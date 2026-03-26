@@ -179,7 +179,11 @@ HTML = """
 
       <label for="job">Job description</label>
       <textarea id="job" placeholder="Example: Replace sink waste and install water softener"></textarea>
-
+       <label>
+       <input type="checkbox" id="tiling">. 
+        Include tiling
+        </label>
+      
       <label for="labour">Labour cost (£)</label>
       <input id="labour" type="number" step="0.01" placeholder="180" />
 
@@ -248,6 +252,7 @@ HTML = """
       const customer_name = document.getElementById("customer_name").value;
       const customer_address = document.getElementById("customer_address").value;
       const customer_phone = document.getElementById("customer_phone").value;
+      const tiling = document.getElementById("tiling").checked;
       const quote_type = document.getElementById("quote_type").value;
       const job = document.getElementById("job").value;
       const labour = parseFloat(document.getElementById("labour").value || 0);
@@ -264,6 +269,7 @@ HTML = """
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
             quote_type: quote_type,
+            tiling: tiling,
             customer_name,
             customer_address,
             customer_phone,
