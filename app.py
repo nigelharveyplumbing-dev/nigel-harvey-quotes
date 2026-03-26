@@ -339,17 +339,16 @@ def get_quotes():
 @app.post("/quote")
 def create_quote(data: QuoteRequest):
     if data.quote_type == "bathroom":
-    materials_with_margin = round(data.materials_cost * 1.5, 2)
+        materials_with_margin = round(data.materials_cost * 1.5, 2)
+    elif data.quote_type == "heating":
+        materials_with_margin = round(data.materials_cost * 1.3, 2)
+    else:
+        materials_with_margin = round(data.materials_cost * 1.25, 2)
 
-elif data.quote_type == "heating":
-    materials_with_margin = round(data.materials_cost * 1.3, 2)
-
-else:  # small job
-    materials_with_margin = round(data.materials_cost * 1.25, 2)
-
-total = round(data.labour_cost + materials_with_margin, 2)
+    total = round(data.labour_cost + materials_with_margin, 2)
 
     quote = {
+        "quote_type": data.quote_type,
         "customer_name": data.customer_name,
         "customer_address": data.customer_address,
         "customer_phone": data.customer_phone,
