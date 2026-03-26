@@ -404,12 +404,14 @@ elif data.quote_type == "heating":
 else:
     materials_with_margin = round(data.materials_cost * 1.25, 2)
 
-    quote = {
+total = round(data.labour_cost + materials_with_margin, 2)
+
+quote = {
         "quote_type": data.quote_type,
         "customer_name": data.customer_name,
         "customer_address": data.customer_address,
         "customer_phone": data.customer_phone,
-        "job": data.job_description,
+        "job": data.job_description + (" + Tiling" if data.tiling else ""),
         "job_description": data.job_description,
         "labour": data.labour_cost,
         "materials_estimated": data.materials_cost,
