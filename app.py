@@ -10,13 +10,14 @@ quotes_db = []
 
 
 class QuoteRequest(BaseModel):
+    quote_type: str = "small"
+
     customer_name: str = ""
     customer_address: str = ""
     customer_phone: str = ""
     job_description: str
     labour_cost: float = 0
     materials_cost: float = 0
-
 
 HTML = """
 <!doctype html>
@@ -161,7 +162,12 @@ HTML = """
     <div class="card no-print">
       <h1>Nigel Harvey Ltd Quotes</h1>
       <div class="sub">Quick quote tool</div>
-
+<label for="quote_type">Quote type</label>
+<select id="quote_type">
+  <option value="small">Small Job</option>
+  <option value="bathroom">Bathroom</option>
+  <option value="heating">Heating</option>
+</select>
       <label for="customer_name">Customer name</label>
       <input id="customer_name" type="text" placeholder="John Smith" />
 
