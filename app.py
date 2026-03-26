@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
-from typing import List
 from datetime import datetime
 
 app = FastAPI(title="Nigel Harvey Ltd Quotes")
@@ -15,14 +14,17 @@ class QuoteRequest(BaseModel):
     customer_name: str = ""
     customer_address: str = ""
     customer_phone: str = ""
-    "job": data.job_description + (" + Tiling" if data.tiling else ""),
+
+    job_description: str
     labour_cost: float = 0
     materials_cost: float = 0
+
     tiling: bool = False
     wall_tiling_m2: float = 0
     floor_tiling_m2: float = 0
     wall_height: str = "half"
     customer_supplies_tiles: bool = False
+
 
 HTML = """
 <!doctype html>
@@ -66,17 +68,29 @@ HTML = """
       font-weight: 600;
       margin: 12px 0 6px;
     }
-    textarea, input {
+    textarea, input, select {
       width: 100%;
       box-sizing: border-box;
       padding: 12px;
       border: 1px solid #ccc;
       border-radius: 10px;
       font-size: 16px;
+      background: white;
     }
     textarea {
       min-height: 110px;
       resize: vertical;
+    }
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 12px 0 6px;
+      font-weight: 600;
+    }
+    .check-row input[type="checkbox"] {
+      width: auto;
+      transform: scale(1.2);
     }
     button, .btn-link {
       width: 100%;
@@ -148,6 +162,9 @@ HTML = """
       font-size: 14px;
       color: #666;
     }
+    .hidden {
+      display: none;
+    }
     @media print {
       body {
         background: white;
@@ -167,12 +184,14 @@ HTML = """
     <div class="card no-print">
       <h1>Nigel Harvey Ltd Quotes</h1>
       <div class="sub">Quick quote tool</div>
-<label for="quote_type">Quote type</label>
-<select id="quote_type">
-  <option value="small">Small Job</option>
-  <option value="bathroom">Bathroom</option>
-  <option value="heating">Heating</option>
-</select>
+
+      <label for="quote_type">Quote type</label>
+      <select id="quote_type" onchange="toggleBathroomFields()">
+        <option value="small">Small Job</option>
+        <option value="bathroom">Bathroom</option>
+        <option value="heating">Heating</option>
+      </select>
+
       <label for="customer_name">Customer name</label>
       <input id="customer_name" type="text" placeholder="John Smith" />
 
@@ -184,26 +203,31 @@ HTML = """
 
       <label for="job">Job description</label>
       <textarea id="job" placeholder="Example: Replace sink waste and install water softener"></textarea>
-       <label>
-       <input type="checkbox" id="tiling">
-        Include tiling
-        </label>
-      <label for="wall_tiling_m2">Wall tiling (m²)</label>
-<input id="wall_tiling_m2" type="number" step="0.1" placeholder="0" />
 
-<label for="floor_tiling_m2">Floor tiling (m²)</label>
-<input id="floor_tiling_m2" type="number" step="0.1" placeholder="0" />
+      <div id="bathroomFields" class="hidden">
+        <div class="check-row">
+          <input type="checkbox" id="tiling" />
+          <span>Include tiling</span>
+        </div>
 
-<label for="wall_height">Wall height</label>
-<select id="wall_height">
-  <option value="half">Half height</option>
-  <option value="full">Full height</option>
-</select>
+        <label for="wall_tiling_m2">Wall tiling (m²)</label>
+        <input id="wall_tiling_m2" type="number" step="0.1" placeholder="0" />
 
-<label>
-  <input type="checkbox" id="customer_supplies_tiles">
-  Customer supplies tiles
-</label>
+        <label for="floor_tiling_m2">Floor tiling (m²)</label>
+        <input id="floor_tiling_m2" type="number" step="0.1" placeholder="0" />
+
+        <label for="wall_height">Wall height</label>
+        <select id="wall_height">
+          <option value="half">Half height</option>
+          <option value="full">Full height</option>
+        </select>
+
+        <div class="check-row">
+          <input type="checkbox" id="customer_supplies_tiles" />
+          <span>Customer supplies tiles</span>
+        </div>
+      </div>
+
       <label for="labour">Labour cost (£)</label>
       <input id="labour" type="number" step="0.01" placeholder="180" />
 
@@ -217,6 +241,7 @@ HTML = """
 
     <div id="resultCard" class="card result">
       <h2>Quote</h2>
+      <div class="row"><span class="muted">Type</span><span id="r_type"></span></div>
       <div class="row"><span class="muted">Customer</span><span id="r_customer"></span></div>
       <div class="row"><span class="muted">Phone</span><span id="r_phone"></span></div>
       <div class="row"><span class="muted">Address</span><span id="r_address"></span></div>
@@ -246,7 +271,21 @@ HTML = """
     }
 
     function escapeHtml(text) {
-      return (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return (text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function toggleBathroomFields() {
+      const quoteType = document.getElementById("quote_type").value;
+      const bathroomFields = document.getElementById("bathroomFields");
+
+      if (quoteType === "bathroom") {
+        bathroomFields.classList.remove("hidden");
+      } else {
+        bathroomFields.classList.add("hidden");
+      }
     }
 
     async function loadHistory() {
@@ -272,15 +311,16 @@ HTML = """
       const customer_name = document.getElementById("customer_name").value;
       const customer_address = document.getElementById("customer_address").value;
       const customer_phone = document.getElementById("customer_phone").value;
+      const quote_type = document.getElementById("quote_type").value;
+      const job = document.getElementById("job").value;
+      const labour = parseFloat(document.getElementById("labour").value || 0);
+      const materials = parseFloat(document.getElementById("materials").value || 0);
+
       const tiling = document.getElementById("tiling").checked;
       const wall_tiling_m2 = parseFloat(document.getElementById("wall_tiling_m2").value || 0);
       const floor_tiling_m2 = parseFloat(document.getElementById("floor_tiling_m2").value || 0);
       const wall_height = document.getElementById("wall_height").value;
       const customer_supplies_tiles = document.getElementById("customer_supplies_tiles").checked;
-      const quote_type = document.getElementById("quote_type").value;
-      const job = document.getElementById("job").value;
-      const labour = parseFloat(document.getElementById("labour").value || 0);
-      const materials = parseFloat(document.getElementById("materials").value || 0);
 
       const errorBox = document.getElementById("error");
       const resultCard = document.getElementById("resultCard");
@@ -293,17 +333,17 @@ HTML = """
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
             quote_type: quote_type,
+            customer_name: customer_name,
+            customer_address: customer_address,
+            customer_phone: customer_phone,
+            job_description: job,
+            labour_cost: labour,
+            materials_cost: materials,
             tiling: tiling,
             wall_tiling_m2: wall_tiling_m2,
             floor_tiling_m2: floor_tiling_m2,
             wall_height: wall_height,
-            customer_supplies_tiles: customer_supplies_tiles,
-            customer_name,
-            customer_address,
-            customer_phone,
-            job_description: job,
-            labour_cost: labour,
-            materials_cost: materials
+            customer_supplies_tiles: customer_supplies_tiles
           })
         });
 
@@ -312,10 +352,11 @@ HTML = """
         const data = await response.json();
         latestQuote = data;
 
+        document.getElementById("r_type").innerText = data.quote_type || "-";
         document.getElementById("r_customer").innerText = data.customer_name || "-";
         document.getElementById("r_phone").innerText = data.customer_phone || "-";
         document.getElementById("r_address").innerText = data.customer_address || "-";
-        document.getElementById("r_job").innerText = data.job;
+        document.getElementById("r_job").innerText = data.job || "-";
         document.getElementById("r_labour").innerText = pounds(data.labour);
         document.getElementById("r_materials").innerText = pounds(data.materials_estimated);
         document.getElementById("r_margin").innerText = pounds(data.materials_with_margin);
@@ -324,20 +365,19 @@ HTML = """
         const message =
 `Nigel Harvey Ltd Quote
 
+Type: ${data.quote_type || "-"}
 Customer: ${data.customer_name || "-"}
 Phone: ${data.customer_phone || "-"}
 Address: ${data.customer_address || "-"}
 
-Job: ${data.job}
+Job: ${data.job || "-"}
 
 Labour: ${pounds(data.labour)}
 Materials estimated: ${pounds(data.materials_estimated)}
 Materials with margin: ${pounds(data.materials_with_margin)}
 Total price: ${pounds(data.total_price)}
 
-Nigel Harvey Ltd
-07595 725547
-Nigelharveyplumbing@gmail.com`;
+Nigel Harvey Ltd`;
 
         document.getElementById("whatsappBtn").href =
           "https://wa.me/?text=" + encodeURIComponent(message);
@@ -350,6 +390,7 @@ Nigelharveyplumbing@gmail.com`;
       }
     }
 
+    toggleBathroomFields();
     loadHistory();
   </script>
 </body>
@@ -374,39 +415,37 @@ def get_quotes():
 
 @app.post("/quote")
 def create_quote(data: QuoteRequest):
-   if data.quote_type == "bathroom":
-    materials_with_margin = round(data.materials_cost * 1.5, 2)
+    if data.quote_type == "bathroom":
+        materials_with_margin = round(data.materials_cost * 1.5, 2)
 
-    # basic tiling checkbox
-    if data.tiling:
-        data.labour_cost += 300
+        if data.tiling:
+            data.labour_cost += 300
 
-    # m² tiling pricing
-    total_area = data.wall_tiling_m2 + data.floor_tiling_m2
+        total_area = data.wall_tiling_m2 + data.floor_tiling_m2
 
-    if total_area > 0:
-        wall_multiplier = 1.2 if data.wall_height == "full" else 1.0
+        if total_area > 0:
+            wall_multiplier = 1.2 if data.wall_height == "full" else 1.0
 
-        wall_labour = data.wall_tiling_m2 * 45 * wall_multiplier
-        floor_labour = data.floor_tiling_m2 * 50
+            wall_labour = data.wall_tiling_m2 * 45 * wall_multiplier
+            floor_labour = data.floor_tiling_m2 * 50
 
-        wall_materials = data.wall_tiling_m2 * 20
-        floor_materials = data.floor_tiling_m2 * 15
+            wall_materials = data.wall_tiling_m2 * 20
+            floor_materials = data.floor_tiling_m2 * 15
 
-        data.labour_cost += wall_labour + floor_labour
+            data.labour_cost += wall_labour + floor_labour
 
-        if not data.customer_supplies_tiles:
-            materials_with_margin += wall_materials + floor_materials
+            if not data.customer_supplies_tiles:
+                materials_with_margin += wall_materials + floor_materials
 
-elif data.quote_type == "heating":
-    materials_with_margin = round(data.materials_cost * 1.3, 2)
+    elif data.quote_type == "heating":
+        materials_with_margin = round(data.materials_cost * 1.3, 2)
 
-else:
-    materials_with_margin = round(data.materials_cost * 1.25, 2)
+    else:
+        materials_with_margin = round(data.materials_cost * 1.25, 2)
 
-total = round(data.labour_cost + materials_with_margin, 2)
+    total = round(data.labour_cost + materials_with_margin, 2)
 
-quote = {
+    quote = {
         "quote_type": data.quote_type,
         "customer_name": data.customer_name,
         "customer_address": data.customer_address,
