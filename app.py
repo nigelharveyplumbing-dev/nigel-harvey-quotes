@@ -248,6 +248,7 @@ HTML = """
       const customer_name = document.getElementById("customer_name").value;
       const customer_address = document.getElementById("customer_address").value;
       const customer_phone = document.getElementById("customer_phone").value;
+      const quote_type = document.getElementById("quote_type").value;
       const job = document.getElementById("job").value;
       const labour = parseFloat(document.getElementById("labour").value || 0);
       const materials = parseFloat(document.getElementById("materials").value || 0);
@@ -262,6 +263,7 @@ HTML = """
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
+            quote_type: quote_type,
             customer_name,
             customer_address,
             customer_phone,
