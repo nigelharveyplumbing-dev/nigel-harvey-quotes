@@ -1,11 +1,18 @@
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
+from typing import List
+from datetime import datetime
 
 app = FastAPI(title="Nigel Harvey Ltd Quotes")
 
+quotes_db = []
+
 
 class QuoteRequest(BaseModel):
+    customer_name: str = ""
+    customer_address: str = ""
+    customer_phone: str = ""
     job_description: str
     labour_cost: float = 0
     materials_cost: float = 0
@@ -25,7 +32,7 @@ HTML = """
       color: #111;
     }
     .wrap {
-      max-width: 720px;
+      max-width: 760px;
       margin: 0 auto;
       padding: 16px;
     }
@@ -39,6 +46,10 @@ HTML = """
     h1 {
       margin: 0 0 8px 0;
       font-size: 28px;
+    }
+    h2 {
+      margin: 0 0 12px 0;
+      font-size: 22px;
     }
     .sub {
       color: #666;
@@ -58,10 +69,10 @@ HTML = """
       font-size: 16px;
     }
     textarea {
-      min-height: 120px;
+      min-height: 110px;
       resize: vertical;
     }
-    button {
+    button, .btn-link {
       width: 100%;
       border: 0;
       border-radius: 10px;
@@ -71,6 +82,17 @@ HTML = """
       background: #111;
       color: white;
       margin-top: 16px;
+      text-decoration: none;
+      display: inline-block;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .btn-secondary {
+      background: #2b2b2b;
+    }
+    .btn-light {
+      background: #eaeaea;
+      color: #111;
     }
     .result {
       display: none;
@@ -79,6 +101,15 @@ HTML = """
       border-radius: 10px;
       background: #f0f7f0;
       border: 1px solid #b9d7b9;
+    }
+    .error {
+      display: none;
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 10px;
+      background: #fff2f2;
+      border: 1px solid #e0b4b4;
+      color: #a33;
     }
     .row {
       display: flex;
@@ -90,26 +121,55 @@ HTML = """
       color: #666;
     }
     .total {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 800;
-      margin-top: 8px;
+      margin-top: 10px;
     }
-    .error {
-      display: none;
-      margin-top: 16px;
-      padding: 14px;
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .history-item {
+      border: 1px solid #ddd;
       border-radius: 10px;
-      background: #fff2f2;
-      border: 1px solid #e0b4b4;
-      color: #a33;
+      padding: 12px;
+      margin-bottom: 10px;
+      background: #fafafa;
+    }
+    .small {
+      font-size: 14px;
+      color: #666;
+    }
+    @media print {
+      body {
+        background: white;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .card {
+        box-shadow: none;
+        border: 0;
+      }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
+    <div class="card no-print">
       <h1>Nigel Harvey Ltd Quotes</h1>
       <div class="sub">Quick quote tool</div>
+
+      <label for="customer_name">Customer name</label>
+      <input id="customer_name" type="text" placeholder="John Smith" />
+
+      <label for="customer_address">Customer address</label>
+      <textarea id="customer_address" placeholder="125 Bushy Hill Drive, Guildford, GU1 2UG"></textarea>
+
+      <label for="customer_phone">Customer phone</label>
+      <input id="customer_phone" type="text" placeholder="07123 456789" />
 
       <label for="job">Job description</label>
       <textarea id="job" placeholder="Example: Replace sink waste and install water softener"></textarea>
@@ -123,57 +183,132 @@ HTML = """
       <button onclick="generateQuote()">Generate Quote</button>
 
       <div id="error" class="error"></div>
+    </div>
 
-      <div id="result" class="result">
-        <div class="row"><span class="muted">Job</span><span id="r_job"></span></div>
-        <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
-        <div class="row"><span class="muted">Materials estimated</span><span id="r_materials"></span></div>
-        <div class="row"><span class="muted">Materials with margin</span><span id="r_margin"></span></div>
-        <div class="row total"><span>Total price</span><span id="r_total"></span></div>
+    <div id="resultCard" class="card result">
+      <h2>Quote</h2>
+      <div class="row"><span class="muted">Customer</span><span id="r_customer"></span></div>
+      <div class="row"><span class="muted">Phone</span><span id="r_phone"></span></div>
+      <div class="row"><span class="muted">Address</span><span id="r_address"></span></div>
+      <div class="row"><span class="muted">Job</span><span id="r_job"></span></div>
+      <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
+      <div class="row"><span class="muted">Materials estimated</span><span id="r_materials"></span></div>
+      <div class="row"><span class="muted">Materials with margin</span><span id="r_margin"></span></div>
+      <div class="row total"><span>Total price</span><span id="r_total"></span></div>
+
+      <div class="actions no-print">
+        <a id="whatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send via WhatsApp</a>
+        <button class="btn-light" onclick="window.print()">Download / Print PDF</button>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>Saved Quotes</h2>
+      <div id="historyList" class="small">No saved quotes yet.</div>
     </div>
   </div>
 
   <script>
+    let latestQuote = null;
+
+    function pounds(value) {
+      return "£" + Number(value).toFixed(2);
+    }
+
+    function escapeHtml(text) {
+      return (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    async function loadHistory() {
+      const res = await fetch("/quotes");
+      const data = await res.json();
+      const history = document.getElementById("historyList");
+
+      if (!data.length) {
+        history.innerHTML = "No saved quotes yet.";
+        return;
+      }
+
+      history.innerHTML = data.slice().reverse().map(q => `
+        <div class="history-item">
+          <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
+          <div>${escapeHtml(q.job_description)}</div>
+          <div class="small">${escapeHtml(q.created_at)} · Total ${pounds(q.total_price)}</div>
+        </div>
+      `).join("");
+    }
+
     async function generateQuote() {
+      const customer_name = document.getElementById("customer_name").value;
+      const customer_address = document.getElementById("customer_address").value;
+      const customer_phone = document.getElementById("customer_phone").value;
       const job = document.getElementById("job").value;
       const labour = parseFloat(document.getElementById("labour").value || 0);
       const materials = parseFloat(document.getElementById("materials").value || 0);
+
       const errorBox = document.getElementById("error");
-      const resultBox = document.getElementById("result");
+      const resultCard = document.getElementById("resultCard");
 
       errorBox.style.display = "none";
-      resultBox.style.display = "none";
 
       try {
         const response = await fetch("/quote", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
+            customer_name,
+            customer_address,
+            customer_phone,
             job_description: job,
             labour_cost: labour,
             materials_cost: materials
           })
         });
 
-        if (!response.ok) {
-          throw new Error("Quote request failed");
-        }
+        if (!response.ok) throw new Error("Quote request failed");
 
         const data = await response.json();
+        latestQuote = data;
 
+        document.getElementById("r_customer").innerText = data.customer_name || "-";
+        document.getElementById("r_phone").innerText = data.customer_phone || "-";
+        document.getElementById("r_address").innerText = data.customer_address || "-";
         document.getElementById("r_job").innerText = data.job;
-        document.getElementById("r_labour").innerText = "£" + Number(data.labour).toFixed(2);
-        document.getElementById("r_materials").innerText = "£" + Number(data.materials_estimated).toFixed(2);
-        document.getElementById("r_margin").innerText = "£" + Number(data.materials_with_margin).toFixed(2);
-        document.getElementById("r_total").innerText = "£" + Number(data.total_price).toFixed(2);
+        document.getElementById("r_labour").innerText = pounds(data.labour);
+        document.getElementById("r_materials").innerText = pounds(data.materials_estimated);
+        document.getElementById("r_margin").innerText = pounds(data.materials_with_margin);
+        document.getElementById("r_total").innerText = pounds(data.total_price);
 
-        resultBox.style.display = "block";
+        const message =
+`Nigel Harvey Ltd Quote
+
+Customer: ${data.customer_name || "-"}
+Phone: ${data.customer_phone || "-"}
+Address: ${data.customer_address || "-"}
+
+Job: ${data.job}
+
+Labour: ${pounds(data.labour)}
+Materials estimated: ${pounds(data.materials_estimated)}
+Materials with margin: ${pounds(data.materials_with_margin)}
+Total price: ${pounds(data.total_price)}
+
+Nigel Harvey Ltd
+07595 725547
+Nigelharveyplumbing@gmail.com`;
+
+        document.getElementById("whatsappBtn").href =
+          "https://wa.me/?text=" + encodeURIComponent(message);
+
+        resultCard.style.display = "block";
+        await loadHistory();
       } catch (err) {
         errorBox.innerText = "Something went wrong generating the quote.";
         errorBox.style.display = "block";
       }
     }
+
+    loadHistory();
   </script>
 </body>
 </html>
@@ -190,15 +325,28 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/quotes")
+def get_quotes():
+    return quotes_db
+
+
 @app.post("/quote")
 def create_quote(data: QuoteRequest):
     materials_with_margin = round(data.materials_cost * 1.25, 2)
     total = round(data.labour_cost + materials_with_margin, 2)
 
-    return {
+    quote = {
+        "customer_name": data.customer_name,
+        "customer_address": data.customer_address,
+        "customer_phone": data.customer_phone,
         "job": data.job_description,
+        "job_description": data.job_description,
         "labour": data.labour_cost,
         "materials_estimated": data.materials_cost,
         "materials_with_margin": materials_with_margin,
-        "total_price": total
+        "total_price": total,
+        "created_at": datetime.now().strftime("%d/%m/%Y %H:%M")
     }
+
+    quotes_db.append(quote)
+    return JSONResponse(content=quote)
