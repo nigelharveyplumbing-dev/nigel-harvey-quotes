@@ -15,9 +15,14 @@ class QuoteRequest(BaseModel):
     customer_name: str = ""
     customer_address: str = ""
     customer_phone: str = ""
-    job_description: str
+    "job": data.job_description + (" + Tiling" if data.tiling else ""),
     labour_cost: float = 0
     materials_cost: float = 0
+    tiling: bool = False
+    wall_tiling_m2: float = 0
+    floor_tiling_m2: float = 0
+    wall_height: str = "half"
+    customer_supplies_tiles: bool = False
 
 HTML = """
 <!doctype html>
@@ -180,10 +185,25 @@ HTML = """
       <label for="job">Job description</label>
       <textarea id="job" placeholder="Example: Replace sink waste and install water softener"></textarea>
        <label>
-       <input type="checkbox" id="tiling">. 
+       <input type="checkbox" id="tiling">
         Include tiling
         </label>
-      
+      <label for="wall_tiling_m2">Wall tiling (m²)</label>
+<input id="wall_tiling_m2" type="number" step="0.1" placeholder="0" />
+
+<label for="floor_tiling_m2">Floor tiling (m²)</label>
+<input id="floor_tiling_m2" type="number" step="0.1" placeholder="0" />
+
+<label for="wall_height">Wall height</label>
+<select id="wall_height">
+  <option value="half">Half height</option>
+  <option value="full">Full height</option>
+</select>
+
+<label>
+  <input type="checkbox" id="customer_supplies_tiles">
+  Customer supplies tiles
+</label>
       <label for="labour">Labour cost (£)</label>
       <input id="labour" type="number" step="0.01" placeholder="180" />
 
@@ -253,6 +273,10 @@ HTML = """
       const customer_address = document.getElementById("customer_address").value;
       const customer_phone = document.getElementById("customer_phone").value;
       const tiling = document.getElementById("tiling").checked;
+      const wall_tiling_m2 = parseFloat(document.getElementById("wall_tiling_m2").value || 0);
+      const floor_tiling_m2 = parseFloat(document.getElementById("floor_tiling_m2").value || 0);
+      const wall_height = document.getElementById("wall_height").value;
+      const customer_supplies_tiles = document.getElementById("customer_supplies_tiles").checked;
       const quote_type = document.getElementById("quote_type").value;
       const job = document.getElementById("job").value;
       const labour = parseFloat(document.getElementById("labour").value || 0);
@@ -270,6 +294,10 @@ HTML = """
           body: JSON.stringify({
             quote_type: quote_type,
             tiling: tiling,
+            wall_tiling_m2: wall_tiling_m2,
+            floor_tiling_m2: floor_tiling_m2,
+            wall_height: wall_height,
+            customer_supplies_tiles: customer_supplies_tiles,
             customer_name,
             customer_address,
             customer_phone,
@@ -346,14 +374,35 @@ def get_quotes():
 
 @app.post("/quote")
 def create_quote(data: QuoteRequest):
-    if data.quote_type == "bathroom":
-        materials_with_margin = round(data.materials_cost * 1.5, 2)
-    elif data.quote_type == "heating":
-        materials_with_margin = round(data.materials_cost * 1.3, 2)
-    else:
-        materials_with_margin = round(data.materials_cost * 1.25, 2)
+   if data.quote_type == "bathroom":
+    materials_with_margin = round(data.materials_cost * 1.5, 2)
 
-    total = round(data.labour_cost + materials_with_margin, 2)
+    # basic tiling checkbox
+    if data.tiling:
+        data.labour_cost += 300
+
+    # m² tiling pricing
+    total_area = data.wall_tiling_m2 + data.floor_tiling_m2
+
+    if total_area > 0:
+        wall_multiplier = 1.2 if data.wall_height == "full" else 1.0
+
+        wall_labour = data.wall_tiling_m2 * 45 * wall_multiplier
+        floor_labour = data.floor_tiling_m2 * 50
+
+        wall_materials = data.wall_tiling_m2 * 20
+        floor_materials = data.floor_tiling_m2 * 15
+
+        data.labour_cost += wall_labour + floor_labour
+
+        if not data.customer_supplies_tiles:
+            materials_with_margin += wall_materials + floor_materials
+
+elif data.quote_type == "heating":
+    materials_with_margin = round(data.materials_cost * 1.3, 2)
+
+else:
+    materials_with_margin = round(data.materials_cost * 1.25, 2)
 
     quote = {
         "quote_type": data.quote_type,
