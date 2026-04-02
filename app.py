@@ -107,7 +107,7 @@ body {
   color:#111;
 }
 .wrap {
-  max-width:820px;
+  max-width:860px;
   margin:0 auto;
 }
 .card {
@@ -163,9 +163,10 @@ button, .btn-link {
   text-decoration:none;
   display:inline-block;
   box-sizing:border-box;
+  cursor:pointer;
 }
 .btn-secondary {
-  background:#2b2b2b;
+  background:#1f7a1f;
 }
 .btn-light {
   background:#ececec;
@@ -236,6 +237,42 @@ button, .btn-link {
   width:auto;
   transform:scale(1.2);
 }
+.quote-sheet {
+  background:white;
+}
+.quote-header {
+  border-bottom:2px solid #111;
+  padding-bottom:12px;
+  margin-bottom:14px;
+}
+.quote-company {
+  font-size:28px;
+  font-weight:800;
+}
+.quote-meta {
+  color:#444;
+  margin-top:6px;
+  line-height:1.5;
+}
+.quote-section-title {
+  font-size:18px;
+  font-weight:800;
+  margin-top:18px;
+  margin-bottom:8px;
+}
+.quote-box {
+  border:1px solid #ddd;
+  border-radius:10px;
+  padding:12px;
+  background:#fafafa;
+}
+.quote-total {
+  font-size:32px;
+  font-weight:900;
+}
+.no-print {
+  display:block;
+}
 @media print {
   .no-print {
     display:none !important;
@@ -247,6 +284,11 @@ button, .btn-link {
   .card {
     box-shadow:none;
     border:none;
+    padding:0;
+    margin:0 0 12px 0;
+  }
+  .wrap {
+    max-width:100%;
   }
 }
 </style>
@@ -329,20 +371,46 @@ button, .btn-link {
     <div id="error" class="error"></div>
   </div>
 
-  <div id="resultCard" class="card result">
-    <h2>Quote</h2>
-    <div class="row"><span class="muted">Type</span><span id="r_type"></span></div>
-    <div class="row"><span class="muted">Customer</span><span id="r_customer"></span></div>
-    <div class="row"><span class="muted">Phone</span><span id="r_phone"></span></div>
-    <div class="row"><span class="muted">Address</span><span id="r_address"></span></div>
-    <div class="row"><span class="muted">Job</span><span id="r_job"></span></div>
-    <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
-    <div class="row"><span class="muted">Materials</span><span id="r_materials"></span></div>
-    <div class="row total"><span>Total price</span><span id="r_total"></span></div>
-    <div class="small">Includes labour and materials</div>
+  <div id="resultCard" class="card result quote-sheet">
+    <div class="quote-header">
+      <div class="quote-company">Nigel Harvey Ltd</div>
+      <div class="quote-meta">
+        125 Bushy Hill Drive, Guildford, GU1 2UG<br>
+        07595 725547<br>
+        Nigelharveyplumbing@gmail.com
+      </div>
+    </div>
+
+    <div class="quote-section-title">Quote details</div>
+    <div class="quote-box">
+      <div class="row"><span class="muted">Date</span><span id="r_date"></span></div>
+      <div class="row"><span class="muted">Type</span><span id="r_type"></span></div>
+      <div class="row"><span class="muted">Customer</span><span id="r_customer"></span></div>
+      <div class="row"><span class="muted">Phone</span><span id="r_phone"></span></div>
+      <div class="row"><span class="muted">Address</span><span id="r_address"></span></div>
+    </div>
+
+    <div class="quote-section-title">Works</div>
+    <div class="quote-box">
+      <div id="r_job"></div>
+    </div>
+
+    <div class="quote-section-title">Price</div>
+    <div class="quote-box">
+      <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
+      <div class="row"><span class="muted">Materials</span><span id="r_materials"></span></div>
+      <div class="row quote-total"><span>Total price</span><span id="r_total"></span></div>
+    </div>
+
+    <div class="quote-section-title">Notes</div>
+    <div class="quote-box">
+      Includes labour and materials.<br>
+      Payment due as agreed.<br>
+      Quote subject to site conditions and any unforeseen issues.
+    </div>
 
     <div class="actions no-print">
-      <a id="whatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send via WhatsApp</a>
+      <a id="whatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send direct to customer WhatsApp</a>
       <button class="btn-light" onclick="window.print()">Download / Print PDF</button>
     </div>
   </div>
@@ -402,6 +470,14 @@ function addMaterial() {
     <input class="m-manual" type="number" step="0.01" placeholder="0">
   `;
   document.getElementById("materials").appendChild(div);
+}
+
+function normalisePhone(phone) {
+  const digits = (phone || "").replace(/\\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("44")) return digits;
+  if (digits.startsWith("0")) return "44" + digits.slice(1);
+  return digits;
 }
 
 async function loadHistory() {
@@ -473,6 +549,7 @@ async function generateQuote() {
 
     const data = await res.json();
 
+    document.getElementById("r_date").innerText = data.created_at || "-";
     document.getElementById("r_type").innerText = data.quote_type || "-";
     document.getElementById("r_customer").innerText = data.customer_name || "-";
     document.getElementById("r_phone").innerText = data.customer_phone || "-";
@@ -485,9 +562,9 @@ async function generateQuote() {
     const message =
 `Nigel Harvey Ltd Quote
 
+Date: ${data.created_at || "-"}
 Type: ${data.quote_type || "-"}
 Customer: ${data.customer_name || "-"}
-Phone: ${data.customer_phone || "-"}
 Address: ${data.customer_address || "-"}
 
 Job: ${data.job || "-"}
@@ -496,10 +573,18 @@ Labour: ${pounds(data.labour)}
 Materials: ${pounds(data.materials)}
 Total price: ${pounds(data.total_price)}
 
-Includes labour and materials`;
+Nigel Harvey Ltd
+07595 725547
+Nigelharveyplumbing@gmail.com`;
 
-    document.getElementById("whatsappBtn").href =
-      "https://wa.me/?text=" + encodeURIComponent(message);
+    const cleanPhone = normalisePhone(data.customer_phone || "");
+    if (cleanPhone) {
+      document.getElementById("whatsappBtn").href =
+        "https://wa.me/" + cleanPhone + "?text=" + encodeURIComponent(message);
+    } else {
+      document.getElementById("whatsappBtn").href =
+        "https://wa.me/?text=" + encodeURIComponent(message);
+    }
 
     resultCard.style.display = "block";
     await loadHistory();
@@ -549,7 +634,7 @@ def create_quote(data: QuoteRequest):
 
     materials_after_job_markup = total_materials * job_multiplier
 
-    # handling
+    # materials handling
     handling_multiplier = 1.0
     if data.include_materials_handling:
         handling_multiplier += (data.materials_handling_percent / 100.0)
