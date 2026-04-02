@@ -32,7 +32,6 @@ MATERIAL_LIBRARY = [
     {"name": "Service Valve", "supplier": "Screwfix", "default_price": 4.00},
     {"name": "Compression Coupler 15mm", "supplier": "Toolstation", "default_price": 1.80},
     {"name": "Compression Coupler 22mm", "supplier": "Toolstation", "default_price": 2.90},
-
     {"name": "Hep2O 15mm Pipe Coil", "supplier": "City Plumbing", "default_price": 65.00},
     {"name": "Hep2O 22mm Pipe Coil", "supplier": "City Plumbing", "default_price": 95.00},
     {"name": "Hep2O 15mm Straight Coupler", "supplier": "City Plumbing", "default_price": 4.50},
@@ -41,9 +40,6 @@ MATERIAL_LIBRARY = [
     {"name": "Hep2O 22mm Elbow", "supplier": "City Plumbing", "default_price": 7.20},
     {"name": "Hep2O 15mm Tee", "supplier": "City Plumbing", "default_price": 6.00},
     {"name": "Hep2O 22mm Tee", "supplier": "City Plumbing", "default_price": 8.50},
-    {"name": "Hep2O Pipe Insert 15mm", "supplier": "City Plumbing", "default_price": 0.80},
-    {"name": "Hep2O Pipe Insert 22mm", "supplier": "City Plumbing", "default_price": 1.20},
-
     {"name": "Speedfit 15mm Pipe Coil", "supplier": "Screwfix", "default_price": 58.00},
     {"name": "Speedfit 22mm Pipe Coil", "supplier": "Screwfix", "default_price": 90.00},
     {"name": "Speedfit 15mm Straight Coupler", "supplier": "Screwfix", "default_price": 4.20},
@@ -52,12 +48,6 @@ MATERIAL_LIBRARY = [
     {"name": "Speedfit 22mm Elbow", "supplier": "Screwfix", "default_price": 7.00},
     {"name": "Speedfit 15mm Tee", "supplier": "Screwfix", "default_price": 5.80},
     {"name": "Speedfit 22mm Tee", "supplier": "Screwfix", "default_price": 8.00},
-    {"name": "Speedfit Female Iron 15mm x 1/2", "supplier": "Screwfix", "default_price": 7.20},
-    {"name": "Speedfit Male Iron 15mm x 1/2", "supplier": "Screwfix", "default_price": 7.20},
-    {"name": "Speedfit Stop End 15mm", "supplier": "Screwfix", "default_price": 3.00},
-    {"name": "Speedfit Pipe Insert 15mm", "supplier": "Screwfix", "default_price": 0.75},
-    {"name": "Speedfit Pipe Insert 22mm", "supplier": "Screwfix", "default_price": 1.10},
-
     {"name": "Kitchen Mixer Tap", "supplier": "City Plumbing", "default_price": 85.00},
     {"name": "Basin Mixer Tap", "supplier": "City Plumbing", "default_price": 65.00},
     {"name": "Bath Mixer Tap", "supplier": "City Plumbing", "default_price": 95.00},
@@ -70,7 +60,6 @@ MATERIAL_LIBRARY = [
     {"name": "Tile Trim 2.5m", "supplier": "Topps Tiles", "default_price": 9.00},
     {"name": "Ceramic Wall Tile per m2", "supplier": "Topps Tiles", "default_price": 25.00},
     {"name": "Porcelain Floor Tile per m2", "supplier": "Topps Tiles", "default_price": 35.00},
-
     {"name": "TRV Valve", "supplier": "Screwfix", "default_price": 14.00},
     {"name": "Lockshield Valve", "supplier": "Screwfix", "default_price": 8.00},
     {"name": "Radiator Valve Set", "supplier": "Screwfix", "default_price": 20.00},
@@ -78,6 +67,19 @@ MATERIAL_LIBRARY = [
     {"name": "Magnetic Filter", "supplier": "City Plumbing", "default_price": 95.00},
     {"name": "Inhibitor 1L", "supplier": "Toolstation", "default_price": 16.00},
     {"name": "Filling Loop", "supplier": "Toolstation", "default_price": 14.00},
+]
+
+JOB_TEMPLATES = [
+    {"name": "Replace tap", "quote_type": "small", "job": "Remove existing tap and fit new tap including testing for leaks.", "labour": 120},
+    {"name": "Replace toilet", "quote_type": "small", "job": "Remove existing toilet and fit new close-coupled toilet including waste connection and testing.", "labour": 180},
+    {"name": "Basin waste", "quote_type": "small", "job": "Remove faulty basin waste and fit new basin waste including testing for leaks.", "labour": 90},
+    {"name": "Outside tap", "quote_type": "small", "job": "Supply and fit outside tap kit with isolation and testing.", "labour": 150},
+    {"name": "Kitchen sink waste", "quote_type": "small", "job": "Remove existing sink waste and fit new waste/trap arrangement including testing.", "labour": 120},
+    {"name": "Bathroom install", "quote_type": "bathroom", "job": "Bathroom plumbing installation including first fix, second fix and sanitaryware connections.", "labour": 1800},
+    {"name": "Bathroom refurb", "quote_type": "bathroom", "job": "Bathroom refurbishment plumbing works including sanitaryware, wastes and connections.", "labour": 2200},
+    {"name": "Heating repair", "quote_type": "heating", "job": "Heating repair works including diagnosis, replacement parts and testing.", "labour": 150},
+    {"name": "Radiator install", "quote_type": "heating", "job": "Supply and fit radiator including valves and testing.", "labour": 180},
+    {"name": "Full heating system", "quote_type": "heating", "job": "Full heating system installation including pipework, controls, radiators and commissioning.", "labour": 3500},
 ]
 
 
@@ -91,19 +93,14 @@ class MaterialItem(BaseModel):
 
 class QuoteRequest(BaseModel):
     quote_type: str = "small"
-
     customer_name: str = ""
     customer_address: str = ""
     customer_phone: str = ""
-
     job_description: str = ""
     labour_cost: float = 0
-
     include_materials_handling: bool = True
     materials_handling_percent: float = 25
-
     materials: list[MaterialItem] = []
-
     tiling: bool = False
     wall_tiling_m2: float = 0
     floor_tiling_m2: float = 0
@@ -114,11 +111,9 @@ class QuoteRequest(BaseModel):
 def fetch_price(url: str):
     if not url:
         return None
-
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         r = requests.get(url, headers=headers, timeout=8)
-
         if r.status_code != 200:
             return None
 
@@ -152,10 +147,8 @@ def fetch_price(url: str):
                         prices.append(value)
                 except Exception:
                     pass
-
             if prices:
                 return max(prices)
-
     except Exception:
         return None
 
@@ -169,221 +162,51 @@ HTML = """
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nigel Harvey Ltd Quotes</title>
 <style>
-body {
-  font-family: Arial, sans-serif;
-  background:#f5f5f5;
-  margin:0;
-  padding:12px;
-  color:#111;
-}
-.wrap {
-  max-width:960px;
-  margin:0 auto;
-}
-.card {
-  background:white;
-  padding:16px;
-  border-radius:14px;
-  margin-bottom:14px;
-  box-shadow:0 2px 10px rgba(0,0,0,0.06);
-}
-h1 {
-  margin:0 0 6px 0;
-  font-size:30px;
-}
-h2 {
-  margin:0 0 12px 0;
-  font-size:22px;
-}
-h3 {
-  margin:18px 0 8px 0;
-}
-.sub {
-  color:#666;
-  margin-bottom:16px;
-}
-label {
-  display:block;
-  font-weight:700;
-  margin:12px 0 6px;
-}
-input, textarea, select {
-  width:100%;
-  box-sizing:border-box;
-  padding:12px;
-  border:1px solid #ccc;
-  border-radius:10px;
-  font-size:16px;
-  background:white;
-}
-textarea {
-  min-height:100px;
-  resize:vertical;
-}
-button, .btn-link {
-  width:100%;
-  padding:14px;
-  border:none;
-  border-radius:10px;
-  background:black;
-  color:white;
-  font-size:18px;
-  font-weight:700;
-  text-align:center;
-  text-decoration:none;
-  display:inline-block;
-  box-sizing:border-box;
-  cursor:pointer;
-}
-.btn-secondary {
-  background:#1f7a1f;
-}
-.btn-light {
-  background:#ececec;
-  color:#111;
-}
-.material-row {
-  border:1px solid #ddd;
-  padding:12px;
-  border-radius:10px;
-  margin-bottom:10px;
-  background:#fafafa;
-}
-.row {
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  margin:8px 0;
-}
-.muted {
-  color:#666;
-}
-.total {
-  font-size:26px;
-  font-weight:800;
-  margin-top:10px;
-}
-.result {
-  display:none;
-  background:#f3faf3;
-  border:1px solid #b7d7b7;
-}
-.error {
-  display:none;
-  background:#fff3f3;
-  border:1px solid #e0b7b7;
-  color:#a33;
-  padding:12px;
-  border-radius:10px;
-  margin-top:12px;
-}
-.actions {
-  display:grid;
-  gap:10px;
-  margin-top:14px;
-}
-.history-item {
-  border:1px solid #ddd;
-  border-radius:10px;
-  padding:12px;
-  margin-bottom:10px;
-  background:#fafafa;
-}
-.small {
-  font-size:14px;
-  color:#666;
-}
-.hidden {
-  display:none;
-}
-.check-row {
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin:12px 0 6px;
-  font-weight:700;
-}
-.check-row input[type="checkbox"] {
-  width:auto;
-  transform:scale(1.2);
-}
-.quote-sheet {
-  background:white;
-}
-.quote-header {
-  border-bottom:2px solid #111;
-  padding-bottom:12px;
-  margin-bottom:14px;
-}
-.quote-company {
-  font-size:28px;
-  font-weight:800;
-}
-.quote-meta {
-  color:#444;
-  margin-top:6px;
-  line-height:1.5;
-}
-.quote-section-title {
-  font-size:18px;
-  font-weight:800;
-  margin-top:18px;
-  margin-bottom:8px;
-}
-.quote-box {
-  border:1px solid #ddd;
-  border-radius:10px;
-  padding:12px;
-  background:#fafafa;
-}
-.quote-total {
-  font-size:32px;
-  font-weight:900;
-}
-.internal-box {
-  margin-top:16px;
-  border:1px dashed #999;
-  background:#fffdf3;
-}
-.search-results {
-  border:1px solid #ddd;
-  border-radius:10px;
-  max-height:220px;
-  overflow:auto;
-  background:#fff;
-  margin-top:8px;
-}
-.search-item {
-  padding:10px;
-  border-bottom:1px solid #eee;
-  cursor:pointer;
-}
-.search-item:last-child {
-  border-bottom:none;
-}
-.search-item:hover {
-  background:#f2f2f2;
-}
-.no-print {
-  display:block;
-}
+body { font-family: Arial, sans-serif; background:#f5f5f5; margin:0; padding:12px; color:#111; }
+.wrap { max-width:960px; margin:0 auto; }
+.card { background:white; padding:16px; border-radius:14px; margin-bottom:14px; box-shadow:0 2px 10px rgba(0,0,0,0.06); }
+h1 { margin:0 0 6px 0; font-size:30px; }
+h2 { margin:0 0 12px 0; font-size:22px; }
+h3 { margin:18px 0 8px 0; }
+.sub { color:#666; margin-bottom:16px; }
+label { display:block; font-weight:700; margin:12px 0 6px; }
+input, textarea, select { width:100%; box-sizing:border-box; padding:12px; border:1px solid #ccc; border-radius:10px; font-size:16px; background:white; }
+textarea { min-height:100px; resize:vertical; }
+button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; background:black; color:white; font-size:18px; font-weight:700; text-align:center; text-decoration:none; display:inline-block; box-sizing:border-box; cursor:pointer; }
+.btn-secondary { background:#1f7a1f; }
+.btn-light { background:#ececec; color:#111; }
+.btn-template { background:#333; font-size:15px; padding:10px; }
+.templates { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
+.material-row { border:1px solid #ddd; padding:12px; border-radius:10px; margin-bottom:10px; background:#fafafa; }
+.row { display:flex; justify-content:space-between; gap:10px; margin:8px 0; }
+.muted { color:#666; }
+.total { font-size:26px; font-weight:800; margin-top:10px; }
+.result { display:none; background:#f3faf3; border:1px solid #b7d7b7; }
+.error { display:none; background:#fff3f3; border:1px solid #e0b7b7; color:#a33; padding:12px; border-radius:10px; margin-top:12px; }
+.actions { display:grid; gap:10px; margin-top:14px; }
+.history-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
+.small { font-size:14px; color:#666; }
+.hidden { display:none; }
+.check-row { display:flex; align-items:center; gap:10px; margin:12px 0 6px; font-weight:700; }
+.check-row input[type="checkbox"] { width:auto; transform:scale(1.2); }
+.quote-sheet { background:white; }
+.quote-header { border-bottom:2px solid #111; padding-bottom:12px; margin-bottom:14px; }
+.quote-company { font-size:28px; font-weight:800; }
+.quote-meta { color:#444; margin-top:6px; line-height:1.5; }
+.quote-section-title { font-size:18px; font-weight:800; margin-top:18px; margin-bottom:8px; }
+.quote-box { border:1px solid #ddd; border-radius:10px; padding:12px; background:#fafafa; }
+.quote-total { font-size:32px; font-weight:900; }
+.internal-box { margin-top:16px; border:1px dashed #999; background:#fffdf3; }
+.search-results { border:1px solid #ddd; border-radius:10px; max-height:220px; overflow:auto; background:#fff; margin-top:8px; }
+.search-item { padding:10px; border-bottom:1px solid #eee; cursor:pointer; }
+.search-item:last-child { border-bottom:none; }
+.search-item:hover { background:#f2f2f2; }
+.no-print { display:block; }
 @media print {
-  .no-print {
-    display:none !important;
-  }
-  body {
-    background:white;
-    padding:0;
-  }
-  .card {
-    box-shadow:none;
-    border:none;
-    padding:0;
-    margin:0 0 12px 0;
-  }
-  .wrap {
-    max-width:100%;
-  }
+  .no-print { display:none !important; }
+  body { background:white; padding:0; }
+  .card { box-shadow:none; border:none; padding:0; margin:0 0 12px 0; }
+  .wrap { max-width:100%; }
 }
 </style>
 </head>
@@ -398,6 +221,9 @@ button, .btn-link {
       <input type="checkbox" id="internal_mode">
       <span>Internal mode</span>
     </div>
+
+    <h3>Job templates</h3>
+    <div id="templateButtons" class="templates"></div>
 
     <label for="quote_type">Quote type</label>
     <select id="quote_type" onchange="toggleBathroomFields()">
@@ -456,6 +282,8 @@ button, .btn-link {
 
     <label for="labour">Labour cost (£)</label>
     <input id="labour" type="number" step="0.01" placeholder="180">
+
+    <div class="small" id="labourSuggestion" style="margin-top:8px;"></div>
 
     <div class="check-row">
       <input type="checkbox" id="include_materials_handling" checked>
@@ -537,6 +365,7 @@ button, .btn-link {
 
 <script>
 const MATERIAL_LIBRARY = __MATERIAL_LIBRARY__;
+const JOB_TEMPLATES = __JOB_TEMPLATES__;
 
 function pounds(value) {
   return "£" + Number(value).toFixed(2);
@@ -560,6 +389,35 @@ function toggleBathroomFields() {
   }
 }
 
+function renderTemplates() {
+  const box = document.getElementById("templateButtons");
+  box.innerHTML = JOB_TEMPLATES.map((t, i) => `
+    <button type="button" class="btn-template" onclick="applyTemplate(${i})">${escapeHtml(t.name)}</button>
+  `).join("");
+}
+
+function applyTemplate(index) {
+  const t = JOB_TEMPLATES[index];
+  document.getElementById("quote_type").value = t.quote_type;
+  document.getElementById("job").value = t.job;
+  document.getElementById("labour").value = t.labour;
+  toggleBathroomFields();
+  updateLabourSuggestion();
+}
+
+function updateLabourSuggestion() {
+  const quoteType = document.getElementById("quote_type").value;
+  const box = document.getElementById("labourSuggestion");
+
+  if (quoteType === "bathroom") {
+    box.innerText = "Typical bathroom labour is often higher. Adjust to suit your job.";
+  } else if (quoteType === "heating") {
+    box.innerText = "Heating jobs often vary by size and access. Adjust labour as needed.";
+  } else {
+    box.innerText = "Small jobs: use your judgement and minimum charge where needed.";
+  }
+}
+
 function addMaterial(prefill = null) {
   const div = document.createElement("div");
   div.className = "material-row";
@@ -580,7 +438,7 @@ function addMaterial(prefill = null) {
     </select>
 
     <label>Product URL</label>
-    <input class="m-url" placeholder="https://..." value="">
+    <input class="m-url" placeholder="https://...">
 
     <label>Manual price (£)</label>
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${prefill ? prefill.default_price : ""}">
@@ -706,9 +564,7 @@ async function generateQuote() {
       body: JSON.stringify(payload)
     });
 
-    if (!res.ok) {
-      throw new Error("Quote request failed");
-    }
+    if (!res.ok) throw new Error("Quote request failed");
 
     const data = await res.json();
 
@@ -753,13 +609,9 @@ Nigel Harvey Ltd
 Nigelharveyplumbing@gmail.com`;
 
     const cleanPhone = normalisePhone(data.customer_phone || "");
-    if (cleanPhone) {
-      document.getElementById("whatsappBtn").href =
-        "https://wa.me/" + cleanPhone + "?text=" + encodeURIComponent(message);
-    } else {
-      document.getElementById("whatsappBtn").href =
-        "https://wa.me/?text=" + encodeURIComponent(message);
-    }
+    document.getElementById("whatsappBtn").href = cleanPhone
+      ? "https://wa.me/" + cleanPhone + "?text=" + encodeURIComponent(message)
+      : "https://wa.me/?text=" + encodeURIComponent(message);
 
     resultCard.style.display = "block";
     await loadHistory();
@@ -770,7 +622,10 @@ Nigelharveyplumbing@gmail.com`;
 }
 
 toggleBathroomFields();
+renderTemplates();
 addMaterial();
+updateLabourSuggestion();
+document.getElementById("quote_type").addEventListener("change", updateLabourSuggestion);
 loadHistory();
 </script>
 </body>
@@ -780,7 +635,9 @@ loadHistory();
 
 @app.get("/", response_class=HTMLResponse)
 def home():
-    html = HTML.replace("__MATERIAL_LIBRARY__", str(MATERIAL_LIBRARY).replace("True", "true").replace("False", "false").replace("None", "null"))
+    html = HTML
+    html = html.replace("__MATERIAL_LIBRARY__", str(MATERIAL_LIBRARY).replace("True", "true").replace("False", "false").replace("None", "null"))
+    html = html.replace("__JOB_TEMPLATES__", str(JOB_TEMPLATES).replace("True", "true").replace("False", "false").replace("None", "null"))
     return html
 
 
@@ -795,17 +652,14 @@ def create_quote(data: QuoteRequest):
 
     for item in data.materials:
         price = fetch_price(item.url) if item.url else None
-
         if price is None:
             price = item.manual_price or 0
-
         total_materials += price * item.quantity
 
     tiling_extra_materials = 0
 
     if data.quote_type == "bathroom" and data.tiling:
         total_area = data.wall_tiling_m2 + data.floor_tiling_m2
-
         if total_area > 0 and not data.customer_supplies_tiles:
             wall_multiplier = 1.2 if data.wall_height == "full" else 1.0
             wall_materials = data.wall_tiling_m2 * 20 * wall_multiplier
@@ -849,7 +703,6 @@ def create_quote(data: QuoteRequest):
         "materials": round(raw_materials_with_tiling, 2),
         "total_price": round(total, 2),
         "created_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
-
         "internal_raw_materials": round(raw_materials_with_tiling, 2),
         "internal_job_multiplier": round(job_multiplier, 2),
         "internal_after_job_markup": round(materials_after_job_markup, 2),
