@@ -164,49 +164,7 @@ BASE_MATERIAL_LIBRARY = [
         "supplier": "Screwfix",
         "default_price": 4.00,
         "product_url": "https://www.screwfix.com/p/service-valve-15mm/27792"
-    },
-    {
-        "name": "Kitchen Mixer Tap",
-        "supplier": "City Plumbing",
-        "default_price": 85.00,
-        "product_url": ""
-    },
-    {
-        "name": "Basin Mixer Tap",
-        "supplier": "City Plumbing",
-        "default_price": 65.00,
-        "product_url": ""
-    },
-    {
-        "name": "Bath Mixer Tap",
-        "supplier": "City Plumbing",
-        "default_price": 95.00,
-        "product_url": ""
-    },
-    {
-        "name": "Thermostatic Shower Valve",
-        "supplier": "City Plumbing",
-        "default_price": 140.00,
-        "product_url": ""
-    },
-    {
-        "name": "Tile Adhesive 20kg",
-        "supplier": "Topps Tiles",
-        "default_price": 22.00,
-        "product_url": ""
-    },
-    {
-        "name": "Tile Grout 5kg",
-        "supplier": "Topps Tiles",
-        "default_price": 14.00,
-        "product_url": ""
-    },
-    {
-        "name": "Tile Trim 2.5m",
-        "supplier": "Topps Tiles",
-        "default_price": 9.00,
-        "product_url": ""
-    },
+    }
 ]
 
 JOB_TEMPLATES = [
@@ -253,6 +211,11 @@ class SaveLibraryItemRequest(BaseModel):
     supplier: str = ""
     product_url: str = ""
     default_price: float = 0
+
+
+class DeleteLibraryItemRequest(BaseModel):
+    name: str
+    supplier: str = ""
 
 
 def load_user_library():
@@ -377,6 +340,11 @@ def material_search(q: str = ""):
     return JSONResponse(content=results)
 
 
+@app.get("/library-items")
+def library_items():
+    return JSONResponse(content=load_user_library())
+
+
 @app.post("/save-library-item")
 def save_library_item(data: SaveLibraryItemRequest):
     user_library = load_user_library()
@@ -408,6 +376,31 @@ def save_library_item(data: SaveLibraryItemRequest):
     return JSONResponse(content={"ok": True, "message": "Item saved to library."})
 
 
+@app.post("/delete-library-item")
+def delete_library_item(data: DeleteLibraryItemRequest):
+    user_library = load_user_library()
+    key = (data.name.strip().lower(), data.supplier.strip().lower())
+
+    new_items = []
+    deleted = False
+
+    for item in user_library:
+        existing_key = (item.get("name", "").strip().lower(), item.get("supplier", "").strip().lower())
+        if existing_key == key:
+            deleted = True
+            continue
+        new_items.append(item)
+
+    if not deleted:
+        return JSONResponse(content={"ok": False, "message": "Item not found in saved library."})
+
+    ok = save_user_library(new_items)
+    if not ok:
+        return JSONResponse(status_code=500, content={"ok": False, "message": "Could not delete item."})
+
+    return JSONResponse(content={"ok": True, "message": "Item deleted."})
+
+
 HTML = """
 <!doctype html>
 <html>
@@ -430,6 +423,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 .btn-light { background:#ececec; color:#111; }
 .btn-template { background:#333; font-size:15px; padding:10px; }
 .btn-save { background:#0b5ed7; margin-top:8px; }
+.btn-delete { background:#b42318; font-size:14px; padding:8px; margin-top:8px; }
+.btn-refresh { background:#555; font-size:14px; padding:10px; margin-top:8px; }
 .templates { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
 .material-row { border:1px solid #ddd; padding:12px; border-radius:10px; margin-bottom:10px; background:#fafafa; }
 .row { display:flex; justify-content:space-between; gap:10px; margin:8px 0; }
@@ -439,7 +434,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 .error { display:none; background:#fff3f3; border:1px solid #e0b7b7; color:#a33; padding:12px; border-radius:10px; margin-top:12px; }
 .notice { display:none; background:#eef6ff; border:1px solid #b9d3f0; color:#134; padding:12px; border-radius:10px; margin-top:12px; }
 .actions { display:grid; gap:10px; margin-top:14px; }
-.history-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
+.history-item, .library-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
 .small { font-size:14px; color:#666; }
 .hidden { display:none; }
 .check-row { display:flex; align-items:center; gap:10px; margin:12px 0 6px; font-weight:700; }
@@ -550,7 +545,15 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 
     <button type="button" class="btn-save" onclick="saveLibraryItem()">Save to library</button>
     <div id="libraryNotice" class="notice"></div>
+  </div>
 
+  <div class="card no-print">
+    <h2>Library manager</h2>
+    <button type="button" class="btn-refresh" onclick="loadLibraryManager()">Refresh saved library</button>
+    <div id="libraryManagerList" class="small" style="margin-top:12px;">No saved library items yet.</div>
+  </div>
+
+  <div class="card no-print">
     <h3>Materials</h3>
     <div id="materials"></div>
     <button type="button" onclick="addMaterial()">+ Add Manual Material Row</button>
@@ -816,10 +819,55 @@ async function saveLibraryItem() {
       document.getElementById("library_name").value = "";
       document.getElementById("library_url").value = "";
       document.getElementById("library_default_price").value = "";
+      loadLibraryManager();
     }
   } catch (e) {
     notice.innerText = "Could not save item.";
     notice.style.display = "block";
+  }
+}
+
+async function loadLibraryManager() {
+  const box = document.getElementById("libraryManagerList");
+  box.innerHTML = "Loading...";
+
+  try {
+    const res = await fetch("/library-items");
+    const items = await res.json();
+
+    if (!items.length) {
+      box.innerHTML = "No saved library items yet.";
+      return;
+    }
+
+    box.innerHTML = items.map(item => `
+      <div class="library-item">
+        <div><strong>${escapeHtml(item.name || "")}</strong></div>
+        <div class="small">${escapeHtml(item.supplier || "")} · fallback ${pounds(item.default_price || 0)}</div>
+        <div class="small">${escapeHtml(item.product_url || "")}</div>
+        <button type="button" class="btn-delete" onclick='deleteLibraryItem(${JSON.stringify(item.name)}, ${JSON.stringify(item.supplier)})'>Delete</button>
+      </div>
+    `).join("");
+  } catch (e) {
+    box.innerHTML = "Could not load saved library items.";
+  }
+}
+
+async function deleteLibraryItem(name, supplier) {
+  if (!confirm("Delete this saved library item?")) return;
+
+  try {
+    const res = await fetch("/delete-library-item", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({name, supplier})
+    });
+
+    const data = await res.json();
+    alert(data.message || "Done");
+    loadLibraryManager();
+  } catch (e) {
+    alert("Could not delete item.");
   }
 }
 
@@ -958,6 +1006,7 @@ renderTemplates();
 addMaterial();
 updateLabourSuggestion();
 loadHistory();
+loadLibraryManager();
 </script>
 </body>
 </html>
