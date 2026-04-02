@@ -6,11 +6,13 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import json
-import sqlite3
+import os
 
 app = FastAPI(title="Nigel Harvey Ltd Quotes")
 
-DB_FILE = "nigel_quotes.db"
+quotes_db = []
+
+LIBRARY_FILE = "materials_library.json"
 
 BASE_MATERIAL_LIBRARY = [
     {
@@ -212,99 +214,48 @@ class SaveLibraryItemRequest(BaseModel):
 
 
 class DeleteLibraryItemRequest(BaseModel):
-    id: int
+    name: str
+    supplier: str = ""
 
 
-class SaveCustomerRequest(BaseModel):
-    customer_name: str
-    customer_address: str = ""
-    customer_phone: str = ""
+def load_user_library():
+    if not os.path.exists(LIBRARY_FILE):
+        return []
+    try:
+        with open(LIBRARY_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+    except Exception:
+        return []
+    return []
 
 
-class DeleteCustomerRequest(BaseModel):
-    id: int
+def save_user_library(items):
+    try:
+        with open(LIBRARY_FILE, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
 
 
-class UpdateQuoteStatusRequest(BaseModel):
-    quote_ref: str
-    status: str
+def get_combined_library():
+    user_library = load_user_library()
+    combined = list(BASE_MATERIAL_LIBRARY)
 
+    existing_keys = {
+        (item.get("name", "").strip().lower(), item.get("supplier", "").strip().lower())
+        for item in combined
+    }
 
-def db():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    return conn
+    for item in user_library:
+        key = (item.get("name", "").strip().lower(), item.get("supplier", "").strip().lower())
+        if key not in existing_keys:
+            combined.append(item)
+            existing_keys.add(key)
 
-
-def init_db():
-    conn = db()
-    cur = conn.cursor()
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS library_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            supplier TEXT NOT NULL,
-            default_price REAL NOT NULL DEFAULT 0,
-            product_url TEXT NOT NULL DEFAULT '',
-            UNIQUE(name, supplier)
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS customers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            customer_name TEXT NOT NULL,
-            customer_address TEXT NOT NULL DEFAULT '',
-            customer_phone TEXT NOT NULL DEFAULT ''
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS quotes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            quote_ref TEXT NOT NULL UNIQUE,
-            status TEXT NOT NULL DEFAULT 'draft',
-            quote_type TEXT NOT NULL,
-            customer_name TEXT NOT NULL DEFAULT '',
-            customer_address TEXT NOT NULL DEFAULT '',
-            customer_phone TEXT NOT NULL DEFAULT '',
-            job TEXT NOT NULL DEFAULT '',
-            labour REAL NOT NULL DEFAULT 0,
-            materials REAL NOT NULL DEFAULT 0,
-            total_price REAL NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL,
-            internal_raw_materials REAL NOT NULL DEFAULT 0,
-            internal_job_multiplier REAL NOT NULL DEFAULT 1,
-            internal_after_job_markup REAL NOT NULL DEFAULT 0,
-            internal_handling_percent REAL NOT NULL DEFAULT 0,
-            internal_after_handling REAL NOT NULL DEFAULT 0,
-            internal_hidden_uplift REAL NOT NULL DEFAULT 0
-        )
-    """)
-
-    conn.commit()
-
-    cur.execute("SELECT COUNT(*) AS c FROM library_items")
-    count = cur.fetchone()["c"]
-
-    if count == 0:
-        for item in BASE_MATERIAL_LIBRARY:
-            cur.execute("""
-                INSERT OR IGNORE INTO library_items (name, supplier, default_price, product_url)
-                VALUES (?, ?, ?, ?)
-            """, (
-                item["name"],
-                item["supplier"],
-                item["default_price"],
-                item["product_url"]
-            ))
-        conn.commit()
-
-    conn.close()
-
-
-init_db()
+    return combined
 
 
 def fetch_price(url: str):
@@ -356,17 +307,6 @@ def fetch_price(url: str):
     return None
 
 
-def generate_quote_ref():
-    conn = db()
-    cur = conn.cursor()
-    today = datetime.now().strftime("%Y%m%d")
-    like = f"NHQ-{today}-%"
-    cur.execute("SELECT COUNT(*) AS c FROM quotes WHERE quote_ref LIKE ?", (like,))
-    count = cur.fetchone()["c"]
-    conn.close()
-    return f"NHQ-{today}-{count + 1:03d}"
-
-
 @app.get("/material-search")
 def material_search(q: str = ""):
     query = q.strip().lower()
@@ -374,28 +314,22 @@ def material_search(q: str = ""):
         return []
 
     terms = [t for t in query.split() if t]
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM library_items ORDER BY name ASC")
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
-
     matches = []
-    for item in rows:
+
+    for item in get_combined_library():
         hay = f"{item.get('name', '')} {item.get('supplier', '')}".lower()
         if all(term in hay for term in terms):
             matches.append(item)
 
     matches = matches[:12]
-    results = []
 
+    results = []
     for item in matches:
         live_price = None
         if item.get("product_url"):
             live_price = fetch_price(item["product_url"])
 
         results.append({
-            "id": item["id"],
             "name": item.get("name", ""),
             "supplier": item.get("supplier", ""),
             "default_price": item.get("default_price", 0),
@@ -408,126 +342,66 @@ def material_search(q: str = ""):
 
 @app.get("/library-items")
 def library_items():
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM library_items ORDER BY name ASC")
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
-    return JSONResponse(content=rows)
+    return JSONResponse(content=load_user_library())
 
 
 @app.post("/save-library-item")
 def save_library_item(data: SaveLibraryItemRequest):
-    if not data.name.strip():
-        return JSONResponse(content={"ok": False, "message": "Item name is required."})
+    user_library = load_user_library()
 
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO library_items (name, supplier, default_price, product_url)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(name, supplier) DO UPDATE SET
-            default_price=excluded.default_price,
-            product_url=excluded.product_url
-    """, (
-        data.name.strip(),
-        data.supplier.strip(),
-        round(data.default_price, 2),
-        data.product_url.strip()
-    ))
-    conn.commit()
-    conn.close()
+    new_item = {
+        "name": data.name.strip(),
+        "supplier": data.supplier.strip(),
+        "default_price": round(data.default_price, 2),
+        "product_url": data.product_url.strip(),
+    }
+
+    key = (new_item["name"].lower(), new_item["supplier"].lower())
+
+    replaced = False
+    for i, item in enumerate(user_library):
+        existing_key = (item.get("name", "").strip().lower(), item.get("supplier", "").strip().lower())
+        if existing_key == key:
+            user_library[i] = new_item
+            replaced = True
+            break
+
+    if not replaced:
+        user_library.append(new_item)
+
+    ok = save_user_library(user_library)
+    if not ok:
+        return JSONResponse(status_code=500, content={"ok": False, "message": "Could not save item."})
 
     return JSONResponse(content={"ok": True, "message": "Item saved to library."})
 
 
 @app.post("/delete-library-item")
 def delete_library_item(data: DeleteLibraryItemRequest):
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM library_items WHERE id = ?", (data.id,))
-    conn.commit()
-    deleted = cur.rowcount
-    conn.close()
+    user_library = load_user_library()
+    key = (data.name.strip().lower(), data.supplier.strip().lower())
+
+    new_items = []
+    deleted = False
+
+    for item in user_library:
+        existing_key = (item.get("name", "").strip().lower(), item.get("supplier", "").strip().lower())
+        if existing_key == key:
+            deleted = True
+            continue
+        new_items.append(item)
 
     if not deleted:
-        return JSONResponse(content={"ok": False, "message": "Item not found."})
+        return JSONResponse(content={"ok": False, "message": "Item not found in saved library."})
+
+    ok = save_user_library(new_items)
+    if not ok:
+        return JSONResponse(status_code=500, content={"ok": False, "message": "Could not delete item."})
 
     return JSONResponse(content={"ok": True, "message": "Item deleted."})
 
 
-@app.get("/customers")
-def customers():
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM customers ORDER BY customer_name ASC")
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
-    return JSONResponse(content=rows)
-
-
-@app.post("/save-customer")
-def save_customer(data: SaveCustomerRequest):
-    if not data.customer_name.strip():
-        return JSONResponse(content={"ok": False, "message": "Customer name is required."})
-
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO customers (customer_name, customer_address, customer_phone)
-        VALUES (?, ?, ?)
-    """, (
-        data.customer_name.strip(),
-        data.customer_address.strip(),
-        data.customer_phone.strip()
-    ))
-    conn.commit()
-    conn.close()
-
-    return JSONResponse(content={"ok": True, "message": "Customer saved."})
-
-
-@app.post("/delete-customer")
-def delete_customer(data: DeleteCustomerRequest):
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM customers WHERE id = ?", (data.id,))
-    conn.commit()
-    deleted = cur.rowcount
-    conn.close()
-
-    if not deleted:
-        return JSONResponse(content={"ok": False, "message": "Customer not found."})
-
-    return JSONResponse(content={"ok": True, "message": "Customer deleted."})
-
-
-@app.get("/quotes")
-def get_quotes():
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM quotes ORDER BY id DESC")
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
-    return JSONResponse(content=rows)
-
-
-@app.post("/update-quote-status")
-def update_quote_status(data: UpdateQuoteStatusRequest):
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("UPDATE quotes SET status = ? WHERE quote_ref = ?", (data.status.strip() or "draft", data.quote_ref))
-    conn.commit()
-    updated = cur.rowcount
-    conn.close()
-
-    if not updated:
-        return JSONResponse(content={"ok": False, "message": "Quote not found."})
-
-    return JSONResponse(content={"ok": True, "message": "Quote status updated."})
-
-
-HTML = r"""
+HTML = """
 <!doctype html>
 <html>
 <head>
@@ -535,7 +409,7 @@ HTML = r"""
 <title>Nigel Harvey Ltd Quotes</title>
 <style>
 body { font-family: Arial, sans-serif; background:#f5f5f5; margin:0; padding:12px; color:#111; }
-.wrap { max-width:1040px; margin:0 auto; }
+.wrap { max-width:960px; margin:0 auto; }
 .card { background:white; padding:16px; border-radius:14px; margin-bottom:14px; box-shadow:0 2px 10px rgba(0,0,0,0.06); }
 h1 { margin:0 0 6px 0; font-size:30px; }
 h2 { margin:0 0 12px 0; font-size:22px; }
@@ -551,17 +425,16 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 .btn-save { background:#0b5ed7; margin-top:8px; }
 .btn-delete { background:#b42318; font-size:14px; padding:8px; margin-top:8px; }
 .btn-refresh { background:#555; font-size:14px; padding:10px; margin-top:8px; }
-.btn-small { font-size:14px; padding:8px; }
 .templates { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
 .material-row { border:1px solid #ddd; padding:12px; border-radius:10px; margin-bottom:10px; background:#fafafa; }
 .row { display:flex; justify-content:space-between; gap:10px; margin:8px 0; }
-.cols2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .muted { color:#666; }
+.total { font-size:26px; font-weight:800; margin-top:10px; }
 .result { display:none; background:#f3faf3; border:1px solid #b7d7b7; }
 .error { display:none; background:#fff3f3; border:1px solid #e0b7b7; color:#a33; padding:12px; border-radius:10px; margin-top:12px; }
 .notice { display:none; background:#eef6ff; border:1px solid #b9d3f0; color:#134; padding:12px; border-radius:10px; margin-top:12px; }
 .actions { display:grid; gap:10px; margin-top:14px; }
-.history-item, .library-item, .customer-item, .compare-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
+.history-item, .library-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
 .small { font-size:14px; color:#666; }
 .hidden { display:none; }
 .check-row { display:flex; align-items:center; gap:10px; margin:12px 0 6px; font-weight:700; }
@@ -578,7 +451,6 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 .search-item { padding:10px; border-bottom:1px solid #eee; cursor:pointer; }
 .search-item:last-child { border-bottom:none; }
 .search-item:hover { background:#f2f2f2; }
-.status-badge { display:inline-block; padding:4px 8px; border-radius:999px; background:#eee; font-size:12px; font-weight:700; }
 .no-print { display:block; }
 @media print {
   .no-print { display:none !important; }
@@ -619,9 +491,6 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
     <label for="customer_phone">Customer phone</label>
     <input id="customer_phone" placeholder="07123 456789">
 
-    <button type="button" class="btn-save btn-small" onclick="saveCustomer()">Save customer</button>
-    <div id="customerNotice" class="notice"></div>
-
     <label for="job">Job description</label>
     <textarea id="job" placeholder="Example: Replace kitchen tap"></textarea>
 
@@ -650,18 +519,12 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
         <span>Customer supplies tiles</span>
       </div>
     </div>
-  </div>
 
-  <div class="card no-print">
     <h3>Live smart material search</h3>
     <input id="materialSearch" placeholder="Search materials e.g. 15mm speedfit elbow, basin waste, kitchen tap" oninput="debouncedSearch()">
     <div id="searchResults" class="search-results hidden"></div>
 
-    <h3>Supplier comparison</h3>
-    <div id="comparisonList" class="small">Search above to compare suppliers and prices.</div>
-
-    <h3>Save / edit a product in library</h3>
-    <input type="hidden" id="library_id">
+    <h3>Save a product to library</h3>
     <label for="library_name">Item name</label>
     <input id="library_name" placeholder="e.g. Kitchen Mixer Tap">
 
@@ -680,22 +543,14 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
     <label for="library_default_price">Fallback price (£)</label>
     <input id="library_default_price" type="number" step="0.01" placeholder="0">
 
-    <button type="button" class="btn-save" onclick="saveLibraryItem()">Save / update library item</button>
+    <button type="button" class="btn-save" onclick="saveLibraryItem()">Save to library</button>
     <div id="libraryNotice" class="notice"></div>
   </div>
 
-  <div class="cols2 no-print">
-    <div class="card">
-      <h2>Customer database</h2>
-      <button type="button" class="btn-refresh" onclick="loadCustomers()">Refresh customers</button>
-      <div id="customerList" class="small" style="margin-top:12px;">No saved customers yet.</div>
-    </div>
-
-    <div class="card">
-      <h2>Library manager</h2>
-      <button type="button" class="btn-refresh" onclick="loadLibraryManager()">Refresh saved library</button>
-      <div id="libraryManagerList" class="small" style="margin-top:12px;">No saved library items yet.</div>
-    </div>
+  <div class="card no-print">
+    <h2>Library manager</h2>
+    <button type="button" class="btn-refresh" onclick="loadLibraryManager()">Refresh saved library</button>
+    <div id="libraryManagerList" class="small" style="margin-top:12px;">No saved library items yet.</div>
   </div>
 
   <div class="card no-print">
@@ -739,9 +594,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 
     <div class="quote-section-title">Quote details</div>
     <div class="quote-box">
-      <div class="row"><span class="muted">Quote ref</span><span id="r_quote_ref"></span></div>
       <div class="row"><span class="muted">Date</span><span id="r_date"></span></div>
-      <div class="row"><span class="muted">Status</span><span id="r_status"></span></div>
       <div class="row"><span class="muted">Type</span><span id="r_type"></span></div>
       <div class="row"><span class="muted">Customer</span><span id="r_customer"></span></div>
       <div class="row"><span class="muted">Phone</span><span id="r_phone"></span></div>
@@ -805,14 +658,8 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;");
 }
 
-function showLibraryNotice(message) {
+function showNotice(message) {
   const notice = document.getElementById("libraryNotice");
-  notice.innerText = message;
-  notice.style.display = "block";
-}
-
-function showCustomerNotice(message) {
-  const notice = document.getElementById("customerNotice");
   notice.innerText = message;
   notice.style.display = "block";
 }
@@ -820,8 +667,12 @@ function showCustomerNotice(message) {
 function toggleBathroomFields() {
   const quoteType = document.getElementById("quote_type").value;
   const bathroomFields = document.getElementById("bathroomFields");
-  if (quoteType === "bathroom") bathroomFields.classList.remove("hidden");
-  else bathroomFields.classList.add("hidden");
+
+  if (quoteType === "bathroom") {
+    bathroomFields.classList.remove("hidden");
+  } else {
+    bathroomFields.classList.add("hidden");
+  }
 }
 
 function renderTemplates() {
@@ -843,9 +694,14 @@ function applyTemplate(index) {
 function updateLabourSuggestion() {
   const quoteType = document.getElementById("quote_type").value;
   const box = document.getElementById("labourSuggestion");
-  if (quoteType === "bathroom") box.innerText = "Typical bathroom labour is often higher. Adjust to suit your job.";
-  else if (quoteType === "heating") box.innerText = "Heating jobs often vary by size and access. Adjust labour as needed.";
-  else box.innerText = "Small jobs: use your judgement and minimum charge where needed.";
+
+  if (quoteType === "bathroom") {
+    box.innerText = "Typical bathroom labour is often higher. Adjust to suit your job.";
+  } else if (quoteType === "heating") {
+    box.innerText = "Heating jobs often vary by size and access. Adjust labour as needed.";
+  } else {
+    box.innerText = "Small jobs: use your judgement and minimum charge where needed.";
+  }
 }
 
 function addMaterial(prefill = null) {
@@ -854,8 +710,10 @@ function addMaterial(prefill = null) {
   div.innerHTML = `
     <label>Item name</label>
     <input class="m-name" placeholder="e.g. kitchen tap" value="${prefill ? escapeHtml(prefill.name) : ""}">
+
     <label>Quantity</label>
     <input class="m-qty" type="number" step="0.01" placeholder="1" value="${prefill ? 1 : ""}">
+
     <label>Supplier</label>
     <select class="m-supplier">
       <option value="City Plumbing">City Plumbing</option>
@@ -864,13 +722,18 @@ function addMaterial(prefill = null) {
       <option value="Topps Tiles">Topps Tiles</option>
       <option value="Selco">Selco</option>
     </select>
+
     <label>Product URL</label>
     <input class="m-url" placeholder="https://..." value="${prefill ? escapeHtml(prefill.product_url || "") : ""}">
+
     <label>Manual price (£)</label>
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${prefill ? prefill.manual_price : ""}">
   `;
   document.getElementById("materials").appendChild(div);
-  if (prefill) div.querySelector(".m-supplier").value = prefill.supplier || "City Plumbing";
+
+  if (prefill) {
+    div.querySelector(".m-supplier").value = prefill.supplier || "City Plumbing";
+  }
 }
 
 function debouncedSearch() {
@@ -881,12 +744,10 @@ function debouncedSearch() {
 async function searchMaterials() {
   const query = document.getElementById("materialSearch").value.trim();
   const resultsBox = document.getElementById("searchResults");
-  const comparisonBox = document.getElementById("comparisonList");
 
   if (query.length < 2) {
     resultsBox.classList.add("hidden");
     resultsBox.innerHTML = "";
-    comparisonBox.innerHTML = "Search above to compare suppliers and prices.";
     return;
   }
 
@@ -899,7 +760,6 @@ async function searchMaterials() {
 
     if (!results.length) {
       resultsBox.innerHTML = `<div class="search-item">No matches found</div>`;
-      comparisonBox.innerHTML = "No supplier matches found.";
       return;
     }
 
@@ -913,31 +773,14 @@ async function searchMaterials() {
         </div>
       `;
     }).join("");
-
-    const sorted = [...results].sort((a, b) => {
-      const pa = a.live_price !== null ? a.live_price : a.default_price;
-      const pb = b.live_price !== null ? b.live_price : b.default_price;
-      return pa - pb;
-    });
-
-    comparisonBox.innerHTML = sorted.map(item => {
-      const bestPrice = item.live_price !== null ? item.live_price : item.default_price;
-      const label = item.live_price !== null ? "live" : "default";
-      return `
-        <div class="compare-item">
-          <strong>${escapeHtml(item.name)}</strong><br>
-          <span class="small">${escapeHtml(item.supplier)} · ${pounds(bestPrice)} (${label})</span>
-        </div>
-      `;
-    }).join("");
   } catch (e) {
     resultsBox.innerHTML = `<div class="search-item">Search failed</div>`;
-    comparisonBox.innerHTML = "Comparison failed.";
   }
 }
 
 async function autoSaveSearchItem(item) {
   const bestPrice = item.live_price !== null ? item.live_price : item.default_price;
+
   try {
     await fetch("/save-library-item", {
       method: "POST",
@@ -950,7 +793,9 @@ async function autoSaveSearchItem(item) {
       })
     });
     loadLibraryManager();
-  } catch (e) {}
+  } catch (e) {
+    // silent fail so adding to quote still works
+  }
 }
 
 async function selectSearchResult(item) {
@@ -969,11 +814,14 @@ async function selectSearchResult(item) {
 
   if ((item.name || "").trim() && (item.supplier || "").trim() && ((item.product_url || "").trim() || bestPrice > 0)) {
     await autoSaveSearchItem(item);
-    showLibraryNotice("Search item auto-saved to library.");
+    showNotice("Search item auto-saved to library.");
   }
 }
 
 async function saveLibraryItem() {
+  const notice = document.getElementById("libraryNotice");
+  notice.style.display = "none";
+
   const payload = {
     name: document.getElementById("library_name").value,
     supplier: document.getElementById("library_supplier").value,
@@ -982,7 +830,8 @@ async function saveLibraryItem() {
   };
 
   if (!payload.name.trim()) {
-    showLibraryNotice("Please enter an item name.");
+    notice.innerText = "Please enter an item name.";
+    notice.style.display = "block";
     return;
   }
 
@@ -994,31 +843,19 @@ async function saveLibraryItem() {
     });
 
     const data = await res.json();
-    showLibraryNotice(data.message || "Saved.");
+    notice.innerText = data.message || "Saved.";
+    notice.style.display = "block";
+
     if (data.ok) {
-      clearLibraryForm();
+      document.getElementById("library_name").value = "";
+      document.getElementById("library_url").value = "";
+      document.getElementById("library_default_price").value = "";
       loadLibraryManager();
     }
   } catch (e) {
-    showLibraryNotice("Could not save item.");
+    notice.innerText = "Could not save item.";
+    notice.style.display = "block";
   }
-}
-
-function fillLibraryForm(item) {
-  document.getElementById("library_id").value = item.id || "";
-  document.getElementById("library_name").value = item.name || "";
-  document.getElementById("library_supplier").value = item.supplier || "City Plumbing";
-  document.getElementById("library_url").value = item.product_url || "";
-  document.getElementById("library_default_price").value = item.default_price || 0;
-  window.scrollTo({top: 0, behavior: "smooth"});
-}
-
-function clearLibraryForm() {
-  document.getElementById("library_id").value = "";
-  document.getElementById("library_name").value = "";
-  document.getElementById("library_supplier").value = "City Plumbing";
-  document.getElementById("library_url").value = "";
-  document.getElementById("library_default_price").value = "";
 }
 
 async function loadLibraryManager() {
@@ -1039,8 +876,7 @@ async function loadLibraryManager() {
         <div><strong>${escapeHtml(item.name || "")}</strong></div>
         <div class="small">${escapeHtml(item.supplier || "")} · fallback ${pounds(item.default_price || 0)}</div>
         <div class="small">${escapeHtml(item.product_url || "")}</div>
-        <button type="button" class="btn-refresh btn-small" onclick='fillLibraryForm(${JSON.stringify(item)})'>Edit</button>
-        <button type="button" class="btn-delete" onclick='deleteLibraryItem(${item.id})'>Delete</button>
+        <button type="button" class="btn-delete" onclick='deleteLibraryItem(${JSON.stringify(item.name)}, ${JSON.stringify(item.supplier)})'>Delete</button>
       </div>
     `).join("");
   } catch (e) {
@@ -1048,14 +884,14 @@ async function loadLibraryManager() {
   }
 }
 
-async function deleteLibraryItem(id) {
+async function deleteLibraryItem(name, supplier) {
   if (!confirm("Delete this saved library item?")) return;
 
   try {
     const res = await fetch("/delete-library-item", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({id})
+      body: JSON.stringify({name, supplier})
     });
 
     const data = await res.json();
@@ -1066,88 +902,8 @@ async function deleteLibraryItem(id) {
   }
 }
 
-async function saveCustomer() {
-  const payload = {
-    customer_name: document.getElementById("customer_name").value,
-    customer_address: document.getElementById("customer_address").value,
-    customer_phone: document.getElementById("customer_phone").value
-  };
-
-  if (!payload.customer_name.trim()) {
-    showCustomerNotice("Please enter a customer name.");
-    return;
-  }
-
-  try {
-    const res = await fetch("/save-customer", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(payload)
-    });
-
-    const data = await res.json();
-    showCustomerNotice(data.message || "Customer saved.");
-
-    if (data.ok) loadCustomers();
-  } catch (e) {
-    showCustomerNotice("Could not save customer.");
-  }
-}
-
-function fillCustomerForm(customer) {
-  document.getElementById("customer_name").value = customer.customer_name || "";
-  document.getElementById("customer_address").value = customer.customer_address || "";
-  document.getElementById("customer_phone").value = customer.customer_phone || "";
-  window.scrollTo({top: 0, behavior: "smooth"});
-}
-
-async function loadCustomers() {
-  const box = document.getElementById("customerList");
-  box.innerHTML = "Loading...";
-
-  try {
-    const res = await fetch("/customers");
-    const customers = await res.json();
-
-    if (!customers.length) {
-      box.innerHTML = "No saved customers yet.";
-      return;
-    }
-
-    box.innerHTML = customers.map(c => `
-      <div class="customer-item">
-        <div><strong>${escapeHtml(c.customer_name || "")}</strong></div>
-        <div class="small">${escapeHtml(c.customer_phone || "")}</div>
-        <div class="small">${escapeHtml(c.customer_address || "")}</div>
-        <button type="button" class="btn-refresh btn-small" onclick='fillCustomerForm(${JSON.stringify(c)})'>Use customer</button>
-        <button type="button" class="btn-delete" onclick='deleteCustomer(${c.id})'>Delete</button>
-      </div>
-    `).join("");
-  } catch (e) {
-    box.innerHTML = "Could not load customers.";
-  }
-}
-
-async function deleteCustomer(id) {
-  if (!confirm("Delete this customer?")) return;
-
-  try {
-    const res = await fetch("/delete-customer", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({id})
-    });
-
-    const data = await res.json();
-    alert(data.message || "Done");
-    loadCustomers();
-  } catch (e) {
-    alert("Could not delete customer.");
-  }
-}
-
 function normalisePhone(phone) {
-  const digits = (phone || "").replace(/\D/g, "");
+  const digits = (phone || "").replace(/\\D/g, "");
   if (!digits) return "";
   if (digits.startsWith("44")) return digits;
   if (digits.startsWith("0")) return "44" + digits.slice(1);
@@ -1165,37 +921,15 @@ async function loadHistory() {
       return;
     }
 
-    history.innerHTML = data.map(q => `
+    history.innerHTML = data.slice().reverse().map(q => `
       <div class="history-item">
         <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
         <div>${escapeHtml(q.job)}</div>
-        <div class="small">${escapeHtml(q.quote_ref || "")} · ${escapeHtml(q.created_at || "")}</div>
-        <div class="small">Total ${pounds(q.total_price)} · <span class="status-badge">${escapeHtml(q.status || "draft")}</span></div>
-        <label>Status</label>
-        <select onchange='updateQuoteStatus(${JSON.stringify(q.quote_ref)}, this.value)'>
-          <option value="draft" ${q.status === "draft" ? "selected" : ""}>draft</option>
-          <option value="sent" ${q.status === "sent" ? "selected" : ""}>sent</option>
-          <option value="accepted" ${q.status === "accepted" ? "selected" : ""}>accepted</option>
-          <option value="declined" ${q.status === "declined" ? "selected" : ""}>declined</option>
-          <option value="invoiced" ${q.status === "invoiced" ? "selected" : ""}>invoiced</option>
-        </select>
+        <div class="small">${escapeHtml(q.created_at)} · Total ${pounds(q.total_price)}</div>
       </div>
     `).join("");
   } catch (e) {
     document.getElementById("historyList").innerHTML = "Unable to load saved quotes.";
-  }
-}
-
-async function updateQuoteStatus(quoteRef, status) {
-  try {
-    await fetch("/update-quote-status", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({quote_ref: quoteRef, status})
-    });
-    loadHistory();
-  } catch (e) {
-    alert("Could not update quote status.");
   }
 }
 
@@ -1245,9 +979,7 @@ async function generateQuote() {
 
     const data = await res.json();
 
-    document.getElementById("r_quote_ref").innerText = data.quote_ref || "-";
     document.getElementById("r_date").innerText = data.created_at || "-";
-    document.getElementById("r_status").innerText = data.status || "-";
     document.getElementById("r_type").innerText = data.quote_type || "-";
     document.getElementById("r_customer").innerText = data.customer_name || "-";
     document.getElementById("r_phone").innerText = data.customer_phone || "-";
@@ -1272,7 +1004,6 @@ async function generateQuote() {
     const message =
 `Nigel Harvey Ltd Quote
 
-Quote ref: ${data.quote_ref || "-"}
 Date: ${data.created_at || "-"}
 Type: ${data.quote_type || "-"}
 Customer: ${data.customer_name || "-"}
@@ -1307,7 +1038,6 @@ addMaterial();
 updateLabourSuggestion();
 loadHistory();
 loadLibraryManager();
-loadCustomers();
 </script>
 </body>
 </html>
@@ -1318,6 +1048,11 @@ loadCustomers();
 def home():
     html = HTML.replace("__JOB_TEMPLATES__", json.dumps(JOB_TEMPLATES))
     return html
+
+
+@app.get("/quotes")
+def get_quotes():
+    return quotes_db
 
 
 @app.post("/quote")
@@ -1368,8 +1103,6 @@ def create_quote(data: QuoteRequest):
     hidden_uplift = materials_with_handling - raw_materials_with_tiling
 
     quote = {
-        "quote_ref": generate_quote_ref(),
-        "status": "draft",
         "quote_type": data.quote_type,
         "customer_name": data.customer_name,
         "customer_address": data.customer_address,
@@ -1387,35 +1120,5 @@ def create_quote(data: QuoteRequest):
         "internal_hidden_uplift": round(hidden_uplift, 2),
     }
 
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO quotes (
-            quote_ref, status, quote_type, customer_name, customer_address, customer_phone,
-            job, labour, materials, total_price, created_at,
-            internal_raw_materials, internal_job_multiplier, internal_after_job_markup,
-            internal_handling_percent, internal_after_handling, internal_hidden_uplift
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        quote["quote_ref"],
-        quote["status"],
-        quote["quote_type"],
-        quote["customer_name"],
-        quote["customer_address"],
-        quote["customer_phone"],
-        quote["job"],
-        quote["labour"],
-        quote["materials"],
-        quote["total_price"],
-        quote["created_at"],
-        quote["internal_raw_materials"],
-        quote["internal_job_multiplier"],
-        quote["internal_after_job_markup"],
-        quote["internal_handling_percent"],
-        quote["internal_after_handling"],
-        quote["internal_hidden_uplift"],
-    ))
-    conn.commit()
-    conn.close()
-
+    quotes_db.append(quote)
     return JSONResponse(content=quote)
