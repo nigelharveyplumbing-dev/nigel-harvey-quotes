@@ -270,6 +270,11 @@ button, .btn-link {
   font-size:32px;
   font-weight:900;
 }
+.internal-box {
+  margin-top:16px;
+  border:1px dashed #999;
+  background:#fffdf3;
+}
 .no-print {
   display:block;
 }
@@ -299,6 +304,11 @@ button, .btn-link {
   <div class="card no-print">
     <h1>Nigel Harvey Ltd Quotes</h1>
     <div class="sub">Quick quote tool</div>
+
+    <div class="check-row">
+      <input type="checkbox" id="internal_mode">
+      <span>Internal mode</span>
+    </div>
 
     <label for="quote_type">Quote type</label>
     <select id="quote_type" onchange="toggleBathroomFields()">
@@ -400,6 +410,16 @@ button, .btn-link {
       <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
       <div class="row"><span class="muted">Materials</span><span id="r_materials"></span></div>
       <div class="row quote-total"><span>Total price</span><span id="r_total"></span></div>
+    </div>
+
+    <div id="internalBox" class="quote-box internal-box hidden">
+      <div class="quote-section-title" style="margin-top:0;">Internal only</div>
+      <div class="row"><span class="muted">Raw materials</span><span id="r_internal_raw"></span></div>
+      <div class="row"><span class="muted">Job multiplier</span><span id="r_internal_job_multiplier"></span></div>
+      <div class="row"><span class="muted">After job markup</span><span id="r_internal_after_job"></span></div>
+      <div class="row"><span class="muted">Handling %</span><span id="r_internal_handling_percent"></span></div>
+      <div class="row"><span class="muted">After handling</span><span id="r_internal_after_handling"></span></div>
+      <div class="row"><span class="muted">Hidden uplift</span><span id="r_internal_hidden_uplift"></span></div>
     </div>
 
     <div class="quote-section-title">Notes</div>
@@ -506,6 +526,8 @@ async function loadHistory() {
 async function generateQuote() {
   const errorBox = document.getElementById("error");
   const resultCard = document.getElementById("resultCard");
+  const internalBox = document.getElementById("internalBox");
+  const internalMode = document.getElementById("internal_mode").checked;
   errorBox.style.display = "none";
 
   const materials = [];
@@ -558,6 +580,18 @@ async function generateQuote() {
     document.getElementById("r_labour").innerText = pounds(data.labour);
     document.getElementById("r_materials").innerText = pounds(data.materials);
     document.getElementById("r_total").innerText = pounds(data.total_price);
+
+    if (internalMode) {
+      internalBox.classList.remove("hidden");
+      document.getElementById("r_internal_raw").innerText = pounds(data.internal_raw_materials);
+      document.getElementById("r_internal_job_multiplier").innerText = data.internal_job_multiplier + "x";
+      document.getElementById("r_internal_after_job").innerText = pounds(data.internal_after_job_markup);
+      document.getElementById("r_internal_handling_percent").innerText = data.internal_handling_percent + "%";
+      document.getElementById("r_internal_after_handling").innerText = pounds(data.internal_after_handling);
+      document.getElementById("r_internal_hidden_uplift").innerText = pounds(data.internal_hidden_uplift);
+    } else {
+      internalBox.classList.add("hidden");
+    }
 
     const message =
 `Nigel Harvey Ltd Quote
@@ -625,9 +659,6 @@ def create_quote(data: QuoteRequest):
 
         total_materials += price * item.quantity
 
-    # FIXED TILING LOGIC:
-    # Labour is always what you enter.
-    # Tiling only adds materials, not auto labour.
     tiling_extra_materials = 0
 
     if data.quote_type == "bathroom" and data.tiling:
@@ -639,19 +670,21 @@ def create_quote(data: QuoteRequest):
             floor_materials = data.floor_tiling_m2 * 15
             tiling_extra_materials += wall_materials + floor_materials
 
-    # job type markup
+    raw_materials_with_tiling = total_materials + tiling_extra_materials
+
     job_multiplier = 1.0
     if data.quote_type == "bathroom":
         job_multiplier = 1.5
     elif data.quote_type == "heating":
         job_multiplier = 1.3
 
-    materials_after_job_markup = (total_materials + tiling_extra_materials) * job_multiplier
+    materials_after_job_markup = raw_materials_with_tiling * job_multiplier
 
-    # materials handling
+    handling_percent = 0.0
     handling_multiplier = 1.0
     if data.include_materials_handling:
-        handling_multiplier += (data.materials_handling_percent / 100.0)
+        handling_percent = data.materials_handling_percent
+        handling_multiplier += (handling_percent / 100.0)
 
     materials_with_handling = materials_after_job_markup * handling_multiplier
 
@@ -662,6 +695,8 @@ def create_quote(data: QuoteRequest):
     if data.tiling and data.quote_type == "bathroom":
         job_text += " + Tiling"
 
+    hidden_uplift = materials_with_handling - raw_materials_with_tiling
+
     quote = {
         "quote_type": data.quote_type,
         "customer_name": data.customer_name,
@@ -669,9 +704,16 @@ def create_quote(data: QuoteRequest):
         "customer_phone": data.customer_phone,
         "job": job_text,
         "labour": round(labour_total, 2),
-        "materials": round(total_materials + tiling_extra_materials, 2),
+        "materials": round(raw_materials_with_tiling, 2),
         "total_price": round(total, 2),
-        "created_at": datetime.now().strftime("%d/%m/%Y %H:%M")
+        "created_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
+
+        "internal_raw_materials": round(raw_materials_with_tiling, 2),
+        "internal_job_multiplier": round(job_multiplier, 2),
+        "internal_after_job_markup": round(materials_after_job_markup, 2),
+        "internal_handling_percent": round(handling_percent, 2),
+        "internal_after_handling": round(materials_with_handling, 2),
+        "internal_hidden_uplift": round(hidden_uplift, 2),
     }
 
     quotes_db.append(quote)
