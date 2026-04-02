@@ -625,6 +625,20 @@ def create_quote(data: QuoteRequest):
 
         total_materials += price * item.quantity
 
+    # FIXED TILING LOGIC:
+    # Labour is always what you enter.
+    # Tiling only adds materials, not auto labour.
+    tiling_extra_materials = 0
+
+    if data.quote_type == "bathroom" and data.tiling:
+        total_area = data.wall_tiling_m2 + data.floor_tiling_m2
+
+        if total_area > 0 and not data.customer_supplies_tiles:
+            wall_multiplier = 1.2 if data.wall_height == "full" else 1.0
+            wall_materials = data.wall_tiling_m2 * 20 * wall_multiplier
+            floor_materials = data.floor_tiling_m2 * 15
+            tiling_extra_materials += wall_materials + floor_materials
+
     # job type markup
     job_multiplier = 1.0
     if data.quote_type == "bathroom":
@@ -632,7 +646,7 @@ def create_quote(data: QuoteRequest):
     elif data.quote_type == "heating":
         job_multiplier = 1.3
 
-    materials_after_job_markup = total_materials * job_multiplier
+    materials_after_job_markup = (total_materials + tiling_extra_materials) * job_multiplier
 
     # materials handling
     handling_multiplier = 1.0
@@ -641,30 +655,8 @@ def create_quote(data: QuoteRequest):
 
     materials_with_handling = materials_after_job_markup * handling_multiplier
 
-    tiling_extra_labour = 0
-    tiling_extra_materials = 0
-
-    if data.quote_type == "bathroom":
-        if data.tiling:
-            tiling_extra_labour += 300
-
-        total_area = data.wall_tiling_m2 + data.floor_tiling_m2
-
-        if total_area > 0:
-            wall_multiplier = 1.2 if data.wall_height == "full" else 1.0
-
-            wall_labour = data.wall_tiling_m2 * 45 * wall_multiplier
-            floor_labour = data.floor_tiling_m2 * 50
-
-            tiling_extra_labour += wall_labour + floor_labour
-
-            if not data.customer_supplies_tiles:
-                wall_materials = data.wall_tiling_m2 * 20
-                floor_materials = data.floor_tiling_m2 * 15
-                tiling_extra_materials += wall_materials + floor_materials
-
-    labour_total = data.labour_cost + tiling_extra_labour
-    total = labour_total + materials_with_handling + tiling_extra_materials
+    labour_total = data.labour_cost
+    total = labour_total + materials_with_handling
 
     job_text = data.job_description
     if data.tiling and data.quote_type == "bathroom":
