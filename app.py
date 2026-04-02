@@ -10,6 +10,76 @@ app = FastAPI(title="Nigel Harvey Ltd Quotes")
 
 quotes_db = []
 
+MATERIAL_LIBRARY = [
+    {"name": "15mm Copper Pipe 3m", "supplier": "City Plumbing", "default_price": 18.00},
+    {"name": "22mm Copper Pipe 3m", "supplier": "City Plumbing", "default_price": 32.00},
+    {"name": "15mm Copper Elbow", "supplier": "Screwfix", "default_price": 1.20},
+    {"name": "22mm Copper Elbow", "supplier": "Screwfix", "default_price": 2.10},
+    {"name": "15mm Copper Tee", "supplier": "Screwfix", "default_price": 1.80},
+    {"name": "22mm Copper Tee", "supplier": "Screwfix", "default_price": 3.20},
+    {"name": "15mm Straight Coupler", "supplier": "Toolstation", "default_price": 1.10},
+    {"name": "22mm Straight Coupler", "supplier": "Toolstation", "default_price": 1.90},
+    {"name": "15mm Isolating Valve", "supplier": "Toolstation", "default_price": 3.50},
+    {"name": "22mm Isolating Valve", "supplier": "Toolstation", "default_price": 5.50},
+    {"name": "Flexible Tap Connector", "supplier": "Screwfix", "default_price": 6.50},
+    {"name": "Sink Waste Kit", "supplier": "City Plumbing", "default_price": 22.00},
+    {"name": "Basin Waste", "supplier": "City Plumbing", "default_price": 14.00},
+    {"name": "Pop Up Basin Waste", "supplier": "City Plumbing", "default_price": 18.00},
+    {"name": "P Trap 1.5in", "supplier": "Toolstation", "default_price": 7.50},
+    {"name": "Bottle Trap Chrome", "supplier": "City Plumbing", "default_price": 24.00},
+    {"name": "Outside Tap Kit", "supplier": "Screwfix", "default_price": 18.00},
+    {"name": "Washing Machine Valve", "supplier": "Toolstation", "default_price": 6.00},
+    {"name": "Service Valve", "supplier": "Screwfix", "default_price": 4.00},
+    {"name": "Compression Coupler 15mm", "supplier": "Toolstation", "default_price": 1.80},
+    {"name": "Compression Coupler 22mm", "supplier": "Toolstation", "default_price": 2.90},
+
+    {"name": "Hep2O 15mm Pipe Coil", "supplier": "City Plumbing", "default_price": 65.00},
+    {"name": "Hep2O 22mm Pipe Coil", "supplier": "City Plumbing", "default_price": 95.00},
+    {"name": "Hep2O 15mm Straight Coupler", "supplier": "City Plumbing", "default_price": 4.50},
+    {"name": "Hep2O 22mm Straight Coupler", "supplier": "City Plumbing", "default_price": 6.80},
+    {"name": "Hep2O 15mm Elbow", "supplier": "City Plumbing", "default_price": 5.20},
+    {"name": "Hep2O 22mm Elbow", "supplier": "City Plumbing", "default_price": 7.20},
+    {"name": "Hep2O 15mm Tee", "supplier": "City Plumbing", "default_price": 6.00},
+    {"name": "Hep2O 22mm Tee", "supplier": "City Plumbing", "default_price": 8.50},
+    {"name": "Hep2O Pipe Insert 15mm", "supplier": "City Plumbing", "default_price": 0.80},
+    {"name": "Hep2O Pipe Insert 22mm", "supplier": "City Plumbing", "default_price": 1.20},
+
+    {"name": "Speedfit 15mm Pipe Coil", "supplier": "Screwfix", "default_price": 58.00},
+    {"name": "Speedfit 22mm Pipe Coil", "supplier": "Screwfix", "default_price": 90.00},
+    {"name": "Speedfit 15mm Straight Coupler", "supplier": "Screwfix", "default_price": 4.20},
+    {"name": "Speedfit 22mm Straight Coupler", "supplier": "Screwfix", "default_price": 6.20},
+    {"name": "Speedfit 15mm Elbow", "supplier": "Screwfix", "default_price": 5.00},
+    {"name": "Speedfit 22mm Elbow", "supplier": "Screwfix", "default_price": 7.00},
+    {"name": "Speedfit 15mm Tee", "supplier": "Screwfix", "default_price": 5.80},
+    {"name": "Speedfit 22mm Tee", "supplier": "Screwfix", "default_price": 8.00},
+    {"name": "Speedfit Female Iron 15mm x 1/2", "supplier": "Screwfix", "default_price": 7.20},
+    {"name": "Speedfit Male Iron 15mm x 1/2", "supplier": "Screwfix", "default_price": 7.20},
+    {"name": "Speedfit Stop End 15mm", "supplier": "Screwfix", "default_price": 3.00},
+    {"name": "Speedfit Pipe Insert 15mm", "supplier": "Screwfix", "default_price": 0.75},
+    {"name": "Speedfit Pipe Insert 22mm", "supplier": "Screwfix", "default_price": 1.10},
+
+    {"name": "Kitchen Mixer Tap", "supplier": "City Plumbing", "default_price": 85.00},
+    {"name": "Basin Mixer Tap", "supplier": "City Plumbing", "default_price": 65.00},
+    {"name": "Bath Mixer Tap", "supplier": "City Plumbing", "default_price": 95.00},
+    {"name": "Thermostatic Shower Valve", "supplier": "City Plumbing", "default_price": 140.00},
+    {"name": "Toilet Fill Valve", "supplier": "Screwfix", "default_price": 12.00},
+    {"name": "Toilet Flush Valve", "supplier": "Screwfix", "default_price": 18.00},
+    {"name": "Silicone", "supplier": "Toolstation", "default_price": 8.00},
+    {"name": "Tile Adhesive 20kg", "supplier": "Topps Tiles", "default_price": 22.00},
+    {"name": "Tile Grout 5kg", "supplier": "Topps Tiles", "default_price": 14.00},
+    {"name": "Tile Trim 2.5m", "supplier": "Topps Tiles", "default_price": 9.00},
+    {"name": "Ceramic Wall Tile per m2", "supplier": "Topps Tiles", "default_price": 25.00},
+    {"name": "Porcelain Floor Tile per m2", "supplier": "Topps Tiles", "default_price": 35.00},
+
+    {"name": "TRV Valve", "supplier": "Screwfix", "default_price": 14.00},
+    {"name": "Lockshield Valve", "supplier": "Screwfix", "default_price": 8.00},
+    {"name": "Radiator Valve Set", "supplier": "Screwfix", "default_price": 20.00},
+    {"name": "Motorised Valve", "supplier": "City Plumbing", "default_price": 65.00},
+    {"name": "Magnetic Filter", "supplier": "City Plumbing", "default_price": 95.00},
+    {"name": "Inhibitor 1L", "supplier": "Toolstation", "default_price": 16.00},
+    {"name": "Filling Loop", "supplier": "Toolstation", "default_price": 14.00},
+]
+
 
 class MaterialItem(BaseModel):
     name: str = ""
@@ -107,7 +177,7 @@ body {
   color:#111;
 }
 .wrap {
-  max-width:860px;
+  max-width:960px;
   margin:0 auto;
 }
 .card {
@@ -275,6 +345,25 @@ button, .btn-link {
   border:1px dashed #999;
   background:#fffdf3;
 }
+.search-results {
+  border:1px solid #ddd;
+  border-radius:10px;
+  max-height:220px;
+  overflow:auto;
+  background:#fff;
+  margin-top:8px;
+}
+.search-item {
+  padding:10px;
+  border-bottom:1px solid #eee;
+  cursor:pointer;
+}
+.search-item:last-child {
+  border-bottom:none;
+}
+.search-item:hover {
+  background:#f2f2f2;
+}
 .no-print {
   display:block;
 }
@@ -355,9 +444,13 @@ button, .btn-link {
       </div>
     </div>
 
+    <h3>Smart material search</h3>
+    <input id="materialSearch" placeholder="Search materials e.g. 15mm speedfit elbow, basin waste, kitchen tap" oninput="searchMaterials()">
+    <div id="searchResults" class="search-results hidden"></div>
+
     <h3>Materials</h3>
     <div id="materials"></div>
-    <button type="button" onclick="addMaterial()">+ Add Material</button>
+    <button type="button" onclick="addMaterial()">+ Add Manual Material Row</button>
 
     <h3>Pricing</h3>
 
@@ -443,6 +536,8 @@ button, .btn-link {
 </div>
 
 <script>
+const MATERIAL_LIBRARY = __MATERIAL_LIBRARY__;
+
 function pounds(value) {
   return "£" + Number(value).toFixed(2);
 }
@@ -465,15 +560,15 @@ function toggleBathroomFields() {
   }
 }
 
-function addMaterial() {
+function addMaterial(prefill = null) {
   const div = document.createElement("div");
   div.className = "material-row";
   div.innerHTML = `
     <label>Item name</label>
-    <input class="m-name" placeholder="e.g. kitchen tap">
+    <input class="m-name" placeholder="e.g. kitchen tap" value="${prefill ? escapeHtml(prefill.name) : ""}">
 
     <label>Quantity</label>
-    <input class="m-qty" type="number" step="0.01" placeholder="1">
+    <input class="m-qty" type="number" step="0.01" placeholder="1" value="${prefill ? 1 : ""}">
 
     <label>Supplier</label>
     <select class="m-supplier">
@@ -481,15 +576,61 @@ function addMaterial() {
       <option value="Screwfix">Screwfix</option>
       <option value="Toolstation">Toolstation</option>
       <option value="Topps Tiles">Topps Tiles</option>
+      <option value="Selco">Selco</option>
     </select>
 
     <label>Product URL</label>
-    <input class="m-url" placeholder="https://...">
+    <input class="m-url" placeholder="https://..." value="">
 
     <label>Manual price (£)</label>
-    <input class="m-manual" type="number" step="0.01" placeholder="0">
+    <input class="m-manual" type="number" step="0.01" placeholder="0" value="${prefill ? prefill.default_price : ""}">
   `;
   document.getElementById("materials").appendChild(div);
+
+  if (prefill) {
+    div.querySelector(".m-supplier").value = prefill.supplier || "City Plumbing";
+  }
+}
+
+function searchMaterials() {
+  const query = document.getElementById("materialSearch").value.trim().toLowerCase();
+  const resultsBox = document.getElementById("searchResults");
+
+  if (!query) {
+    resultsBox.classList.add("hidden");
+    resultsBox.innerHTML = "";
+    return;
+  }
+
+  const terms = query.split(" ").filter(Boolean);
+
+  const results = MATERIAL_LIBRARY.filter(item => {
+    const hay = (item.name + " " + item.supplier).toLowerCase();
+    return terms.every(term => hay.includes(term));
+  }).slice(0, 15);
+
+  if (!results.length) {
+    resultsBox.innerHTML = `<div class="search-item">No matches found</div>`;
+    resultsBox.classList.remove("hidden");
+    return;
+  }
+
+  resultsBox.innerHTML = results.map((item, idx) => `
+    <div class="search-item" onclick="addMaterialFromLibrary(${idx}, ${JSON.stringify(results).replace(/"/g, '&quot;')})">
+      <strong>${escapeHtml(item.name)}</strong><br>
+      <span class="small">${escapeHtml(item.supplier)} · ${pounds(item.default_price)}</span>
+    </div>
+  `).join("");
+
+  resultsBox.classList.remove("hidden");
+}
+
+function addMaterialFromLibrary(index, items) {
+  const item = items[index];
+  addMaterial(item);
+  document.getElementById("materialSearch").value = "";
+  document.getElementById("searchResults").classList.add("hidden");
+  document.getElementById("searchResults").innerHTML = "";
 }
 
 function normalisePhone(phone) {
@@ -639,7 +780,8 @@ loadHistory();
 
 @app.get("/", response_class=HTMLResponse)
 def home():
-    return HTML
+    html = HTML.replace("__MATERIAL_LIBRARY__", str(MATERIAL_LIBRARY).replace("True", "true").replace("False", "false").replace("None", "null"))
+    return html
 
 
 @app.get("/quotes")
