@@ -658,6 +658,12 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;");
 }
 
+function showNotice(message) {
+  const notice = document.getElementById("libraryNotice");
+  notice.innerText = message;
+  notice.style.display = "block";
+}
+
 function toggleBathroomFields() {
   const quoteType = document.getElementById("quote_type").value;
   const bathroomFields = document.getElementById("bathroomFields");
@@ -772,7 +778,27 @@ async function searchMaterials() {
   }
 }
 
-function selectSearchResult(item) {
+async function autoSaveSearchItem(item) {
+  const bestPrice = item.live_price !== null ? item.live_price : item.default_price;
+
+  try {
+    await fetch("/save-library-item", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        name: item.name || "",
+        supplier: item.supplier || "",
+        product_url: item.product_url || "",
+        default_price: bestPrice || 0
+      })
+    });
+    loadLibraryManager();
+  } catch (e) {
+    // silent fail so adding to quote still works
+  }
+}
+
+async function selectSearchResult(item) {
   const bestPrice = item.live_price !== null ? item.live_price : item.default_price;
 
   addMaterial({
@@ -785,6 +811,11 @@ function selectSearchResult(item) {
   document.getElementById("materialSearch").value = "";
   document.getElementById("searchResults").classList.add("hidden");
   document.getElementById("searchResults").innerHTML = "";
+
+  if ((item.name || "").trim() && (item.supplier || "").trim() && ((item.product_url || "").trim() || bestPrice > 0)) {
+    await autoSaveSearchItem(item);
+    showNotice("Search item auto-saved to library.");
+  }
 }
 
 async function saveLibraryItem() {
