@@ -6,13 +6,11 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import json
-import os
+import sqlite3
 
 app = FastAPI(title="Nigel Harvey Ltd Quotes")
 
-LIBRARY_FILE = "materials_library.json"
-CUSTOMERS_FILE = "customers.json"
-QUOTES_FILE = "quotes.json"
+DB_FILE = "nigel_quotes.db"
 
 BASE_MATERIAL_LIBRARY = [
     {
@@ -214,8 +212,7 @@ class SaveLibraryItemRequest(BaseModel):
 
 
 class DeleteLibraryItemRequest(BaseModel):
-    name: str
-    supplier: str = ""
+    id: int
 
 
 class SaveCustomerRequest(BaseModel):
@@ -225,8 +222,7 @@ class SaveCustomerRequest(BaseModel):
 
 
 class DeleteCustomerRequest(BaseModel):
-    customer_name: str
-    customer_phone: str = ""
+    id: int
 
 
 class UpdateQuoteStatusRequest(BaseModel):
@@ -234,69 +230,81 @@ class UpdateQuoteStatusRequest(BaseModel):
     status: str
 
 
-def load_json_file(path, default):
-    if not os.path.exists(path):
-        return default
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data
-    except Exception:
-        return default
+def db():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
-def save_json_file(path, data):
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception:
-        return False
+def init_db():
+    conn = db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS library_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            supplier TEXT NOT NULL,
+            default_price REAL NOT NULL DEFAULT 0,
+            product_url TEXT NOT NULL DEFAULT '',
+            UNIQUE(name, supplier)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_name TEXT NOT NULL,
+            customer_address TEXT NOT NULL DEFAULT '',
+            customer_phone TEXT NOT NULL DEFAULT ''
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS quotes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            quote_ref TEXT NOT NULL UNIQUE,
+            status TEXT NOT NULL DEFAULT 'draft',
+            quote_type TEXT NOT NULL,
+            customer_name TEXT NOT NULL DEFAULT '',
+            customer_address TEXT NOT NULL DEFAULT '',
+            customer_phone TEXT NOT NULL DEFAULT '',
+            job TEXT NOT NULL DEFAULT '',
+            labour REAL NOT NULL DEFAULT 0,
+            materials REAL NOT NULL DEFAULT 0,
+            total_price REAL NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            internal_raw_materials REAL NOT NULL DEFAULT 0,
+            internal_job_multiplier REAL NOT NULL DEFAULT 1,
+            internal_after_job_markup REAL NOT NULL DEFAULT 0,
+            internal_handling_percent REAL NOT NULL DEFAULT 0,
+            internal_after_handling REAL NOT NULL DEFAULT 0,
+            internal_hidden_uplift REAL NOT NULL DEFAULT 0
+        )
+    """)
+
+    conn.commit()
+
+    cur.execute("SELECT COUNT(*) AS c FROM library_items")
+    count = cur.fetchone()["c"]
+
+    if count == 0:
+        for item in BASE_MATERIAL_LIBRARY:
+            cur.execute("""
+                INSERT OR IGNORE INTO library_items (name, supplier, default_price, product_url)
+                VALUES (?, ?, ?, ?)
+            """, (
+                item["name"],
+                item["supplier"],
+                item["default_price"],
+                item["product_url"]
+            ))
+        conn.commit()
+
+    conn.close()
 
 
-def load_user_library():
-    data = load_json_file(LIBRARY_FILE, [])
-    return data if isinstance(data, list) else []
-
-
-def save_user_library(items):
-    return save_json_file(LIBRARY_FILE, items)
-
-
-def load_customers():
-    data = load_json_file(CUSTOMERS_FILE, [])
-    return data if isinstance(data, list) else []
-
-
-def save_customers(items):
-    return save_json_file(CUSTOMERS_FILE, items)
-
-
-def load_quotes():
-    data = load_json_file(QUOTES_FILE, [])
-    return data if isinstance(data, list) else []
-
-
-def save_quotes(items):
-    return save_json_file(QUOTES_FILE, items)
-
-
-def get_combined_library():
-    user_library = load_user_library()
-    combined = list(BASE_MATERIAL_LIBRARY)
-
-    existing_keys = {
-        (item.get("name", "").strip().lower(), item.get("supplier", "").strip().lower())
-        for item in combined
-    }
-
-    for item in user_library:
-        key = (item.get("name", "").strip().lower(), item.get("supplier", "").strip().lower())
-        if key not in existing_keys:
-            combined.append(item)
-            existing_keys.add(key)
-
-    return combined
+init_db()
 
 
 def fetch_price(url: str):
@@ -349,11 +357,14 @@ def fetch_price(url: str):
 
 
 def generate_quote_ref():
-    quotes = load_quotes()
+    conn = db()
+    cur = conn.cursor()
     today = datetime.now().strftime("%Y%m%d")
-    todays = [q for q in quotes if q.get("quote_ref", "").startswith(f"NHQ-{today}")]
-    next_no = len(todays) + 1
-    return f"NHQ-{today}-{next_no:03d}"
+    like = f"NHQ-{today}-%"
+    cur.execute("SELECT COUNT(*) AS c FROM quotes WHERE quote_ref LIKE ?", (like,))
+    count = cur.fetchone()["c"]
+    conn.close()
+    return f"NHQ-{today}-{count + 1:03d}"
 
 
 @app.get("/material-search")
@@ -363,22 +374,28 @@ def material_search(q: str = ""):
         return []
 
     terms = [t for t in query.split() if t]
-    matches = []
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM library_items ORDER BY name ASC")
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
 
-    for item in get_combined_library():
+    matches = []
+    for item in rows:
         hay = f"{item.get('name', '')} {item.get('supplier', '')}".lower()
         if all(term in hay for term in terms):
             matches.append(item)
 
     matches = matches[:12]
-
     results = []
+
     for item in matches:
         live_price = None
         if item.get("product_url"):
             live_price = fetch_price(item["product_url"])
 
         results.append({
+            "id": item["id"],
             "name": item.get("name", ""),
             "supplier": item.get("supplier", ""),
             "default_price": item.get("default_price", 0),
@@ -391,164 +408,126 @@ def material_search(q: str = ""):
 
 @app.get("/library-items")
 def library_items():
-    return JSONResponse(content=load_user_library())
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM library_items ORDER BY name ASC")
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return JSONResponse(content=rows)
 
 
 @app.post("/save-library-item")
 def save_library_item(data: SaveLibraryItemRequest):
-    user_library = load_user_library()
+    if not data.name.strip():
+        return JSONResponse(content={"ok": False, "message": "Item name is required."})
 
-    new_item = {
-        "name": data.name.strip(),
-        "supplier": data.supplier.strip(),
-        "default_price": round(data.default_price, 2),
-        "product_url": data.product_url.strip(),
-    }
-
-    key = (new_item["name"].lower(), new_item["supplier"].lower())
-
-    replaced = False
-    for i, item in enumerate(user_library):
-        existing_key = (item.get("name", "").strip().lower(), item.get("supplier", "").strip().lower())
-        if existing_key == key:
-            user_library[i] = new_item
-            replaced = True
-            break
-
-    if not replaced:
-        user_library.append(new_item)
-
-    ok = save_user_library(user_library)
-    if not ok:
-        return JSONResponse(status_code=500, content={"ok": False, "message": "Could not save item."})
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO library_items (name, supplier, default_price, product_url)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(name, supplier) DO UPDATE SET
+            default_price=excluded.default_price,
+            product_url=excluded.product_url
+    """, (
+        data.name.strip(),
+        data.supplier.strip(),
+        round(data.default_price, 2),
+        data.product_url.strip()
+    ))
+    conn.commit()
+    conn.close()
 
     return JSONResponse(content={"ok": True, "message": "Item saved to library."})
 
 
 @app.post("/delete-library-item")
 def delete_library_item(data: DeleteLibraryItemRequest):
-    user_library = load_user_library()
-    key = (data.name.strip().lower(), data.supplier.strip().lower())
-
-    new_items = []
-    deleted = False
-
-    for item in user_library:
-        existing_key = (item.get("name", "").strip().lower(), item.get("supplier", "").strip().lower())
-        if existing_key == key:
-            deleted = True
-            continue
-        new_items.append(item)
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM library_items WHERE id = ?", (data.id,))
+    conn.commit()
+    deleted = cur.rowcount
+    conn.close()
 
     if not deleted:
-        return JSONResponse(content={"ok": False, "message": "Item not found in saved library."})
-
-    ok = save_user_library(new_items)
-    if not ok:
-        return JSONResponse(status_code=500, content={"ok": False, "message": "Could not delete item."})
+        return JSONResponse(content={"ok": False, "message": "Item not found."})
 
     return JSONResponse(content={"ok": True, "message": "Item deleted."})
 
 
 @app.get("/customers")
 def customers():
-    return JSONResponse(content=load_customers())
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM customers ORDER BY customer_name ASC")
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return JSONResponse(content=rows)
 
 
 @app.post("/save-customer")
 def save_customer(data: SaveCustomerRequest):
-    customer_name = data.customer_name.strip()
-    customer_phone = data.customer_phone.strip()
-    customer_address = data.customer_address.strip()
-
-    if not customer_name:
+    if not data.customer_name.strip():
         return JSONResponse(content={"ok": False, "message": "Customer name is required."})
 
-    items = load_customers()
-    key = (customer_name.lower(), customer_phone.lower())
-
-    new_customer = {
-        "customer_name": customer_name,
-        "customer_phone": customer_phone,
-        "customer_address": customer_address,
-    }
-
-    replaced = False
-    for i, item in enumerate(items):
-        existing_key = (
-            item.get("customer_name", "").strip().lower(),
-            item.get("customer_phone", "").strip().lower()
-        )
-        if existing_key == key:
-            items[i] = new_customer
-            replaced = True
-            break
-
-    if not replaced:
-        items.append(new_customer)
-
-    ok = save_customers(items)
-    if not ok:
-        return JSONResponse(status_code=500, content={"ok": False, "message": "Could not save customer."})
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO customers (customer_name, customer_address, customer_phone)
+        VALUES (?, ?, ?)
+    """, (
+        data.customer_name.strip(),
+        data.customer_address.strip(),
+        data.customer_phone.strip()
+    ))
+    conn.commit()
+    conn.close()
 
     return JSONResponse(content={"ok": True, "message": "Customer saved."})
 
 
 @app.post("/delete-customer")
 def delete_customer(data: DeleteCustomerRequest):
-    items = load_customers()
-    key = (data.customer_name.strip().lower(), data.customer_phone.strip().lower())
-
-    new_items = []
-    deleted = False
-
-    for item in items:
-        existing_key = (
-            item.get("customer_name", "").strip().lower(),
-            item.get("customer_phone", "").strip().lower()
-        )
-        if existing_key == key:
-            deleted = True
-            continue
-        new_items.append(item)
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM customers WHERE id = ?", (data.id,))
+    conn.commit()
+    deleted = cur.rowcount
+    conn.close()
 
     if not deleted:
         return JSONResponse(content={"ok": False, "message": "Customer not found."})
-
-    ok = save_customers(new_items)
-    if not ok:
-        return JSONResponse(status_code=500, content={"ok": False, "message": "Could not delete customer."})
 
     return JSONResponse(content={"ok": True, "message": "Customer deleted."})
 
 
 @app.get("/quotes")
 def get_quotes():
-    return JSONResponse(content=load_quotes())
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM quotes ORDER BY id DESC")
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return JSONResponse(content=rows)
 
 
 @app.post("/update-quote-status")
 def update_quote_status(data: UpdateQuoteStatusRequest):
-    quotes = load_quotes()
-    updated = False
-
-    for q in quotes:
-        if q.get("quote_ref") == data.quote_ref:
-            q["status"] = data.status.strip() or "draft"
-            updated = True
-            break
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("UPDATE quotes SET status = ? WHERE quote_ref = ?", (data.status.strip() or "draft", data.quote_ref))
+    conn.commit()
+    updated = cur.rowcount
+    conn.close()
 
     if not updated:
         return JSONResponse(content={"ok": False, "message": "Quote not found."})
 
-    ok = save_quotes(quotes)
-    if not ok:
-        return JSONResponse(status_code=500, content={"ok": False, "message": "Could not update quote status."})
-
     return JSONResponse(content={"ok": True, "message": "Quote status updated."})
 
 
-HTML = """
+HTML = r"""
 <!doctype html>
 <html>
 <head>
@@ -578,7 +557,6 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 .row { display:flex; justify-content:space-between; gap:10px; margin:8px 0; }
 .cols2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .muted { color:#666; }
-.total { font-size:26px; font-weight:800; margin-top:10px; }
 .result { display:none; background:#f3faf3; border:1px solid #b7d7b7; }
 .error { display:none; background:#fff3f3; border:1px solid #e0b7b7; color:#a33; padding:12px; border-radius:10px; margin-top:12px; }
 .notice { display:none; background:#eef6ff; border:1px solid #b9d3f0; color:#134; padding:12px; border-radius:10px; margin-top:12px; }
@@ -683,6 +661,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
     <div id="comparisonList" class="small">Search above to compare suppliers and prices.</div>
 
     <h3>Save / edit a product in library</h3>
+    <input type="hidden" id="library_id">
     <label for="library_name">Item name</label>
     <input id="library_name" placeholder="e.g. Kitchen Mixer Tap">
 
@@ -841,12 +820,8 @@ function showCustomerNotice(message) {
 function toggleBathroomFields() {
   const quoteType = document.getElementById("quote_type").value;
   const bathroomFields = document.getElementById("bathroomFields");
-
-  if (quoteType === "bathroom") {
-    bathroomFields.classList.remove("hidden");
-  } else {
-    bathroomFields.classList.add("hidden");
-  }
+  if (quoteType === "bathroom") bathroomFields.classList.remove("hidden");
+  else bathroomFields.classList.add("hidden");
 }
 
 function renderTemplates() {
@@ -868,14 +843,9 @@ function applyTemplate(index) {
 function updateLabourSuggestion() {
   const quoteType = document.getElementById("quote_type").value;
   const box = document.getElementById("labourSuggestion");
-
-  if (quoteType === "bathroom") {
-    box.innerText = "Typical bathroom labour is often higher. Adjust to suit your job.";
-  } else if (quoteType === "heating") {
-    box.innerText = "Heating jobs often vary by size and access. Adjust labour as needed.";
-  } else {
-    box.innerText = "Small jobs: use your judgement and minimum charge where needed.";
-  }
+  if (quoteType === "bathroom") box.innerText = "Typical bathroom labour is often higher. Adjust to suit your job.";
+  else if (quoteType === "heating") box.innerText = "Heating jobs often vary by size and access. Adjust labour as needed.";
+  else box.innerText = "Small jobs: use your judgement and minimum charge where needed.";
 }
 
 function addMaterial(prefill = null) {
@@ -884,10 +854,8 @@ function addMaterial(prefill = null) {
   div.innerHTML = `
     <label>Item name</label>
     <input class="m-name" placeholder="e.g. kitchen tap" value="${prefill ? escapeHtml(prefill.name) : ""}">
-
     <label>Quantity</label>
     <input class="m-qty" type="number" step="0.01" placeholder="1" value="${prefill ? 1 : ""}">
-
     <label>Supplier</label>
     <select class="m-supplier">
       <option value="City Plumbing">City Plumbing</option>
@@ -896,18 +864,13 @@ function addMaterial(prefill = null) {
       <option value="Topps Tiles">Topps Tiles</option>
       <option value="Selco">Selco</option>
     </select>
-
     <label>Product URL</label>
     <input class="m-url" placeholder="https://..." value="${prefill ? escapeHtml(prefill.product_url || "") : ""}">
-
     <label>Manual price (£)</label>
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${prefill ? prefill.manual_price : ""}">
   `;
   document.getElementById("materials").appendChild(div);
-
-  if (prefill) {
-    div.querySelector(".m-supplier").value = prefill.supplier || "City Plumbing";
-  }
+  if (prefill) div.querySelector(".m-supplier").value = prefill.supplier || "City Plumbing";
 }
 
 function debouncedSearch() {
@@ -975,7 +938,6 @@ async function searchMaterials() {
 
 async function autoSaveSearchItem(item) {
   const bestPrice = item.live_price !== null ? item.live_price : item.default_price;
-
   try {
     await fetch("/save-library-item", {
       method: "POST",
@@ -988,8 +950,7 @@ async function autoSaveSearchItem(item) {
       })
     });
     loadLibraryManager();
-  } catch (e) {
-  }
+  } catch (e) {}
 }
 
 async function selectSearchResult(item) {
@@ -1034,7 +995,6 @@ async function saveLibraryItem() {
 
     const data = await res.json();
     showLibraryNotice(data.message || "Saved.");
-
     if (data.ok) {
       clearLibraryForm();
       loadLibraryManager();
@@ -1045,6 +1005,7 @@ async function saveLibraryItem() {
 }
 
 function fillLibraryForm(item) {
+  document.getElementById("library_id").value = item.id || "";
   document.getElementById("library_name").value = item.name || "";
   document.getElementById("library_supplier").value = item.supplier || "City Plumbing";
   document.getElementById("library_url").value = item.product_url || "";
@@ -1053,6 +1014,7 @@ function fillLibraryForm(item) {
 }
 
 function clearLibraryForm() {
+  document.getElementById("library_id").value = "";
   document.getElementById("library_name").value = "";
   document.getElementById("library_supplier").value = "City Plumbing";
   document.getElementById("library_url").value = "";
@@ -1078,7 +1040,7 @@ async function loadLibraryManager() {
         <div class="small">${escapeHtml(item.supplier || "")} · fallback ${pounds(item.default_price || 0)}</div>
         <div class="small">${escapeHtml(item.product_url || "")}</div>
         <button type="button" class="btn-refresh btn-small" onclick='fillLibraryForm(${JSON.stringify(item)})'>Edit</button>
-        <button type="button" class="btn-delete" onclick='deleteLibraryItem(${JSON.stringify(item.name)}, ${JSON.stringify(item.supplier)})'>Delete</button>
+        <button type="button" class="btn-delete" onclick='deleteLibraryItem(${item.id})'>Delete</button>
       </div>
     `).join("");
   } catch (e) {
@@ -1086,14 +1048,14 @@ async function loadLibraryManager() {
   }
 }
 
-async function deleteLibraryItem(name, supplier) {
+async function deleteLibraryItem(id) {
   if (!confirm("Delete this saved library item?")) return;
 
   try {
     const res = await fetch("/delete-library-item", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({name, supplier})
+      body: JSON.stringify({id})
     });
 
     const data = await res.json();
@@ -1126,9 +1088,7 @@ async function saveCustomer() {
     const data = await res.json();
     showCustomerNotice(data.message || "Customer saved.");
 
-    if (data.ok) {
-      loadCustomers();
-    }
+    if (data.ok) loadCustomers();
   } catch (e) {
     showCustomerNotice("Could not save customer.");
   }
@@ -1160,7 +1120,7 @@ async function loadCustomers() {
         <div class="small">${escapeHtml(c.customer_phone || "")}</div>
         <div class="small">${escapeHtml(c.customer_address || "")}</div>
         <button type="button" class="btn-refresh btn-small" onclick='fillCustomerForm(${JSON.stringify(c)})'>Use customer</button>
-        <button type="button" class="btn-delete" onclick='deleteCustomer(${JSON.stringify(c.customer_name)}, ${JSON.stringify(c.customer_phone)})'>Delete</button>
+        <button type="button" class="btn-delete" onclick='deleteCustomer(${c.id})'>Delete</button>
       </div>
     `).join("");
   } catch (e) {
@@ -1168,14 +1128,14 @@ async function loadCustomers() {
   }
 }
 
-async function deleteCustomer(name, phone) {
+async function deleteCustomer(id) {
   if (!confirm("Delete this customer?")) return;
 
   try {
     const res = await fetch("/delete-customer", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({customer_name: name, customer_phone: phone})
+      body: JSON.stringify({id})
     });
 
     const data = await res.json();
@@ -1187,7 +1147,7 @@ async function deleteCustomer(name, phone) {
 }
 
 function normalisePhone(phone) {
-  const digits = (phone || "").replace(/\\D/g, "");
+  const digits = (phone || "").replace(/\D/g, "");
   if (!digits) return "";
   if (digits.startsWith("44")) return digits;
   if (digits.startsWith("0")) return "44" + digits.slice(1);
@@ -1205,7 +1165,7 @@ async function loadHistory() {
       return;
     }
 
-    history.innerHTML = data.slice().reverse().map(q => `
+    history.innerHTML = data.map(q => `
       <div class="history-item">
         <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
         <div>${escapeHtml(q.job)}</div>
@@ -1427,8 +1387,35 @@ def create_quote(data: QuoteRequest):
         "internal_hidden_uplift": round(hidden_uplift, 2),
     }
 
-    quotes = load_quotes()
-    quotes.append(quote)
-    save_quotes(quotes)
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO quotes (
+            quote_ref, status, quote_type, customer_name, customer_address, customer_phone,
+            job, labour, materials, total_price, created_at,
+            internal_raw_materials, internal_job_multiplier, internal_after_job_markup,
+            internal_handling_percent, internal_after_handling, internal_hidden_uplift
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        quote["quote_ref"],
+        quote["status"],
+        quote["quote_type"],
+        quote["customer_name"],
+        quote["customer_address"],
+        quote["customer_phone"],
+        quote["job"],
+        quote["labour"],
+        quote["materials"],
+        quote["total_price"],
+        quote["created_at"],
+        quote["internal_raw_materials"],
+        quote["internal_job_multiplier"],
+        quote["internal_after_job_markup"],
+        quote["internal_handling_percent"],
+        quote["internal_after_handling"],
+        quote["internal_hidden_uplift"],
+    ))
+    conn.commit()
+    conn.close()
 
     return JSONResponse(content=quote)
