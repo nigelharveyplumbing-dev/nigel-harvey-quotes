@@ -10,9 +10,9 @@ import os
 
 app = FastAPI(title="Nigel Harvey Ltd Quotes")
 
-quotes_db = []
-
 LIBRARY_FILE = "materials_library.json"
+CUSTOMERS_FILE = "customers.json"
+QUOTES_FILE = "quotes.json"
 
 BASE_MATERIAL_LIBRARY = [
     {
@@ -218,26 +218,67 @@ class DeleteLibraryItemRequest(BaseModel):
     supplier: str = ""
 
 
-def load_user_library():
-    if not os.path.exists(LIBRARY_FILE):
-        return []
+class SaveCustomerRequest(BaseModel):
+    customer_name: str
+    customer_address: str = ""
+    customer_phone: str = ""
+
+
+class DeleteCustomerRequest(BaseModel):
+    customer_name: str
+    customer_phone: str = ""
+
+
+class UpdateQuoteStatusRequest(BaseModel):
+    quote_ref: str
+    status: str
+
+
+def load_json_file(path, default):
+    if not os.path.exists(path):
+        return default
     try:
-        with open(LIBRARY_FILE, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-            if isinstance(data, list):
-                return data
+            return data
     except Exception:
-        return []
-    return []
+        return default
 
 
-def save_user_library(items):
+def save_json_file(path, data):
     try:
-        with open(LIBRARY_FILE, "w", encoding="utf-8") as f:
-            json.dump(items, f, ensure_ascii=False, indent=2)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
         return True
     except Exception:
         return False
+
+
+def load_user_library():
+    data = load_json_file(LIBRARY_FILE, [])
+    return data if isinstance(data, list) else []
+
+
+def save_user_library(items):
+    return save_json_file(LIBRARY_FILE, items)
+
+
+def load_customers():
+    data = load_json_file(CUSTOMERS_FILE, [])
+    return data if isinstance(data, list) else []
+
+
+def save_customers(items):
+    return save_json_file(CUSTOMERS_FILE, items)
+
+
+def load_quotes():
+    data = load_json_file(QUOTES_FILE, [])
+    return data if isinstance(data, list) else []
+
+
+def save_quotes(items):
+    return save_json_file(QUOTES_FILE, items)
 
 
 def get_combined_library():
@@ -305,6 +346,14 @@ def fetch_price(url: str):
         return None
 
     return None
+
+
+def generate_quote_ref():
+    quotes = load_quotes()
+    today = datetime.now().strftime("%Y%m%d")
+    todays = [q for q in quotes if q.get("quote_ref", "").startswith(f"NHQ-{today}")]
+    next_no = len(todays) + 1
+    return f"NHQ-{today}-{next_no:03d}"
 
 
 @app.get("/material-search")
@@ -401,6 +450,104 @@ def delete_library_item(data: DeleteLibraryItemRequest):
     return JSONResponse(content={"ok": True, "message": "Item deleted."})
 
 
+@app.get("/customers")
+def customers():
+    return JSONResponse(content=load_customers())
+
+
+@app.post("/save-customer")
+def save_customer(data: SaveCustomerRequest):
+    customer_name = data.customer_name.strip()
+    customer_phone = data.customer_phone.strip()
+    customer_address = data.customer_address.strip()
+
+    if not customer_name:
+        return JSONResponse(content={"ok": False, "message": "Customer name is required."})
+
+    items = load_customers()
+    key = (customer_name.lower(), customer_phone.lower())
+
+    new_customer = {
+        "customer_name": customer_name,
+        "customer_phone": customer_phone,
+        "customer_address": customer_address,
+    }
+
+    replaced = False
+    for i, item in enumerate(items):
+        existing_key = (
+            item.get("customer_name", "").strip().lower(),
+            item.get("customer_phone", "").strip().lower()
+        )
+        if existing_key == key:
+            items[i] = new_customer
+            replaced = True
+            break
+
+    if not replaced:
+        items.append(new_customer)
+
+    ok = save_customers(items)
+    if not ok:
+        return JSONResponse(status_code=500, content={"ok": False, "message": "Could not save customer."})
+
+    return JSONResponse(content={"ok": True, "message": "Customer saved."})
+
+
+@app.post("/delete-customer")
+def delete_customer(data: DeleteCustomerRequest):
+    items = load_customers()
+    key = (data.customer_name.strip().lower(), data.customer_phone.strip().lower())
+
+    new_items = []
+    deleted = False
+
+    for item in items:
+        existing_key = (
+            item.get("customer_name", "").strip().lower(),
+            item.get("customer_phone", "").strip().lower()
+        )
+        if existing_key == key:
+            deleted = True
+            continue
+        new_items.append(item)
+
+    if not deleted:
+        return JSONResponse(content={"ok": False, "message": "Customer not found."})
+
+    ok = save_customers(new_items)
+    if not ok:
+        return JSONResponse(status_code=500, content={"ok": False, "message": "Could not delete customer."})
+
+    return JSONResponse(content={"ok": True, "message": "Customer deleted."})
+
+
+@app.get("/quotes")
+def get_quotes():
+    return JSONResponse(content=load_quotes())
+
+
+@app.post("/update-quote-status")
+def update_quote_status(data: UpdateQuoteStatusRequest):
+    quotes = load_quotes()
+    updated = False
+
+    for q in quotes:
+        if q.get("quote_ref") == data.quote_ref:
+            q["status"] = data.status.strip() or "draft"
+            updated = True
+            break
+
+    if not updated:
+        return JSONResponse(content={"ok": False, "message": "Quote not found."})
+
+    ok = save_quotes(quotes)
+    if not ok:
+        return JSONResponse(status_code=500, content={"ok": False, "message": "Could not update quote status."})
+
+    return JSONResponse(content={"ok": True, "message": "Quote status updated."})
+
+
 HTML = """
 <!doctype html>
 <html>
@@ -409,7 +556,7 @@ HTML = """
 <title>Nigel Harvey Ltd Quotes</title>
 <style>
 body { font-family: Arial, sans-serif; background:#f5f5f5; margin:0; padding:12px; color:#111; }
-.wrap { max-width:960px; margin:0 auto; }
+.wrap { max-width:1040px; margin:0 auto; }
 .card { background:white; padding:16px; border-radius:14px; margin-bottom:14px; box-shadow:0 2px 10px rgba(0,0,0,0.06); }
 h1 { margin:0 0 6px 0; font-size:30px; }
 h2 { margin:0 0 12px 0; font-size:22px; }
@@ -425,16 +572,18 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 .btn-save { background:#0b5ed7; margin-top:8px; }
 .btn-delete { background:#b42318; font-size:14px; padding:8px; margin-top:8px; }
 .btn-refresh { background:#555; font-size:14px; padding:10px; margin-top:8px; }
+.btn-small { font-size:14px; padding:8px; }
 .templates { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
 .material-row { border:1px solid #ddd; padding:12px; border-radius:10px; margin-bottom:10px; background:#fafafa; }
 .row { display:flex; justify-content:space-between; gap:10px; margin:8px 0; }
+.cols2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .muted { color:#666; }
 .total { font-size:26px; font-weight:800; margin-top:10px; }
 .result { display:none; background:#f3faf3; border:1px solid #b7d7b7; }
 .error { display:none; background:#fff3f3; border:1px solid #e0b7b7; color:#a33; padding:12px; border-radius:10px; margin-top:12px; }
 .notice { display:none; background:#eef6ff; border:1px solid #b9d3f0; color:#134; padding:12px; border-radius:10px; margin-top:12px; }
 .actions { display:grid; gap:10px; margin-top:14px; }
-.history-item, .library-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
+.history-item, .library-item, .customer-item, .compare-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
 .small { font-size:14px; color:#666; }
 .hidden { display:none; }
 .check-row { display:flex; align-items:center; gap:10px; margin:12px 0 6px; font-weight:700; }
@@ -451,6 +600,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 .search-item { padding:10px; border-bottom:1px solid #eee; cursor:pointer; }
 .search-item:last-child { border-bottom:none; }
 .search-item:hover { background:#f2f2f2; }
+.status-badge { display:inline-block; padding:4px 8px; border-radius:999px; background:#eee; font-size:12px; font-weight:700; }
 .no-print { display:block; }
 @media print {
   .no-print { display:none !important; }
@@ -491,6 +641,9 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
     <label for="customer_phone">Customer phone</label>
     <input id="customer_phone" placeholder="07123 456789">
 
+    <button type="button" class="btn-save btn-small" onclick="saveCustomer()">Save customer</button>
+    <div id="customerNotice" class="notice"></div>
+
     <label for="job">Job description</label>
     <textarea id="job" placeholder="Example: Replace kitchen tap"></textarea>
 
@@ -519,12 +672,17 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
         <span>Customer supplies tiles</span>
       </div>
     </div>
+  </div>
 
+  <div class="card no-print">
     <h3>Live smart material search</h3>
     <input id="materialSearch" placeholder="Search materials e.g. 15mm speedfit elbow, basin waste, kitchen tap" oninput="debouncedSearch()">
     <div id="searchResults" class="search-results hidden"></div>
 
-    <h3>Save a product to library</h3>
+    <h3>Supplier comparison</h3>
+    <div id="comparisonList" class="small">Search above to compare suppliers and prices.</div>
+
+    <h3>Save / edit a product in library</h3>
     <label for="library_name">Item name</label>
     <input id="library_name" placeholder="e.g. Kitchen Mixer Tap">
 
@@ -543,14 +701,22 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
     <label for="library_default_price">Fallback price (£)</label>
     <input id="library_default_price" type="number" step="0.01" placeholder="0">
 
-    <button type="button" class="btn-save" onclick="saveLibraryItem()">Save to library</button>
+    <button type="button" class="btn-save" onclick="saveLibraryItem()">Save / update library item</button>
     <div id="libraryNotice" class="notice"></div>
   </div>
 
-  <div class="card no-print">
-    <h2>Library manager</h2>
-    <button type="button" class="btn-refresh" onclick="loadLibraryManager()">Refresh saved library</button>
-    <div id="libraryManagerList" class="small" style="margin-top:12px;">No saved library items yet.</div>
+  <div class="cols2 no-print">
+    <div class="card">
+      <h2>Customer database</h2>
+      <button type="button" class="btn-refresh" onclick="loadCustomers()">Refresh customers</button>
+      <div id="customerList" class="small" style="margin-top:12px;">No saved customers yet.</div>
+    </div>
+
+    <div class="card">
+      <h2>Library manager</h2>
+      <button type="button" class="btn-refresh" onclick="loadLibraryManager()">Refresh saved library</button>
+      <div id="libraryManagerList" class="small" style="margin-top:12px;">No saved library items yet.</div>
+    </div>
   </div>
 
   <div class="card no-print">
@@ -594,7 +760,9 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 
     <div class="quote-section-title">Quote details</div>
     <div class="quote-box">
+      <div class="row"><span class="muted">Quote ref</span><span id="r_quote_ref"></span></div>
       <div class="row"><span class="muted">Date</span><span id="r_date"></span></div>
+      <div class="row"><span class="muted">Status</span><span id="r_status"></span></div>
       <div class="row"><span class="muted">Type</span><span id="r_type"></span></div>
       <div class="row"><span class="muted">Customer</span><span id="r_customer"></span></div>
       <div class="row"><span class="muted">Phone</span><span id="r_phone"></span></div>
@@ -658,8 +826,14 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;");
 }
 
-function showNotice(message) {
+function showLibraryNotice(message) {
   const notice = document.getElementById("libraryNotice");
+  notice.innerText = message;
+  notice.style.display = "block";
+}
+
+function showCustomerNotice(message) {
+  const notice = document.getElementById("customerNotice");
   notice.innerText = message;
   notice.style.display = "block";
 }
@@ -744,10 +918,12 @@ function debouncedSearch() {
 async function searchMaterials() {
   const query = document.getElementById("materialSearch").value.trim();
   const resultsBox = document.getElementById("searchResults");
+  const comparisonBox = document.getElementById("comparisonList");
 
   if (query.length < 2) {
     resultsBox.classList.add("hidden");
     resultsBox.innerHTML = "";
+    comparisonBox.innerHTML = "Search above to compare suppliers and prices.";
     return;
   }
 
@@ -760,6 +936,7 @@ async function searchMaterials() {
 
     if (!results.length) {
       resultsBox.innerHTML = `<div class="search-item">No matches found</div>`;
+      comparisonBox.innerHTML = "No supplier matches found.";
       return;
     }
 
@@ -773,8 +950,26 @@ async function searchMaterials() {
         </div>
       `;
     }).join("");
+
+    const sorted = [...results].sort((a, b) => {
+      const pa = a.live_price !== null ? a.live_price : a.default_price;
+      const pb = b.live_price !== null ? b.live_price : b.default_price;
+      return pa - pb;
+    });
+
+    comparisonBox.innerHTML = sorted.map(item => {
+      const bestPrice = item.live_price !== null ? item.live_price : item.default_price;
+      const label = item.live_price !== null ? "live" : "default";
+      return `
+        <div class="compare-item">
+          <strong>${escapeHtml(item.name)}</strong><br>
+          <span class="small">${escapeHtml(item.supplier)} · ${pounds(bestPrice)} (${label})</span>
+        </div>
+      `;
+    }).join("");
   } catch (e) {
     resultsBox.innerHTML = `<div class="search-item">Search failed</div>`;
+    comparisonBox.innerHTML = "Comparison failed.";
   }
 }
 
@@ -794,7 +989,6 @@ async function autoSaveSearchItem(item) {
     });
     loadLibraryManager();
   } catch (e) {
-    // silent fail so adding to quote still works
   }
 }
 
@@ -814,14 +1008,11 @@ async function selectSearchResult(item) {
 
   if ((item.name || "").trim() && (item.supplier || "").trim() && ((item.product_url || "").trim() || bestPrice > 0)) {
     await autoSaveSearchItem(item);
-    showNotice("Search item auto-saved to library.");
+    showLibraryNotice("Search item auto-saved to library.");
   }
 }
 
 async function saveLibraryItem() {
-  const notice = document.getElementById("libraryNotice");
-  notice.style.display = "none";
-
   const payload = {
     name: document.getElementById("library_name").value,
     supplier: document.getElementById("library_supplier").value,
@@ -830,8 +1021,7 @@ async function saveLibraryItem() {
   };
 
   if (!payload.name.trim()) {
-    notice.innerText = "Please enter an item name.";
-    notice.style.display = "block";
+    showLibraryNotice("Please enter an item name.");
     return;
   }
 
@@ -843,19 +1033,30 @@ async function saveLibraryItem() {
     });
 
     const data = await res.json();
-    notice.innerText = data.message || "Saved.";
-    notice.style.display = "block";
+    showLibraryNotice(data.message || "Saved.");
 
     if (data.ok) {
-      document.getElementById("library_name").value = "";
-      document.getElementById("library_url").value = "";
-      document.getElementById("library_default_price").value = "";
+      clearLibraryForm();
       loadLibraryManager();
     }
   } catch (e) {
-    notice.innerText = "Could not save item.";
-    notice.style.display = "block";
+    showLibraryNotice("Could not save item.");
   }
+}
+
+function fillLibraryForm(item) {
+  document.getElementById("library_name").value = item.name || "";
+  document.getElementById("library_supplier").value = item.supplier || "City Plumbing";
+  document.getElementById("library_url").value = item.product_url || "";
+  document.getElementById("library_default_price").value = item.default_price || 0;
+  window.scrollTo({top: 0, behavior: "smooth"});
+}
+
+function clearLibraryForm() {
+  document.getElementById("library_name").value = "";
+  document.getElementById("library_supplier").value = "City Plumbing";
+  document.getElementById("library_url").value = "";
+  document.getElementById("library_default_price").value = "";
 }
 
 async function loadLibraryManager() {
@@ -876,6 +1077,7 @@ async function loadLibraryManager() {
         <div><strong>${escapeHtml(item.name || "")}</strong></div>
         <div class="small">${escapeHtml(item.supplier || "")} · fallback ${pounds(item.default_price || 0)}</div>
         <div class="small">${escapeHtml(item.product_url || "")}</div>
+        <button type="button" class="btn-refresh btn-small" onclick='fillLibraryForm(${JSON.stringify(item)})'>Edit</button>
         <button type="button" class="btn-delete" onclick='deleteLibraryItem(${JSON.stringify(item.name)}, ${JSON.stringify(item.supplier)})'>Delete</button>
       </div>
     `).join("");
@@ -902,6 +1104,88 @@ async function deleteLibraryItem(name, supplier) {
   }
 }
 
+async function saveCustomer() {
+  const payload = {
+    customer_name: document.getElementById("customer_name").value,
+    customer_address: document.getElementById("customer_address").value,
+    customer_phone: document.getElementById("customer_phone").value
+  };
+
+  if (!payload.customer_name.trim()) {
+    showCustomerNotice("Please enter a customer name.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/save-customer", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    showCustomerNotice(data.message || "Customer saved.");
+
+    if (data.ok) {
+      loadCustomers();
+    }
+  } catch (e) {
+    showCustomerNotice("Could not save customer.");
+  }
+}
+
+function fillCustomerForm(customer) {
+  document.getElementById("customer_name").value = customer.customer_name || "";
+  document.getElementById("customer_address").value = customer.customer_address || "";
+  document.getElementById("customer_phone").value = customer.customer_phone || "";
+  window.scrollTo({top: 0, behavior: "smooth"});
+}
+
+async function loadCustomers() {
+  const box = document.getElementById("customerList");
+  box.innerHTML = "Loading...";
+
+  try {
+    const res = await fetch("/customers");
+    const customers = await res.json();
+
+    if (!customers.length) {
+      box.innerHTML = "No saved customers yet.";
+      return;
+    }
+
+    box.innerHTML = customers.map(c => `
+      <div class="customer-item">
+        <div><strong>${escapeHtml(c.customer_name || "")}</strong></div>
+        <div class="small">${escapeHtml(c.customer_phone || "")}</div>
+        <div class="small">${escapeHtml(c.customer_address || "")}</div>
+        <button type="button" class="btn-refresh btn-small" onclick='fillCustomerForm(${JSON.stringify(c)})'>Use customer</button>
+        <button type="button" class="btn-delete" onclick='deleteCustomer(${JSON.stringify(c.customer_name)}, ${JSON.stringify(c.customer_phone)})'>Delete</button>
+      </div>
+    `).join("");
+  } catch (e) {
+    box.innerHTML = "Could not load customers.";
+  }
+}
+
+async function deleteCustomer(name, phone) {
+  if (!confirm("Delete this customer?")) return;
+
+  try {
+    const res = await fetch("/delete-customer", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({customer_name: name, customer_phone: phone})
+    });
+
+    const data = await res.json();
+    alert(data.message || "Done");
+    loadCustomers();
+  } catch (e) {
+    alert("Could not delete customer.");
+  }
+}
+
 function normalisePhone(phone) {
   const digits = (phone || "").replace(/\\D/g, "");
   if (!digits) return "";
@@ -925,11 +1209,33 @@ async function loadHistory() {
       <div class="history-item">
         <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
         <div>${escapeHtml(q.job)}</div>
-        <div class="small">${escapeHtml(q.created_at)} · Total ${pounds(q.total_price)}</div>
+        <div class="small">${escapeHtml(q.quote_ref || "")} · ${escapeHtml(q.created_at || "")}</div>
+        <div class="small">Total ${pounds(q.total_price)} · <span class="status-badge">${escapeHtml(q.status || "draft")}</span></div>
+        <label>Status</label>
+        <select onchange='updateQuoteStatus(${JSON.stringify(q.quote_ref)}, this.value)'>
+          <option value="draft" ${q.status === "draft" ? "selected" : ""}>draft</option>
+          <option value="sent" ${q.status === "sent" ? "selected" : ""}>sent</option>
+          <option value="accepted" ${q.status === "accepted" ? "selected" : ""}>accepted</option>
+          <option value="declined" ${q.status === "declined" ? "selected" : ""}>declined</option>
+          <option value="invoiced" ${q.status === "invoiced" ? "selected" : ""}>invoiced</option>
+        </select>
       </div>
     `).join("");
   } catch (e) {
     document.getElementById("historyList").innerHTML = "Unable to load saved quotes.";
+  }
+}
+
+async function updateQuoteStatus(quoteRef, status) {
+  try {
+    await fetch("/update-quote-status", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({quote_ref: quoteRef, status})
+    });
+    loadHistory();
+  } catch (e) {
+    alert("Could not update quote status.");
   }
 }
 
@@ -979,7 +1285,9 @@ async function generateQuote() {
 
     const data = await res.json();
 
+    document.getElementById("r_quote_ref").innerText = data.quote_ref || "-";
     document.getElementById("r_date").innerText = data.created_at || "-";
+    document.getElementById("r_status").innerText = data.status || "-";
     document.getElementById("r_type").innerText = data.quote_type || "-";
     document.getElementById("r_customer").innerText = data.customer_name || "-";
     document.getElementById("r_phone").innerText = data.customer_phone || "-";
@@ -1004,6 +1312,7 @@ async function generateQuote() {
     const message =
 `Nigel Harvey Ltd Quote
 
+Quote ref: ${data.quote_ref || "-"}
 Date: ${data.created_at || "-"}
 Type: ${data.quote_type || "-"}
 Customer: ${data.customer_name || "-"}
@@ -1038,6 +1347,7 @@ addMaterial();
 updateLabourSuggestion();
 loadHistory();
 loadLibraryManager();
+loadCustomers();
 </script>
 </body>
 </html>
@@ -1048,11 +1358,6 @@ loadLibraryManager();
 def home():
     html = HTML.replace("__JOB_TEMPLATES__", json.dumps(JOB_TEMPLATES))
     return html
-
-
-@app.get("/quotes")
-def get_quotes():
-    return quotes_db
 
 
 @app.post("/quote")
@@ -1103,6 +1408,8 @@ def create_quote(data: QuoteRequest):
     hidden_uplift = materials_with_handling - raw_materials_with_tiling
 
     quote = {
+        "quote_ref": generate_quote_ref(),
+        "status": "draft",
         "quote_type": data.quote_type,
         "customer_name": data.customer_name,
         "customer_address": data.customer_address,
@@ -1120,5 +1427,8 @@ def create_quote(data: QuoteRequest):
         "internal_hidden_uplift": round(hidden_uplift, 2),
     }
 
-    quotes_db.append(quote)
+    quotes = load_quotes()
+    quotes.append(quote)
+    save_quotes(quotes)
+
     return JSONResponse(content=quote)
