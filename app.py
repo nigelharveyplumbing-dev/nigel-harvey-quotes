@@ -56,7 +56,6 @@ def fetch_price(url: str):
         soup = BeautifulSoup(r.text, "html.parser")
         text = soup.get_text(" ", strip=True)
 
-        # basic public price pattern
         matches = re.findall(r"£\s?\d+(?:\.\d{1,2})?", text)
         if matches:
             cleaned = matches[0].replace("£", "").strip().replace(",", "")
@@ -312,6 +311,7 @@ button, .btn-link {
     <div class="row"><span class="muted">Address</span><span id="r_address"></span></div>
     <div class="row"><span class="muted">Job</span><span id="r_job"></span></div>
     <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
+    <div class="row"><span class="muted">Materials</span><span id="r_materials"></span></div>
     <div class="row total"><span>Total price</span><span id="r_total"></span></div>
     <div class="small">Includes labour and materials</div>
 
@@ -454,6 +454,7 @@ async function generateQuote() {
     document.getElementById("r_address").innerText = data.customer_address || "-";
     document.getElementById("r_job").innerText = data.job || "-";
     document.getElementById("r_labour").innerText = pounds(data.labour);
+    document.getElementById("r_materials").innerText = pounds(data.materials);
     document.getElementById("r_total").innerText = pounds(data.total_price);
 
     const message =
@@ -467,6 +468,7 @@ Address: ${data.customer_address || "-"}
 Job: ${data.job || "-"}
 
 Labour: ${pounds(data.labour)}
+Materials: ${pounds(data.materials)}
 Total price: ${pounds(data.total_price)}
 
 Includes labour and materials`;
@@ -483,6 +485,7 @@ Includes labour and materials`;
 }
 
 toggleBathroomFields();
+addMaterial();
 loadHistory();
 </script>
 </body>
@@ -555,6 +558,7 @@ def create_quote(data: QuoteRequest):
         "customer_phone": data.customer_phone,
         "job": job_text,
         "labour": round(labour_total, 2),
+        "materials": round(total_materials + tiling_extra_materials, 2),
         "total_price": round(total, 2),
         "created_at": datetime.now().strftime("%d/%m/%Y %H:%M")
     }
