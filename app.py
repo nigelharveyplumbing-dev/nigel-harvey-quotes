@@ -1769,12 +1769,5 @@ def createquote(data: QuoteRequest):
     conn.close()
 
     return JSONResponse(content=quote)
-``
+`
 
-What's changed:
-
-• Every major section now has a clickable header with a ▼/▶ arrow indicator
-• Clicking the header smoothly collapses/expands that section
-• All sections start open on load
-• On print, all sections force-expand so nothing is missing from the PDF
-• I also snuck in a "Remove row" button on each material row — was missing before and useful to have
