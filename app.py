@@ -1525,6 +1525,7 @@ async function deleteScheduledJob(id) {
 async function generateQuote() {
   const errorBox = document.getElementById("error");
   errorBox.style.display = "none";
+  errorBox.innerText = "";
 
   const materials = [];
   document.querySelectorAll(".material-row").forEach(row => {
@@ -1547,28 +1548,38 @@ async function generateQuote() {
     include_materials_handling: document.getElementById("include_materials_handling").checked,
     materials_handling_percent: parseFloat(document.getElementById("materials_handling_percent").value || 25),
     materials: materials,
-    tiling: document.getElementById("tiling").checked,
-    wall_tiling_m2: parseFloat(document.getElementById("wall_tiling_m2").value || 0),
-    floor_tiling_m2: parseFloat(document.getElementById("floor_tiling_m2").value || 0),
-    wall_height: document.getElementById("wall_height").value,
-    customer_supplies_tiles: document.getElementById("customer_supplies_tiles").checked
+    tiling: document.getElementById("tiling") ? document.getElementById("tiling").checked : false,
+    wall_tiling_m2: parseFloat(document.getElementById("wall_tiling_m2")?.value || 0),
+    floor_tiling_m2: parseFloat(document.getElementById("floor_tiling_m2")?.value || 0),
+    wall_height: document.getElementById("wall_height") ? document.getElementById("wall_height").value : "half",
+    customer_supplies_tiles: document.getElementById("customer_supplies_tiles") ? document.getElementById("customer_supplies_tiles").checked : false
   };
 
   try {
     const res = await fetch("/quote", {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
 
-    if (!res.ok) throw new Error("Quote request failed");
-
     const data = await res.json();
+    console.log("QUOTE RESPONSE", data);
+
+    if (!res.ok) {
+      throw new Error(data.message || "Quote request failed");
+    }
+
+    if (!data || !data.quote_ref) {
+      throw new Error("Quote saved but invalid response returned");
+    }
+
     renderQuoteView(data);
     await loadHistory();
     await loadProfitSummary();
     loadCustomerHistoryForCurrent();
+
   } catch (err) {
+    console.error(err);
     errorBox.innerText = "Something went wrong generating the quote.";
     errorBox.style.display = "block";
   }
