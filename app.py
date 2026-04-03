@@ -784,7 +784,10 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 
     <label>Labour</label>
     <input id="labour" type="number">
-
+<div class="check-row">
+  <input type="checkbox" id="include_materials_handling" checked>
+  <span>Include materials handling</span>
+</div>
     <label>Handling %</label>
     <select id="materials_handling_percent">
       <option>20</option>
