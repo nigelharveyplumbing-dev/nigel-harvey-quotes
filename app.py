@@ -783,29 +783,39 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 
 <div class="cols2 no-print">
 
-  <div class="card">
-    <div class="collapsible-header" onclick="toggleSection('customerSection')">
-      👤 Customers (tap to open)
+    <!-- Customers -->
+    <div class="card">
+        <div class="collapsible-header" onclick="toggleSection('customerSection')">
+            👤 Customers (tap to open)
+        </div>
+
+        <div id="customerSection" class="collapsible-content">
+            <h2>Customer database</h2>
+
+            <button type="button" class="btn-refresh" onclick="refreshCustomers()">
+                Refresh customers
+            </button>
+
+            <div id="customerList" class="small"></div>
+        </div>
     </div>
 
-    <div id="customerSection" class="collapsible-content">
-      <h2>Customer database</h2>
-      <button type="button" class="btn-refresh" onclick="loadCustomers()">Refresh customers</button>
-      <div id="customerList" class="small" style="margin-top:12px;">No saved customers yet.</div>
-    </div>
-  </div>
+    <!-- Library -->
+    <div class="card">
+        <div class="collapsible-header" onclick="toggleSection('librarySection')">
+            📦 Library manager (tap to open)
+        </div>
 
-  <div class="card">
-    <div class="collapsible-header" onclick="toggleSection('librarySection')">
-      📦 Library manager (tap to open)
-    </div>
+        <div id="librarySection" class="collapsible-content">
+            <h2>Library manager</h2>
 
-    <div id="librarySection" class="collapsible-content">
-      <h2>Library manager</h2>
-      <button type="button" class="btn-refresh" onclick="loadLibraryManager()">Refresh saved library</button>
-      <div id="libraryManagerList" class="small" style="margin-top:12px;">No saved library items yet.</div>
+            <button type="button" class="btn-refresh" onclick="refreshLibrary()">
+                Refresh saved library
+            </button>
+
+            <div id="libraryManagerList" class="small"></div>
+        </div>
     </div>
-  </div>
 
 </div>
 
