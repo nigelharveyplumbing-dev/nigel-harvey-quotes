@@ -10,7 +10,7 @@ import sqlite3
 
 app = FastAPI(title="Nigel Harvey Ltd Quotes")
 
-DB_FILE = "nigel_quotes.db"
+DB_FILE = "nigel_quotes_v2.db"
 
 BASE_MATERIAL_LIBRARY = [
     {"name": "15mm Copper Pipe 3m", "supplier": "City Plumbing", "default_price": 14.50, "product_url": "https://www.cityplumbing.co.uk/p/wednesbury-plain-copper-tube-length-15mm-x-3m-x015l-3/p/313813"},
