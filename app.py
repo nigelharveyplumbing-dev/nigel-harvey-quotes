@@ -812,6 +812,10 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 
 <script>
 function toggleSection(id){
+  document.querySelectorAll(".collapsible-content").forEach(el => {
+    if (el.id !== id) el.classList.remove("active");
+  });
+
   const el = document.getElementById(id);
   el.classList.toggle("active");
 }
