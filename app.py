@@ -796,7 +796,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
     </select>
 
     <button onclick="generateQuote()">Generate Quote</button>
-  </div>
+  <div id="error" class="error"></div>
 </div>
 
 <div class="card">
