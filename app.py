@@ -1,6 +1,3 @@
-Here's the full code with collapsible UI sections added throughout. Each major section has a clickable header that toggles it open/closed, with a ▼/▶ indicator.
-
-``python
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
