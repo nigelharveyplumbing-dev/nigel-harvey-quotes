@@ -627,6 +627,23 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 .history-item, .library-item, .customer-item, .compare-item, .summary-item, .schedule-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
 .small { font-size:14px; color:#666; }
 .hidden { display:none; }
+.collapsible-header {
+  background:#111;
+  color:#fff;
+  padding:12px;
+  border-radius:10px;
+  margin-bottom:8px;
+  cursor:pointer;
+  font-weight:700;
+}
+
+.collapsible-content {
+  display:none;
+}
+
+.collapsible-content.active {
+  display:block;
+}
 .check-row { display:flex; align-items:center; gap:10px; margin:12px 0 6px; font-weight:700; }
 .check-row input[type="checkbox"] { width:auto; transform:scale(1.2); }
 .quote-sheet { background:white; }
@@ -764,12 +781,33 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
     </div>
   </div>
 
-  <div class="cols2 no-print">
-    <div class="card">
-      <h2>Profit dashboard</h2>
-      <button type="button" class="btn-refresh" onclick="loadProfitSummary()">Refresh dashboard</button>
-      <div id="profitSummary" class="small" style="margin-top:12px;">Loading...</div>
+<div class="cols2 no-print">
+
+  <div class="card">
+    <div class="collapsible-header" onclick="toggleSection('customerSection')">
+      👤 Customers (tap to open)
     </div>
+
+    <div id="customerSection" class="collapsible-content">
+      <h2>Customer database</h2>
+      <button type="button" class="btn-refresh" onclick="loadCustomers()">Refresh customers</button>
+      <div id="customerList" class="small" style="margin-top:12px;">No saved customers yet.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="collapsible-header" onclick="toggleSection('librarySection')">
+      📦 Library manager (tap to open)
+    </div>
+
+    <div id="librarySection" class="collapsible-content">
+      <h2>Library manager</h2>
+      <button type="button" class="btn-refresh" onclick="loadLibraryManager()">Refresh saved library</button>
+      <div id="libraryManagerList" class="small" style="margin-top:12px;">No saved library items yet.</div>
+    </div>
+  </div>
+
+</div>
 
     <div class="card">
       <h2>Job scheduling / calendar</h2>
@@ -890,6 +928,10 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 </div>
 
 <script>
+function toggleSection(id){
+  const el = document.getElementById(id);
+  el.classList.toggle("active");
+}
 const JOB_TEMPLATES = __JOB_TEMPLATES__;
 const JOB_PACKS = __JOB_PACKS__;
 let searchTimer = null;
