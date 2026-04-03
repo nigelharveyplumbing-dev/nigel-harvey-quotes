@@ -807,9 +807,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 </div>
 
 <!-- COLLAPSIBLE SECTIONS END -->
-    <div id="historyList" class="small">No saved quotes yet.</div>
-  </div>
-
+    
 </div>
 
 <script>
