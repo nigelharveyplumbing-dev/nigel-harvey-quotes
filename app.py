@@ -1663,7 +1663,7 @@ def create_quote(data: QuoteRequest):
         "internal_handling_percent": round(handling_percent, 2),
         "internal_after_handling": round(materials_with_handling, 2),
         "internal_hidden_uplift": round(hidden_uplift, 2),
-        "materials_json": json.dumps([m.model_dump() for m in data.materials]),
+        "materials_json": json.dumps([m.dict() for m in data.materials]),
         "include_materials_handling": 1 if data.include_materials_handling else 0,
         "materials_handling_percent": round(data.materials_handling_percent, 2),
         "tiling": 1 if data.tiling else 0,
