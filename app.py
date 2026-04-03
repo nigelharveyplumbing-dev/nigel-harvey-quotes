@@ -767,78 +767,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
     <div id="libraryNotice" class="notice"></div>
   </div>
 
-  <div class="cols2 no-print">
-    <div class="card">
-      <h2>Customer database</h2>
-      <button type="button" class="btn-refresh" onclick="loadCustomers()">Refresh customers</button>
-      <div id="customerList" class="small" style="margin-top:12px;">No saved customers yet.</div>
-    </div>
-
-    <div class="card">
-      <h2>Library manager</h2>
-      <button type="button" class="btn-refresh" onclick="loadLibraryManager()">Refresh saved library</button>
-      <div id="libraryManagerList" class="small" style="margin-top:12px;">No saved library items yet.</div>
-    </div>
-  </div>
-
-<div class="cols2 no-print">
-
-    <!-- Customers -->
-    <div class="card">
-        <div class="collapsible-header" onclick="toggleSection('customerSection')">
-            👤 Customers (tap to open)
-        </div>
-
-        <div id="customerSection" class="collapsible-content">
-            <h2>Customer database</h2>
-
-            <button type="button" class="btn-refresh" onclick="refreshCustomers()">
-                Refresh customers
-            </button>
-
-            <div id="customerList" class="small"></div>
-        </div>
-    </div>
-
-    <!-- Library -->
-    <div class="card">
-        <div class="collapsible-header" onclick="toggleSection('librarySection')">
-            📦 Library manager (tap to open)
-        </div>
-
-        <div id="librarySection" class="collapsible-content">
-            <h2>Library manager</h2>
-
-            <button type="button" class="btn-refresh" onclick="refreshLibrary()">
-                Refresh saved library
-            </button>
-
-            <div id="libraryManagerList" class="small"></div>
-        </div>
-    </div>
-
-</div>
-
-    <div class="card">
-      <h2>Job scheduling / calendar</h2>
-      <label for="schedule_quote_ref">Quote ref</label>
-      <input id="schedule_quote_ref" placeholder="NHQ-...">
-      <label for="schedule_customer_name">Customer</label>
-      <input id="schedule_customer_name" placeholder="Customer name">
-      <label for="schedule_job_title">Job title</label>
-      <input id="schedule_job_title" placeholder="Job title">
-      <label for="schedule_date">Date</label>
-      <input id="schedule_date" type="date">
-      <label for="schedule_time">Time</label>
-      <input id="schedule_time" type="time">
-      <label for="schedule_notes">Notes</label>
-      <textarea id="schedule_notes" placeholder="Notes"></textarea>
-      <button type="button" class="btn-save" onclick="scheduleJob()">Schedule job</button>
-      <div id="scheduleList" class="small" style="margin-top:12px;">Loading...</div>
-    </div>
-  </div>
-
-  <div class="card no-print">
+<div class="card no-print">
     <h2>Customer history per job</h2>
     <div id="customerHistory" class="small">Enter or select a customer to see history.</div>
   </div>
