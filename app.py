@@ -735,132 +735,78 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
     </div>
   </div>
 
-  <div class="card no-print">
+<!-- COLLAPSIBLE SECTIONS START -->
+
+<div class="card no-print">
+  <div class="collapsible-header" onclick="toggleSection('searchSection')">
+    🔎 Materials search & library
+  </div>
+
+  <div id="searchSection" class="collapsible-content">
     <h3>Live smart material search</h3>
-    <input id="materialSearch" placeholder="Search materials e.g. 15mm speedfit elbow, basin waste, kitchen tap" oninput="debouncedSearch()">
+    <input id="materialSearch" placeholder="Search materials..." oninput="debouncedSearch()">
     <div id="searchResults" class="search-results hidden"></div>
 
     <h3>Supplier comparison</h3>
     <div id="comparisonList" class="small">Search above to compare suppliers and prices.</div>
 
-    <h3>Save / edit a product in library</h3>
-    <input type="hidden" id="library_id">
-    <label for="library_name">Item name</label>
-    <input id="library_name" placeholder="e.g. Kitchen Mixer Tap">
-
-    <label for="library_supplier">Supplier</label>
+    <h3>Save / edit product</h3>
+    <input id="library_name" placeholder="Item name">
     <select id="library_supplier">
-      <option value="City Plumbing">City Plumbing</option>
-      <option value="Screwfix">Screwfix</option>
-      <option value="Toolstation">Toolstation</option>
-      <option value="Topps Tiles">Topps Tiles</option>
-      <option value="Selco">Selco</option>
+      <option>City Plumbing</option>
+      <option>Screwfix</option>
+      <option>Toolstation</option>
     </select>
-
-    <label for="library_url">Product URL</label>
-    <input id="library_url" placeholder="https://...">
-
-    <label for="library_default_price">Fallback price (£)</label>
-    <input id="library_default_price" type="number" step="0.01" placeholder="0">
-
-    <button type="button" class="btn-save" onclick="saveLibraryItem()">Save / update library item</button>
-    <div id="libraryNotice" class="notice"></div>
+    <input id="library_url" placeholder="Product URL">
+    <input id="library_default_price" type="number" placeholder="Fallback price">
+    <button onclick="saveLibraryItem()">Save</button>
   </div>
+</div>
 
 <div class="card no-print">
-    <h2>Customer history per job</h2>
-    <div id="customerHistory" class="small">Enter or select a customer to see history.</div>
+  <div class="collapsible-header" onclick="toggleSection('historySection')">
+    📋 Customer history
   </div>
 
-  <div class="card no-print">
-    <h3>Materials</h3>
+  <div id="historySection" class="collapsible-content">
+    <div id="customerHistory"></div>
+  </div>
+</div>
+
+<div class="card no-print">
+  <div class="collapsible-header" onclick="toggleSection('materialsSection')">
+    🧰 Materials & pricing
+  </div>
+
+  <div id="materialsSection" class="collapsible-content">
     <div id="materials"></div>
-    <button type="button" onclick="addMaterial()">+ Add Manual Material Row</button>
+    <button onclick="addMaterial()">+ Add</button>
 
-    <h3>Pricing</h3>
+    <label>Labour</label>
+    <input id="labour" type="number">
 
-    <label for="labour">Labour cost (£)</label>
-    <input id="labour" type="number" step="0.01" placeholder="180">
-
-    <div class="small" id="labourSuggestion" style="margin-top:8px;"></div>
-
-    <div class="check-row">
-      <input type="checkbox" id="include_materials_handling" checked>
-      <span>Include materials handling</span>
-    </div>
-
-    <label for="materials_handling_percent">Materials handling %</label>
+    <label>Handling %</label>
     <select id="materials_handling_percent">
-      <option value="20">20%</option>
-      <option value="25" selected>25%</option>
-      <option value="30">30%</option>
+      <option>20</option>
+      <option selected>25</option>
+      <option>30</option>
     </select>
 
-    <button type="button" onclick="generateQuote()">Generate Quote</button>
+    <button onclick="generateQuote()">Generate Quote</button>
+  </div>
+</div>
 
-    <div id="error" class="error"></div>
+<div class="card">
+  <div class="collapsible-header" onclick="toggleSection('savedSection')">
+    💾 Saved Quotes
   </div>
 
-  <div id="resultCard" class="card result quote-sheet">
-    <div class="quote-header">
-      <div class="quote-company">Nigel Harvey Ltd</div>
-      <div class="quote-meta">
-        125 Bushy Hill Drive, Guildford, GU1 2UG<br>
-        07595 725547<br>
-        Nigelharveyplumbing@gmail.com
-      </div>
-    </div>
-
-    <div class="quote-section-title">Quote details</div>
-    <div class="quote-box">
-      <div class="row"><span class="muted">Quote ref</span><span id="r_quote_ref"></span></div>
-      <div class="row"><span class="muted">Invoice ref</span><span id="r_invoice_ref"></span></div>
-      <div class="row"><span class="muted">Date</span><span id="r_date"></span></div>
-      <div class="row"><span class="muted">Status</span><span id="r_status"></span></div>
-      <div class="row"><span class="muted">Type</span><span id="r_type"></span></div>
-      <div class="row"><span class="muted">Customer</span><span id="r_customer"></span></div>
-      <div class="row"><span class="muted">Phone</span><span id="r_phone"></span></div>
-      <div class="row"><span class="muted">Address</span><span id="r_address"></span></div>
-    </div>
-
-    <div class="quote-section-title">Works</div>
-    <div class="quote-box">
-      <div id="r_job"></div>
-    </div>
-
-    <div class="quote-section-title">Price</div>
-    <div class="quote-box">
-      <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
-      <div class="row"><span class="muted">Materials</span><span id="r_materials"></span></div>
-      <div class="row quote-total"><span>Total price</span><span id="r_total"></span></div>
-    </div>
-
-    <div id="internalBox" class="quote-box internal-box hidden">
-      <div class="quote-section-title" style="margin-top:0;">Internal only</div>
-      <div class="row"><span class="muted">Raw materials</span><span id="r_internal_raw"></span></div>
-      <div class="row"><span class="muted">Job multiplier</span><span id="r_internal_job_multiplier"></span></div>
-      <div class="row"><span class="muted">After job markup</span><span id="r_internal_after_job"></span></div>
-      <div class="row"><span class="muted">Handling %</span><span id="r_internal_handling_percent"></span></div>
-      <div class="row"><span class="muted">After handling</span><span id="r_internal_after_handling"></span></div>
-      <div class="row"><span class="muted">Hidden uplift</span><span id="r_internal_hidden_uplift"></span></div>
-    </div>
-
-    <div class="quote-section-title">Notes</div>
-    <div class="quote-box">
-      Includes labour and materials.<br>
-      Payment due as agreed.<br>
-      Quote subject to site conditions and any unforeseen issues.
-    </div>
-
-    <div class="actions no-print">
-      <a id="whatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send direct to customer WhatsApp</a>
-      <button class="btn-light" onclick="window.print()">Download / Print PDF</button>
-      <button class="btn-save" onclick="convertCurrentQuoteToInvoice()">Convert to invoice</button>
-    </div>
+  <div id="savedSection" class="collapsible-content">
+    <div id="historyList"></div>
   </div>
+</div>
 
-  <div class="card">
-    <h2>Saved Quotes</h2>
+<!-- COLLAPSIBLE SECTIONS END -->
     <div id="historyList" class="small">No saved quotes yet.</div>
   </div>
 
