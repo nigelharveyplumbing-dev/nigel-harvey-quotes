@@ -1118,25 +1118,6 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
   <div id="i_payment_link_box"></div>
 </div>
 
-const paymentBox = document.getElementById("i_payment_link_box");
-const isSmallJob = (quoteResult.quote_type || "").toLowerCase() === "small";
-
-const termsHtml = isSmallJob
-  ? `
-    <div class="invoice-note">
-      Please pay by the due date shown above.<br>
-      Late payment fee may be applied after 14 days.<br>
-      Materials remain the property of Nigel Harvey Ltd until paid in full.
-    </div>
-  `
-  : `
-    <div class="invoice-note">
-      Please pay by the due date shown above.<br>
-      Late payment fee may be applied after 14 days.<br>
-      Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
-      Deposit required before works begin where applicable.
-    </div>
-  `;
 
 if (item.payment_link) {
   paymentBox.innerHTML = `
