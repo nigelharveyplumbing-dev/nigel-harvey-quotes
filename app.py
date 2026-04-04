@@ -1964,13 +1964,6 @@ def api_quote_to_invoice(quote_id: int):
         raise HTTPException(status_code=404, detail="Quote not found")
     return invoice
 
-@app.post("/api/quotes/{quote_id}/to-invoice")
-def api_quote_to_invoice(quote_id: int):
-    invoice = create_invoice_from_quote(quote_id)
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Quote not found")
-    return invoice
-
 
 # PUT THE NEW INVOICE PAGE ROUTE HERE
 @app.get("/invoice/{invoice_id}", response_class=HTMLResponse)
