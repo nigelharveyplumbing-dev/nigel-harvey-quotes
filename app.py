@@ -12,7 +12,7 @@ from pathlib import Path
 
 app = FastAPI(title="Nigel Harvey Ltd Business App")
 
-DB_PATH = Path("quotes.db")
+DB_PATH = Path("/var/data/quotes.db")
 UK_TZ = ZoneInfo("Europe/London")
 
 COMPANY_NAME = "Nigel Harvey Ltd"
