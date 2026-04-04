@@ -2118,7 +2118,27 @@ def api_delete_invoice(invoice_id: int):
 @app.get("/api/customers")
 def api_customers():
     return get_customers()
+@app.delete("/api/customers/{customer_id}")
+def api_delete_customer(customer_id: int):
+    conn = get_db()
 
+    customer = conn.execute(
+        "SELECT id FROM customers WHERE id = ?", (customer_id,)
+    ).fetchone()
+
+    if not customer:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    # 🔥 FULL DELETE (quotes + invoices + customer)
+    conn.execute("DELETE FROM invoices WHERE customer_id = ?", (customer_id,))
+    conn.execute("DELETE FROM quotes WHERE customer_id = ?", (customer_id,))
+    conn.execute("DELETE FROM customers WHERE id = ?", (customer_id,))
+
+    conn.commit()
+    conn.close()
+
+    return {"ok": True}
 
 @app.get("/api/customers/{customer_id}/history")
 def api_customer_history(customer_id: int):
