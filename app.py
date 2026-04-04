@@ -1643,9 +1643,13 @@ async function loadCustomers() {
         <div>${escapeHtml(c.phone || "")}</div>
         <div class="small">${escapeHtml(c.address || "")}</div>
         <div class="history-actions" style="grid-template-columns:1fr 1fr;">
-          <button type="button" class="btn-light" onclick="viewCustomerHistory(${c.id})">View History</button>
-          <button type="button" class="btn-light" onclick="startQuoteForCustomer(${c.id})">Start Quote</button>
-        </div>
+  <button type="button" class="btn-light" onclick="viewCustomerHistory(${c.id})">View History</button>
+  <button type="button" class="btn-light" onclick="startQuoteForCustomer(${c.id})">Start Quote</button>
+</div>
+
+<div class="history-actions">
+  <button type="button" class="btn-red" onclick="deleteCustomer(${c.id})">Delete Customer</button>
+</div>
         <div id="customer_history_${c.id}" class="small" style="margin-top:10px;"></div>
       </div>
     `).join("");
