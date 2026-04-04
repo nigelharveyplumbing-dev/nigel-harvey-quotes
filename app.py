@@ -813,6 +813,7 @@ HTML = r'''
 <!doctype html>
 <html>
 <head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nigel Harvey Ltd Business App</title>
 <style>
@@ -1566,22 +1567,27 @@ async function loadDashboard() {
 
 async function deleteCustomer(id) {
   const check = prompt("Type DELETE to confirm");
-  if (check !== "DELETE") return;
+  if (!check || check.trim().toUpperCase() !== "DELETE") return;
 
   try {
     const res = await fetch("/api/customers/" + id, {
       method: "DELETE"
     });
 
-    if (!res.ok) throw new Error();
+    const text = await res.text();
+    if (!res.ok) {
+      alert("Delete failed: " + text);
+      return;
+    }
 
     await loadCustomers();
     await loadHistory();
     await loadInvoices();
     await loadDashboard();
 
+    alert("Customer deleted.");
   } catch (e) {
-    alert("Could not delete customer.");
+    alert("Could not delete customer: " + e);
   }
 }
 
@@ -2154,14 +2160,25 @@ def api_delete_customer(customer_id: int):
         conn.close()
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    conn.execute("DELETE FROM invoices WHERE customer_id = ?", (customer_id,))
-    conn.execute("DELETE FROM quotes WHERE customer_id = ?", (customer_id,))
-    conn.execute("DELETE FROM customers WHERE id = ?", (customer_id,))
+    deleted_invoices = conn.execute(
+        "DELETE FROM invoices WHERE customer_id = ?", (customer_id,)
+    ).rowcount
+    deleted_quotes = conn.execute(
+        "DELETE FROM quotes WHERE customer_id = ?", (customer_id,)
+    ).rowcount
+    deleted_customers = conn.execute(
+        "DELETE FROM customers WHERE id = ?", (customer_id,)
+    ).rowcount
 
     conn.commit()
     conn.close()
 
-    return {"ok": True}
+    return {
+        "ok": True,
+        "deleted_customers": deleted_customers,
+        "deleted_quotes": deleted_quotes,
+        "deleted_invoices": deleted_invoices,
+    }
 
 
 @app.get("/api/customers/{customer_id}/history")
