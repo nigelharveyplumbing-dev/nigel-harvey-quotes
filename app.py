@@ -125,20 +125,20 @@ JOB_TEMPLATES = [
 
 LABOUR_HINTS = {
     "small": [
-        {"keywords": ["tap"], "suggestion": 120, "range": "£100–£140"},
-        {"keywords": ["toilet", "wc"], "suggestion": 180, "range": "£160–£220"},
-        {"keywords": ["waste", "trap"], "suggestion": 120, "range": "£90–£140"},
-        {"keywords": ["outside tap"], "suggestion": 150, "range": "£140–£180"},
+        {"keywords": ["tap"], "suggestion": 120, "range": "Â£100âÂ£140"},
+        {"keywords": ["toilet", "wc"], "suggestion": 180, "range": "Â£160âÂ£220"},
+        {"keywords": ["waste", "trap"], "suggestion": 120, "range": "Â£90âÂ£140"},
+        {"keywords": ["outside tap"], "suggestion": 150, "range": "Â£140âÂ£180"},
     ],
     "bathroom": [
-        {"keywords": ["install"], "suggestion": 1800, "range": "£1,600–£2,200"},
-        {"keywords": ["refurb"], "suggestion": 2200, "range": "£2,000–£2,800"},
-        {"keywords": ["bathroom"], "suggestion": 2000, "range": "£1,600–£2,800"},
+        {"keywords": ["install"], "suggestion": 1800, "range": "Â£1,600âÂ£2,200"},
+        {"keywords": ["refurb"], "suggestion": 2200, "range": "Â£2,000âÂ£2,800"},
+        {"keywords": ["bathroom"], "suggestion": 2000, "range": "Â£1,600âÂ£2,800"},
     ],
     "heating": [
-        {"keywords": ["radiator"], "suggestion": 180, "range": "£160–£220"},
-        {"keywords": ["repair"], "suggestion": 150, "range": "£120–£220"},
-        {"keywords": ["system"], "suggestion": 3500, "range": "£3,000–£4,500"},
+        {"keywords": ["radiator"], "suggestion": 180, "range": "Â£160âÂ£220"},
+        {"keywords": ["repair"], "suggestion": 150, "range": "Â£120âÂ£220"},
+        {"keywords": ["system"], "suggestion": 3500, "range": "Â£3,000âÂ£4,500"},
     ],
 }
 
@@ -287,14 +287,14 @@ def fetch_price(url: str):
 
         if "cityplumbing" in lower_url:
             domain_patterns = [
-                r'£\s?(\d+(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
-                r'£\s?(\d+(?:\.\d{2})?)\s*Inc\.?\s*VAT',
-                r'£\s?(\d+(?:\.\d{2})?)\s*each',
+                r'Â£\s?(\d+(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
+                r'Â£\s?(\d+(?:\.\d{2})?)\s*Inc\.?\s*VAT',
+                r'Â£\s?(\d+(?:\.\d{2})?)\s*each',
             ]
         elif "toppstiles" in lower_url:
             domain_patterns = [
-                r'£\s?(\d+(?:\.\d{2})?)\s*(?:per m2|/m2|m2)',
-                r'£\s?(\d+(?:\.\d{2})?)'
+                r'Â£\s?(\d+(?:\.\d{2})?)\s*(?:per m2|/m2|m2)',
+                r'Â£\s?(\d+(?:\.\d{2})?)'
             ]
 
         for pattern in domain_patterns:
@@ -304,7 +304,7 @@ def fetch_price(url: str):
                 if price and 0 < price < 100000:
                     return round(price, 2)
 
-        generic_matches = re.findall(r'£\s?(\d+(?:\.\d{2})?)', text)
+        generic_matches = re.findall(r'Â£\s?(\d+(?:\.\d{2})?)', text)
         prices = []
         for match in generic_matches:
             price = safe_float(match, None)
@@ -328,10 +328,10 @@ def find_labour_suggestion(quote_type: str, job_description: str):
             return rule
 
     if quote_type == "bathroom":
-        return {"suggestion": 2000, "range": "£1,600–£2,800"}
+        return {"suggestion": 2000, "range": "Â£1,600âÂ£2,800"}
     if quote_type == "heating":
-        return {"suggestion": 180, "range": "£150–£300"}
-    return {"suggestion": 120, "range": "£90–£180"}
+        return {"suggestion": 180, "range": "Â£150âÂ£300"}
+    return {"suggestion": 120, "range": "Â£90âÂ£180"}
 
 
 def calculate_quote(data: QuoteRequest):
@@ -809,7 +809,7 @@ def get_customer_history(customer_id: int):
     }
 
 
-HTML = r"""
+HTML = r'''
 <!doctype html>
 <html>
 <head>
@@ -945,10 +945,10 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
           <span>Include tiling</span>
         </div>
 
-        <label for="wall_tiling_m2">Wall tiling (m²)</label>
+        <label for="wall_tiling_m2">Wall tiling (mÂ²)</label>
         <input id="wall_tiling_m2" type="number" step="0.1" placeholder="0">
 
-        <label for="floor_tiling_m2">Floor tiling (m²)</label>
+        <label for="floor_tiling_m2">Floor tiling (mÂ²)</label>
         <input id="floor_tiling_m2" type="number" step="0.1" placeholder="0">
 
         <label for="wall_height">Wall height</label>
@@ -972,7 +972,7 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
       <button type="button" class="btn-light no-print" onclick="addMaterial()">+ Add Manual Material Row</button>
 
       <h3>Pricing</h3>
-      <label for="labour">Labour cost (£)</label>
+      <label for="labour">Labour cost (Â£)</label>
       <input id="labour" type="number" step="0.01" placeholder="180">
       <div class="small" id="labourSuggestion" style="margin-top:8px;"></div>
 
@@ -1104,35 +1104,23 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
     </div>
 
     <div class="quote-section-title">Invoice totals</div>
-<div class="quote-box">
-  <div class="row"><span class="muted">Labour</span><span id="i_labour"></span></div>
-  <div class="row"><span class="muted">Materials</span><span id="i_materials"></span></div>
-  <div class="row"><span class="muted">Total</span><span id="i_total"></span></div>
-  <div class="row"><span class="muted">Amount paid</span><span id="i_paid"></span></div>
-  <div class="row"><span class="muted">Outstanding</span><span id="i_balance"></span></div>
-  <div class="row quote-total"><span>Balance due</span><span id="i_balance_big"></span></div>
-</div>
+    <div class="quote-box">
+      <div class="row"><span class="muted">Labour</span><span id="i_labour"></span></div>
+      <div class="row"><span class="muted">Materials</span><span id="i_materials"></span></div>
+      <div class="row"><span class="muted">Total</span><span id="i_total"></span></div>
+      <div class="row"><span class="muted">Amount paid</span><span id="i_paid"></span></div>
+      <div class="row"><span class="muted">Outstanding</span><span id="i_balance"></span></div>
+      <div class="row quote-total"><span>Balance due</span><span id="i_balance_big"></span></div>
+    </div>
 
-<div class="quote-section-title">Payment</div>
-<div class="quote-box">
-  <div id="i_payment_link_box"></div>
-</div>
-
-
-if (item.payment_link) {
-  paymentBox.innerHTML = `
-    <div><strong>Payment link:</strong> <a href="${item.payment_link}" target="_blank">${escapeHtml(item.payment_link)}</a></div>
-    ${termsHtml}
-  `;
-} else {
-  paymentBox.innerHTML = `
-    <div>No online payment link set yet.</div>
-    ${termsHtml}
-  `;
-}
+    <div class="quote-section-title">Payment</div>
+    <div class="quote-box">
+      <div id="i_payment_link_box"></div>
+    </div>
 
     <div class="actions no-print">
       <a id="invoiceWhatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Invoice to WhatsApp</a>
+      <a id="invoiceEmailBtn" class="btn-link btn-blue" href="#">Send Invoice by Email</a>
       <button class="btn-light" onclick="window.print()">Download / Print Invoice PDF</button>
     </div>
   </div>
@@ -1157,7 +1145,7 @@ let CURRENT_QUOTE_DATA = null;
 let CURRENT_INVOICE_ID = null;
 
 function pounds(value) {
-  return "£" + Number(value || 0).toFixed(2);
+  return "Â£" + Number(value || 0).toFixed(2);
 }
 
 function escapeHtml(text) {
@@ -1215,14 +1203,14 @@ function updateLabourSuggestion() {
   if (quoteType === "bathroom") message = "Typical bathroom labour is often higher. Adjust to suit your job.";
   if (quoteType === "heating") message = "Heating jobs often vary by size and access. Adjust labour as needed.";
 
-  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around £120. Typical range: £100–£140.";
-  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around £180. Typical range: £160–£220.";
-  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around £120. Typical range: £90–£140.";
-  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around £150. Typical range: £140–£180.";
-  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around £2,200. Typical range: £2,000–£2,800.";
-  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around £1,800. Typical range: £1,600–£2,200.";
-  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around £180. Typical range: £160–£220.";
-  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around £150. Typical range: £120–£220.";
+  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around Â£120. Typical range: Â£100âÂ£140.";
+  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around Â£180. Typical range: Â£160âÂ£220.";
+  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around Â£120. Typical range: Â£90âÂ£140.";
+  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around Â£150. Typical range: Â£140âÂ£180.";
+  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around Â£2,200. Typical range: Â£2,000âÂ£2,800.";
+  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around Â£1,800. Typical range: Â£1,600âÂ£2,200.";
+  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around Â£180. Typical range: Â£160âÂ£220.";
+  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around Â£150. Typical range: Â£120âÂ£220.";
 
   box.innerText = message;
 }
@@ -1259,7 +1247,7 @@ function addMaterial(prefill = null) {
     <label>Product URL</label>
     <input class="m-url" placeholder="https://..." value="${prefill && prefill.url ? escapeHtml(prefill.url) : ""}">
 
-    <label>Manual price (£)</label>
+    <label>Manual price (Â£)</label>
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${manualPrice}">
 
     <button type="button" class="btn-red" style="margin-top:12px;" onclick="this.parentElement.remove()">Remove</button>
@@ -1297,7 +1285,7 @@ function searchMaterials() {
   resultsBox.innerHTML = results.map((item) => `
     <div class="search-item" onclick='addMaterialFromLibrary(${JSON.stringify(item)})'>
       <strong>${escapeHtml(item.name)}</strong><br>
-      <span class="small">${escapeHtml(item.supplier)} · ${pounds(item.default_price)}</span>
+      <span class="small">${escapeHtml(item.supplier)} Â· ${pounds(item.default_price)}</span>
     </div>
   `).join("");
 
@@ -1373,12 +1361,12 @@ function renderQuoteResult(data) {
   document.getElementById("r_job").innerText = data.job || "-";
   document.getElementById("r_labour").innerText = pounds(data.labour);
   document.getElementById("r_materials").innerText = pounds(data.materials);
-  document.getElementById("r_deposit").innerText = data.deposit_amount ? pounds(data.deposit_amount) + " (" + Number(data.deposit_percent).toFixed(0) + "%)" : "£0.00";
+  document.getElementById("r_deposit").innerText = data.deposit_amount ? pounds(data.deposit_amount) + " (" + Number(data.deposit_percent).toFixed(0) + "%)" : "Â£0.00";
   document.getElementById("r_total").innerText = pounds(data.total_price);
 
   const lines = data.material_lines || [];
   document.getElementById("r_material_lines").innerHTML = lines.length
-    ? lines.map(x => `<div>${escapeHtml(x.name || "")} × ${x.quantity} — ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
+    ? lines.map(x => `<div>${escapeHtml(x.name || "")} Ã ${x.quantity} â ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
     : "<div>No materials added.</div>";
 
   const internalMode = document.getElementById("internal_mode").checked;
@@ -1461,15 +1449,40 @@ function renderInvoiceCard(item) {
   document.getElementById("i_balance_big").innerText = pounds(item.balance_due);
 
   const paymentBox = document.getElementById("i_payment_link_box");
+  const isSmallJob = ((quoteResult.quote_type || "").toLowerCase() === "small");
+
+  const termsHtml = isSmallJob
+    ? `
+      <div class="invoice-note">
+        Please pay by the due date shown above.<br>
+        Late payment fee may be applied after 14 days.<br>
+        Materials remain the property of Nigel Harvey Ltd until paid in full.
+      </div>
+    `
+    : `
+      <div class="invoice-note">
+        Please pay by the due date shown above.<br>
+        Late payment fee may be applied after 14 days.<br>
+        Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
+        Deposit required before works begin where applicable.
+      </div>
+    `;
+
   if (item.payment_link) {
-    paymentBox.innerHTML = `<div><strong>Payment link:</strong> <a href="${item.payment_link}" target="_blank">${escapeHtml(item.payment_link)}</a></div>`;
+    paymentBox.innerHTML = `
+      <div><strong>Payment link:</strong> <a href="${item.payment_link}" target="_blank">${escapeHtml(item.payment_link)}</a></div>
+      ${termsHtml}
+    `;
   } else {
-    paymentBox.innerHTML = `<div>No online payment link set yet.</div>`;
+    paymentBox.innerHTML = `
+      <div>No online payment link set yet.</div>
+      ${termsHtml}
+    `;
   }
 
   const invoiceUrl = window.location.origin + "/invoice/" + item.id;
 
-const msg =
+  const msg =
 `Nigel Harvey Ltd Invoice
 
 Invoice: ${item.invoice_number}
@@ -1478,10 +1491,25 @@ Balance due: ${pounds(item.balance_due)}
 
 View your invoice:
 ${invoiceUrl}`;
+
   const cleanPhone = normalisePhone(invoice.customer_phone || quoteResult.customer_phone || "");
   document.getElementById("invoiceWhatsappBtn").href = cleanPhone
     ? "https://wa.me/" + cleanPhone + "?text=" + encodeURIComponent(msg)
     : "https://wa.me/?text=" + encodeURIComponent(msg);
+
+  const emailSubject = encodeURIComponent("Invoice " + item.invoice_number + " - Nigel Harvey Ltd");
+  const emailBody = encodeURIComponent(
+`Hello ${invoice.customer_name || ""},
+
+Please find your invoice here:
+
+${invoiceUrl}
+
+Nigel Harvey Ltd
+07595 725547
+Nigelharveyplumbing@gmail.com`
+  );
+  document.getElementById("invoiceEmailBtn").href = `mailto:?subject=${emailSubject}&body=${emailBody}`;
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1537,8 +1565,8 @@ async function loadDashboard() {
 }
 
 async function deleteCustomer(id) {
-  if const check = prompt("Type DELETE to confirm");
-if (check !== "DELETE") return;
+  const check = prompt("Type DELETE to confirm");
+  if (check !== "DELETE") return;
 
   try {
     const res = await fetch("/api/customers/" + id, {
@@ -1556,6 +1584,7 @@ if (check !== "DELETE") return;
     alert("Could not delete customer.");
   }
 }
+
 async function loadHistory() {
   try {
     const res = await fetch("/api/quotes");
@@ -1572,7 +1601,7 @@ async function loadHistory() {
       <div class="history-item">
         <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
         <div>${escapeHtml(q.job || "")}</div>
-        <div class="small">${escapeHtml(q.created_at || "")} · Total ${pounds(q.total_price)} · Profit ${pounds(q.gross_profit)} · Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
+        <div class="small">${escapeHtml(q.created_at || "")} Â· Total ${pounds(q.total_price)} Â· Profit ${pounds(q.gross_profit)} Â· Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
         <div class="history-actions">
           <button type="button" class="btn-light" onclick="loadSavedQuote(${q.id})">Load</button>
           <button type="button" class="btn-secondary" onclick="sendSavedQuoteWhatsApp(${q.id})">WhatsApp</button>
@@ -1601,9 +1630,9 @@ async function loadInvoices() {
 
     box.innerHTML = data.map(i => `
       <div class="history-item">
-        <div><strong>${escapeHtml(i.invoice_number)}</strong> — ${escapeHtml(i.customer_name || "No customer name")}</div>
+        <div><strong>${escapeHtml(i.invoice_number)}</strong> â ${escapeHtml(i.customer_name || "No customer name")}</div>
         <div>${renderStatusBadge(i.status)}</div>
-        <div class="small">${escapeHtml(i.created_at || "")} · Total ${pounds(i.total_price)} · Paid ${pounds(i.amount_paid)} · Balance ${pounds(i.balance_due)}</div>
+        <div class="small">${escapeHtml(i.created_at || "")} Â· Total ${pounds(i.total_price)} Â· Paid ${pounds(i.amount_paid)} Â· Balance ${pounds(i.balance_due)}</div>
 
         <label style="margin-top:10px;">Update payment</label>
         <div class="row">
@@ -1644,13 +1673,12 @@ async function loadCustomers() {
         <div>${escapeHtml(c.phone || "")}</div>
         <div class="small">${escapeHtml(c.address || "")}</div>
         <div class="history-actions" style="grid-template-columns:1fr 1fr;">
-  <button type="button" class="btn-light" onclick="viewCustomerHistory(${c.id})">View History</button>
-  <button type="button" class="btn-light" onclick="startQuoteForCustomer(${c.id})">Start Quote</button>
-</div>
-
-<div class="history-actions">
-  <button type="button" class="btn-red" onclick="deleteCustomer(${c.id})">Delete Customer</button>
-</div>
+          <button type="button" class="btn-light" onclick="viewCustomerHistory(${c.id})">View History</button>
+          <button type="button" class="btn-light" onclick="startQuoteForCustomer(${c.id})">Start Quote</button>
+        </div>
+        <div class="history-actions">
+          <button type="button" class="btn-red" onclick="deleteCustomer(${c.id})">Delete Customer</button>
+        </div>
         <div id="customer_history_${c.id}" class="small" style="margin-top:10px;"></div>
       </div>
     `).join("");
@@ -1670,9 +1698,9 @@ async function viewCustomerHistory(id) {
 
     box.innerHTML = `
       <div><strong>Quotes:</strong> ${quotes.length}</div>
-      ${quotes.slice(0,5).map(q => `<div>• ${escapeHtml(q.created_at)} — ${escapeHtml(q.job || "")} — ${pounds(q.total_price)}</div>`).join("") || "<div>None</div>"}
+      ${quotes.slice(0,5).map(q => `<div>â¢ ${escapeHtml(q.created_at)} â ${escapeHtml(q.job || "")} â ${pounds(q.total_price)}</div>`).join("") || "<div>None</div>"}
       <div style="margin-top:8px;"><strong>Invoices:</strong> ${invoices.length}</div>
-      ${invoices.slice(0,5).map(i => `<div>• ${escapeHtml(i.invoice_number)} — ${pounds(i.total_price)} — ${escapeHtml(i.status)}</div>`).join("") || "<div>None</div>"}
+      ${invoices.slice(0,5).map(i => `<div>â¢ ${escapeHtml(i.invoice_number)} â ${pounds(i.total_price)} â ${escapeHtml(i.status)}</div>`).join("") || "<div>None</div>"}
     `;
   } catch (e) {
     alert("Could not load customer history.");
@@ -1893,7 +1921,7 @@ loadCustomers();
 </script>
 </body>
 </html>
-"""
+'''
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1946,7 +1974,6 @@ def api_quote_to_invoice(quote_id: int):
     return invoice
 
 
-# PUT THE NEW INVOICE PAGE ROUTE HERE
 @app.get("/invoice/{invoice_id}", response_class=HTMLResponse)
 def public_invoice(invoice_id: int):
     item = get_invoice_by_id(invoice_id)
@@ -1976,7 +2003,7 @@ def public_invoice(invoice_id: int):
     <html>
     <head>
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>Invoice {item["invoice_number"]}</title>
+      <title>Invoice {item['invoice_number']}</title>
       <style>
         body {{
           font-family: Arial, sans-serif;
@@ -2045,27 +2072,27 @@ def public_invoice(invoice_id: int):
       <h2>Invoice</h2>
 
       <div class="box">
-        <div class="row"><span class="muted">Invoice number</span><span>{item["invoice_number"]}</span></div>
-        <div class="row"><span class="muted">Date</span><span>{item["created_at"]}</span></div>
-        <div class="row"><span class="muted">Due date</span><span>{item["due_date"]}</span></div>
-        <div class="row"><span class="muted">Status</span><span>{item["status"]}</span></div>
-        <div class="row"><span class="muted">Customer</span><span>{invoice.get("customer_name", "-")}</span></div>
-        <div class="row"><span class="muted">Phone</span><span>{invoice.get("customer_phone", "-")}</span></div>
-        <div class="row"><span class="muted">Address</span><span>{invoice.get("customer_address", "-")}</span></div>
+        <div class="row"><span class="muted">Invoice number</span><span>{item['invoice_number']}</span></div>
+        <div class="row"><span class="muted">Date</span><span>{item['created_at']}</span></div>
+        <div class="row"><span class="muted">Due date</span><span>{item['due_date']}</span></div>
+        <div class="row"><span class="muted">Status</span><span>{item['status']}</span></div>
+        <div class="row"><span class="muted">Customer</span><span>{invoice.get('customer_name', '-')}</span></div>
+        <div class="row"><span class="muted">Phone</span><span>{invoice.get('customer_phone', '-')}</span></div>
+        <div class="row"><span class="muted">Address</span><span>{invoice.get('customer_address', '-')}</span></div>
       </div>
 
       <h3>Work</h3>
       <div class="box">
-        {invoice.get("job", "-")}
+        {invoice.get('job', '-')}
       </div>
 
       <h3>Invoice totals</h3>
       <div class="box">
-        <div class="row"><span class="muted">Labour</span><span>£{invoice.get("labour", 0):.2f}</span></div>
-        <div class="row"><span class="muted">Materials</span><span>£{invoice.get("materials", 0):.2f}</span></div>
-        <div class="row"><span class="muted">Total</span><span>£{item["total_price"]:.2f}</span></div>
-        <div class="row"><span class="muted">Amount paid</span><span>£{item["amount_paid"]:.2f}</span></div>
-        <div class="row"><span class="muted">Balance due</span><span class="total">£{item["balance_due"]:.2f}</span></div>
+        <div class="row"><span class="muted">Labour</span><span>Â£{invoice.get('labour', 0):.2f}</span></div>
+        <div class="row"><span class="muted">Materials</span><span>Â£{invoice.get('materials', 0):.2f}</span></div>
+        <div class="row"><span class="muted">Total</span><span>Â£{item['total_price']:.2f}</span></div>
+        <div class="row"><span class="muted">Amount paid</span><span>Â£{item['amount_paid']:.2f}</span></div>
+        <div class="row"><span class="muted">Balance due</span><span class="total">Â£{item['balance_due']:.2f}</span></div>
       </div>
 
       <h3>Payment terms</h3>
@@ -2082,9 +2109,6 @@ def public_invoice(invoice_id: int):
     return HTMLResponse(content=html)
 
 
-@app.get("/api/invoices")
-def api_invoices():
-    return load_invoices()
 @app.get("/api/invoices")
 def api_invoices():
     return load_invoices()
@@ -2116,6 +2140,8 @@ def api_delete_invoice(invoice_id: int):
 @app.get("/api/customers")
 def api_customers():
     return get_customers()
+
+
 @app.delete("/api/customers/{customer_id}")
 def api_delete_customer(customer_id: int):
     conn = get_db()
@@ -2128,7 +2154,6 @@ def api_delete_customer(customer_id: int):
         conn.close()
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    # 🔥 FULL DELETE (quotes + invoices + customer)
     conn.execute("DELETE FROM invoices WHERE customer_id = ?", (customer_id,))
     conn.execute("DELETE FROM quotes WHERE customer_id = ?", (customer_id,))
     conn.execute("DELETE FROM customers WHERE id = ?", (customer_id,))
@@ -2137,6 +2162,7 @@ def api_delete_customer(customer_id: int):
     conn.close()
 
     return {"ok": True}
+
 
 @app.get("/api/customers/{customer_id}/history")
 def api_customer_history(customer_id: int):
