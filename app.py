@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -125,8 +125,13 @@ def init_db():
     conn.execute("""
         CREATE TABLE IF NOT EXISTS quotes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            quote_json TEXT NOT NULL,
-            created_at_sort TEXT NOT NULL
+            customer_name TEXT,
+            job TEXT,
+            total_price REAL,
+            created_at TEXT NOT NULL,
+            created_at_sort TEXT NOT NULL,
+            request_json TEXT NOT NULL,
+            result_json TEXT NOT NULL
         )
     """)
     conn.commit()
@@ -138,11 +143,37 @@ def startup():
     init_db()
 
 
-def save_quote(quote: dict):
+def row_to_history_item(row):
+    result = json.loads(row["result_json"])
+    request_data = json.loads(row["request_json"])
+    return {
+        "id": row["id"],
+        "customer_name": row["customer_name"] or "",
+        "job": row["job"] or "",
+        "total_price": row["total_price"] or 0,
+        "created_at": row["created_at"],
+        "request": request_data,
+        "result": result,
+    }
+
+
+def save_quote(request_data: dict, result_data: dict):
     conn = get_db()
     conn.execute(
-        "INSERT INTO quotes (quote_json, created_at_sort) VALUES (?, ?)",
-        (json.dumps(quote), quote["created_at_sort"])
+        """
+        INSERT INTO quotes (
+            customer_name, job, total_price, created_at, created_at_sort, request_json, result_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            result_data.get("customer_name", ""),
+            result_data.get("job", ""),
+            result_data.get("total_price", 0),
+            result_data.get("created_at", ""),
+            result_data.get("created_at_sort", ""),
+            json.dumps(request_data),
+            json.dumps(result_data),
+        )
     )
     conn.commit()
     conn.close()
@@ -150,11 +181,32 @@ def save_quote(quote: dict):
 
 def load_quotes():
     conn = get_db()
-    rows = conn.execute(
-        "SELECT quote_json FROM quotes ORDER BY created_at_sort DESC, id DESC LIMIT 200"
-    ).fetchall()
+    rows = conn.execute("""
+        SELECT *
+        FROM quotes
+        ORDER BY created_at_sort DESC, id DESC
+        LIMIT 200
+    """).fetchall()
     conn.close()
-    return [json.loads(row["quote_json"]) for row in rows]
+    return [row_to_history_item(row) for row in rows]
+
+
+def get_quote_by_id(quote_id: int):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM quotes WHERE id = ?", (quote_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    return row_to_history_item(row)
+
+
+def delete_quote_by_id(quote_id: int):
+    conn = get_db()
+    cur = conn.execute("DELETE FROM quotes WHERE id = ?", (quote_id,))
+    conn.commit()
+    deleted = cur.rowcount
+    conn.close()
+    return deleted > 0
 
 
 def safe_float(value, default=0.0):
@@ -318,16 +370,18 @@ textarea { min-height:100px; resize:vertical; }
 button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; background:black; color:white; font-size:18px; font-weight:700; text-align:center; text-decoration:none; display:inline-block; box-sizing:border-box; cursor:pointer; }
 .btn-secondary { background:#1f7a1f; }
 .btn-light { background:#ececec; color:#111; }
+.btn-red { background:#b62323; color:white; }
 .btn-template { background:#333; font-size:15px; padding:10px; }
 .templates { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
 .material-row { border:1px solid #ddd; padding:12px; border-radius:10px; margin-bottom:10px; background:#fafafa; }
 .row { display:flex; justify-content:space-between; gap:10px; margin:8px 0; }
 .muted { color:#666; }
-.total { font-size:26px; font-weight:800; margin-top:10px; }
 .result { display:none; background:#f3faf3; border:1px solid #b7d7b7; }
 .error { display:none; background:#fff3f3; border:1px solid #e0b7b7; color:#a33; padding:12px; border-radius:10px; margin-top:12px; }
 .actions { display:grid; gap:10px; margin-top:14px; }
 .history-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
+.history-actions { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-top:10px; }
+.history-actions button { font-size:15px; padding:10px; }
 .small { font-size:14px; color:#666; }
 .hidden { display:none; }
 .check-row { display:flex; align-items:center; gap:10px; margin:12px 0 6px; font-weight:700; }
@@ -345,6 +399,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 .search-item:last-child { border-bottom:none; }
 .search-item:hover { background:#f2f2f2; }
 .no-print { display:block; }
+.status-bar { font-size:14px; color:#1f7a1f; margin-top:8px; font-weight:700; }
 @media print {
   .no-print { display:none !important; }
   body { background:white; padding:0; }
@@ -359,6 +414,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
   <div class="card no-print">
     <h1>Nigel Harvey Ltd Quotes</h1>
     <div class="sub">Quick quote tool</div>
+    <div id="editingStatus" class="status-bar hidden"></div>
 
     <div class="check-row">
       <input type="checkbox" id="internal_mode">
@@ -499,7 +555,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
     </div>
   </div>
 
-  <div class="card">
+  <div class="card no-print">
     <h2>Saved Quotes</h2>
     <div id="historyList" class="small">No saved quotes yet.</div>
   </div>
@@ -509,6 +565,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:10px; b
 <script>
 const MATERIAL_LIBRARY = __MATERIAL_LIBRARY__;
 const JOB_TEMPLATES = __JOB_TEMPLATES__;
+let SAVED_QUOTES = [];
+let CURRENT_HISTORY_ID = null;
 
 function pounds(value) {
   return "£" + Number(value || 0).toFixed(2);
@@ -561,12 +619,18 @@ function updateLabourSuggestion() {
   }
 }
 
+function clearMaterials() {
+  document.getElementById("materials").innerHTML = "";
+}
+
 function addMaterial(prefill = null) {
   const div = document.createElement("div");
   div.className = "material-row";
 
   const qty = prefill && prefill.quantity ? prefill.quantity : 1;
-  const manualPrice = prefill && prefill.default_price ? prefill.default_price : "";
+  const manualPrice = prefill && prefill.manual_price != null
+    ? prefill.manual_price
+    : (prefill && prefill.default_price != null ? prefill.default_price : "");
 
   div.innerHTML = `
     <label>Item name</label>
@@ -585,10 +649,12 @@ function addMaterial(prefill = null) {
     </select>
 
     <label>Product URL</label>
-    <input class="m-url" placeholder="https://...">
+    <input class="m-url" placeholder="https://..." value="${prefill && prefill.url ? escapeHtml(prefill.url) : ""}">
 
     <label>Manual price (£)</label>
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${manualPrice}">
+
+    <button type="button" class="btn-red" style="margin-top:12px;" onclick="this.parentElement.remove()">Remove</button>
   `;
   document.getElementById("materials").appendChild(div);
 
@@ -645,36 +711,18 @@ function normalisePhone(phone) {
   return digits;
 }
 
-async function loadHistory() {
-  try {
-    const res = await fetch("/quotes");
-    const data = await res.json();
-    const history = document.getElementById("historyList");
-
-    if (!data.length) {
-      history.innerHTML = "No saved quotes yet.";
-      return;
-    }
-
-    history.innerHTML = data.map(q => `
-      <div class="history-item">
-        <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
-        <div>${escapeHtml(q.job || "")}</div>
-        <div class="small">${escapeHtml(q.created_at || "")} · Total ${pounds(q.total_price)}</div>
-      </div>
-    `).join("");
-  } catch (e) {
-    document.getElementById("historyList").innerHTML = "Unable to load saved quotes.";
+function setEditingStatus(text = "", show = false) {
+  const box = document.getElementById("editingStatus");
+  if (show) {
+    box.innerText = text;
+    box.classList.remove("hidden");
+  } else {
+    box.innerText = "";
+    box.classList.add("hidden");
   }
 }
 
-async function generateQuote() {
-  const errorBox = document.getElementById("error");
-  const resultCard = document.getElementById("resultCard");
-  const internalBox = document.getElementById("internalBox");
-  const internalMode = document.getElementById("internal_mode").checked;
-  errorBox.style.display = "none";
-
+function collectFormPayload() {
   const materials = [];
   document.querySelectorAll(".material-row").forEach(row => {
     materials.push({
@@ -686,7 +734,7 @@ async function generateQuote() {
     });
   });
 
-  const payload = {
+  return {
     quote_type: document.getElementById("quote_type").value,
     customer_name: document.getElementById("customer_name").value,
     customer_address: document.getElementById("customer_address").value,
@@ -702,41 +750,36 @@ async function generateQuote() {
     wall_height: document.getElementById("wall_height").value,
     customer_supplies_tiles: document.getElementById("customer_supplies_tiles").checked
   };
+}
 
-  try {
-    const res = await fetch("/quote", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(payload)
-    });
+function renderQuoteResult(data) {
+  const resultCard = document.getElementById("resultCard");
+  const internalBox = document.getElementById("internalBox");
+  const internalMode = document.getElementById("internal_mode").checked;
 
-    if (!res.ok) throw new Error("Quote request failed");
+  document.getElementById("r_date").innerText = data.created_at || "-";
+  document.getElementById("r_type").innerText = data.quote_type || "-";
+  document.getElementById("r_customer").innerText = data.customer_name || "-";
+  document.getElementById("r_phone").innerText = data.customer_phone || "-";
+  document.getElementById("r_address").innerText = data.customer_address || "-";
+  document.getElementById("r_job").innerText = data.job || "-";
+  document.getElementById("r_labour").innerText = pounds(data.labour);
+  document.getElementById("r_materials").innerText = pounds(data.materials);
+  document.getElementById("r_total").innerText = pounds(data.total_price);
 
-    const data = await res.json();
+  if (internalMode) {
+    internalBox.classList.remove("hidden");
+    document.getElementById("r_internal_raw").innerText = pounds(data.internal_raw_materials);
+    document.getElementById("r_internal_job_multiplier").innerText = data.internal_job_multiplier + "x";
+    document.getElementById("r_internal_after_job").innerText = pounds(data.internal_after_job_markup);
+    document.getElementById("r_internal_handling_percent").innerText = data.internal_handling_percent + "%";
+    document.getElementById("r_internal_after_handling").innerText = pounds(data.internal_after_handling);
+    document.getElementById("r_internal_hidden_uplift").innerText = pounds(data.internal_hidden_uplift);
+  } else {
+    internalBox.classList.add("hidden");
+  }
 
-    document.getElementById("r_date").innerText = data.created_at || "-";
-    document.getElementById("r_type").innerText = data.quote_type || "-";
-    document.getElementById("r_customer").innerText = data.customer_name || "-";
-    document.getElementById("r_phone").innerText = data.customer_phone || "-";
-    document.getElementById("r_address").innerText = data.customer_address || "-";
-    document.getElementById("r_job").innerText = data.job || "-";
-    document.getElementById("r_labour").innerText = pounds(data.labour);
-    document.getElementById("r_materials").innerText = pounds(data.materials);
-    document.getElementById("r_total").innerText = pounds(data.total_price);
-
-    if (internalMode) {
-      internalBox.classList.remove("hidden");
-      document.getElementById("r_internal_raw").innerText = pounds(data.internal_raw_materials);
-      document.getElementById("r_internal_job_multiplier").innerText = data.internal_job_multiplier + "x";
-      document.getElementById("r_internal_after_job").innerText = pounds(data.internal_after_job_markup);
-      document.getElementById("r_internal_handling_percent").innerText = data.internal_handling_percent + "%";
-      document.getElementById("r_internal_after_handling").innerText = pounds(data.internal_after_handling);
-      document.getElementById("r_internal_hidden_uplift").innerText = pounds(data.internal_hidden_uplift);
-    } else {
-      internalBox.classList.add("hidden");
-    }
-
-    const message =
+  const message =
 `Nigel Harvey Ltd Quote
 
 Date: ${data.created_at || "-"}
@@ -754,12 +797,158 @@ Nigel Harvey Ltd
 07595 725547
 Nigelharveyplumbing@gmail.com`;
 
-    const cleanPhone = normalisePhone(data.customer_phone || "");
-    document.getElementById("whatsappBtn").href = cleanPhone
-      ? "https://wa.me/" + cleanPhone + "?text=" + encodeURIComponent(message)
-      : "https://wa.me/?text=" + encodeURIComponent(message);
+  const cleanPhone = normalisePhone(data.customer_phone || "");
+  document.getElementById("whatsappBtn").href = cleanPhone
+    ? "https://wa.me/" + cleanPhone + "?text=" + encodeURIComponent(message)
+    : "https://wa.me/?text=" + encodeURIComponent(message);
 
-    resultCard.style.display = "block";
+  resultCard.style.display = "block";
+}
+
+function fillFormFromRequest(requestData, quoteId = null) {
+  document.getElementById("quote_type").value = requestData.quote_type || "small";
+  document.getElementById("customer_name").value = requestData.customer_name || "";
+  document.getElementById("customer_address").value = requestData.customer_address || "";
+  document.getElementById("customer_phone").value = requestData.customer_phone || "";
+  document.getElementById("job").value = requestData.job_description || "";
+  document.getElementById("labour").value = requestData.labour_cost || "";
+  document.getElementById("include_materials_handling").checked = !!requestData.include_materials_handling;
+  document.getElementById("materials_handling_percent").value = String(requestData.materials_handling_percent || 25);
+  document.getElementById("tiling").checked = !!requestData.tiling;
+  document.getElementById("wall_tiling_m2").value = requestData.wall_tiling_m2 || "";
+  document.getElementById("floor_tiling_m2").value = requestData.floor_tiling_m2 || "";
+  document.getElementById("wall_height").value = requestData.wall_height || "half";
+  document.getElementById("customer_supplies_tiles").checked = !!requestData.customer_supplies_tiles;
+
+  clearMaterials();
+  const materials = requestData.materials || [];
+  if (materials.length) {
+    materials.forEach(item => addMaterial(item));
+  } else {
+    addMaterial();
+  }
+
+  CURRENT_HISTORY_ID = quoteId;
+  if (quoteId) {
+    setEditingStatus("Editing saved quote #" + quoteId, true);
+  } else {
+    setEditingStatus("", false);
+  }
+
+  toggleBathroomFields();
+  updateLabourSuggestion();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function loadHistory() {
+  try {
+    const res = await fetch("/quotes");
+    const data = await res.json();
+    SAVED_QUOTES = data;
+
+    const history = document.getElementById("historyList");
+
+    if (!data.length) {
+      history.innerHTML = "No saved quotes yet.";
+      return;
+    }
+
+    history.innerHTML = data.map(q => `
+      <div class="history-item">
+        <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
+        <div>${escapeHtml(q.job || "")}</div>
+        <div class="small">${escapeHtml(q.created_at || "")} · Total ${pounds(q.total_price)}</div>
+
+        <div class="history-actions">
+          <button type="button" class="btn-light" onclick="loadSavedQuote(${q.id})">Load</button>
+          <button type="button" class="btn-secondary" onclick="sendSavedQuoteWhatsApp(${q.id})">WhatsApp</button>
+          <button type="button" class="btn-light" onclick="printSavedQuote(${q.id})">Print</button>
+          <button type="button" class="btn-red" onclick="deleteSavedQuote(${q.id})">Delete</button>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    document.getElementById("historyList").innerHTML = "Unable to load saved quotes.";
+  }
+}
+
+async function loadSavedQuote(id) {
+  try {
+    const res = await fetch("/quotes/" + id);
+    if (!res.ok) throw new Error("Unable to load quote");
+    const data = await res.json();
+    fillFormFromRequest(data.request, data.id);
+    renderQuoteResult(data.result);
+  } catch (e) {
+    alert("Could not load saved quote.");
+  }
+}
+
+async function sendSavedQuoteWhatsApp(id) {
+  try {
+    const res = await fetch("/quotes/" + id);
+    if (!res.ok) throw new Error("Unable to load quote");
+    const data = await res.json();
+    renderQuoteResult(data.result);
+    document.getElementById("whatsappBtn").click();
+  } catch (e) {
+    alert("Could not open WhatsApp for this saved quote.");
+  }
+}
+
+async function printSavedQuote(id) {
+  try {
+    const res = await fetch("/quotes/" + id);
+    if (!res.ok) throw new Error("Unable to load quote");
+    const data = await res.json();
+    renderQuoteResult(data.result);
+    window.print();
+  } catch (e) {
+    alert("Could not print this saved quote.");
+  }
+}
+
+async function deleteSavedQuote(id) {
+  const ok = confirm("Delete this saved quote?");
+  if (!ok) return;
+
+  try {
+    const res = await fetch("/quotes/" + id, { method: "DELETE" });
+    if (!res.ok) throw new Error("Delete failed");
+
+    if (CURRENT_HISTORY_ID === id) {
+      CURRENT_HISTORY_ID = null;
+      setEditingStatus("", false);
+    }
+
+    await loadHistory();
+  } catch (e) {
+    alert("Could not delete saved quote.");
+  }
+}
+
+async function generateQuote() {
+  const errorBox = document.getElementById("error");
+  errorBox.style.display = "none";
+
+  const payload = collectFormPayload();
+
+  try {
+    const res = await fetch("/quote", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error("Quote request failed");
+
+    const data = await res.json();
+    CURRENT_HISTORY_ID = data.id || null;
+    if (CURRENT_HISTORY_ID) {
+      setEditingStatus("Editing saved quote #" + CURRENT_HISTORY_ID, true);
+    }
+
+    renderQuoteResult(data.result);
     await loadHistory();
   } catch (err) {
     errorBox.innerText = "Something went wrong generating the quote.";
@@ -791,8 +980,33 @@ def get_quotes():
     return load_quotes()
 
 
+@app.get("/quotes/{quote_id}")
+def get_quote(quote_id: int):
+    quote = get_quote_by_id(quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return quote
+
+
+@app.delete("/quotes/{quote_id}")
+def delete_quote(quote_id: int):
+    deleted = delete_quote_by_id(quote_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return {"ok": True}
+
+
 @app.post("/quote")
 def create_quote(data: QuoteRequest):
-    quote = calculate_quote(data)
-    save_quote(quote)
-    return JSONResponse(content=quote)
+    request_data = data.model_dump()
+    result_data = calculate_quote(data)
+    save_quote(request_data, result_data)
+
+    latest = load_quotes()
+    latest_item = latest[0] if latest else None
+
+    return JSONResponse(content=latest_item or {
+        "id": None,
+        "request": request_data,
+        "result": result_data,
+    })
