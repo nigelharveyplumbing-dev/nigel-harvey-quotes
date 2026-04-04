@@ -20,8 +20,6 @@ COMPANY_ADDRESS = "125 Bushy Hill Drive, Guildford, GU1 2UG"
 COMPANY_PHONE = "07595 725547"
 COMPANY_EMAIL = "Nigelharveyplumbing@gmail.com"
 
-# Optional: set this later if you want invoice payment links.
-# Example: "https://pay.example.com/invoice/"
 PAYMENT_LINK_BASE = ""
 
 MATERIAL_LIBRARY = [
@@ -175,11 +173,8 @@ def safe_float(value, default=0.0):
         return default
 
 
-def pounds(value):
-    return f"£{safe_float(value):.2f}"
-
-
 def get_db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -243,6 +238,7 @@ def startup():
 def fetch_price(url: str):
     if not url:
         return None
+
     try:
         headers = {
             "User-Agent": "Mozilla/5.0",
@@ -270,9 +266,9 @@ def fetch_price(url: str):
                 return round(price, 2)
 
         text = soup.get_text(" ", strip=True)
-
-        domain_patterns = []
         lower_url = url.lower()
+        domain_patterns = []
+
         if "cityplumbing" in lower_url:
             domain_patterns = [
                 r'£\s?(\d+(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
@@ -301,8 +297,10 @@ def fetch_price(url: str):
 
         if prices:
             return round(min(prices), 2)
+
     except Exception:
         return None
+
     return None
 
 
@@ -312,6 +310,7 @@ def find_labour_suggestion(quote_type: str, job_description: str):
     for rule in rules:
         if any(keyword in text for keyword in rule["keywords"]):
             return rule
+
     if quote_type == "bathroom":
         return {"suggestion": 2000, "range": "£1,600–£2,800"}
     if quote_type == "heating":
@@ -329,6 +328,7 @@ def calculate_quote(data: QuoteRequest):
         unit_price = live_price if live_price is not None else (item.manual_price or 0)
         line_total = unit_price * item.quantity
         raw_materials += line_total
+
         material_lines.append({
             "name": item.name,
             "quantity": item.quantity,
@@ -491,6 +491,7 @@ def save_quote(request_data: dict, result_data: dict):
         request_data.get("customer_address", ""),
         request_data.get("customer_phone", ""),
     )
+
     conn = get_db()
     conn.execute("""
         INSERT INTO quotes (
@@ -718,9 +719,7 @@ def get_dashboard():
         WHERE substr(created_at_sort, 1, 7) = ?
     """, (month_prefix,)).fetchone()
 
-    customers = conn.execute("""
-        SELECT COUNT(*) AS customer_count FROM customers
-    """).fetchone()
+    customers = conn.execute("SELECT COUNT(*) AS customer_count FROM customers").fetchone()
 
     conn.close()
 
@@ -1091,7 +1090,8 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
       <div class="row"><span class="muted">Materials</span><span id="i_materials"></span></div>
       <div class="row"><span class="muted">Total</span><span id="i_total"></span></div>
       <div class="row"><span class="muted">Amount paid</span><span id="i_paid"></span></div>
-      <div class="row quote-total"><span>Balance due</span><span id="i_balance"></span></div>
+      <div class="row"><span class="muted">Outstanding</span><span id="i_balance"></span></div>
+      <div class="row quote-total"><span>Balance due</span><span id="i_balance_big"></span></div>
     </div>
 
     <div class="quote-section-title">Payment</div>
@@ -1181,36 +1181,17 @@ function updateLabourSuggestion() {
   const box = document.getElementById("labourSuggestion");
 
   let message = "Small jobs: use your judgement and minimum charge where needed.";
-  if (quoteType === "bathroom") {
-    message = "Typical bathroom labour is often higher. Adjust to suit your job.";
-  } else if (quoteType === "heating") {
-    message = "Heating jobs often vary by size and access. Adjust labour as needed.";
-  }
+  if (quoteType === "bathroom") message = "Typical bathroom labour is often higher. Adjust to suit your job.";
+  if (quoteType === "heating") message = "Heating jobs often vary by size and access. Adjust labour as needed.";
 
-  if (quoteType === "small" && text.includes("tap")) {
-    message = "Suggested labour: around £120. Typical range: £100–£140.";
-  }
-  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) {
-    message = "Suggested labour: around £180. Typical range: £160–£220.";
-  }
-  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) {
-    message = "Suggested labour: around £120. Typical range: £90–£140.";
-  }
-  if (quoteType === "small" && text.includes("outside tap")) {
-    message = "Suggested labour: around £150. Typical range: £140–£180.";
-  }
-  if (quoteType === "bathroom" && text.includes("refurb")) {
-    message = "Suggested labour: around £2,200. Typical range: £2,000–£2,800.";
-  }
-  if (quoteType === "bathroom" && text.includes("install")) {
-    message = "Suggested labour: around £1,800. Typical range: £1,600–£2,200.";
-  }
-  if (quoteType === "heating" && text.includes("radiator")) {
-    message = "Suggested labour: around £180. Typical range: £160–£220.";
-  }
-  if (quoteType === "heating" && text.includes("repair")) {
-    message = "Suggested labour: around £150. Typical range: £120–£220.";
-  }
+  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around £120. Typical range: £100–£140.";
+  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around £180. Typical range: £160–£220.";
+  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around £120. Typical range: £90–£140.";
+  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around £150. Typical range: £140–£180.";
+  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around £2,200. Typical range: £2,000–£2,800.";
+  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around £1,800. Typical range: £1,600–£2,200.";
+  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around £180. Typical range: £160–£220.";
+  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around £150. Typical range: £120–£220.";
 
   box.innerText = message;
 }
@@ -1400,8 +1381,8 @@ Materials: ${pounds(data.materials)}
 Total price: ${pounds(data.total_price)}
 
 Nigel Harvey Ltd
-${"07595 725547"}
-${"Nigelharveyplumbing@gmail.com"}`;
+07595 725547
+Nigelharveyplumbing@gmail.com`;
 
   const cleanPhone = normalisePhone(data.customer_phone || "");
   document.getElementById("whatsappBtn").href = cleanPhone
@@ -1410,6 +1391,13 @@ ${"Nigelharveyplumbing@gmail.com"}`;
 
   document.getElementById("resultCard").style.display = "block";
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderStatusBadge(status) {
+  const s = (status || "").toLowerCase();
+  if (s === "paid") return '<span class="badge green">Paid</span>';
+  if (s === "part paid") return '<span class="badge orange">Part Paid</span>';
+  return '<span class="badge red">Unpaid</span>';
 }
 
 function renderInvoiceCard(item) {
@@ -1433,6 +1421,7 @@ function renderInvoiceCard(item) {
   document.getElementById("i_total").innerText = pounds(item.total_price);
   document.getElementById("i_paid").innerText = pounds(item.amount_paid);
   document.getElementById("i_balance").innerText = pounds(item.balance_due);
+  document.getElementById("i_balance_big").innerText = pounds(item.balance_due);
 
   const paymentBox = document.getElementById("i_payment_link_box");
   if (item.payment_link) {
@@ -1466,13 +1455,6 @@ Nigelharveyplumbing@gmail.com${item.payment_link ? "\nPayment link: " + item.pay
     : "https://wa.me/?text=" + encodeURIComponent(msg);
 
   window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function renderStatusBadge(status) {
-  const s = (status || "").toLowerCase();
-  if (s === "paid") return '<span class="badge green">Paid</span>';
-  if (s === "part paid") return '<span class="badge orange">Part Paid</span>';
-  return '<span class="badge red">Unpaid</span>';
 }
 
 function fillFormFromRequest(requestData, quoteId = null) {
@@ -1577,10 +1559,12 @@ async function loadInvoices() {
         <label style="margin-top:10px;">Update payment</label>
         <div class="row">
           <input id="paid_${i.id}" type="number" step="0.01" placeholder="Amount paid" value="${i.amount_paid || 0}">
-          <button type="button" class="btn-blue" style="max-width:180px;" onclick="updateInvoicePaid(${i.id})">Save</button>
+          <button type="button" class="btn-blue" style="max-width:180px;" onclick="updateInvoicePaid(${i.id})">Save Amount</button>
         </div>
 
         <div class="history-actions">
+          <button type="button" class="btn-secondary" onclick="markInvoicePaid(${i.id}, ${i.total_price})">Mark Paid</button>
+          <button type="button" class="btn-light" onclick="markInvoiceUnpaid(${i.id})">Mark Unpaid</button>
           <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Open</button>
           <button type="button" class="btn-secondary" onclick="sendInvoiceWhatsApp(${i.id})">WhatsApp</button>
           <button type="button" class="btn-light" onclick="printInvoice(${i.id})">Print</button>
@@ -1799,6 +1783,36 @@ async function updateInvoicePaid(id) {
     await loadDashboard();
   } catch (e) {
     alert("Could not update invoice.");
+  }
+}
+
+async function markInvoicePaid(id, total) {
+  try {
+    const res = await fetch("/api/invoices/" + id + "/status", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ status: "paid", amount_paid: total })
+    });
+    if (!res.ok) throw new Error();
+    await loadInvoices();
+    await loadDashboard();
+  } catch (e) {
+    alert("Could not mark invoice as paid.");
+  }
+}
+
+async function markInvoiceUnpaid(id) {
+  try {
+    const res = await fetch("/api/invoices/" + id + "/status", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ status: "unpaid", amount_paid: 0 })
+    });
+    if (!res.ok) throw new Error();
+    await loadInvoices();
+    await loadDashboard();
+  } catch (e) {
+    alert("Could not mark invoice as unpaid.");
   }
 }
 
