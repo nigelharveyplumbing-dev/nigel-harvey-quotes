@@ -1104,25 +1104,51 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
     </div>
 
     <div class="quote-section-title">Invoice totals</div>
-    <div class="quote-box">
-      <div class="row"><span class="muted">Labour</span><span id="i_labour"></span></div>
-      <div class="row"><span class="muted">Materials</span><span id="i_materials"></span></div>
-      <div class="row"><span class="muted">Total</span><span id="i_total"></span></div>
-      <div class="row"><span class="muted">Amount paid</span><span id="i_paid"></span></div>
-      <div class="row"><span class="muted">Outstanding</span><span id="i_balance"></span></div>
-      <div class="row quote-total"><span>Balance due</span><span id="i_balance_big"></span></div>
-    </div>
+<div class="quote-box">
+  <div class="row"><span class="muted">Labour</span><span id="i_labour"></span></div>
+  <div class="row"><span class="muted">Materials</span><span id="i_materials"></span></div>
+  <div class="row"><span class="muted">Total</span><span id="i_total"></span></div>
+  <div class="row"><span class="muted">Amount paid</span><span id="i_paid"></span></div>
+  <div class="row"><span class="muted">Outstanding</span><span id="i_balance"></span></div>
+  <div class="row quote-total"><span>Balance due</span><span id="i_balance_big"></span></div>
+</div>
 
-    <div class="quote-section-title">Payment</div>
-    <div class="quote-box">
-      <div id="i_payment_link_box"></div>
-      <div class="invoice-note">
-        Please pay by the due date shown above.<br>
-        Late payment fee may be applied after 14 days.<br>
-        Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
-        Deposit required before works begin where applicable.
-      </div>
+<div class="quote-section-title">Payment</div>
+<div class="quote-box">
+  <div id="i_payment_link_box"></div>
+</div>
+
+const paymentBox = document.getElementById("i_payment_link_box");
+const isSmallJob = (quoteResult.quote_type || "").toLowerCase() === "small";
+
+const termsHtml = isSmallJob
+  ? `
+    <div class="invoice-note">
+      Please pay by the due date shown above.<br>
+      Late payment fee may be applied after 14 days.<br>
+      Materials remain the property of Nigel Harvey Ltd until paid in full.
     </div>
+  `
+  : `
+    <div class="invoice-note">
+      Please pay by the due date shown above.<br>
+      Late payment fee may be applied after 14 days.<br>
+      Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
+      Deposit required before works begin where applicable.
+    </div>
+  `;
+
+if (item.payment_link) {
+  paymentBox.innerHTML = `
+    <div><strong>Payment link:</strong> <a href="${item.payment_link}" target="_blank">${escapeHtml(item.payment_link)}</a></div>
+    ${termsHtml}
+  `;
+} else {
+  paymentBox.innerHTML = `
+    <div>No online payment link set yet.</div>
+    ${termsHtml}
+  `;
+}
 
     <div class="actions no-print">
       <a id="invoiceWhatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Invoice to WhatsApp</a>
