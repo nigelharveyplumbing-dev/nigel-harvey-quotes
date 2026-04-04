@@ -1460,31 +1460,17 @@ function renderInvoiceCard(item) {
     paymentBox.innerHTML = `<div>No online payment link set yet.</div>`;
   }
 
-  const msg =
+  const invoiceUrl = window.location.origin + "/invoice/" + item.id;
+
+const msg =
 `Nigel Harvey Ltd Invoice
 
 Invoice: ${item.invoice_number}
-Date: ${item.created_at}
-Due date: ${item.due_date}
 Customer: ${invoice.customer_name || "-"}
-Address: ${invoice.customer_address || "-"}
-
-Job: ${invoice.job || "-"}
-
-Total: ${pounds(item.total_price)}
-Paid: ${pounds(item.amount_paid)}
 Balance due: ${pounds(item.balance_due)}
 
-Terms:
-- Payment due by the due date shown on this invoice.
-- Late payment fee may be applied after 14 days.
-- Materials remain the property of Nigel Harvey Ltd until paid in full.
-- Deposit required before works begin where applicable.
-
-Nigel Harvey Ltd
-07595 725547
-Nigelharveyplumbing@gmail.com${item.payment_link ? "\nPayment link: " + item.payment_link : ""}`;
-
+View your invoice:
+${invoiceUrl}`;
   const cleanPhone = normalisePhone(invoice.customer_phone || quoteResult.customer_phone || "");
   document.getElementById("invoiceWhatsappBtn").href = cleanPhone
     ? "https://wa.me/" + cleanPhone + "?text=" + encodeURIComponent(msg)
