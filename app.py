@@ -22,6 +22,22 @@ COMPANY_EMAIL = "Nigelharveyplumbing@gmail.com"
 
 PAYMENT_LINK_BASE = ""
 
+QUOTE_TERMS = [
+    "Includes labour and materials.",
+    "Payment due as agreed.",
+    "Late payment fee may be applied after 14 days.",
+    "Materials remain the property of Nigel Harvey Ltd until paid in full.",
+    "Deposit required before works begin where applicable.",
+    "Quote subject to site conditions and any unforeseen issues.",
+]
+
+INVOICE_TERMS = [
+    "Please pay by the due date shown above.",
+    "Late payment fee may be applied after 14 days.",
+    "Materials remain the property of Nigel Harvey Ltd until paid in full.",
+    "Deposit required before works begin where applicable.",
+]
+
 MATERIAL_LIBRARY = [
     {"name": "15mm Copper Pipe 3m", "supplier": "City Plumbing", "default_price": 18.00},
     {"name": "22mm Copper Pipe 3m", "supplier": "City Plumbing", "default_price": 32.00},
@@ -569,7 +585,7 @@ def create_invoice_from_quote(quote_id: int):
 
     result = quote["result"]
     invoice_number = next_invoice_number()
-    due_date = (now_uk() + timedelta(days=7)).strftime("%d/%m/%Y")
+    due_date = (now_uk() + timedelta(days=14)).strftime("%d/%m/%Y")
     payment_link = build_payment_link(invoice_number)
 
     invoice_payload = {
@@ -1048,6 +1064,9 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
     <div class="quote-box">
       Includes labour and materials.<br>
       Payment due as agreed.<br>
+      Late payment fee may be applied after 14 days.<br>
+      Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
+      Deposit required before works begin where applicable.<br>
       Quote subject to site conditions and any unforeseen issues.
     </div>
 
@@ -1097,7 +1116,12 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
     <div class="quote-section-title">Payment</div>
     <div class="quote-box">
       <div id="i_payment_link_box"></div>
-      <div class="invoice-note">Please pay by the due date shown above.</div>
+      <div class="invoice-note">
+        Please pay by the due date shown above.<br>
+        Late payment fee may be applied after 14 days.<br>
+        Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
+        Deposit required before works begin where applicable.
+      </div>
     </div>
 
     <div class="actions no-print">
@@ -1380,6 +1404,12 @@ Labour: ${pounds(data.labour)}
 Materials: ${pounds(data.materials)}
 Total price: ${pounds(data.total_price)}
 
+Terms:
+- Payment due as agreed.
+- Late payment fee may be applied after 14 days.
+- Materials remain the property of Nigel Harvey Ltd until paid in full.
+- Deposit required before works begin where applicable.
+
 Nigel Harvey Ltd
 07595 725547
 Nigelharveyplumbing@gmail.com`;
@@ -1444,6 +1474,12 @@ Job: ${invoice.job || "-"}
 Total: ${pounds(item.total_price)}
 Paid: ${pounds(item.amount_paid)}
 Balance due: ${pounds(item.balance_due)}
+
+Terms:
+- Payment due by the due date shown on this invoice.
+- Late payment fee may be applied after 14 days.
+- Materials remain the property of Nigel Harvey Ltd until paid in full.
+- Deposit required before works begin where applicable.
 
 Nigel Harvey Ltd
 07595 725547
