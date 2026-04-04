@@ -1146,7 +1146,7 @@ let CURRENT_QUOTE_DATA = null;
 let CURRENT_INVOICE_ID = null;
 
 function pounds(value) {
-  return "Â£" + Number(value || 0).toFixed(2);
+  return String.fromCharCode(163) + Number(value || 0).toFixed(2);
 }
 
 function escapeHtml(text) {
@@ -1362,7 +1362,7 @@ function renderQuoteResult(data) {
   document.getElementById("r_job").innerText = data.job || "-";
   document.getElementById("r_labour").innerText = pounds(data.labour);
   document.getElementById("r_materials").innerText = pounds(data.materials);
-  document.getElementById("r_deposit").innerText = data.deposit_amount ? pounds(data.deposit_amount) + " (" + Number(data.deposit_percent).toFixed(0) + "%)" : "Â£0.00";
+  document.getElementById("r_deposit").innerText = data.deposit_amount ? pounds(data.deposit_amount) + " (" + Number(data.deposit_percent).toFixed(0) + "%)" : String.fromCharCode(163) + "0.00";
   document.getElementById("r_total").innerText = pounds(data.total_price);
 
   const lines = data.material_lines || [];
@@ -2094,11 +2094,11 @@ def public_invoice(invoice_id: int):
 
       <h3>Invoice totals</h3>
       <div class="box">
-        <div class="row"><span class="muted">Labour</span><span>Â£{invoice.get('labour', 0):.2f}</span></div>
-        <div class="row"><span class="muted">Materials</span><span>Â£{invoice.get('materials', 0):.2f}</span></div>
-        <div class="row"><span class="muted">Total</span><span>Â£{item['total_price']:.2f}</span></div>
-        <div class="row"><span class="muted">Amount paid</span><span>Â£{item['amount_paid']:.2f}</span></div>
-        <div class="row"><span class="muted">Balance due</span><span class="total">Â£{item['balance_due']:.2f}</span></div>
+        <div class="row"><span class="muted">Labour</span><span>&#163;{invoice.get('labour', 0):.2f}</span></div>
+        <div class="row"><span class="muted">Materials</span><span>&#163;{invoice.get('materials', 0):.2f}</span></div>
+        <div class="row"><span class="muted">Total</span><span>&#163;{item['total_price']:.2f}</span></div>
+        <div class="row"><span class="muted">Amount paid</span><span>&#163;{item['amount_paid']:.2f}</span></div>
+        <div class="row"><span class="muted">Balance due</span><span class="total">&#163;{item['balance_due']:.2f}</span></div>
       </div>
 
       <h3>Payment terms</h3>
