@@ -1928,7 +1928,153 @@ def api_quote_to_invoice(quote_id: int):
         raise HTTPException(status_code=404, detail="Quote not found")
     return invoice
 
+@app.post("/api/quotes/{quote_id}/to-invoice")
+def api_quote_to_invoice(quote_id: int):
+    invoice = create_invoice_from_quote(quote_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return invoice
 
+
+# PUT THE NEW INVOICE PAGE ROUTE HERE
+@app.get("/invoice/{invoice_id}", response_class=HTMLResponse)
+def public_invoice(invoice_id: int):
+    item = get_invoice_by_id(invoice_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    invoice = item["invoice"]
+    quote_result = item["quote_result"]
+    is_small_job = (quote_result.get("quote_type", "") or "").lower() == "small"
+
+    if is_small_job:
+        terms_html = """
+        Please pay by the due date shown above.<br>
+        Late payment fee may be applied after 14 days.<br>
+        Materials remain the property of Nigel Harvey Ltd until paid in full.
+        """
+    else:
+        terms_html = """
+        Please pay by the due date shown above.<br>
+        Late payment fee may be applied after 14 days.<br>
+        Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
+        Deposit required before works begin where applicable.
+        """
+
+    html = f"""
+    <!doctype html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Invoice {item["invoice_number"]}</title>
+      <style>
+        body {{
+          font-family: Arial, sans-serif;
+          background: white;
+          color: #111;
+          max-width: 900px;
+          margin: 0 auto;
+          padding: 20px;
+        }}
+        .box {{
+          border: 1px solid #ddd;
+          border-radius: 10px;
+          padding: 12px;
+          margin-bottom: 14px;
+          background: #fafafa;
+        }}
+        .row {{
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          margin: 8px 0;
+        }}
+        .muted {{
+          color: #666;
+        }}
+        .title {{
+          font-size: 30px;
+          font-weight: 800;
+          margin-bottom: 4px;
+        }}
+        .total {{
+          font-size: 30px;
+          font-weight: 900;
+        }}
+        .actions {{
+          margin-top: 20px;
+        }}
+        .btn {{
+          display: inline-block;
+          padding: 12px 16px;
+          border-radius: 10px;
+          background: black;
+          color: white;
+          text-decoration: none;
+          margin-right: 8px;
+        }}
+        @media print {{
+          .actions {{
+            display: none !important;
+          }}
+          body {{
+            padding: 0;
+            margin: 0;
+          }}
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="title">Nigel Harvey Ltd</div>
+      <div>
+        125 Bushy Hill Drive, Guildford, GU1 2UG<br>
+        07595 725547<br>
+        Nigelharveyplumbing@gmail.com
+      </div>
+
+      <h2>Invoice</h2>
+
+      <div class="box">
+        <div class="row"><span class="muted">Invoice number</span><span>{item["invoice_number"]}</span></div>
+        <div class="row"><span class="muted">Date</span><span>{item["created_at"]}</span></div>
+        <div class="row"><span class="muted">Due date</span><span>{item["due_date"]}</span></div>
+        <div class="row"><span class="muted">Status</span><span>{item["status"]}</span></div>
+        <div class="row"><span class="muted">Customer</span><span>{invoice.get("customer_name", "-")}</span></div>
+        <div class="row"><span class="muted">Phone</span><span>{invoice.get("customer_phone", "-")}</span></div>
+        <div class="row"><span class="muted">Address</span><span>{invoice.get("customer_address", "-")}</span></div>
+      </div>
+
+      <h3>Work</h3>
+      <div class="box">
+        {invoice.get("job", "-")}
+      </div>
+
+      <h3>Invoice totals</h3>
+      <div class="box">
+        <div class="row"><span class="muted">Labour</span><span>£{invoice.get("labour", 0):.2f}</span></div>
+        <div class="row"><span class="muted">Materials</span><span>£{invoice.get("materials", 0):.2f}</span></div>
+        <div class="row"><span class="muted">Total</span><span>£{item["total_price"]:.2f}</span></div>
+        <div class="row"><span class="muted">Amount paid</span><span>£{item["amount_paid"]:.2f}</span></div>
+        <div class="row"><span class="muted">Balance due</span><span class="total">£{item["balance_due"]:.2f}</span></div>
+      </div>
+
+      <h3>Payment terms</h3>
+      <div class="box">
+        {terms_html}
+      </div>
+
+      <div class="actions">
+        <a href="javascript:window.print()" class="btn">Print / Save PDF</a>
+      </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
+
+
+@app.get("/api/invoices")
+def api_invoices():
+    return load_invoices()
 @app.get("/api/invoices")
 def api_invoices():
     return load_invoices()
