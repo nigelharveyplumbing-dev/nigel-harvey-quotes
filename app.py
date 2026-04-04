@@ -1555,6 +1555,26 @@ async function loadDashboard() {
   } catch (e) {}
 }
 
+async function deleteCustomer(id) {
+  if const check = prompt("Type DELETE to confirm");
+if (check !== "DELETE") return;
+
+  try {
+    const res = await fetch("/api/customers/" + id, {
+      method: "DELETE"
+    });
+
+    if (!res.ok) throw new Error();
+
+    await loadCustomers();
+    await loadHistory();
+    await loadInvoices();
+    await loadDashboard();
+
+  } catch (e) {
+    alert("Could not delete customer.");
+  }
+}
 async function loadHistory() {
   try {
     const res = await fetch("/api/quotes");
