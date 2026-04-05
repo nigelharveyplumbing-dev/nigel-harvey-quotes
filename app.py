@@ -1245,6 +1245,16 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 .quote-section-title { font-size:18px; font-weight:800; margin-top:18px; margin-bottom:8px; }
 .quote-box { border:1px solid #ddd; border-radius:10px; padding:12px; background:#fafafa; }
 .quote-total { font-size:32px; font-weight:900; }
+.doc-grid-two { display:grid; grid-template-columns:1.15fr 0.85fr; gap:14px; margin-top:14px; }
+.doc-grid-bottom { display:grid; grid-template-columns:1fr 0.95fr; gap:14px; margin-top:14px; align-items:start; }
+.doc-panel { border:1px solid #ddd; border-radius:12px; background:#fafafa; padding:14px; }
+.doc-panel-title { font-size:17px; font-weight:800; margin-bottom:10px; }
+.doc-summary .row { margin:10px 0; }
+.doc-total-box { border-top:1px solid #ddd; margin-top:12px; padding-top:12px; }
+.doc-total-box .quote-total { font-size:40px; line-height:1.05; }
+.doc-notes { margin-top:14px; }
+.doc-notes-content { line-height:1.6; }
+.doc-work-text { line-height:1.6; white-space:pre-wrap; }
 .internal-box { margin-top:16px; border:1px dashed #999; background:#fffdf3; }
 .search-results { border:1px solid #ddd; border-radius:10px; max-height:220px; overflow:auto; background:#fff; margin-top:8px; }
 .search-item { padding:10px; border-bottom:1px solid #eee; cursor:pointer; }
@@ -1282,9 +1292,10 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
   h1 { font-size:26px; }
   h2 { font-size:21px; }
   .tabs { grid-template-columns:repeat(2, 1fr); }
-  .templates, .favourites, .dashboard-grid, .history-actions { grid-template-columns:1fr; }
+  .templates, .favourites, .dashboard-grid, .history-actions, .doc-grid-two, .doc-grid-bottom, .dashboard-summary { grid-template-columns:1fr; }
   .row { flex-direction:column; gap:4px; }
   .actions { position:sticky; bottom:8px; z-index:5; }
+  .doc-total-box .quote-total { font-size:34px; }
 }
 </style>
 </head>
@@ -1436,31 +1447,36 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <div class="logo-box">__COMPANY_LOGO_HTML__</div>
     </div>
 
-    <div class="quote-section-title">Quote details</div>
-    <div class="quote-box">
-      <div class="row"><span class="muted">Date</span><span id="r_date"></span></div>
-      <div class="row"><span class="muted">Type</span><span id="r_type"></span></div>
-      <div class="row"><span class="muted">Customer</span><span id="r_customer"></span></div>
-      <div class="row"><span class="muted">Phone</span><span id="r_phone"></span></div>
-      <div class="row"><span class="muted">Address</span><span id="r_address"></span></div>
+    <div class="doc-grid-two">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Works</div>
+        <div id="r_job" class="doc-work-text"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Quote details</div>
+        <div class="row"><span class="muted">Date</span><span id="r_date"></span></div>
+        <div class="row"><span class="muted">Type</span><span id="r_type"></span></div>
+        <div class="row"><span class="muted">Customer</span><span id="r_customer"></span></div>
+        <div class="row"><span class="muted">Phone</span><span id="r_phone"></span></div>
+        <div class="row"><span class="muted">Address</span><span id="r_address"></span></div>
+      </div>
     </div>
 
-    <div class="quote-section-title">Works</div>
-    <div class="quote-box">
-      <div id="r_job"></div>
-    </div>
-
-    <div class="quote-section-title">Price</div>
-    <div class="quote-box">
-      <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
-      <div class="row"><span class="muted">Materials</span><span id="r_materials"></span></div>
-      <div class="row"><span class="muted">Deposit</span><span id="r_deposit"></span></div>
-      <div class="row quote-total"><span>Total price</span><span id="r_total"></span></div>
-    </div>
-
-    <div class="quote-section-title">Materials used</div>
-    <div class="quote-box">
-      <div id="r_material_lines" class="material-lines"></div>
+    <div class="doc-grid-bottom">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Materials used</div>
+        <div id="r_material_lines" class="material-lines"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Pricing summary</div>
+        <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
+        <div class="row"><span class="muted">Materials</span><span id="r_materials"></span></div>
+        <div class="row"><span class="muted">Deposit</span><span id="r_deposit"></span></div>
+        <div class="doc-total-box">
+          <div class="muted">Total price</div>
+          <div class="quote-total" id="r_total"></div>
+        </div>
+      </div>
     </div>
 
     <div id="internalBox" class="quote-box internal-box hidden">
@@ -1475,14 +1491,16 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <div class="row"><span class="muted">Margin %</span><span id="r_internal_margin"></span></div>
     </div>
 
-    <div class="quote-section-title">Notes</div>
-    <div class="quote-box">
-      Includes labour and materials.<br>
-      Payment due as agreed.<br>
-      Late payment fee may be applied after 14 days.<br>
-      Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
-      Deposit required before works begin where applicable.<br>
-      Quote subject to site conditions and any unforeseen issues.
+    <div class="doc-panel doc-notes">
+      <div class="doc-panel-title">Notes</div>
+      <div class="doc-notes-content">
+        Includes labour and materials.<br>
+        Payment due as agreed.<br>
+        Late payment fee may be applied after 14 days.<br>
+        Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
+        Deposit required before works begin where applicable.<br>
+        Quote subject to site conditions and any unforeseen issues.
+      </div>
     </div>
 
     <div class="actions no-print">
@@ -1502,35 +1520,40 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
     </div>
 
-    <div class="quote-section-title">Invoice details</div>
-    <div class="quote-box">
-      <div class="row"><span class="muted">Invoice number</span><span id="i_number"></span></div>
-      <div class="row"><span class="muted">Date</span><span id="i_date"></span></div>
-      <div class="row"><span class="muted">Due date</span><span id="i_due_date"></span></div>
-      <div class="row"><span class="muted">Status</span><span id="i_status"></span></div>
-      <div class="row"><span class="muted">Customer</span><span id="i_customer"></span></div>
-      <div class="row"><span class="muted">Phone</span><span id="i_phone"></span></div>
-      <div class="row"><span class="muted">Address</span><span id="i_address"></span></div>
+    <div class="doc-grid-two">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Work</div>
+        <div id="i_job" class="doc-work-text"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Invoice details</div>
+        <div class="row"><span class="muted">Invoice number</span><span id="i_number"></span></div>
+        <div class="row"><span class="muted">Date</span><span id="i_date"></span></div>
+        <div class="row"><span class="muted">Due date</span><span id="i_due_date"></span></div>
+        <div class="row"><span class="muted">Status</span><span id="i_status"></span></div>
+        <div class="row"><span class="muted">Customer</span><span id="i_customer"></span></div>
+        <div class="row"><span class="muted">Phone</span><span id="i_phone"></span></div>
+        <div class="row"><span class="muted">Address</span><span id="i_address"></span></div>
+      </div>
     </div>
 
-    <div class="quote-section-title">Work</div>
-    <div class="quote-box">
-      <div id="i_job"></div>
-    </div>
-
-    <div class="quote-section-title">Invoice totals</div>
-    <div class="quote-box">
-      <div class="row"><span class="muted">Labour</span><span id="i_labour"></span></div>
-      <div class="row"><span class="muted">Materials</span><span id="i_materials"></span></div>
-      <div class="row"><span class="muted">Total</span><span id="i_total"></span></div>
-      <div class="row"><span class="muted">Amount paid</span><span id="i_paid"></span></div>
-      <div class="row"><span class="muted">Outstanding</span><span id="i_balance"></span></div>
-      <div class="row quote-total"><span>Balance due</span><span id="i_balance_big"></span></div>
-    </div>
-
-    <div class="quote-section-title">Payment</div>
-    <div class="quote-box">
-      <div id="i_payment_link_box"></div>
+    <div class="doc-grid-bottom">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Payment</div>
+        <div id="i_payment_link_box"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Invoice totals</div>
+        <div class="row"><span class="muted">Labour</span><span id="i_labour"></span></div>
+        <div class="row"><span class="muted">Materials</span><span id="i_materials"></span></div>
+        <div class="row"><span class="muted">Total</span><span id="i_total"></span></div>
+        <div class="row"><span class="muted">Amount paid</span><span id="i_paid"></span></div>
+        <div class="row"><span class="muted">Outstanding</span><span id="i_balance"></span></div>
+        <div class="doc-total-box">
+          <div class="muted">Balance due</div>
+          <div class="quote-total" id="i_balance_big"></div>
+        </div>
+      </div>
     </div>
 
     <div id="invoiceEditPanel" class="quote-box edit-panel hidden no-print">
