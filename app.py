@@ -125,20 +125,20 @@ JOB_TEMPLATES = [
 
 LABOUR_HINTS = {
     "small": [
-        {"keywords": ["tap"], "suggestion": 120, "range": "Â£100âÂ£140"},
-        {"keywords": ["toilet", "wc"], "suggestion": 180, "range": "Â£160âÂ£220"},
-        {"keywords": ["waste", "trap"], "suggestion": 120, "range": "Â£90âÂ£140"},
-        {"keywords": ["outside tap"], "suggestion": 150, "range": "Â£140âÂ£180"},
+        {"keywords": ["tap"], "suggestion": 120, "range": "&#163;100–&#163;140"},
+        {"keywords": ["toilet", "wc"], "suggestion": 180, "range": "&#163;160–&#163;220"},
+        {"keywords": ["waste", "trap"], "suggestion": 120, "range": "&#163;90–&#163;140"},
+        {"keywords": ["outside tap"], "suggestion": 150, "range": "£140–&#163;180"},
     ],
     "bathroom": [
-        {"keywords": ["install"], "suggestion": 1800, "range": "Â£1,600âÂ£2,200"},
-        {"keywords": ["refurb"], "suggestion": 2200, "range": "Â£2,000âÂ£2,800"},
-        {"keywords": ["bathroom"], "suggestion": 2000, "range": "Â£1,600âÂ£2,800"},
+        {"keywords": ["install"], "suggestion": 1800, "range": "£1,600–&#163;2,200"},
+        {"keywords": ["refurb"], "suggestion": 2200, "range": "&#163;2,000–&#163;2,800"},
+        {"keywords": ["bathroom"], "suggestion": 2000, "range": "£1,600–£2,800"},
     ],
     "heating": [
-        {"keywords": ["radiator"], "suggestion": 180, "range": "Â£160âÂ£220"},
-        {"keywords": ["repair"], "suggestion": 150, "range": "Â£120âÂ£220"},
-        {"keywords": ["system"], "suggestion": 3500, "range": "Â£3,000âÂ£4,500"},
+        {"keywords": ["radiator"], "suggestion": 180, "range": "&#163;160–&#163;220"},
+        {"keywords": ["repair"], "suggestion": 150, "range": "&#163;120–£220"},
+        {"keywords": ["system"], "suggestion": 3500, "range": "£3,000–£4,500"},
     ],
 }
 
@@ -306,14 +306,14 @@ def fetch_price(url: str):
 
         if "cityplumbing" in lower_url:
             domain_patterns = [
-                r'Â£\s?(\d+(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
-                r'Â£\s?(\d+(?:\.\d{2})?)\s*Inc\.?\s*VAT',
-                r'Â£\s?(\d+(?:\.\d{2})?)\s*each',
+                r'£\s?(\d+(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
+                r'£\s?(\d+(?:\.\d{2})?)\s*Inc\.?\s*VAT',
+                r'£\s?(\d+(?:\.\d{2})?)\s*each',
             ]
         elif "toppstiles" in lower_url:
             domain_patterns = [
-                r'Â£\s?(\d+(?:\.\d{2})?)\s*(?:per m2|/m2|m2)',
-                r'Â£\s?(\d+(?:\.\d{2})?)'
+                r'£\s?(\d+(?:\.\d{2})?)\s*(?:per m2|/m2|m2)',
+                r'£\s?(\d+(?:\.\d{2})?)'
             ]
 
         for pattern in domain_patterns:
@@ -323,7 +323,7 @@ def fetch_price(url: str):
                 if price and 0 < price < 100000:
                     return round(price, 2)
 
-        generic_matches = re.findall(r'Â£\s?(\d+(?:\.\d{2})?)', text)
+        generic_matches = re.findall(r'£\s?(\d+(?:\.\d{2})?)', text)
         prices = []
         for match in generic_matches:
             price = safe_float(match, None)
@@ -347,10 +347,10 @@ def find_labour_suggestion(quote_type: str, job_description: str):
             return rule
 
     if quote_type == "bathroom":
-        return {"suggestion": 2000, "range": "Â£1,600âÂ£2,800"}
+        return {"suggestion": 2000, "range": "£1,600–£2,800"}
     if quote_type == "heating":
-        return {"suggestion": 180, "range": "Â£150âÂ£300"}
-    return {"suggestion": 120, "range": "Â£90âÂ£180"}
+        return {"suggestion": 180, "range": "&#163;150–£300"}
+    return {"suggestion": 120, "range": "£90–&#163;180"}
 
 
 def calculate_quote(data: QuoteRequest):
@@ -917,6 +917,10 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
 .badge.red { background:#ffe3e3; color:#8e1414; }
 .badge.orange { background:#fff0d9; color:#8a5500; }
 .invoice-note { margin-top:10px; font-size:14px; }
+.notice { display:none; padding:12px; border-radius:10px; margin-top:12px; font-weight:700; }
+.notice.success { background:#eef8ee; border:1px solid #b7d7b7; color:#1f7a1f; }
+.notice.error { background:#fff3f3; border:1px solid #e0b7b7; color:#a33; }
+.dashboard-summary { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-top:10px; }
 @media print {
   .no-print { display:none !important; }
   body { background:white; padding:0; }
@@ -931,6 +935,7 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
   <div class="card">
     <h1>Nigel Harvey Ltd</h1>
     <div class="sub">Quotes, invoices, customers, profit tracking</div>
+    <div id="appNotice" class="notice success"></div>
 
     <div class="tabs no-print">
       <button class="btn-light" onclick="showTab('dashboardTab')">Dashboard</button>
@@ -945,6 +950,7 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
       <div id="dashboardGrid" class="dashboard-grid"></div>
       <h3>Monthly profit</h3>
       <div id="profitChart" class="quote-box small">Loading chart...</div>
+      <div id="dashboardSummary" class="dashboard-summary"></div>
     </div>
 
     <div id="quotesTab" class="tab-panel">
@@ -989,10 +995,10 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
           <span>Include tiling</span>
         </div>
 
-        <label for="wall_tiling_m2">Wall tiling (mÂ²)</label>
+        <label for="wall_tiling_m2">Wall tiling (m²)</label>
         <input id="wall_tiling_m2" type="number" step="0.1" placeholder="0">
 
-        <label for="floor_tiling_m2">Floor tiling (mÂ²)</label>
+        <label for="floor_tiling_m2">Floor tiling (m²)</label>
         <input id="floor_tiling_m2" type="number" step="0.1" placeholder="0">
 
         <label for="wall_height">Wall height</label>
@@ -1016,7 +1022,7 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
       <button type="button" class="btn-light no-print" onclick="addMaterial()">+ Add Manual Material Row</button>
 
       <h3>Pricing</h3>
-      <label for="labour">Labour cost (Â£)</label>
+      <label for="labour">Labour cost (&#163;)</label>
       <input id="labour" type="number" step="0.01" placeholder="180">
       <div class="small" id="labourSuggestion" style="margin-top:8px;"></div>
 
@@ -1190,6 +1196,28 @@ let CURRENT_QUOTE_ID = null;
 let CURRENT_QUOTE_DATA = null;
 let CURRENT_INVOICE_ID = null;
 
+function showNotice(message, type = "success") {
+  const box = document.getElementById("appNotice");
+  if (!box) return;
+  box.className = "notice " + (type === "error" ? "error" : "success");
+  box.innerText = message || "";
+  box.style.display = message ? "block" : "none";
+  if (message) {
+    window.clearTimeout(showNotice._timer);
+    showNotice._timer = window.setTimeout(() => {
+      box.style.display = "none";
+      box.innerText = "";
+    }, 2600);
+  }
+}
+
+function clearNotice() {
+  const box = document.getElementById("appNotice");
+  if (!box) return;
+  box.style.display = "none";
+  box.innerText = "";
+}
+
 function pounds(value) {
   return String.fromCharCode(163) + Number(value || 0).toFixed(2);
 }
@@ -1249,14 +1277,14 @@ function updateLabourSuggestion() {
   if (quoteType === "bathroom") message = "Typical bathroom labour is often higher. Adjust to suit your job.";
   if (quoteType === "heating") message = "Heating jobs often vary by size and access. Adjust labour as needed.";
 
-  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around Â£120. Typical range: Â£100âÂ£140.";
-  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around Â£180. Typical range: Â£160âÂ£220.";
-  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around Â£120. Typical range: Â£90âÂ£140.";
-  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around Â£150. Typical range: Â£140âÂ£180.";
-  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around Â£2,200. Typical range: Â£2,000âÂ£2,800.";
-  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around Â£1,800. Typical range: Â£1,600âÂ£2,200.";
-  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around Â£180. Typical range: Â£160âÂ£220.";
-  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around Â£150. Typical range: Â£120âÂ£220.";
+  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around &#163;120. Typical range: &#163;100–&#163;140.";
+  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around &#163;180. Typical range: &#163;160–&#163;220.";
+  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around &#163;120. Typical range: &#163;90–&#163;140.";
+  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around &#163;150. Typical range: £140–&#163;180.";
+  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around &#163;2,200. Typical range: &#163;2,000–&#163;2,800.";
+  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around &#163;1,800. Typical range: £1,600–&#163;2,200.";
+  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around &#163;180. Typical range: &#163;160–&#163;220.";
+  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around &#163;150. Typical range: &#163;120–£220.";
 
   box.innerText = message;
 }
@@ -1293,7 +1321,7 @@ function addMaterial(prefill = null) {
     <label>Product URL</label>
     <input class="m-url" placeholder="https://..." value="${prefill && prefill.url ? escapeHtml(prefill.url) : ""}">
 
-    <label>Manual price (Â£)</label>
+    <label>Manual price (&#163;)</label>
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${manualPrice}">
 
     <button type="button" class="btn-red" style="margin-top:12px;" onclick="this.parentElement.remove()">Remove</button>
@@ -1331,7 +1359,7 @@ function searchMaterials() {
   resultsBox.innerHTML = results.map((item) => `
     <div class="search-item" onclick='addMaterialFromLibrary(${JSON.stringify(item)})'>
       <strong>${escapeHtml(item.name)}</strong><br>
-      <span class="small">${escapeHtml(item.supplier)} Â· ${pounds(item.default_price)}</span>
+      <span class="small">${escapeHtml(item.supplier)} · ${pounds(item.default_price)}</span>
     </div>
   `).join("");
 
@@ -1412,7 +1440,7 @@ function renderQuoteResult(data) {
 
   const lines = data.material_lines || [];
   document.getElementById("r_material_lines").innerHTML = lines.length
-    ? lines.map(x => `<div>${escapeHtml(x.name || "")} Ã ${x.quantity} â ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
+    ? lines.map(x => `<div>${escapeHtml(x.name || "")} × ${x.quantity} — ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
     : "<div>No materials added.</div>";
 
   const internalMode = document.getElementById("internal_mode").checked;
@@ -1616,6 +1644,32 @@ function renderProfitChart(data) {
   }).join("");
 }
 
+function renderDashboardSummary(data) {
+  const box = document.getElementById("dashboardSummary");
+  if (!box) return;
+  if (!data || !data.length) {
+    box.innerHTML = "";
+    return;
+  }
+
+  const sorted = [...data].sort((a, b) => Number(b.profit || 0) - Number(a.profit || 0));
+  const best = sorted[0];
+  const worst = sorted[sorted.length - 1];
+
+  box.innerHTML = `
+    <div class="dashboard-item">
+      <div class="small">Best profit month</div>
+      <div><strong>${escapeHtml(best.label || "-")}</strong></div>
+      <div class="num">${pounds(best.profit || 0)}</div>
+    </div>
+    <div class="dashboard-item">
+      <div class="small">Lowest profit month</div>
+      <div><strong>${escapeHtml(worst.label || "-")}</strong></div>
+      <div class="num">${pounds(worst.profit || 0)}</div>
+    </div>
+  `;
+}
+
 async function loadDashboard() {
   try {
     const [res, chartRes] = await Promise.all([
@@ -1637,8 +1691,10 @@ async function loadDashboard() {
       <div class="dashboard-item"><div class="small">Customers</div><div class="num">${data.customer_count}</div></div>
     `;
     renderProfitChart(chartData);
+    renderDashboardSummary(chartData);
   } catch (e) {
     document.getElementById("profitChart").innerHTML = "Could not load chart.";
+    document.getElementById("dashboardSummary").innerHTML = "";
   }
 }
 
@@ -1662,7 +1718,7 @@ async function deleteCustomer(id) {
     await loadInvoices();
     await loadDashboard();
 
-    alert("Customer deleted.");
+    showNotice("Customer deleted.");
   } catch (e) {
     alert("Could not delete customer: " + e);
   }
@@ -1684,7 +1740,7 @@ async function loadHistory() {
       <div class="history-item">
         <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
         <div>${escapeHtml(q.job || "")}</div>
-        <div class="small">${escapeHtml(q.created_at || "")} Â· Total ${pounds(q.total_price)} Â· Profit ${pounds(q.gross_profit)} Â· Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
+        <div class="small">${escapeHtml(q.created_at || "")} · Total ${pounds(q.total_price)} · Profit ${pounds(q.gross_profit)} · Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
         <div class="history-actions">
           <button type="button" class="btn-light" onclick="loadSavedQuote(${q.id})">Load</button>
           <button type="button" class="btn-secondary" onclick="sendSavedQuoteWhatsApp(${q.id})">WhatsApp</button>
@@ -1713,9 +1769,9 @@ async function loadInvoices() {
 
     box.innerHTML = data.map(i => `
       <div class="history-item">
-        <div><strong>${escapeHtml(i.invoice_number)}</strong> â ${escapeHtml(i.customer_name || "No customer name")}</div>
+        <div><strong>${escapeHtml(i.invoice_number)}</strong> — ${escapeHtml(i.customer_name || "No customer name")}</div>
         <div>${renderStatusBadge(i.status)}</div>
-        <div class="small">${escapeHtml(i.created_at || "")} Â· Total ${pounds(i.total_price)} Â· Paid ${pounds(i.amount_paid)} Â· Balance ${pounds(i.balance_due)}</div>
+        <div class="small">${escapeHtml(i.created_at || "")} · Total ${pounds(i.total_price)} · Paid ${pounds(i.amount_paid)} · Balance ${pounds(i.balance_due)}</div>
 
         <label style="margin-top:10px;">Update payment</label>
         <div class="row">
@@ -1794,9 +1850,9 @@ async function viewCustomerHistory(id) {
 
     box.innerHTML = `
       <div><strong>Quotes:</strong> ${quotes.length}</div>
-      ${quotes.slice(0,5).map(q => `<div>â¢ ${escapeHtml(q.created_at)} â ${escapeHtml(q.job || "")} â ${pounds(q.total_price)}</div>`).join("") || "<div>None</div>"}
+      ${quotes.slice(0,5).map(q => `<div>• ${escapeHtml(q.created_at)} — ${escapeHtml(q.job || "")} — ${pounds(q.total_price)}</div>`).join("") || "<div>None</div>"}
       <div style="margin-top:8px;"><strong>Invoices:</strong> ${invoices.length}</div>
-      ${invoices.slice(0,5).map(i => `<div>â¢ ${escapeHtml(i.invoice_number)} â ${pounds(i.total_price)} â ${escapeHtml(i.status)}</div>`).join("") || "<div>None</div>"}
+      ${invoices.slice(0,5).map(i => `<div>• ${escapeHtml(i.invoice_number)} — ${pounds(i.total_price)} — ${escapeHtml(i.status)}</div>`).join("") || "<div>None</div>"}
     `;
   } catch (e) {
     alert("Could not load customer history.");
@@ -1856,6 +1912,7 @@ async function deleteSavedQuote(id) {
     if (!res.ok) throw new Error();
     await loadHistory();
     await loadDashboard();
+    showNotice("Saved quote deleted.");
   } catch (e) {
     alert("Could not delete saved quote.");
   }
@@ -1884,6 +1941,7 @@ async function generateQuote() {
     await loadHistory();
     await loadCustomers();
     await loadDashboard();
+    showNotice("Quote saved.");
   } catch (err) {
     errorBox.innerText = "Something went wrong generating the quote.";
     errorBox.style.display = "block";
@@ -1899,6 +1957,7 @@ async function convertQuoteToInvoice(quoteId) {
     showTab("invoicesTab");
     await loadInvoices();
     await loadDashboard();
+    showNotice("Invoice created from quote.");
   } catch (e) {
     alert("Could not convert quote to invoice.");
   }
@@ -1961,7 +2020,7 @@ async function savePaymentLink(id) {
     });
     if (!res.ok) throw new Error();
     await loadInvoices();
-    alert("Payment link saved.");
+    showNotice("Payment link saved.");
   } catch (e) {
     alert("Could not save payment link.");
   }
@@ -1990,6 +2049,7 @@ async function updateInvoicePaid(id) {
     if (!res.ok) throw new Error();
     await loadInvoices();
     await loadDashboard();
+    showNotice("Invoice payment updated.");
   } catch (e) {
     alert("Could not update invoice.");
   }
@@ -2005,6 +2065,7 @@ async function markInvoicePaid(id, total) {
     if (!res.ok) throw new Error();
     await loadInvoices();
     await loadDashboard();
+    showNotice("Invoice marked paid.");
   } catch (e) {
     alert("Could not mark invoice as paid.");
   }
@@ -2020,6 +2081,7 @@ async function markInvoiceUnpaid(id) {
     if (!res.ok) throw new Error();
     await loadInvoices();
     await loadDashboard();
+    showNotice("Invoice marked unpaid.");
   } catch (e) {
     alert("Could not mark invoice as unpaid.");
   }
@@ -2032,6 +2094,7 @@ async function deleteInvoice(id) {
     if (!res.ok) throw new Error();
     await loadInvoices();
     await loadDashboard();
+    showNotice("Invoice deleted.");
   } catch (e) {
     alert("Could not delete invoice.");
   }
@@ -2057,7 +2120,7 @@ def home():
     html = HTML.replace("__MATERIAL_LIBRARY__", json.dumps(MATERIAL_LIBRARY))
     html = html.replace("__FAVOURITE_MATERIALS__", json.dumps(FAVOURITE_MATERIALS))
     html = html.replace("__JOB_TEMPLATES__", json.dumps(JOB_TEMPLATES))
-    return HTMLResponse(content=html)
+    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
 @app.get("/api/dashboard")
@@ -2240,7 +2303,7 @@ def public_invoice(invoice_id: int):
     </body>
     </html>
     """
-    return HTMLResponse(content=html)
+    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
 @app.get("/api/invoices")
@@ -2339,4 +2402,3 @@ def api_customer_history(customer_id: int):
     if not history:
         raise HTTPException(status_code=404, detail="Customer not found")
     return history
-
