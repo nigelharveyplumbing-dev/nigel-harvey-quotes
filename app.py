@@ -178,6 +178,18 @@ class PaymentLinkUpdateRequest(BaseModel):
     payment_link: str = ""
 
 
+class InvoiceEditRequest(BaseModel):
+    customer_name: str = ""
+    customer_address: str = ""
+    customer_phone: str = ""
+    job: str = ""
+    labour: float = 0
+    materials: float = 0
+    due_date: str = ""
+    payment_link: str = ""
+    amount_paid: float = 0
+
+
 def now_uk():
     return datetime.now(UK_TZ)
 
@@ -723,6 +735,122 @@ def update_invoice_status(invoice_id: int, status: str, amount_paid: float):
     return get_invoice_by_id(invoice_id)
 
 
+def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict):
+    existing = get_quote_by_id(quote_id)
+    if not existing:
+        return None
+
+    customer_id = upsert_customer(
+        request_data.get("customer_name", ""),
+        request_data.get("customer_address", ""),
+        request_data.get("customer_phone", ""),
+    )
+
+    conn = get_db()
+    conn.execute("""
+        UPDATE quotes
+        SET customer_id = ?, customer_name = ?, job = ?, total_price = ?, gross_profit = ?, margin_percent = ?,
+            created_at = ?, created_at_sort = ?, request_json = ?, result_json = ?
+        WHERE id = ?
+    """, (
+        customer_id,
+        result_data.get("customer_name", ""),
+        result_data.get("job", ""),
+        result_data.get("total_price", 0),
+        result_data.get("gross_profit", 0),
+        result_data.get("margin_percent", 0),
+        result_data.get("created_at", existing["created_at"]),
+        result_data.get("created_at_sort", existing["result"].get("created_at_sort", existing["created_at"])),
+        json.dumps(request_data),
+        json.dumps(result_data),
+        quote_id,
+    ))
+    conn.commit()
+    conn.close()
+    return get_quote_by_id(quote_id)
+
+
+def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        return None
+
+    customer_name = (data.customer_name or "").strip()
+    customer_address = (data.customer_address or "").strip()
+    customer_phone = (data.customer_phone or "").strip()
+    job = (data.job or "").strip()
+    due_date = (data.due_date or "").strip() or invoice["due_date"]
+    payment_link = (data.payment_link or "").strip()
+
+    labour = max(0.0, safe_float(data.labour, 0.0))
+    materials = max(0.0, safe_float(data.materials, 0.0))
+    total_price = round(labour + materials, 2)
+    amount_paid = max(0.0, min(total_price, safe_float(data.amount_paid, 0.0)))
+    balance_due = max(0.0, round(total_price - amount_paid, 2))
+
+    if amount_paid <= 0:
+        status = "unpaid"
+    elif amount_paid >= total_price:
+        status = "paid"
+    else:
+        status = "part paid"
+
+    customer_id = upsert_customer(customer_name, customer_address, customer_phone)
+
+    quote_result = invoice["quote_result"]
+    quote_result["customer_name"] = customer_name
+    quote_result["customer_address"] = customer_address
+    quote_result["customer_phone"] = customer_phone
+    quote_result["job"] = job
+    quote_result["labour"] = round(labour, 2)
+    quote_result["materials"] = round(materials, 2)
+    quote_result["total_price"] = round(total_price, 2)
+    deposit_percent = safe_float(quote_result.get("deposit_percent", 0), 0)
+    quote_result["deposit_amount"] = round(total_price * (deposit_percent / 100.0), 2)
+    gross_profit = round(labour + materials - safe_float(quote_result.get("internal_raw_materials", 0), 0), 2)
+    quote_result["gross_profit"] = gross_profit
+    quote_result["margin_percent"] = round((gross_profit / total_price * 100.0), 2) if total_price > 0 else 0.0
+
+    invoice_payload = invoice["invoice"]
+    invoice_payload.update({
+        "customer_name": customer_name,
+        "customer_address": customer_address,
+        "customer_phone": customer_phone,
+        "job": job,
+        "labour": round(labour, 2),
+        "materials": round(materials, 2),
+        "total_price": round(total_price, 2),
+        "due_date": due_date,
+        "payment_link": payment_link,
+        "status": status,
+        "amount_paid": round(amount_paid, 2),
+        "balance_due": round(balance_due, 2),
+    })
+
+    conn = get_db()
+    conn.execute("""
+        UPDATE invoices
+        SET customer_id = ?, customer_name = ?, total_price = ?, amount_paid = ?, balance_due = ?, status = ?,
+            due_date = ?, payment_link = ?, quote_result_json = ?, invoice_json = ?
+        WHERE id = ?
+    """, (
+        customer_id,
+        customer_name,
+        round(total_price, 2),
+        round(amount_paid, 2),
+        round(balance_due, 2),
+        status,
+        due_date,
+        payment_link,
+        json.dumps(quote_result),
+        json.dumps(invoice_payload),
+        invoice_id,
+    ))
+    conn.commit()
+    conn.close()
+    return get_invoice_by_id(invoice_id)
+
+
 def get_dashboard():
     now = now_uk()
     month_prefix = now.strftime("%Y-%m")
@@ -932,6 +1060,8 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
 <body>
 <div class="wrap">
 
+  <div id="appNotice" class="notice" style="display:none;"></div>
+
   <div class="card">
     <h1>Nigel Harvey Ltd</h1>
     <div class="sub">Quotes, invoices, customers, profit tracking</div>
@@ -956,6 +1086,7 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
     <div id="quotesTab" class="tab-panel">
       <h2>Quote Builder</h2>
       <div id="editingStatus" class="status-bar hidden"></div>
+      <button type="button" class="btn-light no-print" style="margin-bottom:12px;" onclick="startNewQuote()">Start Fresh Quote</button>
 
       <div class="check-row no-print">
         <input type="checkbox" id="internal_mode">
@@ -1169,6 +1300,32 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
       <div id="i_payment_link_box"></div>
     </div>
 
+    <div id="invoiceEditPanel" class="quote-box edit-panel hidden no-print">
+      <div class="quote-section-title" style="margin-top:0;">Edit invoice</div>
+      <label for="edit_invoice_customer_name">Customer name</label>
+      <input id="edit_invoice_customer_name" placeholder="Customer name">
+      <label for="edit_invoice_customer_address">Customer address</label>
+      <textarea id="edit_invoice_customer_address" placeholder="Customer address"></textarea>
+      <label for="edit_invoice_customer_phone">Customer phone</label>
+      <input id="edit_invoice_customer_phone" placeholder="Customer phone">
+      <label for="edit_invoice_job">Job</label>
+      <textarea id="edit_invoice_job" placeholder="Job details"></textarea>
+      <label for="edit_invoice_labour">Labour (£)</label>
+      <input id="edit_invoice_labour" type="number" step="0.01" placeholder="0">
+      <label for="edit_invoice_materials">Materials (£)</label>
+      <input id="edit_invoice_materials" type="number" step="0.01" placeholder="0">
+      <label for="edit_invoice_due_date">Due date</label>
+      <input id="edit_invoice_due_date" placeholder="dd/mm/yyyy">
+      <label for="edit_invoice_payment_link">Payment link</label>
+      <input id="edit_invoice_payment_link" placeholder="https://...">
+      <label for="edit_invoice_amount_paid">Amount paid (£)</label>
+      <input id="edit_invoice_amount_paid" type="number" step="0.01" placeholder="0">
+      <div class="history-actions" style="grid-template-columns:1fr 1fr; margin-top:12px;">
+        <button type="button" class="btn-blue" onclick="saveInvoiceEdit()">Save Invoice Changes</button>
+        <button type="button" class="btn-light" onclick="cancelInvoiceEdit()">Cancel</button>
+      </div>
+    </div>
+
     <div class="actions no-print">
       <a id="invoiceWhatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Invoice to WhatsApp</a>
       <a id="invoiceEmailBtn" class="btn-link btn-blue" href="#">Send Invoice by Email</a>
@@ -1195,6 +1352,7 @@ let SAVED_CUSTOMERS = [];
 let CURRENT_QUOTE_ID = null;
 let CURRENT_QUOTE_DATA = null;
 let CURRENT_INVOICE_ID = null;
+let CURRENT_EDITING_INVOICE_ID = null;
 
 function showNotice(message, type = "success") {
   const box = document.getElementById("appNotice");
@@ -1503,6 +1661,7 @@ function renderInvoiceCard(item) {
   CURRENT_INVOICE_ID = item.id;
   document.getElementById("resultCard").style.display = "none";
   document.getElementById("invoiceCard").style.display = "block";
+  cancelInvoiceEdit();
 
   const invoice = item.invoice;
   const quoteResult = item.quote_result;
@@ -1589,6 +1748,17 @@ Nigelharveyplumbing@gmail.com`
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function setQuoteButtonMode(isEditing = false) {
+  const btn = document.querySelector('#quotesTab button[onclick="generateQuote()"]');
+  if (btn) btn.innerText = isEditing ? "Update Quote" : "Generate Quote";
+}
+
+function resetQuoteFormState() {
+  CURRENT_QUOTE_ID = null;
+  setEditingStatus("", false);
+  setQuoteButtonMode(false);
+}
+
 function fillFormFromRequest(requestData, quoteId = null) {
   document.getElementById("quote_type").value = requestData.quote_type || "small";
   document.getElementById("customer_name").value = requestData.customer_name || "";
@@ -1611,8 +1781,13 @@ function fillFormFromRequest(requestData, quoteId = null) {
   else addMaterial();
 
   CURRENT_QUOTE_ID = quoteId;
-  if (quoteId) setEditingStatus("Loaded saved quote #" + quoteId, true);
-  else setEditingStatus("", false);
+  if (quoteId) {
+    setEditingStatus("Editing saved quote #" + quoteId, true);
+    setQuoteButtonMode(true);
+  } else {
+    setEditingStatus("", false);
+    setQuoteButtonMode(false);
+  }
 
   toggleBathroomFields();
   updateLabourSuggestion();
@@ -1743,6 +1918,7 @@ async function loadHistory() {
         <div class="small">${escapeHtml(q.created_at || "")} · Total ${pounds(q.total_price)} · Profit ${pounds(q.gross_profit)} · Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
         <div class="history-actions">
           <button type="button" class="btn-light" onclick="loadSavedQuote(${q.id})">Load</button>
+          <button type="button" class="btn-blue" onclick="editSavedQuote(${q.id})">Edit</button>
           <button type="button" class="btn-secondary" onclick="sendSavedQuoteWhatsApp(${q.id})">WhatsApp</button>
           <button type="button" class="btn-blue" onclick="convertQuoteToInvoice(${q.id})">To Invoice</button>
           <button type="button" class="btn-light" onclick="printSavedQuote(${q.id})">Print</button>
@@ -1788,6 +1964,7 @@ async function loadInvoices() {
         <div class="history-actions" style="grid-template-columns:repeat(3, 1fr);">
           <button type="button" class="btn-secondary" onclick="markInvoicePaid(${i.id}, ${i.total_price})">Mark Paid</button>
           <button type="button" class="btn-light" onclick="markInvoiceUnpaid(${i.id})">Mark Unpaid</button>
+          <button type="button" class="btn-blue" onclick="editInvoice(${i.id})">Edit</button>
           <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Open</button>
           <button type="button" class="btn-secondary" onclick="sendInvoiceWhatsApp(${i.id})">WhatsApp</button>
           <button type="button" class="btn-blue" onclick="emailInvoice(${i.id})">Email</button>
@@ -1862,10 +2039,38 @@ async function viewCustomerHistory(id) {
 function startQuoteForCustomer(id) {
   const c = SAVED_CUSTOMERS.find(x => x.id === id);
   if (!c) return;
+  resetQuoteFormState();
   showTab("quotesTab");
   document.getElementById("customer_name").value = c.name || "";
   document.getElementById("customer_address").value = c.address || "";
   document.getElementById("customer_phone").value = c.phone || "";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function startNewQuote() {
+  resetQuoteFormState();
+  CURRENT_QUOTE_DATA = null;
+  document.getElementById("resultCard").style.display = "none";
+  document.getElementById("invoiceCard").style.display = "none";
+  document.getElementById("quote_type").value = "small";
+  document.getElementById("customer_name").value = "";
+  document.getElementById("customer_address").value = "";
+  document.getElementById("customer_phone").value = "";
+  document.getElementById("job").value = "";
+  document.getElementById("labour").value = "";
+  document.getElementById("include_materials_handling").checked = true;
+  document.getElementById("materials_handling_percent").value = "25";
+  document.getElementById("tiling").checked = false;
+  document.getElementById("wall_tiling_m2").value = "";
+  document.getElementById("floor_tiling_m2").value = "";
+  document.getElementById("wall_height").value = "half";
+  document.getElementById("customer_supplies_tiles").checked = false;
+  document.getElementById("deposit_percent").value = "0";
+  clearMaterials();
+  addMaterial();
+  toggleBathroomFields();
+  updateLabourSuggestion();
+  showTab("quotesTab");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1878,6 +2083,19 @@ async function loadSavedQuote(id) {
     renderQuoteResult(data.result);
   } catch (e) {
     alert("Could not load saved quote.");
+  }
+}
+
+async function editSavedQuote(id) {
+  try {
+    const res = await fetch("/api/quotes/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    fillFormFromRequest(data.request, data.id);
+    renderQuoteResult(data.result);
+    showNotice("Quote loaded for editing.");
+  } catch (e) {
+    alert("Could not load quote for editing.");
   }
 }
 
@@ -1923,10 +2141,13 @@ async function generateQuote() {
   errorBox.style.display = "none";
 
   const payload = collectFormPayload();
+  const isEditing = !!CURRENT_QUOTE_ID;
+  const url = isEditing ? "/api/quotes/" + CURRENT_QUOTE_ID : "/api/quote";
+  const method = isEditing ? "PUT" : "POST";
 
   try {
-    const res = await fetch("/api/quote", {
-      method: "POST",
+    const res = await fetch(url, {
+      method,
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(payload)
     });
@@ -1935,15 +2156,16 @@ async function generateQuote() {
     const data = await res.json();
 
     CURRENT_QUOTE_ID = data.id || null;
-    setEditingStatus(CURRENT_QUOTE_ID ? "Saved quote #" + CURRENT_QUOTE_ID : "", !!CURRENT_QUOTE_ID);
+    setEditingStatus(CURRENT_QUOTE_ID ? "Editing saved quote #" + CURRENT_QUOTE_ID : "", !!CURRENT_QUOTE_ID);
+    setQuoteButtonMode(!!CURRENT_QUOTE_ID);
 
     renderQuoteResult(data.result);
     await loadHistory();
     await loadCustomers();
     await loadDashboard();
-    showNotice("Quote saved.");
+    showNotice(isEditing ? "Quote updated." : "Quote saved.");
   } catch (err) {
-    errorBox.innerText = "Something went wrong generating the quote.";
+    errorBox.innerText = isEditing ? "Something went wrong updating the quote." : "Something went wrong generating the quote.";
     errorBox.style.display = "block";
   }
 }
@@ -1971,6 +2193,30 @@ async function convertCurrentQuoteToInvoice() {
   await convertQuoteToInvoice(CURRENT_QUOTE_ID);
 }
 
+function populateInvoiceEditForm(item) {
+  const invoice = item.invoice || {};
+  document.getElementById("edit_invoice_customer_name").value = invoice.customer_name || "";
+  document.getElementById("edit_invoice_customer_address").value = invoice.customer_address || "";
+  document.getElementById("edit_invoice_customer_phone").value = invoice.customer_phone || "";
+  document.getElementById("edit_invoice_job").value = invoice.job || "";
+  document.getElementById("edit_invoice_labour").value = invoice.labour || 0;
+  document.getElementById("edit_invoice_materials").value = invoice.materials || 0;
+  document.getElementById("edit_invoice_due_date").value = item.due_date || "";
+  document.getElementById("edit_invoice_payment_link").value = item.payment_link || "";
+  document.getElementById("edit_invoice_amount_paid").value = item.amount_paid || 0;
+}
+
+function showInvoiceEditPanel(item) {
+  CURRENT_EDITING_INVOICE_ID = item.id;
+  populateInvoiceEditForm(item);
+  document.getElementById("invoiceEditPanel").classList.remove("hidden");
+}
+
+function cancelInvoiceEdit() {
+  CURRENT_EDITING_INVOICE_ID = null;
+  document.getElementById("invoiceEditPanel").classList.add("hidden");
+}
+
 async function openInvoice(id) {
   try {
     const res = await fetch("/api/invoices/" + id);
@@ -1979,6 +2225,19 @@ async function openInvoice(id) {
     renderInvoiceCard(data);
   } catch (e) {
     alert("Could not open invoice.");
+  }
+}
+
+async function editInvoice(id) {
+  try {
+    const res = await fetch("/api/invoices/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderInvoiceCard(data);
+    showInvoiceEditPanel(data);
+    showNotice("Invoice loaded for editing.");
+  } catch (e) {
+    alert("Could not load invoice for editing.");
   }
 }
 
@@ -2007,6 +2266,38 @@ async function emailInvoice(id) {
     document.getElementById("invoiceEmailBtn").click();
   } catch (e) {
     alert("Could not open email for this invoice.");
+  }
+}
+
+async function saveInvoiceEdit() {
+  if (!CURRENT_EDITING_INVOICE_ID) return;
+  try {
+    const payload = {
+      customer_name: document.getElementById("edit_invoice_customer_name").value || "",
+      customer_address: document.getElementById("edit_invoice_customer_address").value || "",
+      customer_phone: document.getElementById("edit_invoice_customer_phone").value || "",
+      job: document.getElementById("edit_invoice_job").value || "",
+      labour: parseFloat(document.getElementById("edit_invoice_labour").value || 0),
+      materials: parseFloat(document.getElementById("edit_invoice_materials").value || 0),
+      due_date: document.getElementById("edit_invoice_due_date").value || "",
+      payment_link: document.getElementById("edit_invoice_payment_link").value || "",
+      amount_paid: parseFloat(document.getElementById("edit_invoice_amount_paid").value || 0)
+    };
+
+    const res = await fetch("/api/invoices/" + CURRENT_EDITING_INVOICE_ID, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderInvoiceCard(data);
+    await loadInvoices();
+    await loadCustomers();
+    await loadDashboard();
+    showNotice("Invoice updated.");
+  } catch (e) {
+    alert("Could not save invoice changes.");
   }
 }
 
@@ -2104,6 +2395,7 @@ toggleBathroomFields();
 renderTemplates();
 renderFavourites();
 addMaterial();
+setQuoteButtonMode(false);
 updateLabourSuggestion();
 loadDashboard();
 loadHistory();
@@ -2159,6 +2451,16 @@ def api_create_quote(data: QuoteRequest):
     result_data = calculate_quote(data)
     quote_id = save_quote(request_data, result_data)
     quote = get_quote_by_id(quote_id)
+    return JSONResponse(content=quote)
+
+
+@app.put("/api/quotes/{quote_id}")
+def api_update_quote(quote_id: int, data: QuoteRequest):
+    request_data = data.model_dump()
+    result_data = calculate_quote(data)
+    quote = update_quote_by_id(quote_id, request_data, result_data)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
     return JSONResponse(content=quote)
 
 
@@ -2314,6 +2616,14 @@ def api_invoices():
 @app.get("/api/invoices/{invoice_id}")
 def api_invoice(invoice_id: int):
     invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return invoice
+
+
+@app.put("/api/invoices/{invoice_id}")
+def api_update_invoice(invoice_id: int, data: InvoiceEditRequest):
+    invoice = update_invoice_by_id(invoice_id, data)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return invoice
