@@ -174,6 +174,10 @@ class InvoiceStatusRequest(BaseModel):
     amount_paid: float = 0
 
 
+class PaymentLinkUpdateRequest(BaseModel):
+    payment_link: str = ""
+
+
 def now_uk():
     return datetime.now(UK_TZ)
 
@@ -187,6 +191,21 @@ def safe_float(value, default=0.0):
         return float(value)
     except Exception:
         return default
+
+
+def month_labels(count=6):
+    now = now_uk()
+    labels = []
+    year = now.year
+    month = now.month
+    for _ in range(count):
+        labels.append(f"{year:04d}-{month:02d}")
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    labels.reverse()
+    return labels
 
 
 def get_db():
@@ -753,6 +772,28 @@ def get_dashboard():
     }
 
 
+def get_monthly_profit_series(month_count: int = 6):
+    labels = month_labels(month_count)
+    conn = get_db()
+    out = []
+    for month_prefix in labels:
+        row = conn.execute("""
+            SELECT
+                COALESCE(SUM(total_price), 0) AS revenue,
+                COALESCE(SUM(gross_profit), 0) AS profit
+            FROM quotes
+            WHERE substr(created_at_sort, 1, 7) = ?
+        """, (month_prefix,)).fetchone()
+        out.append({
+            "month_key": month_prefix,
+            "label": datetime.strptime(month_prefix + '-01', '%Y-%m-%d').strftime('%b %Y'),
+            "revenue": round(row['revenue'] or 0, 2),
+            "profit": round(row['profit'] or 0, 2),
+        })
+    conn.close()
+    return out
+
+
 def get_customers():
     conn = get_db()
     rows = conn.execute("""
@@ -902,6 +943,8 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
       <h2>Dashboard</h2>
       <div class="small" id="dashboardMonth"></div>
       <div id="dashboardGrid" class="dashboard-grid"></div>
+      <h3>Monthly profit</h3>
+      <div id="profitChart" class="quote-box small">Loading chart...</div>
     </div>
 
     <div id="quotesTab" class="tab-panel">
@@ -1008,7 +1051,8 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
 
     <div id="customersTab" class="tab-panel">
       <h2>Customers</h2>
-      <div id="customerList" class="small">No customers yet.</div>
+      <input id="customerSearch" placeholder="Search customer by name, phone or address" oninput="loadCustomers()">
+      <div id="customerList" class="small" style="margin-top:10px;">No customers yet.</div>
     </div>
   </div>
 
@@ -1122,6 +1166,7 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
     <div class="actions no-print">
       <a id="invoiceWhatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Invoice to WhatsApp</a>
       <a id="invoiceEmailBtn" class="btn-link btn-blue" href="#">Send Invoice by Email</a>
+      <a id="invoiceOpenBtn" class="btn-link btn-light" href="#" target="_blank">Open Invoice Page</a>
       <button class="btn-light" onclick="window.print()">Download / Print Invoice PDF</button>
     </div>
   </div>
@@ -1511,6 +1556,7 @@ Nigel Harvey Ltd
 Nigelharveyplumbing@gmail.com`
   );
   document.getElementById("invoiceEmailBtn").href = `mailto:?subject=${emailSubject}&body=${emailBody}`;
+  document.getElementById("invoiceOpenBtn").href = invoiceUrl;
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1546,10 +1592,38 @@ function fillFormFromRequest(requestData, quoteId = null) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function renderProfitChart(data) {
+  const box = document.getElementById("profitChart");
+  if (!data || !data.length) {
+    box.innerHTML = "No monthly data yet.";
+    return;
+  }
+
+  const maxValue = Math.max(...data.map(x => x.profit), 1);
+  box.innerHTML = data.map(x => {
+    const width = Math.max(4, Math.round((x.profit / maxValue) * 100));
+    return `
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <span>${escapeHtml(x.label)}</span>
+          <strong>${pounds(x.profit)}</strong>
+        </div>
+        <div style="background:#e9e9e9;border-radius:999px;height:10px;margin-top:6px;overflow:hidden;">
+          <div style="background:#1f7a1f;height:10px;width:${width}%;"></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
 async function loadDashboard() {
   try {
-    const res = await fetch("/api/dashboard");
+    const [res, chartRes] = await Promise.all([
+      fetch("/api/dashboard"),
+      fetch("/api/dashboard/monthly-profit")
+    ]);
     const data = await res.json();
+    const chartData = await chartRes.json();
     document.getElementById("dashboardMonth").innerText = data.month_label || "";
     document.getElementById("dashboardGrid").innerHTML = `
       <div class="dashboard-item"><div class="small">Quotes this month</div><div class="num">${data.quote_count}</div></div>
@@ -1562,7 +1636,10 @@ async function loadDashboard() {
       <div class="dashboard-item"><div class="small">Outstanding</div><div class="num">${pounds(data.balance_total)}</div></div>
       <div class="dashboard-item"><div class="small">Customers</div><div class="num">${data.customer_count}</div></div>
     `;
-  } catch (e) {}
+    renderProfitChart(chartData);
+  } catch (e) {
+    document.getElementById("profitChart").innerHTML = "Could not load chart.";
+  }
 }
 
 async function deleteCustomer(id) {
@@ -1646,11 +1723,19 @@ async function loadInvoices() {
           <button type="button" class="btn-blue" style="max-width:180px;" onclick="updateInvoicePaid(${i.id})">Save Amount</button>
         </div>
 
-        <div class="history-actions">
+        <label style="margin-top:10px;">Payment link</label>
+        <div class="row">
+          <input id="payment_link_${i.id}" type="text" placeholder="https://..." value="${escapeHtml(i.payment_link || "")}">
+          <button type="button" class="btn-blue" style="max-width:180px;" onclick="savePaymentLink(${i.id})">Save Link</button>
+        </div>
+
+        <div class="history-actions" style="grid-template-columns:repeat(3, 1fr);">
           <button type="button" class="btn-secondary" onclick="markInvoicePaid(${i.id}, ${i.total_price})">Mark Paid</button>
           <button type="button" class="btn-light" onclick="markInvoiceUnpaid(${i.id})">Mark Unpaid</button>
           <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Open</button>
           <button type="button" class="btn-secondary" onclick="sendInvoiceWhatsApp(${i.id})">WhatsApp</button>
+          <button type="button" class="btn-blue" onclick="emailInvoice(${i.id})">Email</button>
+          <button type="button" class="btn-light" onclick="openInvoicePage(${i.id})">Invoice Page</button>
           <button type="button" class="btn-light" onclick="printInvoice(${i.id})">Print</button>
           <button type="button" class="btn-red" onclick="deleteInvoice(${i.id})">Delete</button>
         </div>
@@ -1667,13 +1752,18 @@ async function loadCustomers() {
     const data = await res.json();
     SAVED_CUSTOMERS = data;
     const box = document.getElementById("customerList");
+    const q = (document.getElementById("customerSearch")?.value || "").trim().toLowerCase();
+    const filtered = data.filter(c => {
+      const hay = `${c.name || ""} ${c.phone || ""} ${c.address || ""}`.toLowerCase();
+      return !q || hay.includes(q);
+    });
 
-    if (!data.length) {
-      box.innerHTML = "No customers yet.";
+    if (!filtered.length) {
+      box.innerHTML = q ? "No matching customers." : "No customers yet.";
       return;
     }
 
-    box.innerHTML = data.map(c => `
+    box.innerHTML = filtered.map(c => `
       <div class="history-item">
         <div><strong>${escapeHtml(c.name || "No customer name")}</strong></div>
         <div>${escapeHtml(c.phone || "")}</div>
@@ -1845,6 +1935,38 @@ async function sendInvoiceWhatsApp(id) {
   }
 }
 
+function openInvoicePage(id) {
+  window.open("/invoice/" + id, "_blank");
+}
+
+async function emailInvoice(id) {
+  try {
+    const res = await fetch("/api/invoices/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderInvoiceCard(data);
+    document.getElementById("invoiceEmailBtn").click();
+  } catch (e) {
+    alert("Could not open email for this invoice.");
+  }
+}
+
+async function savePaymentLink(id) {
+  try {
+    const paymentLink = document.getElementById("payment_link_" + id).value || "";
+    const res = await fetch("/api/invoices/" + id + "/payment-link", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ payment_link: paymentLink })
+    });
+    if (!res.ok) throw new Error();
+    await loadInvoices();
+    alert("Payment link saved.");
+  } catch (e) {
+    alert("Could not save payment link.");
+  }
+}
+
 async function printInvoice(id) {
   try {
     const res = await fetch("/api/invoices/" + id);
@@ -1943,6 +2065,11 @@ def api_dashboard():
     return get_dashboard()
 
 
+@app.get("/api/dashboard/monthly-profit")
+def api_dashboard_monthly_profit():
+    return get_monthly_profit_series(6)
+
+
 @app.get("/api/quotes")
 def api_quotes():
     return load_quotes()
@@ -2008,6 +2135,7 @@ def public_invoice(invoice_id: int):
     <!doctype html>
     <html>
     <head>
+      <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <title>Invoice {item['invoice_number']}</title>
       <style>
@@ -2136,6 +2264,30 @@ def api_invoice_status(invoice_id: int, data: InvoiceStatusRequest):
     return invoice
 
 
+@app.post("/api/invoices/{invoice_id}/payment-link")
+def api_invoice_payment_link(invoice_id: int, data: PaymentLinkUpdateRequest):
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    invoice_payload = invoice["invoice"]
+    invoice_payload["payment_link"] = (data.payment_link or "").strip()
+
+    conn = get_db()
+    conn.execute("""
+        UPDATE invoices
+        SET payment_link = ?, invoice_json = ?
+        WHERE id = ?
+    """, (
+        (data.payment_link or "").strip(),
+        json.dumps(invoice_payload),
+        invoice_id,
+    ))
+    conn.commit()
+    conn.close()
+    return get_invoice_by_id(invoice_id)
+
+
 @app.delete("/api/invoices/{invoice_id}")
 def api_delete_invoice(invoice_id: int):
     if not delete_invoice_by_id(invoice_id):
@@ -2187,3 +2339,4 @@ def api_customer_history(customer_id: int):
     if not history:
         raise HTTPException(status_code=404, detail="Customer not found")
     return history
+
