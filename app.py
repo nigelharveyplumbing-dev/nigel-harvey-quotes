@@ -150,15 +150,15 @@ FAVOURITE_MATERIALS = [
 ]
 
 JOB_TEMPLATES = [
-    {"name": "Replace tap", "quote_type": "small", "job": "Remove existing tap and fit new tap including testing for leaks.", "labour": 120},
-    {"name": "Replace toilet", "quote_type": "small", "job": "Remove existing toilet and fit new close-coupled toilet including waste connection and testing.", "labour": 180},
-    {"name": "Basin waste", "quote_type": "small", "job": "Remove faulty basin waste and fit new basin waste including testing for leaks.", "labour": 90},
-    {"name": "Outside tap", "quote_type": "small", "job": "Supply and fit outside tap kit with isolation and testing.", "labour": 150},
-    {"name": "Kitchen sink waste", "quote_type": "small", "job": "Remove existing sink waste and fit new waste/trap arrangement including testing.", "labour": 120},
+    {"name": "Replace tap", "quote_type": "small", "job": "Remove existing tap and fit new tap including testing for leaks.", "labour": 120, "materials": [{"name":"Flexible Tap Connector","supplier":"Screwfix","default_price":6.50,"quantity":2},{"name":"Service Valve","supplier":"Screwfix","default_price":4.00,"quantity":2},{"name":"Silicone","supplier":"Toolstation","default_price":8.00,"quantity":1}]},
+    {"name": "Replace toilet", "quote_type": "small", "job": "Remove existing toilet and fit new close-coupled toilet including waste connection and testing.", "labour": 180, "materials": [{"name":"Toilet Fill Valve","supplier":"Screwfix","default_price":12.00,"quantity":1},{"name":"Toilet Flush Valve","supplier":"Screwfix","default_price":18.00,"quantity":1},{"name":"Silicone","supplier":"Toolstation","default_price":8.00,"quantity":1}]},
+    {"name": "Basin waste", "quote_type": "small", "job": "Remove faulty basin waste and fit new basin waste including testing for leaks.", "labour": 90, "materials": [{"name":"Basin Waste","supplier":"City Plumbing","default_price":14.00,"quantity":1},{"name":"Silicone","supplier":"Toolstation","default_price":8.00,"quantity":1}]},
+    {"name": "Outside tap", "quote_type": "small", "job": "Supply and fit outside tap kit with isolation and testing.", "labour": 150, "materials": [{"name":"Outside Tap Kit","supplier":"Screwfix","default_price":18.00,"quantity":1},{"name":"15mm Isolating Valve","supplier":"Toolstation","default_price":3.50,"quantity":1},{"name":"Silicone","supplier":"Toolstation","default_price":8.00,"quantity":1}]},
+    {"name": "Kitchen sink waste", "quote_type": "small", "job": "Remove existing sink waste and fit new waste/trap arrangement including testing.", "labour": 120, "materials": [{"name":"Sink Waste Kit","supplier":"City Plumbing","default_price":22.00,"quantity":1},{"name":"P Trap 1.5in","supplier":"Toolstation","default_price":7.50,"quantity":1}]},
     {"name": "Bathroom install", "quote_type": "bathroom", "job": "Bathroom plumbing installation including first fix, second fix and sanitaryware connections.", "labour": 1800},
     {"name": "Bathroom refurb", "quote_type": "bathroom", "job": "Bathroom refurbishment plumbing works including sanitaryware, wastes and connections.", "labour": 2200},
     {"name": "Heating repair", "quote_type": "heating", "job": "Heating repair works including diagnosis, replacement parts and testing.", "labour": 150},
-    {"name": "Radiator install", "quote_type": "heating", "job": "Supply and fit radiator including valves and testing.", "labour": 180},
+    {"name": "Radiator install", "quote_type": "heating", "job": "Supply and fit radiator including valves and testing.", "labour": 180, "materials": [{"name":"Radiator Valve Set","supplier":"Screwfix","default_price":20.00,"quantity":1},{"name":"TRV Valve","supplier":"Screwfix","default_price":14.00,"quantity":1},{"name":"Lockshield Valve","supplier":"Screwfix","default_price":8.00,"quantity":1}]},
     {"name": "Full heating system", "quote_type": "heating", "job": "Full heating system installation including pipework, controls, radiators and commissioning.", "labour": 3500},
 ]
 
@@ -234,6 +234,10 @@ class InvoiceEditRequest(BaseModel):
     amount_paid: float = 0
 
 
+class CustomerNotesRequest(BaseModel):
+    notes: str = ""
+
+
 def now_uk():
     return datetime.now(UK_TZ)
 
@@ -247,6 +251,29 @@ def safe_float(value, default=0.0):
         return float(value)
     except Exception:
         return default
+
+
+def parse_display_date(value: str):
+    value = (value or "").strip()
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%d/%m/%Y").date()
+    except Exception:
+        return None
+
+
+def invoice_is_overdue(status: str, due_date: str):
+    due = parse_display_date(due_date)
+    if not due:
+        return False
+    return (status or "").lower() != "paid" and due < now_uk().date()
+
+
+def ensure_column(conn, table: str, column: str, definition: str):
+    cols = [r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def month_labels(count=6):
@@ -279,6 +306,7 @@ def init_db():
             name TEXT,
             address TEXT,
             phone TEXT,
+            notes TEXT DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -317,6 +345,7 @@ def init_db():
             invoice_json TEXT NOT NULL
         )
     """)
+    ensure_column(conn, "customers", "notes", "TEXT DEFAULT ''")
     conn.commit()
     conn.close()
 
@@ -571,6 +600,7 @@ def row_to_invoice(row):
         "due_date": row["due_date"],
         "payment_link": row["payment_link"] or "",
         "created_at": row["created_at"],
+        "overdue": invoice_is_overdue(row["status"], row["due_date"]),
         "quote_result": json.loads(row["quote_result_json"]),
         "invoice": json.loads(row["invoice_json"]),
     }
@@ -927,8 +957,28 @@ def get_dashboard():
     """, (month_prefix,)).fetchone()
 
     customers = conn.execute("SELECT COUNT(*) AS customer_count FROM customers").fetchone()
-
+    due_rows = conn.execute("SELECT * FROM invoices ORDER BY created_at_sort DESC, id DESC LIMIT 300").fetchall()
     conn.close()
+
+    tomorrow = now.date() + timedelta(days=1)
+    due_tomorrow_items = []
+    overdue_count = 0
+    unpaid_count = 0
+    for row in due_rows:
+        due = parse_display_date(row["due_date"])
+        status = (row["status"] or "").lower()
+        if status != "paid":
+            unpaid_count += 1
+        if due and status != "paid" and due < now.date():
+            overdue_count += 1
+        if due and status != "paid" and due == tomorrow:
+            due_tomorrow_items.append({
+                "id": row["id"],
+                "invoice_number": row["invoice_number"],
+                "customer_name": row["customer_name"] or "",
+                "balance_due": round(row["balance_due"] or 0, 2),
+                "due_date": row["due_date"],
+            })
 
     return {
         "month_label": now.strftime("%B %Y"),
@@ -941,6 +991,9 @@ def get_dashboard():
         "balance_total": round(i["balance_total"] or 0, 2),
         "avg_quote": round(avg["avg_quote"] or 0, 2),
         "customer_count": customers["customer_count"] or 0,
+        "unpaid_count": unpaid_count,
+        "overdue_count": overdue_count,
+        "due_tomorrow_items": due_tomorrow_items[:12],
     }
 
 
@@ -974,17 +1027,29 @@ def get_customers():
         ORDER BY updated_at DESC, id DESC
         LIMIT 200
     """).fetchall()
-    conn.close()
 
     out = []
     for row in rows:
+        q_stats = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM quotes WHERE customer_id = ?",
+            (row["id"],)
+        ).fetchone()
+        i_stats = conn.execute(
+            "SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_due), 0) AS outstanding FROM invoices WHERE customer_id = ?",
+            (row["id"],)
+        ).fetchone()
         out.append({
             "id": row["id"],
             "name": row["name"] or "",
             "address": row["address"] or "",
             "phone": row["phone"] or "",
+            "notes": row["notes"] or "",
             "updated_at": row["updated_at"],
+            "quote_count": q_stats["cnt"] or 0,
+            "invoice_count": i_stats["cnt"] or 0,
+            "outstanding": round(i_stats["outstanding"] or 0, 2),
         })
+    conn.close()
     return out
 
 
@@ -1010,15 +1075,35 @@ def get_customer_history(customer_id: int):
     """, (customer_id,)).fetchall()
     conn.close()
 
+    quote_list = [row_to_quote(r) for r in quotes]
+    invoice_list = [row_to_invoice(r) for r in invoices]
+
+    recent_prices = []
+    seen_jobs = set()
+    for q in quote_list:
+        key = (q.get("job") or "").strip().lower()
+        if key and key not in seen_jobs:
+            recent_prices.append({
+                "job": q.get("job") or "",
+                "price": q.get("total_price") or 0,
+                "created_at": q.get("created_at") or "",
+                "quote_id": q.get("id"),
+            })
+            seen_jobs.add(key)
+        if len(recent_prices) >= 8:
+            break
+
     return {
         "customer": {
             "id": customer["id"],
             "name": customer["name"] or "",
             "address": customer["address"] or "",
             "phone": customer["phone"] or "",
+            "notes": customer["notes"] or "",
         },
-        "quotes": [row_to_quote(r) for r in quotes],
-        "invoices": [row_to_invoice(r) for r in invoices],
+        "quotes": quote_list,
+        "invoices": invoice_list,
+        "recent_prices": recent_prices,
     }
 
 
@@ -1315,6 +1400,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 .result { display:none; background:#f3faf3; border:1px solid #b7d7b7; }
 .error { display:none; background:#fff3f3; border:1px solid #e0b7b7; color:#a33; padding:12px; border-radius:10px; margin-top:12px; }
 .actions { display:grid; gap:10px; margin-top:14px; }
+.quick-chip { display:inline-block; padding:7px 10px; border-radius:999px; background:#efefef; margin:4px 6px 0 0; font-size:13px; }
 .notice { display:none; background:#eef7ff; border:1px solid #c7def5; color:#124a7a; padding:12px; border-radius:12px; margin-top:12px; font-weight:700; }
 .print-head { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .logo-box img { max-height:70px; max-width:170px; object-fit:contain; }
@@ -1381,7 +1467,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
   .tabs { grid-template-columns:repeat(2, 1fr); }
   .templates, .favourites, .dashboard-grid, .history-actions, .doc-grid-two, .doc-grid-bottom, .dashboard-summary { grid-template-columns:1fr; }
   .row { flex-direction:column; gap:4px; }
-  .actions { position:sticky; bottom:8px; z-index:5; }
+  .actions { position:sticky; bottom:8px; z-index:5; background:#f5f5f5; padding:8px; border-radius:14px; }
   .doc-total-box .quote-total { font-size:34px; }
 }
 </style>
@@ -1410,12 +1496,21 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <h3>Monthly profit</h3>
       <div id="profitChart" class="quote-box small">Loading chart...</div>
       <div id="dashboardSummary" class="dashboard-summary"></div>
+      <h3>Due tomorrow</h3>
+      <div id="dueTomorrowList" class="quote-box small">Loading reminders...</div>
     </div>
 
     <div id="quotesTab" class="tab-panel">
       <h2>Quote Builder</h2>
       <div id="editingStatus" class="status-bar hidden"></div>
-      <button type="button" class="btn-light no-print" style="margin-bottom:12px;" onclick="startNewQuote()">Start Fresh Quote</button>
+      <div class="history-actions no-print" style="grid-template-columns:1fr 1fr; margin-bottom:12px;">
+        <button type="button" class="btn-light" onclick="startNewQuote()">Start Fresh Quote</button>
+        <button type="button" class="btn-blue" onclick="showTab('customersTab'); window.scrollTo({ top: 0, behavior: 'smooth' });">Pick Saved Customer</button>
+      </div>
+
+      <label for="quickCustomerSearch">Quick customer fill</label>
+      <input id="quickCustomerSearch" placeholder="Start typing a saved customer name or phone" oninput="renderQuickCustomerMatches()">
+      <div id="quickCustomerMatches" class="search-results hidden"></div>
 
       <div class="check-row no-print">
         <input type="checkbox" id="internal_mode">
@@ -1513,6 +1608,16 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 
     <div id="invoicesTab" class="tab-panel">
       <h2>Invoices</h2>
+      <label for="invoiceSearch">Search invoices</label>
+      <input id="invoiceSearch" placeholder="Customer name or invoice number" oninput="loadInvoices()">
+      <label for="invoiceFilter">Filter invoices</label>
+      <select id="invoiceFilter" onchange="loadInvoices()">
+        <option value="all">All invoices</option>
+        <option value="unpaid">Unpaid</option>
+        <option value="part paid">Part paid</option>
+        <option value="paid">Paid</option>
+        <option value="overdue">Overdue</option>
+      </select>
       <div id="invoiceList" class="small">No invoices yet.</div>
     </div>
 
@@ -1672,6 +1777,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
     <div class="actions no-print">
       <a id="invoiceWhatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Invoice to WhatsApp</a>
       <button id="invoiceEmailBtn" class="btn-blue" type="button" onclick="sendInvoiceEmail()">Email Invoice PDF</button>
+      <button class="btn-light" type="button" onclick="sendInvoiceReminderEmail(CURRENT_INVOICE_ID)">Reminder Email</button>
+      <button class="btn-light" type="button" onclick="sendOverdueReminderWhatsApp(CURRENT_INVOICE_ID)">Reminder WhatsApp</button>
       <a id="invoiceOpenBtn" class="btn-link btn-light" href="#" target="_blank">Open Invoice Page</a>
       <button class="btn-light" type="button" onclick="downloadCurrentInvoicePdf()">Download Invoice PDF</button>
     </div>
@@ -1769,12 +1876,91 @@ function applyTemplate(index) {
   document.getElementById("quote_type").value = t.quote_type;
   document.getElementById("job").value = t.job;
   document.getElementById("labour").value = t.labour;
+  if (Array.isArray(t.materials) && t.materials.length) {
+    clearMaterials();
+    t.materials.forEach(m => addMaterial(m));
+  }
   toggleBathroomFields();
   updateLabourSuggestion();
+  showNotice("Template applied.");
 }
 
 function addFavouriteMaterial(index) {
   addMaterial(FAVOURITE_MATERIALS[index]);
+}
+
+function renderQuickCustomerMatches() {
+  const q = (document.getElementById("quickCustomerSearch")?.value || "").trim().toLowerCase();
+  const box = document.getElementById("quickCustomerMatches");
+  if (!box) return;
+  if (!q) {
+    box.innerHTML = "";
+    box.classList.add("hidden");
+    return;
+  }
+  const matches = SAVED_CUSTOMERS.filter(c => (`${c.name || ""} ${c.phone || ""} ${c.address || ""}`).toLowerCase().includes(q)).slice(0, 8);
+  if (!matches.length) {
+    box.innerHTML = '<div class="search-item">No saved customer match</div>';
+    box.classList.remove("hidden");
+    return;
+  }
+  box.innerHTML = matches.map(c => `
+    <div class="search-item" onclick="fillCustomerFromPicker(${c.id})">
+      <strong>${escapeHtml(c.name || "No name")}</strong><br>
+      <span class="small">${escapeHtml(c.phone || "")} · ${escapeHtml(c.address || "")}</span>
+    </div>
+  `).join("");
+  box.classList.remove("hidden");
+}
+
+function fillCustomerFromPicker(id) {
+  const c = SAVED_CUSTOMERS.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById("customer_name").value = c.name || "";
+  document.getElementById("customer_address").value = c.address || "";
+  document.getElementById("customer_phone").value = c.phone || "";
+  const search = document.getElementById("quickCustomerSearch");
+  if (search) search.value = c.name || "";
+  const box = document.getElementById("quickCustomerMatches");
+  if (box) {
+    box.innerHTML = "";
+    box.classList.add("hidden");
+  }
+  showNotice("Customer details filled.");
+}
+
+function duplicateQuote(id) {
+  const q = SAVED_QUOTES.find(x => x.id === id);
+  if (!q) return;
+  resetQuoteFormState();
+  populateFormFromQuote(q, false);
+  setEditingStatus("Duplicated from quote #" + id + ". This will save as a new quote.", true);
+  showTab("quotesTab");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function duplicateQuoteToInvoice(id) {
+  duplicateQuote(id);
+  await generateQuote();
+  if (CURRENT_QUOTE_ID) {
+    await convertCurrentQuoteToInvoice();
+  }
+}
+
+async function saveCustomerNotes(id) {
+  const box = document.getElementById(`customer_notes_${id}`);
+  try {
+    const res = await fetch(`/api/customers/${id}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: box ? box.value : "" })
+    });
+    if (!res.ok) throw new Error("save failed");
+    showNotice("Customer notes saved.");
+    await loadCustomers();
+  } catch (e) {
+    showNotice("Could not save customer notes.", "error");
+  }
 }
 
 function updateLabourSuggestion() {
@@ -2001,8 +2187,9 @@ Nigelharveyplumbing@gmail.com`;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function renderStatusBadge(status) {
+function renderStatusBadge(status, overdue = false) {
   const s = (status || "").toLowerCase();
+  if (overdue && s !== "paid") return '<span class="badge red">Overdue</span>';
   if (s === "paid") return '<span class="badge green">Paid</span>';
   if (s === "part paid") return '<span class="badge orange">Part Paid</span>';
   return '<span class="badge red">Unpaid</span>';
@@ -2020,7 +2207,7 @@ function renderInvoiceCard(item) {
   document.getElementById("i_number").innerText = item.invoice_number || "-";
   document.getElementById("i_date").innerText = item.created_at || "-";
   document.getElementById("i_due_date").innerText = item.due_date || "-";
-  document.getElementById("i_status").innerHTML = renderStatusBadge(item.status);
+  document.getElementById("i_status").innerHTML = renderStatusBadge(item.status, item.overdue);
   document.getElementById("i_customer").innerText = invoice.customer_name || "-";
   document.getElementById("i_phone").innerText = invoice.customer_phone || "-";
   document.getElementById("i_address").innerText = invoice.customer_address || "-";
@@ -2234,9 +2421,17 @@ async function loadDashboard() {
     `;
     renderProfitChart(chartData);
     renderDashboardSummary(chartData);
+    document.getElementById("dueTomorrowList").innerHTML = (data.due_tomorrow_items || []).length
+      ? data.due_tomorrow_items.map(x => `<div style="margin-bottom:8px;"><strong>${escapeHtml(x.invoice_number)}</strong> — ${escapeHtml(x.customer_name || "")} — ${pounds(x.balance_due)} <button type="button" class="btn-light" style="width:auto;padding:6px 10px;font-size:13px;" onclick="openInvoice(${x.id})">Open</button></div>`).join("")
+      : "No invoices due tomorrow.";
+    document.getElementById("dashboardGrid").innerHTML += `
+      <div class="dashboard-item"><div class="small">Unpaid invoices</div><div class="num">${data.unpaid_count || 0}</div></div>
+      <div class="dashboard-item"><div class="small">Overdue invoices</div><div class="num">${data.overdue_count || 0}</div></div>
+    `;
   } catch (e) {
     document.getElementById("profitChart").innerHTML = "Could not load chart.";
     document.getElementById("dashboardSummary").innerHTML = "";
+    document.getElementById("dueTomorrowList").innerHTML = "Could not load reminders.";
   }
 }
 
@@ -2286,8 +2481,10 @@ async function loadHistory() {
         <div class="history-actions">
           <button type="button" class="btn-light" onclick="loadSavedQuote(${q.id})">Load</button>
           <button type="button" class="btn-blue" onclick="editSavedQuote(${q.id})">Edit</button>
+          <button type="button" class="btn-light" onclick="duplicateQuote(${q.id})">Duplicate</button>
           <button type="button" class="btn-secondary" onclick="sendSavedQuoteWhatsApp(${q.id})">WhatsApp</button>
           <button type="button" class="btn-blue" onclick="convertQuoteToInvoice(${q.id})">To Invoice</button>
+          <button type="button" class="btn-blue" onclick="duplicateQuoteToInvoice(${q.id})">Repeat & Invoice</button>
           <button type="button" class="btn-light" onclick="printSavedQuote(${q.id})">Print</button>
           <button type="button" class="btn-red" onclick="deleteSavedQuote(${q.id})">Delete</button>
         </div>
@@ -2298,23 +2495,49 @@ async function loadHistory() {
   }
 }
 
+function invoiceReminderEmailMessage(invoice) {
+  return `Hello ${invoice.customer_name || ""},
+
+This is a friendly reminder that invoice ${invoice.invoice_number} for ${pounds(invoice.balance_due)} is still outstanding.
+
+Due date: ${invoice.due_date || "-"}
+Balance due: ${pounds(invoice.balance_due)}
+
+Thank you,
+Nigel Harvey Ltd`;
+}
+
+function invoiceReminderWhatsAppMessage(invoice) {
+  return `Nigel Harvey Ltd reminder\n\nInvoice: ${invoice.invoice_number}\nDue date: ${invoice.due_date || "-"}\nBalance due: ${pounds(invoice.balance_due)}\n\nPlease let me know once payment has been made. Thank you.`;
+}
+
 async function loadInvoices() {
   try {
     const res = await fetch("/api/invoices");
     const data = await res.json();
     SAVED_INVOICES = data;
     const box = document.getElementById("invoiceList");
+    const q = (document.getElementById("invoiceSearch")?.value || "").trim().toLowerCase();
+    const filter = (document.getElementById("invoiceFilter")?.value || "all").toLowerCase();
 
-    if (!data.length) {
-      box.innerHTML = "No invoices yet.";
+    const filtered = data.filter(i => {
+      const hay = `${i.invoice_number || ""} ${i.customer_name || ""}`.toLowerCase();
+      if (q && !hay.includes(q)) return false;
+      if (filter === "all") return true;
+      if (filter === "overdue") return !!i.overdue;
+      return (i.status || "").toLowerCase() === filter;
+    });
+
+    if (!filtered.length) {
+      box.innerHTML = q || filter !== "all" ? "No matching invoices." : "No invoices yet.";
       return;
     }
 
-    box.innerHTML = data.map(i => `
+    box.innerHTML = filtered.map(i => `
       <div class="history-item">
         <div><strong>${escapeHtml(i.invoice_number)}</strong> — ${escapeHtml(i.customer_name || "No customer name")}</div>
-        <div>${renderStatusBadge(i.status)}</div>
-        <div class="small">${escapeHtml(i.created_at || "")} · Total ${pounds(i.total_price)} · Paid ${pounds(i.amount_paid)} · Balance ${pounds(i.balance_due)}</div>
+        <div>${renderStatusBadge(i.status, i.overdue)}</div>
+        <div class="small">${escapeHtml(i.created_at || "")} · Due ${escapeHtml(i.due_date || "")} · Total ${pounds(i.total_price)} · Paid ${pounds(i.amount_paid)} · Balance ${pounds(i.balance_due)}</div>
 
         <label style="margin-top:10px;">Update payment</label>
         <div class="row">
@@ -2330,11 +2553,14 @@ async function loadInvoices() {
 
         <div class="history-actions" style="grid-template-columns:repeat(3, 1fr);">
           <button type="button" class="btn-secondary" onclick="markInvoicePaid(${i.id}, ${i.total_price})">Mark Paid</button>
+          <button type="button" class="btn-light" onclick="updateInvoiceStatus(${i.id}, 'part paid', Math.max(0, Number(i.total_price) / 2))">Mark Part Paid</button>
           <button type="button" class="btn-light" onclick="markInvoiceUnpaid(${i.id})">Mark Unpaid</button>
           <button type="button" class="btn-blue" onclick="editInvoice(${i.id})">Edit</button>
           <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Open</button>
           <button type="button" class="btn-secondary" onclick="sendInvoiceWhatsApp(${i.id})">WhatsApp</button>
           <button type="button" class="btn-blue" onclick="emailInvoice(${i.id})">Email</button>
+          <button type="button" class="btn-light" onclick="sendInvoiceReminderEmail(${i.id})">Reminder Email</button>
+          <button type="button" class="btn-light" onclick="sendOverdueReminderWhatsApp(${i.id})">Reminder WhatsApp</button>
           <button type="button" class="btn-light" onclick="openInvoicePage(${i.id})">Invoice Page</button>
           <button type="button" class="btn-light" onclick="printInvoice(${i.id})">Print</button>
           <button type="button" class="btn-red" onclick="deleteInvoice(${i.id})">Delete</button>
@@ -2344,6 +2570,36 @@ async function loadInvoices() {
   } catch (e) {
     document.getElementById("invoiceList").innerHTML = "Unable to load invoices.";
   }
+}
+
+async function sendInvoiceReminderEmail(id) {
+  const invoice = SAVED_INVOICES.find(x => x.id === id);
+  if (!invoice) return;
+  const toEmail = prompt("Send reminder email to:", "");
+  if (!toEmail) return;
+  try {
+    const res = await fetch(`/api/invoices/${id}/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to_email: toEmail, message: invoiceReminderEmailMessage(invoice) })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || "Email failed");
+    }
+    showNotice("Reminder email sent.");
+  } catch (e) {
+    showNotice(e.message || "Reminder email failed.", "error");
+  }
+}
+
+function sendOverdueReminderWhatsApp(id) {
+  const invoice = SAVED_INVOICES.find(x => x.id === id);
+  if (!invoice) return;
+  const phone = normalisePhone(invoice.invoice?.customer_phone || "");
+  const message = invoiceReminderWhatsAppMessage(invoice);
+  const href = phone ? "https://wa.me/" + phone + "?text=" + encodeURIComponent(message) : "https://wa.me/?text=" + encodeURIComponent(message);
+  window.open(href, "_blank");
 }
 
 async function loadCustomers() {
@@ -2371,9 +2627,13 @@ async function loadCustomers() {
         <div class="history-actions" style="grid-template-columns:1fr 1fr;">
           <button type="button" class="btn-light" onclick="viewCustomerHistory(${c.id})">View History</button>
           <button type="button" class="btn-light" onclick="startQuoteForCustomer(${c.id})">Start Quote</button>
-        </div>
-        <div class="history-actions">
+          <button type="button" class="btn-blue" onclick="fillCustomerFromPicker(${c.id}); showTab('quotesTab');">Quick Fill</button>
           <button type="button" class="btn-red" onclick="deleteCustomer(${c.id})">Delete Customer</button>
+        </div>
+        <label style="margin-top:10px;">Customer notes</label>
+        <textarea id="customer_notes_${c.id}" placeholder="Prefers WhatsApp / paid by bank transfer / parking notes">${escapeHtml(c.notes || "")}</textarea>
+        <div class="history-actions" style="grid-template-columns:1fr;">
+          <button type="button" class="btn-blue" onclick="saveCustomerNotes(${c.id})">Save Notes</button>
         </div>
         <div id="customer_history_${c.id}" class="small" style="margin-top:10px;"></div>
       </div>
@@ -2391,12 +2651,16 @@ async function viewCustomerHistory(id) {
 
     const quotes = data.quotes || [];
     const invoices = data.invoices || [];
+    const recentPrices = data.recent_prices || [];
 
     box.innerHTML = `
-      <div><strong>Quotes:</strong> ${quotes.length}</div>
-      ${quotes.slice(0,5).map(q => `<div>• ${escapeHtml(q.created_at)} — ${escapeHtml(q.job || "")} — ${pounds(q.total_price)}</div>`).join("") || "<div>None</div>"}
+      <div><strong>Customer notes:</strong> ${escapeHtml(data.customer?.notes || "None saved")}</div>
+      <div style="margin-top:8px;"><strong>Recent prices:</strong></div>
+      ${recentPrices.map(x => `<div>• ${escapeHtml(x.job)} — ${pounds(x.price)} — ${escapeHtml(x.created_at)}</div>`).join("") || "<div>None</div>"}
+      <div style="margin-top:8px;"><strong>Quotes:</strong> ${quotes.length}</div>
+      ${quotes.map(q => `<div style="margin-bottom:6px;">• ${escapeHtml(q.created_at)} — ${escapeHtml(q.job || "")} — ${pounds(q.total_price)} <button type="button" class="btn-light" style="width:auto;padding:6px 10px;font-size:13px;" onclick="duplicateQuote(${q.id})">Repeat</button> <button type="button" class="btn-blue" style="width:auto;padding:6px 10px;font-size:13px;" onclick="convertQuoteToInvoice(${q.id})">Invoice</button></div>`).join("") || "<div>None</div>"}
       <div style="margin-top:8px;"><strong>Invoices:</strong> ${invoices.length}</div>
-      ${invoices.slice(0,5).map(i => `<div>• ${escapeHtml(i.invoice_number)} — ${pounds(i.total_price)} — ${escapeHtml(i.status)}</div>`).join("") || "<div>None</div>"}
+      ${invoices.map(i => `<div style="margin-bottom:6px;">• ${escapeHtml(i.invoice_number)} — ${pounds(i.total_price)} — ${escapeHtml(i.status)} — due ${escapeHtml(i.due_date || "")}</div>`).join("") || "<div>None</div>"}
     `;
   } catch (e) {
     alert("Could not load customer history.");
@@ -2408,9 +2672,7 @@ function startQuoteForCustomer(id) {
   if (!c) return;
   resetQuoteFormState();
   showTab("quotesTab");
-  document.getElementById("customer_name").value = c.name || "";
-  document.getElementById("customer_address").value = c.address || "";
-  document.getElementById("customer_phone").value = c.phone || "";
+  fillCustomerFromPicker(id);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -3023,6 +3285,21 @@ def api_delete_invoice(invoice_id: int):
 @app.get("/api/customers")
 def api_customers():
     return get_customers()
+
+
+@app.post("/api/customers/{customer_id}/notes")
+def api_customer_notes(customer_id: int, data: CustomerNotesRequest):
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE customers SET notes = ?, updated_at = ? WHERE id = ?",
+        ((data.notes or "").strip(), now_uk().isoformat(), customer_id)
+    )
+    conn.commit()
+    if cur.rowcount <= 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Customer not found")
+    conn.close()
+    return {"ok": True}
 
 
 @app.delete("/api/customers/{customer_id}")
