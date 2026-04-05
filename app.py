@@ -1,5 +1,5 @@
-from fastapi import FastAPI, HTTPException, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Response, Request, Form
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -13,6 +13,9 @@ import io
 import base64
 import ssl
 import smtplib
+import time
+import hmac
+import hashlib
 from html import escape
 from pathlib import Path
 from email.mime.multipart import MIMEMultipart
@@ -44,6 +47,89 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
 EMAIL_USER = os.getenv("EMAIL_USER", "")
 EMAIL_PASS = os.getenv("EMAIL_PASS", "")
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", COMPANY_NAME)
+
+
+APP_LOGIN_USER = os.getenv("APP_LOGIN_USER", "nigel")
+APP_LOGIN_PASSWORD = os.getenv("APP_LOGIN_PASSWORD", "")
+APP_SESSION_SECRET = os.getenv("APP_SESSION_SECRET", "change-this-secret")
+SESSION_COOKIE_NAME = "nh_admin_session"
+SESSION_MAX_AGE = 60 * 60 * 24 * 30
+
+
+def _session_secret_bytes():
+    return (APP_SESSION_SECRET or "change-this-secret").encode("utf-8")
+
+
+def make_session_cookie_value(username: str) -> str:
+    ts = str(int(time.time()))
+    payload = f"{username}|{ts}"
+    sig = hmac.new(_session_secret_bytes(), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{payload}|{sig}"
+
+
+def verify_session_cookie(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        username, ts, sig = value.split("|", 2)
+        payload = f"{username}|{ts}"
+        expected = hmac.new(_session_secret_bytes(), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return False
+        if username != APP_LOGIN_USER:
+            return False
+        if int(time.time()) - int(ts) > SESSION_MAX_AGE:
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def is_admin_logged_in(request: Request) -> bool:
+    return verify_session_cookie(request.cookies.get(SESSION_COOKIE_NAME))
+
+
+def admin_login_page(error: str = "") -> str:
+    error_html = f'<div style="margin-bottom:12px;padding:12px;border-radius:12px;background:#fff1f1;color:#9b1c1c;font-weight:700;">{escape(error)}</div>' if error else ""
+    hint_html = '' if APP_LOGIN_PASSWORD else '<div style="margin-top:12px;color:#856404;background:#fff3cd;border:1px solid #ffe69c;padding:12px;border-radius:12px;">Set APP_LOGIN_USER, APP_LOGIN_PASSWORD and APP_SESSION_SECRET in Render environment variables before using admin login.</div>'
+    return f'''<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Login - Nigel Harvey Ltd</title>
+<style>
+body{{font-family:Arial,sans-serif;margin:0;background:#f5f7fb;color:#111827}}
+.wrap{{max-width:460px;margin:0 auto;padding:40px 18px}}
+.card{{background:#fff;border:1px solid #e5e7eb;border-radius:24px;box-shadow:0 10px 30px rgba(0,0,0,.06);padding:26px}}
+h1{{margin:0 0 8px;font-size:32px}}
+p{{color:#667085;margin:0 0 18px}}
+label{{display:block;font-weight:700;margin:12px 0 6px}}
+input{{width:100%;box-sizing:border-box;padding:14px;border:1px solid #d0d5dd;border-radius:14px;font-size:16px}}
+button{{width:100%;padding:14px;border:none;border-radius:999px;background:#111827;color:#fff;font-size:17px;font-weight:700;margin-top:18px;cursor:pointer}}
+.link{{display:inline-block;margin-top:14px;color:#475467}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Admin login</h1>
+      <p>Use your private login to open the Nigel Harvey app.</p>
+      {error_html}
+      <form method="post" action="/login">
+        <input type="hidden" name="next" value="/app">
+        <label>Username</label>
+        <input name="username" autocomplete="username" required>
+        <label>Password</label>
+        <input type="password" name="password" autocomplete="current-password" required>
+        <button type="submit">Log in</button>
+      </form>
+      <a class="link" href="/">Back to website</a>
+      {hint_html}
+    </div>
+  </div>
+</body>
+</html>'''
 
 def get_company_logo_value():
     return os.getenv("COMPANY_LOGO_URL", "").strip() or DEFAULT_COMPANY_LOGO_URL
@@ -1476,8 +1562,7 @@ LANDING_PAGE_HTML = r'''
       <div class="nav-actions">
         <a class="btn btn-light" href="tel:__COMPANY_PHONE__">Call Now</a>
         <a class="btn btn-primary" href="/request-quote">Request a Quote</a>
-        <a class="btn btn-light" href="/app">Open App</a>
-      </div>
+              </div>
     </div>
   </div>
   <div class="wrap hero">
@@ -3234,6 +3319,46 @@ loadLeads();
 '''
 
 
+@app.get("/login", response_class=HTMLResponse)
+def login_page():
+    return HTMLResponse(content=admin_login_page(), media_type="text/html; charset=utf-8")
+
+
+@app.post("/login")
+def login_submit(username: str = Form(...), password: str = Form(...), next: str = Form("/app")):
+    if not APP_LOGIN_PASSWORD:
+        return HTMLResponse(content=admin_login_page("Admin login is not set up yet. Add APP_LOGIN_PASSWORD and APP_SESSION_SECRET in Render first."), status_code=503, media_type="text/html; charset=utf-8")
+    if username != APP_LOGIN_USER or password != APP_LOGIN_PASSWORD:
+        return HTMLResponse(content=admin_login_page("Incorrect username or password."), status_code=401, media_type="text/html; charset=utf-8")
+    response = RedirectResponse(url=next or "/app", status_code=303)
+    response.set_cookie(SESSION_COOKIE_NAME, make_session_cookie_value(username), max_age=SESSION_MAX_AGE, httponly=True, samesite="lax")
+    return response
+
+
+@app.get("/logout")
+def logout():
+    response = RedirectResponse(url="/", status_code=303)
+    response.delete_cookie(SESSION_COOKIE_NAME)
+    return response
+
+
+@app.middleware("http")
+async def admin_auth_middleware(request: Request, call_next):
+    path = request.url.path
+    is_public = (
+        path in {"/", "/request-quote", "/login", "/logout", "/favicon.ico"}
+        or (path == "/api/leads" and request.method.upper() == "POST")
+        or path.startswith("/invoice/")
+        or re.fullmatch(r"/api/invoices/\d+/pdf", path) is not None
+    )
+    is_protected = path.startswith("/app") or path.startswith("/api")
+    if is_protected and not is_public and not is_admin_logged_in(request):
+        if path.startswith("/api"):
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        return RedirectResponse(url="/login", status_code=303)
+    return await call_next(request)
+
+
 @app.get("/request-quote", response_class=HTMLResponse)
 def request_quote_page():
     logo_value = get_company_logo_value()
@@ -3570,5 +3695,4 @@ def api_delete_customer(customer_id: int):
 def api_customer_history(customer_id: int):
     history = get_customer_history(customer_id)
     if not history:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    return history
+        raise HTTPExce
