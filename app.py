@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
@@ -8,7 +8,18 @@ from bs4 import BeautifulSoup
 import re
 import json
 import sqlite3
+import os
+import io
+import ssl
+import smtplib
+from html import escape
 from pathlib import Path
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 app = FastAPI(title="Nigel Harvey Ltd Business App")
 
@@ -19,8 +30,16 @@ COMPANY_NAME = "Nigel Harvey Ltd"
 COMPANY_ADDRESS = "125 Bushy Hill Drive, Guildford, GU1 2UG"
 COMPANY_PHONE = "07595 725547"
 COMPANY_EMAIL = "Nigelharveyplumbing@gmail.com"
+COMPANY_LOGO_URL = os.getenv("COMPANY_LOGO_URL", "")
 
 PAYMENT_LINK_BASE = ""
+
+EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "0") == "1"
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
+EMAIL_USER = os.getenv("EMAIL_USER", "")
+EMAIL_PASS = os.getenv("EMAIL_PASS", "")
+EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", COMPANY_NAME)
 
 QUOTE_TERMS = [
     "Includes labour and materials.",
@@ -176,6 +195,11 @@ class InvoiceStatusRequest(BaseModel):
 
 class PaymentLinkUpdateRequest(BaseModel):
     payment_link: str = ""
+
+
+class SendInvoiceEmailRequest(BaseModel):
+    to_email: str
+    message: str = ""
 
 
 class InvoiceEditRequest(BaseModel):
@@ -978,6 +1002,200 @@ def get_customer_history(customer_id: int):
     }
 
 
+
+
+def pounds_text(value):
+    return f"£{safe_float(value, 0):.2f}"
+
+
+def build_invoice_public_url(invoice_id: int):
+    base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+    if base:
+        return f"{base}/invoice/{invoice_id}"
+    return f"/invoice/{invoice_id}"
+
+
+def _pdf_header(c, title: str, ref_number: str):
+    width, height = A4
+    y = height - 48
+    if COMPANY_LOGO_URL:
+        c.setFont("Helvetica-Bold", 24)
+    c.setFont("Helvetica-Bold", 24)
+    c.drawString(40, y, COMPANY_NAME)
+    c.setFont("Helvetica", 11)
+    c.drawString(40, y - 18, COMPANY_ADDRESS)
+    c.drawString(40, y - 34, COMPANY_PHONE)
+    c.drawString(40, y - 50, COMPANY_EMAIL)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawRightString(width - 40, y, title)
+    c.setFont("Helvetica", 11)
+    c.drawRightString(width - 40, y - 18, ref_number)
+    c.line(40, y - 62, width - 40, y - 62)
+    return y - 84
+
+
+def _pdf_row(c, y, left, right, bold=False):
+    c.setFont("Helvetica-Bold" if bold else "Helvetica", 11)
+    c.drawString(50, y, str(left))
+    c.drawRightString(A4[0] - 50, y, str(right))
+    return y - 18
+
+
+def generate_invoice_pdf_bytes(item: dict):
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    invoice = item["invoice"]
+    quote_result = item["quote_result"]
+    y = _pdf_header(c, "INVOICE", item["invoice_number"])
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Bill To")
+    c.drawString(320, y, "Invoice Details")
+    y -= 18
+    c.setFont("Helvetica", 11)
+    for line in [invoice.get("customer_name", "-"), invoice.get("customer_address", "-"), invoice.get("customer_phone", "-")]:
+        if line:
+            c.drawString(40, y, str(line)[:65])
+            y -= 15
+    detail_y = y + 30
+    c.drawString(320, detail_y, f"Date: {item['created_at']}")
+    c.drawString(320, detail_y - 15, f"Due: {item['due_date']}")
+    c.drawString(320, detail_y - 30, f"Status: {item['status'].title()}")
+    y -= 8
+    c.line(40, y, A4[0] - 40, y)
+    y -= 22
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Work Description")
+    y -= 18
+    c.setFont("Helvetica", 11)
+    text_obj = c.beginText(40, y)
+    for line in str(invoice.get("job", "-")).splitlines() or ["-"]:
+        text_obj.textLine(line[:105])
+    c.drawText(text_obj)
+    y = text_obj.getY() - 10
+    c.line(40, y, A4[0] - 40, y)
+    y -= 24
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Summary")
+    y -= 20
+    y = _pdf_row(c, y, "Labour", pounds_text(invoice.get("labour", 0)))
+    y = _pdf_row(c, y, "Materials", pounds_text(invoice.get("materials", 0)))
+    y = _pdf_row(c, y, "Total", pounds_text(item.get("total_price", 0)), bold=True)
+    y = _pdf_row(c, y, "Amount Paid", pounds_text(item.get("amount_paid", 0)))
+    y = _pdf_row(c, y, "Balance Due", pounds_text(item.get("balance_due", 0)), bold=True)
+
+    y -= 12
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Payment Terms")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    terms = INVOICE_TERMS[:]
+    if (quote_result.get("quote_type", "") or "").lower() == "small":
+        terms = terms[:3]
+    text_obj = c.beginText(40, y)
+    for line in terms:
+        text_obj.textLine(f"• {line}")
+    if item.get("payment_link"):
+        text_obj.textLine("")
+        text_obj.textLine(f"Payment link: {item['payment_link']}")
+    c.drawText(text_obj)
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def generate_quote_pdf_bytes(item: dict):
+    result = item["result"]
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    y = _pdf_header(c, "QUOTE", f"Quote #{item['id']}")
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Customer")
+    y -= 18
+    c.setFont("Helvetica", 11)
+    for line in [result.get("customer_name", "-"), result.get("customer_address", "-"), result.get("customer_phone", "-")]:
+        if line:
+            c.drawString(40, y, str(line)[:65])
+            y -= 15
+    y -= 8
+    c.line(40, y, A4[0] - 40, y)
+    y -= 22
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Works")
+    y -= 18
+    c.setFont("Helvetica", 11)
+    text_obj = c.beginText(40, y)
+    for line in str(result.get("job", "-")).splitlines() or ["-"]:
+        text_obj.textLine(line[:105])
+    c.drawText(text_obj)
+    y = text_obj.getY() - 10
+    c.line(40, y, A4[0] - 40, y)
+    y -= 24
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Price")
+    y -= 20
+    y = _pdf_row(c, y, "Labour", pounds_text(result.get("labour", 0)))
+    y = _pdf_row(c, y, "Materials", pounds_text(result.get("materials", 0)))
+    y = _pdf_row(c, y, "Deposit", pounds_text(result.get("deposit_amount", 0)))
+    y = _pdf_row(c, y, "Total Price", pounds_text(result.get("total_price", 0)), bold=True)
+    y -= 12
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Terms")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    text_obj = c.beginText(40, y)
+    for line in QUOTE_TERMS:
+        text_obj.textLine(f"• {line}")
+    c.drawText(text_obj)
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def send_invoice_email_now(item: dict, to_email: str, extra_message: str = ""):
+    if not EMAIL_ENABLED or not EMAIL_USER or not EMAIL_PASS:
+        raise RuntimeError("Email sending is not configured yet. Set EMAIL_ENABLED=1, EMAIL_USER and EMAIL_PASS.")
+
+    invoice = item["invoice"]
+    public_url = build_invoice_public_url(item["id"])
+    subject = f"Invoice {item['invoice_number']} - {COMPANY_NAME}"
+
+    body_lines = [
+        f"Hello {invoice.get('customer_name') or ''},".strip(),
+        "",
+        extra_message.strip() if extra_message else "Please find your invoice attached as a PDF.",
+        "",
+        f"Invoice number: {item['invoice_number']}",
+        f"Balance due: {pounds_text(item.get('balance_due', 0))}",
+        f"Invoice link: {public_url}",
+        "",
+        COMPANY_NAME,
+        COMPANY_PHONE,
+        COMPANY_EMAIL,
+    ]
+    body = "\n".join([line for line in body_lines if line is not None])
+
+    msg = MIMEMultipart()
+    msg["Subject"] = subject
+    msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_USER}>"
+    msg["To"] = to_email.strip()
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+
+    pdf_part = MIMEBase("application", "pdf")
+    pdf_part.set_payload(generate_invoice_pdf_bytes(item))
+    encoders.encode_base64(pdf_part)
+    pdf_part.add_header("Content-Disposition", "attachment", filename=f"{item['invoice_number']}.pdf")
+    msg.attach(pdf_part)
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, context=context) as server:
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.sendmail(EMAIL_USER, [to_email.strip()], msg.as_string())
+
 HTML = r'''
 <!doctype html>
 <html>
@@ -988,7 +1206,7 @@ HTML = r'''
 <style>
 body { font-family: Arial, sans-serif; background:#f5f5f5; margin:0; padding:12px; color:#111; }
 .wrap { max-width:1100px; margin:0 auto; }
-.card { background:white; padding:16px; border-radius:14px; margin-bottom:14px; box-shadow:0 2px 10px rgba(0,0,0,0.06); }
+.card { background:white; padding:18px; border-radius:18px; margin-bottom:14px; box-shadow:0 2px 14px rgba(0,0,0,0.06); }
 h1 { margin:0 0 6px 0; font-size:30px; }
 h2 { margin:0 0 12px 0; font-size:22px; }
 h3 { margin:18px 0 8px 0; }
@@ -996,7 +1214,7 @@ h3 { margin:18px 0 8px 0; }
 label { display:block; font-weight:700; margin:12px 0 6px; }
 input, textarea, select { width:100%; box-sizing:border-box; padding:12px; border:1px solid #ccc; border-radius:10px; font-size:16px; background:white; }
 textarea { min-height:100px; resize:vertical; }
-button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; background:black; color:white; font-size:16px; font-weight:700; text-align:center; text-decoration:none; display:inline-block; box-sizing:border-box; cursor:pointer; }
+button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; background:black; color:white; font-size:17px; font-weight:700; text-align:center; text-decoration:none; display:inline-block; box-sizing:border-box; cursor:pointer; min-height:52px; }
 .btn-secondary { background:#1f7a1f; }
 .btn-light { background:#ececec; color:#111; }
 .btn-red { background:#b62323; color:white; }
@@ -1010,6 +1228,9 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
 .result { display:none; background:#f3faf3; border:1px solid #b7d7b7; }
 .error { display:none; background:#fff3f3; border:1px solid #e0b7b7; color:#a33; padding:12px; border-radius:10px; margin-top:12px; }
 .actions { display:grid; gap:10px; margin-top:14px; }
+.notice { display:none; background:#eef7ff; border:1px solid #c7def5; color:#124a7a; padding:12px; border-radius:12px; margin-top:12px; font-weight:700; }
+.print-head { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.logo-box img { max-height:70px; max-width:170px; object-fit:contain; }
 .history-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
 .history-actions { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-top:10px; }
 .history-actions button, .history-actions a { font-size:15px; padding:10px; }
@@ -1054,6 +1275,16 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
   body { background:white; padding:0; }
   .card { box-shadow:none; border:none; padding:0; margin:0 0 12px 0; }
   .wrap { max-width:100%; }
+  .quote-sheet, .invoice-sheet { page-break-inside: avoid; }
+}
+@media (max-width: 768px) {
+  body { padding:10px; }
+  h1 { font-size:26px; }
+  h2 { font-size:21px; }
+  .tabs { grid-template-columns:repeat(2, 1fr); }
+  .templates, .favourites, .dashboard-grid, .history-actions { grid-template-columns:1fr; }
+  .row { flex-direction:column; gap:4px; }
+  .actions { position:sticky; bottom:8px; z-index:5; }
 }
 </style>
 </head>
@@ -1179,6 +1410,7 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
 
       <button type="button" class="no-print" onclick="generateQuote()">Generate Quote</button>
       <div id="error" class="error"></div>
+      <div id="notice" class="notice"></div>
     </div>
 
     <div id="invoicesTab" class="tab-panel">
@@ -1194,13 +1426,14 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
   </div>
 
   <div id="resultCard" class="card result quote-sheet">
-    <div class="quote-header">
-      <div class="quote-company">Nigel Harvey Ltd</div>
+    <div class="quote-header print-head">
+      <div><div class="quote-company">Nigel Harvey Ltd</div>
       <div class="quote-meta">
         125 Bushy Hill Drive, Guildford, GU1 2UG<br>
         07595 725547<br>
         Nigelharveyplumbing@gmail.com
       </div>
+      <div class="logo-box">__COMPANY_LOGO_HTML__</div>
     </div>
 
     <div class="quote-section-title">Quote details</div>
@@ -1255,13 +1488,13 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
     <div class="actions no-print">
       <a id="whatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Quote to WhatsApp</a>
       <button class="btn-blue" onclick="convertCurrentQuoteToInvoice()">Convert to Invoice</button>
-      <button class="btn-light" onclick="window.print()">Download / Print PDF</button>
+      <button class="btn-light" type="button" onclick="downloadCurrentQuotePdf()">Download Quote PDF</button>
     </div>
   </div>
 
   <div id="invoiceCard" class="card result invoice-sheet">
-    <div class="quote-header">
-      <div class="quote-company">Nigel Harvey Ltd</div>
+    <div class="quote-header print-head">
+      <div><div class="quote-company">Nigel Harvey Ltd</div>
       <div class="quote-meta">
         125 Bushy Hill Drive, Guildford, GU1 2UG<br>
         07595 725547<br>
@@ -1328,9 +1561,9 @@ button, .btn-link { width:100%; padding:12px; border:none; border-radius:10px; b
 
     <div class="actions no-print">
       <a id="invoiceWhatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Invoice to WhatsApp</a>
-      <a id="invoiceEmailBtn" class="btn-link btn-blue" href="#">Send Invoice by Email</a>
+      <button id="invoiceEmailBtn" class="btn-blue" type="button" onclick="sendInvoiceEmail()">Email Invoice PDF</button>
       <a id="invoiceOpenBtn" class="btn-link btn-light" href="#" target="_blank">Open Invoice Page</a>
-      <button class="btn-light" onclick="window.print()">Download / Print Invoice PDF</button>
+      <button class="btn-light" type="button" onclick="downloadCurrentInvoicePdf()">Download Invoice PDF</button>
     </div>
   </div>
 
@@ -1385,6 +1618,14 @@ function escapeHtml(text) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function showNotice(message) {
+  const box = document.getElementById("notice");
+  if (!box) return;
+  box.innerText = message;
+  box.style.display = "block";
+  setTimeout(() => { box.style.display = "none"; }, 4000);
 }
 
 function showTab(id) {
@@ -1730,22 +1971,38 @@ ${invoiceUrl}`;
     ? "https://wa.me/" + cleanPhone + "?text=" + encodeURIComponent(msg)
     : "https://wa.me/?text=" + encodeURIComponent(msg);
 
-  const emailSubject = encodeURIComponent("Invoice " + item.invoice_number + " - Nigel Harvey Ltd");
-  const emailBody = encodeURIComponent(
-`Hello ${invoice.customer_name || ""},
-
-Please find your invoice here:
-
-${invoiceUrl}
-
-Nigel Harvey Ltd
-07595 725547
-Nigelharveyplumbing@gmail.com`
-  );
-  document.getElementById("invoiceEmailBtn").href = `mailto:?subject=${emailSubject}&body=${emailBody}`;
   document.getElementById("invoiceOpenBtn").href = invoiceUrl;
 
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function downloadCurrentQuotePdf() {
+  if (!CURRENT_QUOTE_ID) { window.print(); return; }
+  window.open(`/api/quotes/${CURRENT_QUOTE_ID}/pdf`, "_blank");
+}
+
+function downloadCurrentInvoicePdf() {
+  if (!CURRENT_INVOICE_ID) { window.print(); return; }
+  window.open(`/api/invoices/${CURRENT_INVOICE_ID}/pdf`, "_blank");
+}
+
+async function sendInvoiceEmail() {
+  if (!CURRENT_INVOICE_ID) return;
+  const toEmail = prompt("Send invoice PDF to which email address?");
+  if (!toEmail) return;
+  const customMessage = prompt("Optional message to include in the email:", "Please find your invoice attached as a PDF.") || "";
+  try {
+    const r = await fetch(`/api/invoices/${CURRENT_INVOICE_ID}/send-email`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ to_email: toEmail, message: customMessage })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || "Failed to send email");
+    showNotice("Invoice email sent successfully.");
+  } catch (e) {
+    alert(e.message || "Failed to send email");
+  }
 }
 
 function setQuoteButtonMode(isEditing = false) {
@@ -2412,6 +2669,8 @@ def home():
     html = HTML.replace("__MATERIAL_LIBRARY__", json.dumps(MATERIAL_LIBRARY))
     html = html.replace("__FAVOURITE_MATERIALS__", json.dumps(FAVOURITE_MATERIALS))
     html = html.replace("__JOB_TEMPLATES__", json.dumps(JOB_TEMPLATES))
+    logo_html = f'<img src="{COMPANY_LOGO_URL}" alt="Logo">' if COMPANY_LOGO_URL else ""
+    html = html.replace("__COMPANY_LOGO_HTML__", logo_html)
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -2481,20 +2740,9 @@ def public_invoice(invoice_id: int):
     invoice = item["invoice"]
     quote_result = item["quote_result"]
     is_small_job = (quote_result.get("quote_type", "") or "").lower() == "small"
-
-    if is_small_job:
-        terms_html = """
-        Please pay by the due date shown above.<br>
-        Late payment fee may be applied after 14 days.<br>
-        Materials remain the property of Nigel Harvey Ltd until paid in full.
-        """
-    else:
-        terms_html = """
-        Please pay by the due date shown above.<br>
-        Late payment fee may be applied after 14 days.<br>
-        Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
-        Deposit required before works begin where applicable.
-        """
+    terms = INVOICE_TERMS[:3] if is_small_job else INVOICE_TERMS
+    logo_html = f'<img src="{escape(COMPANY_LOGO_URL)}" alt="Logo" class="logo">' if COMPANY_LOGO_URL else ""
+    payment_html = f'<div class="pay-box"><strong>Payment link:</strong> <a href="{escape(item.get("payment_link") or "")}" target="_blank">Pay online</a></div>' if item.get("payment_link") else ""
 
     html = f"""
     <!doctype html>
@@ -2502,111 +2750,105 @@ def public_invoice(invoice_id: int):
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>Invoice {item['invoice_number']}</title>
+      <title>Invoice {escape(item['invoice_number'])}</title>
       <style>
-        body {{
-          font-family: Arial, sans-serif;
-          background: white;
-          color: #111;
-          max-width: 900px;
-          margin: 0 auto;
-          padding: 20px;
-        }}
-        .box {{
-          border: 1px solid #ddd;
-          border-radius: 10px;
-          padding: 12px;
-          margin-bottom: 14px;
-          background: #fafafa;
-        }}
-        .row {{
-          display: flex;
-          justify-content: space-between;
-          gap: 10px;
-          margin: 8px 0;
-        }}
-        .muted {{
-          color: #666;
-        }}
-        .title {{
-          font-size: 30px;
-          font-weight: 800;
-          margin-bottom: 4px;
-        }}
-        .total {{
-          font-size: 30px;
-          font-weight: 900;
-        }}
-        .actions {{
-          margin-top: 20px;
-        }}
-        .btn {{
-          display: inline-block;
-          padding: 12px 16px;
-          border-radius: 10px;
-          background: black;
-          color: white;
-          text-decoration: none;
-          margin-right: 8px;
-        }}
-        @media print {{
-          .actions {{
-            display: none !important;
-          }}
-          body {{
-            padding: 0;
-            margin: 0;
-          }}
-        }}
+        body {{ font-family: Arial, sans-serif; background:#f3f4f6; color:#111; margin:0; padding:18px; }}
+        .sheet {{ max-width:900px; margin:0 auto; background:white; border-radius:18px; padding:28px; box-shadow:0 10px 30px rgba(0,0,0,0.08); }}
+        .top {{ display:flex; justify-content:space-between; gap:20px; align-items:flex-start; border-bottom:2px solid #111; padding-bottom:18px; }}
+        .logo {{ max-height:72px; max-width:180px; object-fit:contain; }}
+        .company {{ font-size:30px; font-weight:800; margin-bottom:8px; }}
+        .doc-title {{ font-size:14px; text-transform:uppercase; letter-spacing:1.5px; color:#666; }}
+        .doc-number {{ font-size:24px; font-weight:800; margin-top:6px; }}
+        .grid {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:20px; }}
+        .box {{ border:1px solid #e5e7eb; border-radius:14px; padding:16px; background:#fafafa; }}
+        .label {{ color:#666; font-size:13px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }}
+        .row {{ display:flex; justify-content:space-between; gap:12px; margin:10px 0; }}
+        .muted {{ color:#666; }}
+        .section-title {{ font-size:18px; font-weight:800; margin:24px 0 10px; }}
+        .total {{ font-size:30px; font-weight:900; }}
+        .pay-box {{ margin-top:12px; padding:12px; background:#eef7ff; border:1px solid #cfe5f8; border-radius:12px; }}
+        .actions {{ margin-top:20px; display:flex; gap:10px; flex-wrap:wrap; }}
+        .btn {{ display:inline-block; padding:13px 16px; border-radius:12px; background:black; color:white; text-decoration:none; font-weight:700; }}
+        .btn.light {{ background:#e5e7eb; color:#111; }}
+        ul {{ margin:0; padding-left:18px; }}
+        @media (max-width:700px) {{ .sheet {{ padding:18px; }} .top, .grid, .row {{ display:block; }} .row span:last-child {{ display:block; margin-top:4px; }} .actions a {{ width:100%; text-align:center; box-sizing:border-box; }} }}
+        @media print {{ body {{ background:white; padding:0; }} .sheet {{ box-shadow:none; border-radius:0; max-width:100%; padding:0; }} .actions {{ display:none !important; }} }}
       </style>
     </head>
     <body>
-      <div class="title">Nigel Harvey Ltd</div>
-      <div>
-        125 Bushy Hill Drive, Guildford, GU1 2UG<br>
-        07595 725547<br>
-        Nigelharveyplumbing@gmail.com
-      </div>
-
-      <h2>Invoice</h2>
-
-      <div class="box">
-        <div class="row"><span class="muted">Invoice number</span><span>{item['invoice_number']}</span></div>
-        <div class="row"><span class="muted">Date</span><span>{item['created_at']}</span></div>
-        <div class="row"><span class="muted">Due date</span><span>{item['due_date']}</span></div>
-        <div class="row"><span class="muted">Status</span><span>{item['status']}</span></div>
-        <div class="row"><span class="muted">Customer</span><span>{invoice.get('customer_name', '-')}</span></div>
-        <div class="row"><span class="muted">Phone</span><span>{invoice.get('customer_phone', '-')}</span></div>
-        <div class="row"><span class="muted">Address</span><span>{invoice.get('customer_address', '-')}</span></div>
-      </div>
-
-      <h3>Work</h3>
-      <div class="box">
-        {invoice.get('job', '-')}
-      </div>
-
-      <h3>Invoice totals</h3>
-      <div class="box">
-        <div class="row"><span class="muted">Labour</span><span>&#163;{invoice.get('labour', 0):.2f}</span></div>
-        <div class="row"><span class="muted">Materials</span><span>&#163;{invoice.get('materials', 0):.2f}</span></div>
-        <div class="row"><span class="muted">Total</span><span>&#163;{item['total_price']:.2f}</span></div>
-        <div class="row"><span class="muted">Amount paid</span><span>&#163;{item['amount_paid']:.2f}</span></div>
-        <div class="row"><span class="muted">Balance due</span><span class="total">&#163;{item['balance_due']:.2f}</span></div>
-      </div>
-
-      <h3>Payment terms</h3>
-      <div class="box">
-        {terms_html}
-      </div>
-
-      <div class="actions">
-        <a href="javascript:window.print()" class="btn">Print / Save PDF</a>
+      <div class="sheet">
+        <div class="top">
+          <div>
+            <div class="company">{escape(COMPANY_NAME)}</div>
+            <div>{escape(COMPANY_ADDRESS)}<br>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div>
+          </div>
+          <div style="text-align:right;">{logo_html}<div class="doc-title">Invoice</div><div class="doc-number">{escape(item['invoice_number'])}</div></div>
+        </div>
+        <div class="grid">
+          <div class="box"><div class="label">Bill To</div>{escape(invoice.get('customer_name', '-') or '-')}<br>{escape(invoice.get('customer_address', '-') or '-')}<br>{escape(invoice.get('customer_phone', '-') or '-')}</div>
+          <div class="box">
+            <div class="row"><span class="muted">Date</span><span>{escape(item['created_at'])}</span></div>
+            <div class="row"><span class="muted">Due date</span><span>{escape(item['due_date'])}</span></div>
+            <div class="row"><span class="muted">Status</span><span>{escape(item['status'].title())}</span></div>
+          </div>
+        </div>
+        <div class="section-title">Work</div>
+        <div class="box">{escape(invoice.get('job', '-') or '-').replace(chr(10), '<br>')}</div>
+        <div class="section-title">Invoice totals</div>
+        <div class="box">
+          <div class="row"><span class="muted">Labour</span><span>{pounds_text(invoice.get('labour', 0))}</span></div>
+          <div class="row"><span class="muted">Materials</span><span>{pounds_text(invoice.get('materials', 0))}</span></div>
+          <div class="row"><span class="muted">Total</span><span>{pounds_text(item['total_price'])}</span></div>
+          <div class="row"><span class="muted">Amount paid</span><span>{pounds_text(item['amount_paid'])}</span></div>
+          <div class="row"><span class="muted">Balance due</span><span class="total">{pounds_text(item['balance_due'])}</span></div>
+        </div>
+        <div class="section-title">Payment terms</div>
+        <div class="box"><ul>{''.join(f'<li>{escape(t)}</li>' for t in terms)}</ul>{payment_html}</div>
+        <div class="actions">
+          <a href="/api/invoices/{item['id']}/pdf" target="_blank" class="btn">Download PDF</a>
+          <a href="javascript:window.print()" class="btn light">Print</a>
+        </div>
       </div>
     </body>
     </html>
     """
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
+
+
+
+@app.get("/api/quotes/{quote_id}/pdf")
+def api_quote_pdf(quote_id: int):
+    quote = get_quote_by_id(quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    pdf_bytes = generate_quote_pdf_bytes(quote)
+    headers = {"Content-Disposition": f'inline; filename="quote-{quote_id}.pdf"'}
+    return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+
+@app.get("/api/invoices/{invoice_id}/pdf")
+def api_invoice_pdf(invoice_id: int):
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    pdf_bytes = generate_invoice_pdf_bytes(invoice)
+    headers = {"Content-Disposition": f'inline; filename="{invoice["invoice_number"]}.pdf"'}
+    return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+
+@app.post("/api/invoices/{invoice_id}/send-email")
+def api_invoice_send_email(invoice_id: int, data: SendInvoiceEmailRequest):
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    try:
+        send_invoice_email_now(invoice, data.to_email, data.message)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email send failed: {e}")
+    return {"ok": True}
 
 @app.get("/api/invoices")
 def api_invoices():
