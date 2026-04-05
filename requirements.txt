@@ -4,3 +4,4 @@ requests
 beautifulsoup4
 pydantic>=2
 reportlab
+python-multipart
