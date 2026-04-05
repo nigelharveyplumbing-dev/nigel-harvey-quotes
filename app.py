@@ -10,6 +10,7 @@ import json
 import sqlite3
 import os
 import io
+import base64
 import ssl
 import smtplib
 from html import escape
@@ -150,34 +151,34 @@ FAVOURITE_MATERIALS = [
 ]
 
 JOB_TEMPLATES = [
-    {"name": "Replace tap", "quote_type": "small", "job": "Remove existing tap and fit new tap including testing for leaks.", "labour": 120, "materials": [{"name":"Flexible Tap Connector","supplier":"Screwfix","default_price":6.50,"quantity":2},{"name":"Service Valve","supplier":"Screwfix","default_price":4.00,"quantity":2},{"name":"Silicone","supplier":"Toolstation","default_price":8.00,"quantity":1}]},
-    {"name": "Replace toilet", "quote_type": "small", "job": "Remove existing toilet and fit new close-coupled toilet including waste connection and testing.", "labour": 180, "materials": [{"name":"Toilet Fill Valve","supplier":"Screwfix","default_price":12.00,"quantity":1},{"name":"Toilet Flush Valve","supplier":"Screwfix","default_price":18.00,"quantity":1},{"name":"Silicone","supplier":"Toolstation","default_price":8.00,"quantity":1}]},
-    {"name": "Basin waste", "quote_type": "small", "job": "Remove faulty basin waste and fit new basin waste including testing for leaks.", "labour": 90, "materials": [{"name":"Basin Waste","supplier":"City Plumbing","default_price":14.00,"quantity":1},{"name":"Silicone","supplier":"Toolstation","default_price":8.00,"quantity":1}]},
-    {"name": "Outside tap", "quote_type": "small", "job": "Supply and fit outside tap kit with isolation and testing.", "labour": 150, "materials": [{"name":"Outside Tap Kit","supplier":"Screwfix","default_price":18.00,"quantity":1},{"name":"15mm Isolating Valve","supplier":"Toolstation","default_price":3.50,"quantity":1},{"name":"Silicone","supplier":"Toolstation","default_price":8.00,"quantity":1}]},
-    {"name": "Kitchen sink waste", "quote_type": "small", "job": "Remove existing sink waste and fit new waste/trap arrangement including testing.", "labour": 120, "materials": [{"name":"Sink Waste Kit","supplier":"City Plumbing","default_price":22.00,"quantity":1},{"name":"P Trap 1.5in","supplier":"Toolstation","default_price":7.50,"quantity":1}]},
+    {"name": "Replace tap", "quote_type": "small", "job": "Remove existing tap and fit new tap including testing for leaks.", "labour": 120},
+    {"name": "Replace toilet", "quote_type": "small", "job": "Remove existing toilet and fit new close-coupled toilet including waste connection and testing.", "labour": 180},
+    {"name": "Basin waste", "quote_type": "small", "job": "Remove faulty basin waste and fit new basin waste including testing for leaks.", "labour": 90},
+    {"name": "Outside tap", "quote_type": "small", "job": "Supply and fit outside tap kit with isolation and testing.", "labour": 150},
+    {"name": "Kitchen sink waste", "quote_type": "small", "job": "Remove existing sink waste and fit new waste/trap arrangement including testing.", "labour": 120},
     {"name": "Bathroom install", "quote_type": "bathroom", "job": "Bathroom plumbing installation including first fix, second fix and sanitaryware connections.", "labour": 1800},
     {"name": "Bathroom refurb", "quote_type": "bathroom", "job": "Bathroom refurbishment plumbing works including sanitaryware, wastes and connections.", "labour": 2200},
     {"name": "Heating repair", "quote_type": "heating", "job": "Heating repair works including diagnosis, replacement parts and testing.", "labour": 150},
-    {"name": "Radiator install", "quote_type": "heating", "job": "Supply and fit radiator including valves and testing.", "labour": 180, "materials": [{"name":"Radiator Valve Set","supplier":"Screwfix","default_price":20.00,"quantity":1},{"name":"TRV Valve","supplier":"Screwfix","default_price":14.00,"quantity":1},{"name":"Lockshield Valve","supplier":"Screwfix","default_price":8.00,"quantity":1}]},
+    {"name": "Radiator install", "quote_type": "heating", "job": "Supply and fit radiator including valves and testing.", "labour": 180},
     {"name": "Full heating system", "quote_type": "heating", "job": "Full heating system installation including pipework, controls, radiators and commissioning.", "labour": 3500},
 ]
 
 LABOUR_HINTS = {
     "small": [
-        {"keywords": ["tap"], "suggestion": 120, "range": "&#163;100–&#163;140"},
-        {"keywords": ["toilet", "wc"], "suggestion": 180, "range": "&#163;160–&#163;220"},
-        {"keywords": ["waste", "trap"], "suggestion": 120, "range": "&#163;90–&#163;140"},
-        {"keywords": ["outside tap"], "suggestion": 150, "range": "£140–&#163;180"},
+        {"keywords": ["tap"], "suggestion": 120, "range": "&#163;100â&#163;140"},
+        {"keywords": ["toilet", "wc"], "suggestion": 180, "range": "&#163;160â&#163;220"},
+        {"keywords": ["waste", "trap"], "suggestion": 120, "range": "&#163;90â&#163;140"},
+        {"keywords": ["outside tap"], "suggestion": 150, "range": "Â£140â&#163;180"},
     ],
     "bathroom": [
-        {"keywords": ["install"], "suggestion": 1800, "range": "£1,600–&#163;2,200"},
-        {"keywords": ["refurb"], "suggestion": 2200, "range": "&#163;2,000–&#163;2,800"},
-        {"keywords": ["bathroom"], "suggestion": 2000, "range": "£1,600–£2,800"},
+        {"keywords": ["install"], "suggestion": 1800, "range": "Â£1,600â&#163;2,200"},
+        {"keywords": ["refurb"], "suggestion": 2200, "range": "&#163;2,000â&#163;2,800"},
+        {"keywords": ["bathroom"], "suggestion": 2000, "range": "Â£1,600âÂ£2,800"},
     ],
     "heating": [
-        {"keywords": ["radiator"], "suggestion": 180, "range": "&#163;160–&#163;220"},
-        {"keywords": ["repair"], "suggestion": 150, "range": "&#163;120–£220"},
-        {"keywords": ["system"], "suggestion": 3500, "range": "£3,000–£4,500"},
+        {"keywords": ["radiator"], "suggestion": 180, "range": "&#163;160â&#163;220"},
+        {"keywords": ["repair"], "suggestion": 150, "range": "&#163;120âÂ£220"},
+        {"keywords": ["system"], "suggestion": 3500, "range": "Â£3,000âÂ£4,500"},
     ],
 }
 
@@ -222,6 +223,20 @@ class SendInvoiceEmailRequest(BaseModel):
     message: str = ""
 
 
+class LeadRequest(BaseModel):
+    name: str = ""
+    phone: str = ""
+    email: str = ""
+    address: str = ""
+    job_type: str = "small"
+    description: str = ""
+    source: str = "website"
+
+
+class LeadStatusRequest(BaseModel):
+    status: str = "new"
+
+
 class InvoiceEditRequest(BaseModel):
     customer_name: str = ""
     customer_address: str = ""
@@ -232,10 +247,6 @@ class InvoiceEditRequest(BaseModel):
     due_date: str = ""
     payment_link: str = ""
     amount_paid: float = 0
-
-
-class CustomerNotesRequest(BaseModel):
-    notes: str = ""
 
 
 def now_uk():
@@ -251,29 +262,6 @@ def safe_float(value, default=0.0):
         return float(value)
     except Exception:
         return default
-
-
-def parse_display_date(value: str):
-    value = (value or "").strip()
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%d/%m/%Y").date()
-    except Exception:
-        return None
-
-
-def invoice_is_overdue(status: str, due_date: str):
-    due = parse_display_date(due_date)
-    if not due:
-        return False
-    return (status or "").lower() != "paid" and due < now_uk().date()
-
-
-def ensure_column(conn, table: str, column: str, definition: str):
-    cols = [r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
-    if column not in cols:
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def month_labels(count=6):
@@ -306,7 +294,6 @@ def init_db():
             name TEXT,
             address TEXT,
             phone TEXT,
-            notes TEXT DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -345,7 +332,22 @@ def init_db():
             invoice_json TEXT NOT NULL
         )
     """)
-    ensure_column(conn, "customers", "notes", "TEXT DEFAULT ''")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            phone TEXT,
+            email TEXT,
+            address TEXT,
+            job_type TEXT,
+            description TEXT,
+            status TEXT NOT NULL,
+            source TEXT,
+            created_at TEXT NOT NULL,
+            created_at_sort TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -391,14 +393,14 @@ def fetch_price(url: str):
 
         if "cityplumbing" in lower_url:
             domain_patterns = [
-                r'£\s?(\d+(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
-                r'£\s?(\d+(?:\.\d{2})?)\s*Inc\.?\s*VAT',
-                r'£\s?(\d+(?:\.\d{2})?)\s*each',
+                r'Â£\s?(\d+(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
+                r'Â£\s?(\d+(?:\.\d{2})?)\s*Inc\.?\s*VAT',
+                r'Â£\s?(\d+(?:\.\d{2})?)\s*each',
             ]
         elif "toppstiles" in lower_url:
             domain_patterns = [
-                r'£\s?(\d+(?:\.\d{2})?)\s*(?:per m2|/m2|m2)',
-                r'£\s?(\d+(?:\.\d{2})?)'
+                r'Â£\s?(\d+(?:\.\d{2})?)\s*(?:per m2|/m2|m2)',
+                r'Â£\s?(\d+(?:\.\d{2})?)'
             ]
 
         for pattern in domain_patterns:
@@ -408,7 +410,7 @@ def fetch_price(url: str):
                 if price and 0 < price < 100000:
                     return round(price, 2)
 
-        generic_matches = re.findall(r'£\s?(\d+(?:\.\d{2})?)', text)
+        generic_matches = re.findall(r'Â£\s?(\d+(?:\.\d{2})?)', text)
         prices = []
         for match in generic_matches:
             price = safe_float(match, None)
@@ -432,10 +434,10 @@ def find_labour_suggestion(quote_type: str, job_description: str):
             return rule
 
     if quote_type == "bathroom":
-        return {"suggestion": 2000, "range": "£1,600–£2,800"}
+        return {"suggestion": 2000, "range": "Â£1,600âÂ£2,800"}
     if quote_type == "heating":
-        return {"suggestion": 180, "range": "&#163;150–£300"}
-    return {"suggestion": 120, "range": "£90–&#163;180"}
+        return {"suggestion": 180, "range": "&#163;150âÂ£300"}
+    return {"suggestion": 120, "range": "Â£90â&#163;180"}
 
 
 def calculate_quote(data: QuoteRequest):
@@ -600,7 +602,6 @@ def row_to_invoice(row):
         "due_date": row["due_date"],
         "payment_link": row["payment_link"] or "",
         "created_at": row["created_at"],
-        "overdue": invoice_is_overdue(row["status"], row["due_date"]),
         "quote_result": json.loads(row["quote_result_json"]),
         "invoice": json.loads(row["invoice_json"]),
     }
@@ -957,28 +958,8 @@ def get_dashboard():
     """, (month_prefix,)).fetchone()
 
     customers = conn.execute("SELECT COUNT(*) AS customer_count FROM customers").fetchone()
-    due_rows = conn.execute("SELECT * FROM invoices ORDER BY created_at_sort DESC, id DESC LIMIT 300").fetchall()
-    conn.close()
 
-    tomorrow = now.date() + timedelta(days=1)
-    due_tomorrow_items = []
-    overdue_count = 0
-    unpaid_count = 0
-    for row in due_rows:
-        due = parse_display_date(row["due_date"])
-        status = (row["status"] or "").lower()
-        if status != "paid":
-            unpaid_count += 1
-        if due and status != "paid" and due < now.date():
-            overdue_count += 1
-        if due and status != "paid" and due == tomorrow:
-            due_tomorrow_items.append({
-                "id": row["id"],
-                "invoice_number": row["invoice_number"],
-                "customer_name": row["customer_name"] or "",
-                "balance_due": round(row["balance_due"] or 0, 2),
-                "due_date": row["due_date"],
-            })
+    conn.close()
 
     return {
         "month_label": now.strftime("%B %Y"),
@@ -991,9 +972,6 @@ def get_dashboard():
         "balance_total": round(i["balance_total"] or 0, 2),
         "avg_quote": round(avg["avg_quote"] or 0, 2),
         "customer_count": customers["customer_count"] or 0,
-        "unpaid_count": unpaid_count,
-        "overdue_count": overdue_count,
-        "due_tomorrow_items": due_tomorrow_items[:12],
     }
 
 
@@ -1027,29 +1005,17 @@ def get_customers():
         ORDER BY updated_at DESC, id DESC
         LIMIT 200
     """).fetchall()
+    conn.close()
 
     out = []
     for row in rows:
-        q_stats = conn.execute(
-            "SELECT COUNT(*) AS cnt FROM quotes WHERE customer_id = ?",
-            (row["id"],)
-        ).fetchone()
-        i_stats = conn.execute(
-            "SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_due), 0) AS outstanding FROM invoices WHERE customer_id = ?",
-            (row["id"],)
-        ).fetchone()
         out.append({
             "id": row["id"],
             "name": row["name"] or "",
             "address": row["address"] or "",
             "phone": row["phone"] or "",
-            "notes": row["notes"] or "",
             "updated_at": row["updated_at"],
-            "quote_count": q_stats["cnt"] or 0,
-            "invoice_count": i_stats["cnt"] or 0,
-            "outstanding": round(i_stats["outstanding"] or 0, 2),
         })
-    conn.close()
     return out
 
 
@@ -1075,42 +1041,22 @@ def get_customer_history(customer_id: int):
     """, (customer_id,)).fetchall()
     conn.close()
 
-    quote_list = [row_to_quote(r) for r in quotes]
-    invoice_list = [row_to_invoice(r) for r in invoices]
-
-    recent_prices = []
-    seen_jobs = set()
-    for q in quote_list:
-        key = (q.get("job") or "").strip().lower()
-        if key and key not in seen_jobs:
-            recent_prices.append({
-                "job": q.get("job") or "",
-                "price": q.get("total_price") or 0,
-                "created_at": q.get("created_at") or "",
-                "quote_id": q.get("id"),
-            })
-            seen_jobs.add(key)
-        if len(recent_prices) >= 8:
-            break
-
     return {
         "customer": {
             "id": customer["id"],
             "name": customer["name"] or "",
             "address": customer["address"] or "",
             "phone": customer["phone"] or "",
-            "notes": customer["notes"] or "",
         },
-        "quotes": quote_list,
-        "invoices": invoice_list,
-        "recent_prices": recent_prices,
+        "quotes": [row_to_quote(r) for r in quotes],
+        "invoices": [row_to_invoice(r) for r in invoices],
     }
 
 
 
 
 def pounds_text(value):
-    return f"£{safe_float(value, 0):.2f}"
+    return f"Â£{safe_float(value, 0):.2f}"
 
 
 def build_invoice_public_url(invoice_id: int):
@@ -1209,7 +1155,7 @@ def generate_invoice_pdf_bytes(item: dict):
         terms = terms[:3]
     text_obj = c.beginText(40, y)
     for line in terms:
-        text_obj.textLine(f"• {line}")
+        text_obj.textLine(f"â¢ {line}")
     if item.get("payment_link"):
         text_obj.textLine("")
         text_obj.textLine(f"Payment link: {item['payment_link']}")
@@ -1261,7 +1207,7 @@ def generate_quote_pdf_bytes(item: dict):
     c.setFont("Helvetica", 10)
     text_obj = c.beginText(40, y)
     for line in QUOTE_TERMS:
-        text_obj.textLine(f"• {line}")
+        text_obj.textLine(f"â¢ {line}")
     c.drawText(text_obj)
     c.showPage()
     c.save()
@@ -1368,6 +1314,309 @@ def send_invoice_email_now(item: dict, to_email: str, extra_message: str = ""):
         server.login(EMAIL_USER, EMAIL_PASS)
         server.sendmail(EMAIL_USER, [to_email.strip()], msg.as_string())
 
+def row_to_lead(row):
+    return {
+        "id": row["id"],
+        "name": row["name"] or "",
+        "phone": row["phone"] or "",
+        "email": row["email"] or "",
+        "address": row["address"] or "",
+        "job_type": row["job_type"] or "small",
+        "description": row["description"] or "",
+        "status": row["status"] or "new",
+        "source": row["source"] or "website",
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def save_lead(data: LeadRequest):
+    now = now_uk()
+    conn = get_db()
+    conn.execute(
+        """
+        INSERT INTO leads (name, phone, email, address, job_type, description, status, source, created_at, created_at_sort, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            (data.name or "").strip(),
+            (data.phone or "").strip(),
+            (data.email or "").strip(),
+            (data.address or "").strip(),
+            (data.job_type or "small").strip() or "small",
+            (data.description or "").strip(),
+            "new",
+            (data.source or "website").strip() or "website",
+            format_dt(now),
+            now.isoformat(),
+            now.isoformat(),
+        ),
+    )
+    lead_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return get_lead_by_id(lead_id)
+
+
+def get_lead_by_id(lead_id: int):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM leads WHERE id = ?", (lead_id,)).fetchone()
+    conn.close()
+    return row_to_lead(row) if row else None
+
+
+def load_leads():
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT * FROM leads
+        ORDER BY created_at_sort DESC, id DESC
+        LIMIT 300
+        """
+    ).fetchall()
+    conn.close()
+    return [row_to_lead(r) for r in rows]
+
+
+def update_lead_status(lead_id: int, status: str):
+    status = (status or "new").strip().lower()
+    if status not in {"new", "contacted", "quoted", "won", "lost"}:
+        status = "new"
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE leads SET status = ?, updated_at = ? WHERE id = ?",
+        (status, now_uk().isoformat(), lead_id),
+    )
+    conn.commit()
+    conn.close()
+    if cur.rowcount <= 0:
+        return None
+    return get_lead_by_id(lead_id)
+
+
+def delete_lead_by_id(lead_id: int):
+    conn = get_db()
+    cur = conn.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
+    conn.commit()
+    deleted = cur.rowcount > 0
+    conn.close()
+    return deleted
+
+
+def send_lead_notification_email(lead: dict):
+    if not EMAIL_ENABLED or not EMAIL_USER or not EMAIL_PASS:
+        return
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"New quote request - {lead.get('name') or 'Website lead'}"
+        msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_USER}>"
+        msg["To"] = EMAIL_USER
+        public_url = os.getenv("PUBLIC_BASE_URL", "").strip()
+        plain = (
+            f"New website lead\n\n"
+            f"Name: {lead.get('name','')}\n"
+            f"Phone: {lead.get('phone','')}\n"
+            f"Email: {lead.get('email','')}\n"
+            f"Address: {lead.get('address','')}\n"
+            f"Job type: {lead.get('job_type','')}\n"
+            f"Description: {lead.get('description','')}\n\n"
+            f"Open app: {public_url}\n"
+        )
+        html = (
+            '<html><body style="font-family:Arial,sans-serif;">'
+            '<h2>New website lead</h2>'
+            f"<p><strong>Name:</strong> {escape(lead.get('name',''))}<br>"
+            f"<strong>Phone:</strong> {escape(lead.get('phone',''))}<br>"
+            f"<strong>Email:</strong> {escape(lead.get('email',''))}<br>"
+            f"<strong>Address:</strong> {escape(lead.get('address',''))}<br>"
+            f"<strong>Job type:</strong> {escape(lead.get('job_type',''))}</p>"
+            f"<p><strong>Description:</strong><br>{escape(lead.get('description','')).replace(chr(10), '<br>')}</p>"
+            '</body></html>'
+        )
+        msg.attach(MIMEText(plain, "plain", "utf-8"))
+        msg.attach(MIMEText(html, "html", "utf-8"))
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, context=context) as server:
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.sendmail(EMAIL_USER, [EMAIL_USER], msg.as_string())
+    except Exception:
+        return
+
+
+
+LANDING_PAGE_HTML = r'''
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nigel Harvey Ltd | Plumbing & Heating</title>
+<meta name="description" content="Reliable plumbing and heating services in Guildford and surrounding areas. Request a quote online with Nigel Harvey Ltd.">
+<style>
+:root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#16a34a;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
+*{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)} a{text-decoration:none;color:inherit}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;background:rgba(245,247,251,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);z-index:10}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:14px 0;gap:12px;flex-wrap:wrap}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.nav-actions{display:flex;gap:10px;flex-wrap:wrap}.btn{display:inline-block;padding:14px 20px;border-radius:999px;font-weight:700}.btn-primary{background:var(--brand);color:#fff}.btn-green{background:var(--accent);color:#fff}.btn-light{background:#fff;border:1px solid var(--border)}
+.hero{padding:42px 0 24px}.hero-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:22px;align-items:stretch}.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.hero-copy{padding:34px}.tag{display:inline-block;padding:7px 12px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:12px;margin-bottom:12px} h1{font-size:clamp(34px,5vw,58px);line-height:1.02;margin:0 0 14px} .lead{font-size:18px;color:var(--muted);max-width:42rem;margin:0 0 20px}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}.trust{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-weight:700;font-size:14px}
+.panel{padding:24px}.panel h2,.section h2{margin:0 0 10px;font-size:30px}.check{padding:14px 15px;border:1px solid var(--border);border-radius:14px;background:#f8fafc;font-weight:700;margin-bottom:10px}
+.section{padding:18px 0}.section p.copy{margin:0 0 18px;color:var(--muted);max-width:46rem}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.item{padding:22px}.item h3{margin:0 0 8px;font-size:20px}.item p{margin:0;color:var(--muted);line-height:1.55}
+.cta{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:26px;margin:24px 0 44px}.footer{padding:20px 0 36px;color:var(--muted)} .footer-inner{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:18px}
+.logo-box{margin-bottom:14px}.logo-box img{max-width:240px;max-height:90px;object-fit:contain}.logo{max-width:240px;max-height:90px;object-fit:contain}
+@media (max-width:900px){.hero-grid,.grid3{grid-template-columns:1fr}.hero-copy,.panel,.item,.cta{padding:20px} .panel h2,.section h2{font-size:26px}}
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="wrap nav">
+      <div class="brand">Nigel Harvey Ltd<small>Plumbing & Heating</small></div>
+      <div class="nav-actions">
+        <a class="btn btn-light" href="tel:__COMPANY_PHONE__">Call Now</a>
+        <a class="btn btn-primary" href="/request-quote">Request a Quote</a>
+        <a class="btn btn-light" href="/app">Open App</a>
+      </div>
+    </div>
+  </div>
+  <div class="wrap hero">
+    <div class="hero-grid">
+      <div class="card hero-copy">
+        <div class="logo-box">__COMPANY_LOGO_HTML__</div>
+        <div class="tag">Local â¢ Reliable â¢ Professional</div>
+        <h1>Trusted plumbing and heating work without the hassle.</h1>
+        <p class="lead">Need a tap replaced, a bathroom upgraded, heating work priced, or a general plumbing repair sorted? Request a quote online and get a fast, straightforward response from Nigel Harvey Ltd.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="/request-quote">Get Your Quote</a>
+          <a class="btn btn-green" href="https://wa.me/447595725547" target="_blank">WhatsApp Nigel</a>
+        </div>
+        <div class="trust"><span>Fast quote requests</span><span>Clear pricing</span><span>Friendly local service</span></div>
+      </div>
+      <div class="card panel">
+        <h2>What you can request online</h2>
+        <div class="check">Tap, toilet, sink and waste repairs</div>
+        <div class="check">Bathroom plumbing and refurb work</div>
+        <div class="check">Heating repairs and radiator jobs</div>
+        <div class="check">Outside taps and general plumbing jobs</div>
+        <a class="btn btn-primary" style="width:100%;text-align:center;margin-top:8px" href="/request-quote">Start Your Quote Request</a>
+      </div>
+    </div>
+  </div>
+  <div class="wrap section">
+    <h2>Services</h2>
+    <p class="copy">Whether itâs a quick repair or a larger install, Nigel Harvey Ltd helps customers with practical, tidy, reliable plumbing and heating work.</p>
+    <div class="grid3">
+      <div class="card item"><h3>General Plumbing</h3><p>Taps, leaks, wastes, traps, toilets, valves, kitchen and bathroom plumbing jobs handled clearly and efficiently.</p></div>
+      <div class="card item"><h3>Bathrooms</h3><p>Bathroom plumbing installs and refurb work including sanitaryware connections, first fix and second fix work.</p></div>
+      <div class="card item"><h3>Heating</h3><p>Radiator installs, heating repairs, valves, controls and general heating system work priced properly and carried out professionally.</p></div>
+    </div>
+  </div>
+  <div class="wrap section">
+    <h2>Why customers use Nigel Harvey Ltd</h2>
+    <p class="copy">The aim is simple: make it easy for people to ask for help, get a clear quote, and book reliable work without chasing around.</p>
+    <div class="grid3">
+      <div class="card item"><h3>Simple quote process</h3><p>Customers can send their details and job information online in minutes, making it easier to get back to them fast.</p></div>
+      <div class="card item"><h3>Professional paperwork</h3><p>Branded quotes, invoices, PDFs and clear communication give customers confidence from the start.</p></div>
+      <div class="card item"><h3>Easy payment flow</h3><p>Invoices can include payment links, making it straightforward for customers to pay once work is complete.</p></div>
+    </div>
+  </div>
+  <div class="wrap">
+    <div class="card cta">
+      <div><h2 style="margin:0 0 8px">Need plumbing or heating work priced?</h2><div style="color:var(--muted)">Use the online quote request form and send over the job details. Itâs the quickest way to get started.</div></div>
+      <div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="mailto:__COMPANY_EMAIL__">Email Nigel</a></div>
+    </div>
+  </div>
+  <div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing & Heating</div><div>Phone: __COMPANY_PHONE__<br>Email: __COMPANY_EMAIL__<br>Guildford and surrounding areas</div></div></div>
+</body>
+</html>
+'''
+
+LEAD_FORM_HTML = r'''<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request a Quote - Nigel Harvey Ltd</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f5f5f5;margin:0;color:#111;padding:14px;}
+.wrap{max-width:760px;margin:0 auto;}
+.card{background:#fff;border-radius:18px;padding:22px;box-shadow:0 8px 24px rgba(0,0,0,.08);margin-bottom:14px;}
+h1{margin:0 0 8px 0;font-size:30px;}
+.sub{color:#666;margin-bottom:18px;}
+label{display:block;font-weight:700;margin:14px 0 6px;}
+input,textarea,select{width:100%;box-sizing:border-box;padding:14px;border:1px solid #d1d5db;border-radius:12px;font-size:16px;background:#fff;}
+textarea{min-height:120px;resize:vertical;}
+button{width:100%;padding:15px;border:none;border-radius:12px;background:#111;color:#fff;font-size:17px;font-weight:700;cursor:pointer;margin-top:18px;}
+.small{font-size:14px;color:#666;}
+.ok{display:none;margin-top:14px;background:#edf9ed;border:1px solid #b7ddb7;color:#14532d;padding:12px;border-radius:12px;}
+.err{display:none;margin-top:14px;background:#fff4f4;border:1px solid #e8bcbc;color:#9b1c1c;padding:12px;border-radius:12px;}
+.logo{max-height:76px;max-width:220px;display:block;margin:0 0 12px auto;}
+.quick-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.quick-btn{padding:12px;border-radius:12px;border:1px solid #d1d5db;background:#fafafa;text-align:center;font-weight:700;cursor:pointer;}
+@media (max-width:640px){.quick-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div style="text-align:right;">__COMPANY_LOGO_HTML__</div>
+    <h1>Request a Quote</h1>
+    <div class="sub">Send Nigel Harvey Ltd your job details and get a callback or quote.</div>
+    <div class="small" style="margin-bottom:12px;">Phone: __COMPANY_PHONE__ Â· Email: __COMPANY_EMAIL__</div>
+    <div class="quick-grid" style="margin-bottom:10px;">
+      <div class="quick-btn" onclick="setJobType('small','Tap / toilet / leak / waste repair')">Small plumbing job</div>
+      <div class="quick-btn" onclick="setJobType('bathroom','Bathroom install / refurb')">Bathroom</div>
+      <div class="quick-btn" onclick="setJobType('heating','Heating / radiator / system work')">Heating</div>
+      <div class="quick-btn" onclick="setJobType('small','Outside tap / general plumbing')">Outside tap / general</div>
+    </div>
+    <label>Name</label><input id="lead_name" placeholder="Your name">
+    <label>Phone</label><input id="lead_phone" placeholder="Your phone">
+    <label>Email (optional)</label><input id="lead_email" placeholder="Your email">
+    <label>Address</label><textarea id="lead_address" placeholder="Job address"></textarea>
+    <label>Job type</label>
+    <select id="lead_job_type">
+      <option value="small">Small plumbing job</option>
+      <option value="bathroom">Bathroom</option>
+      <option value="heating">Heating</option>
+    </select>
+    <label>Describe the job</label><textarea id="lead_description" placeholder="Tell us what needs doing"></textarea>
+    <button type="button" onclick="submitLead()">Send quote request</button>
+    <div id="lead_ok" class="ok">Thanks â your quote request has been sent. Nigel Harvey Ltd will get back to you shortly.</div>
+    <div id="lead_err" class="err"></div>
+  </div>
+</div>
+<script>
+function setJobType(type, text){document.getElementById('lead_job_type').value=type; if(!document.getElementById('lead_description').value.trim()){document.getElementById('lead_description').value=text;}}
+async function submitLead(){
+  const err=document.getElementById('lead_err'); const ok=document.getElementById('lead_ok');
+  err.style.display='none'; ok.style.display='none';
+  const payload={
+    name:document.getElementById('lead_name').value,
+    phone:document.getElementById('lead_phone').value,
+    email:document.getElementById('lead_email').value,
+    address:document.getElementById('lead_address').value,
+    job_type:document.getElementById('lead_job_type').value,
+    description:document.getElementById('lead_description').value,
+    source:'website'
+  };
+  if(!payload.name.trim() || !payload.phone.trim() || !payload.description.trim()){
+    err.textContent='Please add your name, phone number and a short job description.'; err.style.display='block'; return;
+  }
+  try{
+    const res=await fetch('/api/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.detail || 'Could not send quote request.');
+    ok.style.display='block';
+    ['lead_name','lead_phone','lead_email','lead_address','lead_description'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('lead_job_type').value='small';
+  }catch(e){err.textContent=String(e); err.style.display='block';}
+}
+</script>
+</body>
+</html>'''
+
+
 HTML = r'''
 <!doctype html>
 <html>
@@ -1400,7 +1649,6 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 .result { display:none; background:#f3faf3; border:1px solid #b7d7b7; }
 .error { display:none; background:#fff3f3; border:1px solid #e0b7b7; color:#a33; padding:12px; border-radius:10px; margin-top:12px; }
 .actions { display:grid; gap:10px; margin-top:14px; }
-.quick-chip { display:inline-block; padding:7px 10px; border-radius:999px; background:#efefef; margin:4px 6px 0 0; font-size:13px; }
 .notice { display:none; background:#eef7ff; border:1px solid #c7def5; color:#124a7a; padding:12px; border-radius:12px; margin-top:12px; font-weight:700; }
 .print-head { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .logo-box img { max-height:70px; max-width:170px; object-fit:contain; }
@@ -1438,7 +1686,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 .dashboard-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
 .dashboard-item { border:1px solid #ddd; border-radius:10px; padding:12px; background:#fafafa; }
 .dashboard-item .num { font-size:26px; font-weight:800; margin-top:4px; }
-.tabs { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:14px; }
+.tabs { display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; margin-bottom:14px; }
 .tabs button { padding:12px; }
 .tab-panel { display:none; }
 .tab-panel.active { display:block; }
@@ -1467,7 +1715,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
   .tabs { grid-template-columns:repeat(2, 1fr); }
   .templates, .favourites, .dashboard-grid, .history-actions, .doc-grid-two, .doc-grid-bottom, .dashboard-summary { grid-template-columns:1fr; }
   .row { flex-direction:column; gap:4px; }
-  .actions { position:sticky; bottom:8px; z-index:5; background:#f5f5f5; padding:8px; border-radius:14px; }
+  .actions { position:sticky; bottom:8px; z-index:5; }
   .doc-total-box .quote-total { font-size:34px; }
 }
 </style>
@@ -1487,6 +1735,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <button class="btn-light" onclick="showTab('quotesTab')">Quotes</button>
       <button class="btn-light" onclick="showTab('invoicesTab')">Invoices</button>
       <button class="btn-light" onclick="showTab('customersTab')">Customers</button>
+      <button class="btn-light" onclick="showTab('leadsTab')">Leads</button>
     </div>
 
     <div id="dashboardTab" class="tab-panel active">
@@ -1496,21 +1745,12 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <h3>Monthly profit</h3>
       <div id="profitChart" class="quote-box small">Loading chart...</div>
       <div id="dashboardSummary" class="dashboard-summary"></div>
-      <h3>Due tomorrow</h3>
-      <div id="dueTomorrowList" class="quote-box small">Loading reminders...</div>
     </div>
 
     <div id="quotesTab" class="tab-panel">
       <h2>Quote Builder</h2>
       <div id="editingStatus" class="status-bar hidden"></div>
-      <div class="history-actions no-print" style="grid-template-columns:1fr 1fr; margin-bottom:12px;">
-        <button type="button" class="btn-light" onclick="startNewQuote()">Start Fresh Quote</button>
-        <button type="button" class="btn-blue" onclick="showTab('customersTab'); window.scrollTo({ top: 0, behavior: 'smooth' });">Pick Saved Customer</button>
-      </div>
-
-      <label for="quickCustomerSearch">Quick customer fill</label>
-      <input id="quickCustomerSearch" placeholder="Start typing a saved customer name or phone" oninput="renderQuickCustomerMatches()">
-      <div id="quickCustomerMatches" class="search-results hidden"></div>
+      <button type="button" class="btn-light no-print" style="margin-bottom:12px;" onclick="startNewQuote()">Start Fresh Quote</button>
 
       <div class="check-row no-print">
         <input type="checkbox" id="internal_mode">
@@ -1550,10 +1790,10 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
           <span>Include tiling</span>
         </div>
 
-        <label for="wall_tiling_m2">Wall tiling (m²)</label>
+        <label for="wall_tiling_m2">Wall tiling (mÂ²)</label>
         <input id="wall_tiling_m2" type="number" step="0.1" placeholder="0">
 
-        <label for="floor_tiling_m2">Floor tiling (m²)</label>
+        <label for="floor_tiling_m2">Floor tiling (mÂ²)</label>
         <input id="floor_tiling_m2" type="number" step="0.1" placeholder="0">
 
         <label for="wall_height">Wall height</label>
@@ -1608,16 +1848,6 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 
     <div id="invoicesTab" class="tab-panel">
       <h2>Invoices</h2>
-      <label for="invoiceSearch">Search invoices</label>
-      <input id="invoiceSearch" placeholder="Customer name or invoice number" oninput="loadInvoices()">
-      <label for="invoiceFilter">Filter invoices</label>
-      <select id="invoiceFilter" onchange="loadInvoices()">
-        <option value="all">All invoices</option>
-        <option value="unpaid">Unpaid</option>
-        <option value="part paid">Part paid</option>
-        <option value="paid">Paid</option>
-        <option value="overdue">Overdue</option>
-      </select>
       <div id="invoiceList" class="small">No invoices yet.</div>
     </div>
 
@@ -1625,6 +1855,23 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <h2>Customers</h2>
       <input id="customerSearch" placeholder="Search customer by name, phone or address" oninput="loadCustomers()">
       <div id="customerList" class="small" style="margin-top:10px;">No customers yet.</div>
+    </div>
+
+    <div id="leadsTab" class="tab-panel">
+      <h2>Lead Generator</h2>
+      <div class="small">Public quote request page: <a href="/request-quote" target="_blank">/request-quote</a></div>
+      <div class="lead-filter-row">
+        <input id="leadSearch" placeholder="Search leads by name, phone, email, address or job" oninput="loadLeads()">
+        <select id="leadStatusFilter" onchange="loadLeads()">
+          <option value="all">All statuses</option>
+          <option value="new">New</option>
+          <option value="contacted">Contacted</option>
+          <option value="quoted">Quoted</option>
+          <option value="won">Won</option>
+          <option value="lost">Lost</option>
+        </select>
+      </div>
+      <div id="leadList" class="small" style="margin-top:10px;">No leads yet.</div>
     </div>
   </div>
 
@@ -1758,15 +2005,15 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <input id="edit_invoice_customer_phone" placeholder="Customer phone">
       <label for="edit_invoice_job">Job</label>
       <textarea id="edit_invoice_job" placeholder="Job details"></textarea>
-      <label for="edit_invoice_labour">Labour (£)</label>
+      <label for="edit_invoice_labour">Labour (Â£)</label>
       <input id="edit_invoice_labour" type="number" step="0.01" placeholder="0">
-      <label for="edit_invoice_materials">Materials (£)</label>
+      <label for="edit_invoice_materials">Materials (Â£)</label>
       <input id="edit_invoice_materials" type="number" step="0.01" placeholder="0">
       <label for="edit_invoice_due_date">Due date</label>
       <input id="edit_invoice_due_date" placeholder="dd/mm/yyyy">
       <label for="edit_invoice_payment_link">Payment link</label>
       <input id="edit_invoice_payment_link" placeholder="https://...">
-      <label for="edit_invoice_amount_paid">Amount paid (£)</label>
+      <label for="edit_invoice_amount_paid">Amount paid (Â£)</label>
       <input id="edit_invoice_amount_paid" type="number" step="0.01" placeholder="0">
       <div class="history-actions" style="grid-template-columns:1fr 1fr; margin-top:12px;">
         <button type="button" class="btn-blue" onclick="saveInvoiceEdit()">Save Invoice Changes</button>
@@ -1777,8 +2024,6 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
     <div class="actions no-print">
       <a id="invoiceWhatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Invoice to WhatsApp</a>
       <button id="invoiceEmailBtn" class="btn-blue" type="button" onclick="sendInvoiceEmail()">Email Invoice PDF</button>
-      <button class="btn-light" type="button" onclick="sendInvoiceReminderEmail(CURRENT_INVOICE_ID)">Reminder Email</button>
-      <button class="btn-light" type="button" onclick="sendOverdueReminderWhatsApp(CURRENT_INVOICE_ID)">Reminder WhatsApp</button>
       <a id="invoiceOpenBtn" class="btn-link btn-light" href="#" target="_blank">Open Invoice Page</a>
       <button class="btn-light" type="button" onclick="downloadCurrentInvoicePdf()">Download Invoice PDF</button>
     </div>
@@ -1799,6 +2044,7 @@ const JOB_TEMPLATES = __JOB_TEMPLATES__;
 let SAVED_QUOTES = [];
 let SAVED_INVOICES = [];
 let SAVED_CUSTOMERS = [];
+let SAVED_LEADS = [];
 let CURRENT_QUOTE_ID = null;
 let CURRENT_QUOTE_DATA = null;
 let CURRENT_INVOICE_ID = null;
@@ -1876,91 +2122,12 @@ function applyTemplate(index) {
   document.getElementById("quote_type").value = t.quote_type;
   document.getElementById("job").value = t.job;
   document.getElementById("labour").value = t.labour;
-  if (Array.isArray(t.materials) && t.materials.length) {
-    clearMaterials();
-    t.materials.forEach(m => addMaterial(m));
-  }
   toggleBathroomFields();
   updateLabourSuggestion();
-  showNotice("Template applied.");
 }
 
 function addFavouriteMaterial(index) {
   addMaterial(FAVOURITE_MATERIALS[index]);
-}
-
-function renderQuickCustomerMatches() {
-  const q = (document.getElementById("quickCustomerSearch")?.value || "").trim().toLowerCase();
-  const box = document.getElementById("quickCustomerMatches");
-  if (!box) return;
-  if (!q) {
-    box.innerHTML = "";
-    box.classList.add("hidden");
-    return;
-  }
-  const matches = SAVED_CUSTOMERS.filter(c => (`${c.name || ""} ${c.phone || ""} ${c.address || ""}`).toLowerCase().includes(q)).slice(0, 8);
-  if (!matches.length) {
-    box.innerHTML = '<div class="search-item">No saved customer match</div>';
-    box.classList.remove("hidden");
-    return;
-  }
-  box.innerHTML = matches.map(c => `
-    <div class="search-item" onclick="fillCustomerFromPicker(${c.id})">
-      <strong>${escapeHtml(c.name || "No name")}</strong><br>
-      <span class="small">${escapeHtml(c.phone || "")} · ${escapeHtml(c.address || "")}</span>
-    </div>
-  `).join("");
-  box.classList.remove("hidden");
-}
-
-function fillCustomerFromPicker(id) {
-  const c = SAVED_CUSTOMERS.find(x => x.id === id);
-  if (!c) return;
-  document.getElementById("customer_name").value = c.name || "";
-  document.getElementById("customer_address").value = c.address || "";
-  document.getElementById("customer_phone").value = c.phone || "";
-  const search = document.getElementById("quickCustomerSearch");
-  if (search) search.value = c.name || "";
-  const box = document.getElementById("quickCustomerMatches");
-  if (box) {
-    box.innerHTML = "";
-    box.classList.add("hidden");
-  }
-  showNotice("Customer details filled.");
-}
-
-function duplicateQuote(id) {
-  const q = SAVED_QUOTES.find(x => x.id === id);
-  if (!q) return;
-  resetQuoteFormState();
-  populateFormFromQuote(q, false);
-  setEditingStatus("Duplicated from quote #" + id + ". This will save as a new quote.", true);
-  showTab("quotesTab");
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-async function duplicateQuoteToInvoice(id) {
-  duplicateQuote(id);
-  await generateQuote();
-  if (CURRENT_QUOTE_ID) {
-    await convertCurrentQuoteToInvoice();
-  }
-}
-
-async function saveCustomerNotes(id) {
-  const box = document.getElementById(`customer_notes_${id}`);
-  try {
-    const res = await fetch(`/api/customers/${id}/notes`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes: box ? box.value : "" })
-    });
-    if (!res.ok) throw new Error("save failed");
-    showNotice("Customer notes saved.");
-    await loadCustomers();
-  } catch (e) {
-    showNotice("Could not save customer notes.", "error");
-  }
 }
 
 function updateLabourSuggestion() {
@@ -1972,14 +2139,14 @@ function updateLabourSuggestion() {
   if (quoteType === "bathroom") message = "Typical bathroom labour is often higher. Adjust to suit your job.";
   if (quoteType === "heating") message = "Heating jobs often vary by size and access. Adjust labour as needed.";
 
-  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around &#163;120. Typical range: &#163;100–&#163;140.";
-  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around &#163;180. Typical range: &#163;160–&#163;220.";
-  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around &#163;120. Typical range: &#163;90–&#163;140.";
-  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around &#163;150. Typical range: £140–&#163;180.";
-  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around &#163;2,200. Typical range: &#163;2,000–&#163;2,800.";
-  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around &#163;1,800. Typical range: £1,600–&#163;2,200.";
-  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around &#163;180. Typical range: &#163;160–&#163;220.";
-  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around &#163;150. Typical range: &#163;120–£220.";
+  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around &#163;120. Typical range: &#163;100â&#163;140.";
+  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around &#163;180. Typical range: &#163;160â&#163;220.";
+  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around &#163;120. Typical range: &#163;90â&#163;140.";
+  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around &#163;150. Typical range: Â£140â&#163;180.";
+  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around &#163;2,200. Typical range: &#163;2,000â&#163;2,800.";
+  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around &#163;1,800. Typical range: Â£1,600â&#163;2,200.";
+  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around &#163;180. Typical range: &#163;160â&#163;220.";
+  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around &#163;150. Typical range: &#163;120âÂ£220.";
 
   box.innerText = message;
 }
@@ -2054,7 +2221,7 @@ function searchMaterials() {
   resultsBox.innerHTML = results.map((item) => `
     <div class="search-item" onclick='addMaterialFromLibrary(${JSON.stringify(item)})'>
       <strong>${escapeHtml(item.name)}</strong><br>
-      <span class="small">${escapeHtml(item.supplier)} · ${pounds(item.default_price)}</span>
+      <span class="small">${escapeHtml(item.supplier)} Â· ${pounds(item.default_price)}</span>
     </div>
   `).join("");
 
@@ -2135,7 +2302,7 @@ function renderQuoteResult(data) {
 
   const lines = data.material_lines || [];
   document.getElementById("r_material_lines").innerHTML = lines.length
-    ? lines.map(x => `<div>${escapeHtml(x.name || "")} × ${x.quantity} — ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
+    ? lines.map(x => `<div>${escapeHtml(x.name || "")} Ã ${x.quantity} â ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
     : "<div>No materials added.</div>";
 
   const internalMode = document.getElementById("internal_mode").checked;
@@ -2187,9 +2354,8 @@ Nigelharveyplumbing@gmail.com`;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function renderStatusBadge(status, overdue = false) {
+function renderStatusBadge(status) {
   const s = (status || "").toLowerCase();
-  if (overdue && s !== "paid") return '<span class="badge red">Overdue</span>';
   if (s === "paid") return '<span class="badge green">Paid</span>';
   if (s === "part paid") return '<span class="badge orange">Part Paid</span>';
   return '<span class="badge red">Unpaid</span>';
@@ -2207,7 +2373,7 @@ function renderInvoiceCard(item) {
   document.getElementById("i_number").innerText = item.invoice_number || "-";
   document.getElementById("i_date").innerText = item.created_at || "-";
   document.getElementById("i_due_date").innerText = item.due_date || "-";
-  document.getElementById("i_status").innerHTML = renderStatusBadge(item.status, item.overdue);
+  document.getElementById("i_status").innerHTML = renderStatusBadge(item.status);
   document.getElementById("i_customer").innerText = invoice.customer_name || "-";
   document.getElementById("i_phone").innerText = invoice.customer_phone || "-";
   document.getElementById("i_address").innerText = invoice.customer_address || "-";
@@ -2421,17 +2587,9 @@ async function loadDashboard() {
     `;
     renderProfitChart(chartData);
     renderDashboardSummary(chartData);
-    document.getElementById("dueTomorrowList").innerHTML = (data.due_tomorrow_items || []).length
-      ? data.due_tomorrow_items.map(x => `<div style="margin-bottom:8px;"><strong>${escapeHtml(x.invoice_number)}</strong> — ${escapeHtml(x.customer_name || "")} — ${pounds(x.balance_due)} <button type="button" class="btn-light" style="width:auto;padding:6px 10px;font-size:13px;" onclick="openInvoice(${x.id})">Open</button></div>`).join("")
-      : "No invoices due tomorrow.";
-    document.getElementById("dashboardGrid").innerHTML += `
-      <div class="dashboard-item"><div class="small">Unpaid invoices</div><div class="num">${data.unpaid_count || 0}</div></div>
-      <div class="dashboard-item"><div class="small">Overdue invoices</div><div class="num">${data.overdue_count || 0}</div></div>
-    `;
   } catch (e) {
     document.getElementById("profitChart").innerHTML = "Could not load chart.";
     document.getElementById("dashboardSummary").innerHTML = "";
-    document.getElementById("dueTomorrowList").innerHTML = "Could not load reminders.";
   }
 }
 
@@ -2477,14 +2635,12 @@ async function loadHistory() {
       <div class="history-item">
         <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
         <div>${escapeHtml(q.job || "")}</div>
-        <div class="small">${escapeHtml(q.created_at || "")} · Total ${pounds(q.total_price)} · Profit ${pounds(q.gross_profit)} · Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
+        <div class="small">${escapeHtml(q.created_at || "")} Â· Total ${pounds(q.total_price)} Â· Profit ${pounds(q.gross_profit)} Â· Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
         <div class="history-actions">
           <button type="button" class="btn-light" onclick="loadSavedQuote(${q.id})">Load</button>
           <button type="button" class="btn-blue" onclick="editSavedQuote(${q.id})">Edit</button>
-          <button type="button" class="btn-light" onclick="duplicateQuote(${q.id})">Duplicate</button>
           <button type="button" class="btn-secondary" onclick="sendSavedQuoteWhatsApp(${q.id})">WhatsApp</button>
           <button type="button" class="btn-blue" onclick="convertQuoteToInvoice(${q.id})">To Invoice</button>
-          <button type="button" class="btn-blue" onclick="duplicateQuoteToInvoice(${q.id})">Repeat & Invoice</button>
           <button type="button" class="btn-light" onclick="printSavedQuote(${q.id})">Print</button>
           <button type="button" class="btn-red" onclick="deleteSavedQuote(${q.id})">Delete</button>
         </div>
@@ -2495,49 +2651,23 @@ async function loadHistory() {
   }
 }
 
-function invoiceReminderEmailMessage(invoice) {
-  return `Hello ${invoice.customer_name || ""},
-
-This is a friendly reminder that invoice ${invoice.invoice_number} for ${pounds(invoice.balance_due)} is still outstanding.
-
-Due date: ${invoice.due_date || "-"}
-Balance due: ${pounds(invoice.balance_due)}
-
-Thank you,
-Nigel Harvey Ltd`;
-}
-
-function invoiceReminderWhatsAppMessage(invoice) {
-  return `Nigel Harvey Ltd reminder\n\nInvoice: ${invoice.invoice_number}\nDue date: ${invoice.due_date || "-"}\nBalance due: ${pounds(invoice.balance_due)}\n\nPlease let me know once payment has been made. Thank you.`;
-}
-
 async function loadInvoices() {
   try {
     const res = await fetch("/api/invoices");
     const data = await res.json();
     SAVED_INVOICES = data;
     const box = document.getElementById("invoiceList");
-    const q = (document.getElementById("invoiceSearch")?.value || "").trim().toLowerCase();
-    const filter = (document.getElementById("invoiceFilter")?.value || "all").toLowerCase();
 
-    const filtered = data.filter(i => {
-      const hay = `${i.invoice_number || ""} ${i.customer_name || ""}`.toLowerCase();
-      if (q && !hay.includes(q)) return false;
-      if (filter === "all") return true;
-      if (filter === "overdue") return !!i.overdue;
-      return (i.status || "").toLowerCase() === filter;
-    });
-
-    if (!filtered.length) {
-      box.innerHTML = q || filter !== "all" ? "No matching invoices." : "No invoices yet.";
+    if (!data.length) {
+      box.innerHTML = "No invoices yet.";
       return;
     }
 
-    box.innerHTML = filtered.map(i => `
+    box.innerHTML = data.map(i => `
       <div class="history-item">
-        <div><strong>${escapeHtml(i.invoice_number)}</strong> — ${escapeHtml(i.customer_name || "No customer name")}</div>
-        <div>${renderStatusBadge(i.status, i.overdue)}</div>
-        <div class="small">${escapeHtml(i.created_at || "")} · Due ${escapeHtml(i.due_date || "")} · Total ${pounds(i.total_price)} · Paid ${pounds(i.amount_paid)} · Balance ${pounds(i.balance_due)}</div>
+        <div><strong>${escapeHtml(i.invoice_number)}</strong> â ${escapeHtml(i.customer_name || "No customer name")}</div>
+        <div>${renderStatusBadge(i.status)}</div>
+        <div class="small">${escapeHtml(i.created_at || "")} Â· Total ${pounds(i.total_price)} Â· Paid ${pounds(i.amount_paid)} Â· Balance ${pounds(i.balance_due)}</div>
 
         <label style="margin-top:10px;">Update payment</label>
         <div class="row">
@@ -2553,14 +2683,11 @@ async function loadInvoices() {
 
         <div class="history-actions" style="grid-template-columns:repeat(3, 1fr);">
           <button type="button" class="btn-secondary" onclick="markInvoicePaid(${i.id}, ${i.total_price})">Mark Paid</button>
-          <button type="button" class="btn-light" onclick="updateInvoiceStatus(${i.id}, 'part paid', Math.max(0, Number(i.total_price) / 2))">Mark Part Paid</button>
           <button type="button" class="btn-light" onclick="markInvoiceUnpaid(${i.id})">Mark Unpaid</button>
           <button type="button" class="btn-blue" onclick="editInvoice(${i.id})">Edit</button>
           <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Open</button>
           <button type="button" class="btn-secondary" onclick="sendInvoiceWhatsApp(${i.id})">WhatsApp</button>
           <button type="button" class="btn-blue" onclick="emailInvoice(${i.id})">Email</button>
-          <button type="button" class="btn-light" onclick="sendInvoiceReminderEmail(${i.id})">Reminder Email</button>
-          <button type="button" class="btn-light" onclick="sendOverdueReminderWhatsApp(${i.id})">Reminder WhatsApp</button>
           <button type="button" class="btn-light" onclick="openInvoicePage(${i.id})">Invoice Page</button>
           <button type="button" class="btn-light" onclick="printInvoice(${i.id})">Print</button>
           <button type="button" class="btn-red" onclick="deleteInvoice(${i.id})">Delete</button>
@@ -2572,34 +2699,110 @@ async function loadInvoices() {
   }
 }
 
-async function sendInvoiceReminderEmail(id) {
-  const invoice = SAVED_INVOICES.find(x => x.id === id);
-  if (!invoice) return;
-  const toEmail = prompt("Send reminder email to:", "");
-  if (!toEmail) return;
+function renderLeadBadge(status) {
+  const s = (status || 'new').toLowerCase();
+  if (s === 'won') return '<span class="badge green">Won</span>';
+  if (s === 'lost') return '<span class="badge red">Lost</span>';
+  if (s === 'quoted') return '<span class="badge blue">Quoted</span>';
+  if (s === 'contacted') return '<span class="badge orange">Contacted</span>';
+  return '<span class="badge gray">New</span>';
+}
+
+async function loadLeads() {
   try {
-    const res = await fetch(`/api/invoices/${id}/send-email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to_email: toEmail, message: invoiceReminderEmailMessage(invoice) })
+    const res = await fetch('/api/leads');
+    const data = await res.json();
+    SAVED_LEADS = data;
+    const box = document.getElementById('leadList');
+    const q = (document.getElementById('leadSearch')?.value || '').trim().toLowerCase();
+    const status = (document.getElementById('leadStatusFilter')?.value || 'all').toLowerCase();
+    const filtered = data.filter(l => {
+      const hay = `${l.name || ''} ${l.phone || ''} ${l.email || ''} ${l.address || ''} ${l.description || ''}`.toLowerCase();
+      const statusOk = status === 'all' || (l.status || '').toLowerCase() === status;
+      return statusOk && (!q || hay.includes(q));
     });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail || "Email failed");
+    if (!filtered.length) {
+      box.innerHTML = q || status !== 'all' ? 'No matching leads.' : 'No leads yet.';
+      return;
     }
-    showNotice("Reminder email sent.");
+    box.innerHTML = filtered.map(l => `
+      <div class="history-item">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+          <div><strong>${escapeHtml(l.name || 'Website lead')}</strong></div>
+          <div>${renderLeadBadge(l.status)}</div>
+        </div>
+        <div>${escapeHtml(l.phone || '')}${l.email ? ' Â· ' + escapeHtml(l.email) : ''}</div>
+        <div class="small">${escapeHtml(l.address || '')}</div>
+        <div style="margin-top:8px;">${escapeHtml(l.description || '')}</div>
+        <div class="small" style="margin-top:8px;">${escapeHtml(l.created_at || '')} Â· ${escapeHtml((l.job_type || 'small').toUpperCase())} Â· ${escapeHtml(l.source || 'website')}</div>
+        <div class="history-actions" style="grid-template-columns:repeat(2,1fr);">
+          <button type="button" class="btn-light" onclick="startQuoteFromLead(${l.id})">Start Quote</button>
+          <button type="button" class="btn-blue" onclick="updateLeadStatus(${l.id}, 'contacted')">Mark Contacted</button>
+        </div>
+        <div class="history-actions" style="grid-template-columns:repeat(3,1fr);">
+          <button type="button" class="btn-secondary" onclick="updateLeadStatus(${l.id}, 'quoted')">Quoted</button>
+          <button type="button" class="btn-secondary" onclick="updateLeadStatus(${l.id}, 'won')">Won</button>
+          <button type="button" class="btn-red" onclick="updateLeadStatus(${l.id}, 'lost')">Lost</button>
+        </div>
+        <div class="history-actions" style="grid-template-columns:1fr 1fr;">
+          <a class="btn-link btn-secondary" href="${buildLeadWhatsappHref(l)}" target="_blank">WhatsApp</a>
+          <button type="button" class="btn-red" onclick="deleteLead(${l.id})">Delete</button>
+        </div>
+      </div>
+    `).join('');
   } catch (e) {
-    showNotice(e.message || "Reminder email failed.", "error");
+    document.getElementById('leadList').innerHTML = 'Unable to load leads.';
   }
 }
 
-function sendOverdueReminderWhatsApp(id) {
-  const invoice = SAVED_INVOICES.find(x => x.id === id);
-  if (!invoice) return;
-  const phone = normalisePhone(invoice.invoice?.customer_phone || "");
-  const message = invoiceReminderWhatsAppMessage(invoice);
-  const href = phone ? "https://wa.me/" + phone + "?text=" + encodeURIComponent(message) : "https://wa.me/?text=" + encodeURIComponent(message);
-  window.open(href, "_blank");
+function buildLeadWhatsappHref(lead) {
+  const cleanPhone = normalisePhone(lead.phone || '');
+  const msg = `Hi ${lead.name || ''}, thanks for contacting Nigel Harvey Ltd about: ${lead.description || ''}`.trim();
+  return cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+}
+
+function startQuoteFromLead(id) {
+  const lead = SAVED_LEADS.find(x => x.id === id);
+  if (!lead) return;
+  startNewQuote();
+  document.getElementById('customer_name').value = lead.name || '';
+  document.getElementById('customer_address').value = lead.address || '';
+  document.getElementById('customer_phone').value = lead.phone || '';
+  document.getElementById('quote_type').value = lead.job_type || 'small';
+  document.getElementById('job').value = lead.description || '';
+  toggleBathroomFields();
+  updateLabourSuggestion();
+  showTab('quotesTab');
+  setEditingStatus('Lead loaded into quote builder.', true);
+}
+
+async function updateLeadStatus(id, status) {
+  try {
+    const res = await fetch('/api/leads/' + id + '/status', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not update lead.');
+    await loadLeads();
+    showNotice('Lead updated.');
+  } catch (e) {
+    alert('Could not update lead: ' + e);
+  }
+}
+
+async function deleteLead(id) {
+  if (!confirm('Delete this lead?')) return;
+  try {
+    const res = await fetch('/api/leads/' + id, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not delete lead.');
+    await loadLeads();
+    showNotice('Lead deleted.');
+  } catch (e) {
+    alert('Could not delete lead: ' + e);
+  }
 }
 
 async function loadCustomers() {
@@ -2627,13 +2830,9 @@ async function loadCustomers() {
         <div class="history-actions" style="grid-template-columns:1fr 1fr;">
           <button type="button" class="btn-light" onclick="viewCustomerHistory(${c.id})">View History</button>
           <button type="button" class="btn-light" onclick="startQuoteForCustomer(${c.id})">Start Quote</button>
-          <button type="button" class="btn-blue" onclick="fillCustomerFromPicker(${c.id}); showTab('quotesTab');">Quick Fill</button>
-          <button type="button" class="btn-red" onclick="deleteCustomer(${c.id})">Delete Customer</button>
         </div>
-        <label style="margin-top:10px;">Customer notes</label>
-        <textarea id="customer_notes_${c.id}" placeholder="Prefers WhatsApp / paid by bank transfer / parking notes">${escapeHtml(c.notes || "")}</textarea>
-        <div class="history-actions" style="grid-template-columns:1fr;">
-          <button type="button" class="btn-blue" onclick="saveCustomerNotes(${c.id})">Save Notes</button>
+        <div class="history-actions">
+          <button type="button" class="btn-red" onclick="deleteCustomer(${c.id})">Delete Customer</button>
         </div>
         <div id="customer_history_${c.id}" class="small" style="margin-top:10px;"></div>
       </div>
@@ -2651,16 +2850,12 @@ async function viewCustomerHistory(id) {
 
     const quotes = data.quotes || [];
     const invoices = data.invoices || [];
-    const recentPrices = data.recent_prices || [];
 
     box.innerHTML = `
-      <div><strong>Customer notes:</strong> ${escapeHtml(data.customer?.notes || "None saved")}</div>
-      <div style="margin-top:8px;"><strong>Recent prices:</strong></div>
-      ${recentPrices.map(x => `<div>• ${escapeHtml(x.job)} — ${pounds(x.price)} — ${escapeHtml(x.created_at)}</div>`).join("") || "<div>None</div>"}
-      <div style="margin-top:8px;"><strong>Quotes:</strong> ${quotes.length}</div>
-      ${quotes.map(q => `<div style="margin-bottom:6px;">• ${escapeHtml(q.created_at)} — ${escapeHtml(q.job || "")} — ${pounds(q.total_price)} <button type="button" class="btn-light" style="width:auto;padding:6px 10px;font-size:13px;" onclick="duplicateQuote(${q.id})">Repeat</button> <button type="button" class="btn-blue" style="width:auto;padding:6px 10px;font-size:13px;" onclick="convertQuoteToInvoice(${q.id})">Invoice</button></div>`).join("") || "<div>None</div>"}
+      <div><strong>Quotes:</strong> ${quotes.length}</div>
+      ${quotes.slice(0,5).map(q => `<div>â¢ ${escapeHtml(q.created_at)} â ${escapeHtml(q.job || "")} â ${pounds(q.total_price)}</div>`).join("") || "<div>None</div>"}
       <div style="margin-top:8px;"><strong>Invoices:</strong> ${invoices.length}</div>
-      ${invoices.map(i => `<div style="margin-bottom:6px;">• ${escapeHtml(i.invoice_number)} — ${pounds(i.total_price)} — ${escapeHtml(i.status)} — due ${escapeHtml(i.due_date || "")}</div>`).join("") || "<div>None</div>"}
+      ${invoices.slice(0,5).map(i => `<div>â¢ ${escapeHtml(i.invoice_number)} â ${pounds(i.total_price)} â ${escapeHtml(i.status)}</div>`).join("") || "<div>None</div>"}
     `;
   } catch (e) {
     alert("Could not load customer history.");
@@ -2672,7 +2867,9 @@ function startQuoteForCustomer(id) {
   if (!c) return;
   resetQuoteFormState();
   showTab("quotesTab");
-  fillCustomerFromPicker(id);
+  document.getElementById("customer_name").value = c.name || "";
+  document.getElementById("customer_address").value = c.address || "";
+  document.getElementById("customer_phone").value = c.phone || "";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -3030,19 +3227,68 @@ loadDashboard();
 loadHistory();
 loadInvoices();
 loadCustomers();
+loadLeads();
 </script>
 </body>
 </html>
 '''
 
 
-@app.get("/", response_class=HTMLResponse)
-def home():
+@app.get("/request-quote", response_class=HTMLResponse)
+def request_quote_page():
+    logo_value = get_company_logo_value()
+    logo_html = f'<img src="{logo_value}" alt="Logo" class="logo">' if logo_value else ""
+    html = LEAD_FORM_HTML.replace("__COMPANY_LOGO_HTML__", logo_html)
+    html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
+    html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
+    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
+
+
+@app.get("/api/leads")
+def api_leads():
+    return load_leads()
+
+
+@app.post("/api/leads")
+def api_create_lead(data: LeadRequest):
+    lead = save_lead(data)
+    send_lead_notification_email(lead)
+    return JSONResponse(content=lead)
+
+
+@app.put("/api/leads/{lead_id}/status")
+def api_update_lead_status(lead_id: int, data: LeadStatusRequest):
+    lead = update_lead_status(lead_id, data.status)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+
+@app.delete("/api/leads/{lead_id}")
+def api_delete_lead(lead_id: int):
+    if not delete_lead_by_id(lead_id):
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return {"ok": True}
+
+
+@app.get("/app", response_class=HTMLResponse)
+def home_app():
     html = HTML.replace("__MATERIAL_LIBRARY__", json.dumps(MATERIAL_LIBRARY))
     html = html.replace("__FAVOURITE_MATERIALS__", json.dumps(FAVOURITE_MATERIALS))
     html = html.replace("__JOB_TEMPLATES__", json.dumps(JOB_TEMPLATES))
-    logo_html = f'<img src="{COMPANY_LOGO_URL}" alt="Logo">' if COMPANY_LOGO_URL else ""
+    logo_value = get_company_logo_value()
+    logo_html = f'<img src="{logo_value}" alt="Logo">' if logo_value else ""
     html = html.replace("__COMPANY_LOGO_HTML__", logo_html)
+    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
+
+
+@app.get("/", response_class=HTMLResponse)
+def landing_home():
+    logo_value = get_company_logo_value()
+    logo_html = f'<img src="{logo_value}" alt="Logo" class="logo">' if logo_value else ""
+    html = LANDING_PAGE_HTML.replace("__COMPANY_LOGO_HTML__", logo_html)
+    html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
+    html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -3285,21 +3531,6 @@ def api_delete_invoice(invoice_id: int):
 @app.get("/api/customers")
 def api_customers():
     return get_customers()
-
-
-@app.post("/api/customers/{customer_id}/notes")
-def api_customer_notes(customer_id: int, data: CustomerNotesRequest):
-    conn = get_db()
-    cur = conn.execute(
-        "UPDATE customers SET notes = ?, updated_at = ? WHERE id = ?",
-        ((data.notes or "").strip(), now_uk().isoformat(), customer_id)
-    )
-    conn.commit()
-    if cur.rowcount <= 0:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Customer not found")
-    conn.close()
-    return {"ok": True}
 
 
 @app.delete("/api/customers/{customer_id}")
