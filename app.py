@@ -1584,7 +1584,7 @@ LANDING_PAGE_HTML = r'''
 <script type="application/ld+json">__BUSINESS_SCHEMA_JSON__</script>
 <script type="application/ld+json">__FAQ_SCHEMA_JSON__</script>
 <style>
-:root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#16a34a;--accent2:#1d4ed8;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
+:root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#0f7a34;--accent2:#1d4ed8;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
 *{box-sizing:border-box}
 body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
 a{text-decoration:none;color:inherit}
@@ -1657,6 +1657,7 @@ ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
     </div>
   </div>
 
+  <main>
   <div class="hero">
     <div class="wrap hero-grid">
       <div class="card hero-copy">
@@ -1774,12 +1775,13 @@ ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
       </div>
     </div>
   </div>
+  </main>
 </body>
 </html>
 '''
 
 SEO_CSS = '''
-:root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#16a34a;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
+:root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#0f7a34;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
 *{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)} a{text-decoration:none;color:inherit}
 .wrap{max-width:1100px;margin:0 auto;padding:0 16px}
 .top{position:sticky;top:0;background:rgba(245,247,251,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);z-index:10}
@@ -1817,7 +1819,7 @@ SERVICE_PAGES = [
 ]
 
 def get_company_logo_html(logo_value: str) -> str:
-    return f'<img src="{logo_value}" alt="Nigel Harvey Ltd logo" class="logo">' if logo_value else ''
+    return f'<img src="{logo_value}" alt="Nigel Harvey Ltd logo" class="logo" width="240" height="90">' if logo_value else ''
 
 def render_location_page(location_name: str, logo_html: str, request: Request | None = None) -> str:
     related = ''.join(
@@ -1848,6 +1850,7 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
     return f"""<!doctype html>
 <html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Plumber in {escape(location_name)} | Reliable Local Plumbing Services | Nigel Harvey Ltd</title><meta name="description" content="Looking for a plumber in {escape(location_name)}? Nigel Harvey Ltd provides emergency plumbing, leaks, bathroom plumbing and general plumbing services in {escape(location_name)} and surrounding Surrey areas."><meta name="keywords" content="plumber {escape(location_name)}, emergency plumber {escape(location_name)}, plumbing {escape(location_name)}, plumber Surrey"><link rel="canonical" href="{escape(canonical)}"><script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{local_schema}</script><style>{SEO_CSS}</style></head>
 <body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>Plumber in {escape(location_name)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
+<main>
 <div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Local plumber in {escape(location_name)}</div><h1>Plumber in {escape(location_name)} - Reliable Local Plumbing Services</h1><p class="lead">Looking for a reliable plumber in {escape(location_name)}? Nigel Harvey Ltd provides fast, professional plumbing services for homes and landlords across {escape(location_name)} and surrounding Surrey areas. From leaks and repairs to bathroom plumbing, the focus is on a straightforward service you can trust.</p><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE)}">Call {escape(COMPANY_PHONE)}</a></div></div></div>
 <div class="wrap section"><h2>Our {escape(location_name)} plumbing services</h2><p>Customers in {escape(location_name)} contact Nigel Harvey Ltd for urgent plumbing issues, everyday repairs and planned bathroom plumbing work. We cover domestic plumbing jobs such as leaks, taps, toilets, sinks, wastes, first fix and second fix plumbing, pipework changes and practical general plumbing work.</p><div class="pill-links"><a href="/emergency-plumber-surrey">Emergency Plumber Surrey</a><a href="/general-plumbing-surrey">General Plumbing Surrey</a><a href="/bathroom-plumbing-surrey">Bathroom Plumbing Surrey</a></div></div>
 <div class="wrap section"><h2>Why choose Nigel Harvey Ltd in {escape(location_name)}?</h2><div class="grid3"><div class="card item"><h3>Fast local response</h3><p>We focus on Surrey and nearby areas, helping customers in {escape(location_name)} get a quicker and more reliable response.</p></div><div class="card item"><h3>Clear communication</h3><p>From first contact to final visit, the process is straightforward, practical and easy to deal with.</p></div><div class="card item"><h3>Tidy workmanship</h3><p>We aim to deliver neat, professional plumbing work with a focus on quality and long-term results.</p></div></div></div>
@@ -1881,6 +1884,7 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
     return f"""<!doctype html>
 <html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(service['title'])} | Nigel Harvey Ltd</title><meta name="description" content="{escape(service['meta'])}"><meta name="keywords" content="{escape(service['keywords'])}"><link rel="canonical" href="{escape(canonical)}"><script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{service_schema}</script><style>{SEO_CSS}</style></head>
 <body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(service['title'])}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
+<main>
 <div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Surrey plumbing service</div><h1>{escape(service['heading'])}</h1><p class="lead">{escape(service['intro'])}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE)}">Call {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a></div></div></div>
 <div class="wrap section"><h2>Why customers choose this service</h2><p>{escape(service['body'])}</p><div class="grid3"><div class="card item"><h3>Local Surrey coverage</h3><p>We cover Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead, Epsom and surrounding Surrey areas.</p></div><div class="card item"><h3>Clear pricing and communication</h3><p>Use the quote form to send job details and get a practical response without the runaround.</p></div><div class="card item"><h3>Domestic plumbing focus</h3><p>Our service pages are written for real customer searches and practical domestic plumbing jobs.</p></div></div></div>
 <div class="wrap section"><h2>Areas covered for {escape(service['heading']).lower()}</h2><p>We also cover nearby towns for customers searching for this service in Surrey.</p><div class="pill-links">{location_links}</div></div>
@@ -1916,6 +1920,7 @@ button{width:100%;padding:15px;border:none;border-radius:12px;background:#111;co
 </style>
 </head>
 <body>
+<main>
 <div class="wrap">
   <div class="card">
     <div style="text-align:right;">__COMPANY_LOGO_HTML__</div>
@@ -1944,6 +1949,7 @@ button{width:100%;padding:15px;border:none;border-radius:12px;background:#111;co
     <div id="lead_err" class="err"></div>
   </div>
 </div>
+</main>
 <script>
 function setJobType(type, text){document.getElementById('lead_job_type').value=type; if(!document.getElementById('lead_description').value.trim()){document.getElementById('lead_description').value=text;}}
 async function submitLead(){
@@ -3595,7 +3601,7 @@ loadLeads();
 @app.get("/request-quote", response_class=HTMLResponse)
 def request_quote_page(request: Request):
     logo_value = get_company_logo_value()
-    logo_html = f'<img src="{logo_value}" alt="Logo" class="logo">' if logo_value else ""
+    logo_html = f'<img src="{logo_value}" alt="Nigel Harvey Ltd logo" class="logo" width="240" height="90">' if logo_value else ""
     html = LEAD_FORM_HTML.replace("__COMPANY_LOGO_HTML__", logo_html)
     html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
     html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
