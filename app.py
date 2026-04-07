@@ -1570,9 +1570,9 @@ def build_reviews_section_html() -> str:
             f'<div class="grid3">{"".join(cards)}</div></div>'
         )
     return (
-    '<div class="wrap section"><h2>Trusted local plumber in Surrey</h2>'
-    '<p class="copy">Nigel Harvey Ltd is a local plumbing and heating company serving Surrey and surrounding areas. We focus on providing reliable service, clear communication and quality workmanship on every job.</p>'
-)
+        '<div class="wrap section"><h2>Trusted local plumber in Surrey</h2>'
+        '<p class="copy">Nigel Harvey Ltd is a local plumbing and heating company serving Surrey and surrounding areas. We focus on providing reliable service, clear communication and quality workmanship on every job.</p></div>'
+    )
 
 
 
@@ -3558,7 +3558,7 @@ loadLeads();
 
 
 @app.get("/request-quote", response_class=HTMLResponse)
-def request_quote_page():
+def request_quote_page(request: Request):
     logo_value = get_company_logo_value()
     logo_html = f'<img src="{logo_value}" alt="Logo" class="logo">' if logo_value else ""
     html = LEAD_FORM_HTML.replace("__COMPANY_LOGO_HTML__", logo_html)
