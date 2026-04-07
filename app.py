@@ -1583,7 +1583,7 @@ LANDING_PAGE_HTML = r'''
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plumber in Surrey | Emergency Plumbing & Heating | Nigel Harvey Ltd</title>
-<meta name="description" content="Trusted plumber in Surrey covering Guildford, Woking, Farnham and surrounding areas. Emergency plumbing, boiler repairs, installations. Call Nigel Harvey Ltd today.">
+<meta name="description" content="Trusted plumber in Surrey covering Guildford, Woking, Farnham and surrounding areas. Emergency plumbing, bathroom plumbing, leaks, repairs and installations. Call Nigel Harvey Ltd today.">
 <meta name="keywords" content="plumber Surrey, emergency plumber Surrey, plumber Guildford, plumber Woking, plumber Farnham, heating repairs Surrey, bathroom plumbing Surrey">
 <link rel="canonical" href="__CANONICAL_HOME__">
 <script type="application/ld+json">__BUSINESS_SCHEMA_JSON__</script>
@@ -1668,7 +1668,7 @@ ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
         <div class="logo-box">__COMPANY_LOGO_HTML__</div>
         <span class="tag">Trusted local plumber across Surrey</span>
         <h1>Reliable Plumber in Surrey</h1>
-        <p class="lead">Nigel Harvey Ltd provides professional plumbing and heating services across Surrey, including Guildford, Woking, Farnham and surrounding areas. Whether you need an emergency plumber, boiler repair, or general plumbing work, we deliver a fast, reliable and straightforward service you can trust.</p>
+        <p class="lead">Nigel Harvey Ltd provides professional plumbing and heating services across Surrey, including Guildford, Woking, Farnham and surrounding areas. Whether you need an emergency plumber, help with leaks, pipework, bathroom plumbing or general plumbing work, we deliver a fast, reliable and straightforward service you can trust.</p>
         <div class="hero-actions">
           <a class="btn btn-green" href="tel:__COMPANY_PHONE__">Call __COMPANY_PHONE__</a>
           <a class="btn btn-primary" href="/request-quote">Request a Quote</a>
@@ -1685,7 +1685,7 @@ ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
         <h2>Local Plumbing &amp; Heating Experts in Surrey</h2>
         <p>We are a local Surrey-based plumbing company focused on providing clear communication, fair pricing and high-quality workmanship. From small repairs to full installations, every job is completed with care and attention to detail.</p>
         <div class="check">Emergency plumbing services</div>
-        <div class="check">Boiler repairs and heating work</div>
+        <div class="check">Leaks, pipework repairs and general plumbing</div>
         <div class="check">Bathroom plumbing and installations</div>
         <div class="check">Covering Surrey towns and nearby areas</div>
         <div class="stats">
@@ -1767,7 +1767,7 @@ ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
         </div>
         <div class="card faq">
           <h3>What type of plumbing work do you do?</h3>
-          <p>We handle general plumbing, boiler repairs, heating systems, bathroom installations and more.</p>
+          <p>We handle general plumbing, general plumbing, leaks, pipework repairs, bathroom plumbing and more.</p>
         </div>
       </div>
     </div>
