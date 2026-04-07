@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
@@ -1060,11 +1060,23 @@ def pounds_text(value):
     return f"£{safe_float(value, 0):.2f}"
 
 
-def build_invoice_public_url(invoice_id: int):
-    base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
-    if base:
-        return f"{base}/invoice/{invoice_id}"
-    return f"/invoice/{invoice_id}"
+def get_public_base_url(request: Request | None = None) -> str:
+    env_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if env_base:
+        return env_base
+    if request is not None:
+        return str(request.base_url).rstrip("/")
+    return ""
+
+
+def absolute_url(path: str, request: Request | None = None) -> str:
+    clean_path = path if path.startswith("/") else f"/{path}"
+    base = get_public_base_url(request)
+    return f"{base}{clean_path}" if base else clean_path
+
+
+def build_invoice_public_url(invoice_id: int, request: Request | None = None):
+    return absolute_url(f"/invoice/{invoice_id}", request)
 
 
 def _pdf_header(c, title: str, ref_number: str):
@@ -1454,7 +1466,7 @@ LANDING_PAGE_HTML = r'''
 <title>Plumber in Surrey | Emergency Plumbing & Heating | Nigel Harvey Ltd</title>
 <meta name="description" content="Trusted plumber in Surrey covering Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead, Epsom and surrounding areas. Emergency plumbing, bathroom plumbing, heating repairs and general plumbing from Nigel Harvey Ltd.">
 <meta name="keywords" content="plumber Surrey, plumber Guildford, plumber Woking, emergency plumber Surrey, heating engineer Surrey, bathroom plumber Surrey">
-<link rel="canonical" href="/">
+<link rel="canonical" href="__CANONICAL_HOME__">
 <style>
 :root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#16a34a;--accent2:#1d4ed8;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
 *{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)} a{text-decoration:none;color:inherit}
@@ -1479,7 +1491,7 @@ ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
 @media (max-width:980px){.hero-grid,.grid3,.grid4,.pill-links{grid-template-columns:1fr 1fr}.hero-copy,.panel,.item,.cta,.faq{padding:20px} .panel h2,.section h2{font-size:26px}}
 @media (max-width:640px){.grid3,.grid4,.pill-links{grid-template-columns:1fr}}
 </style>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Plumber","name":"Nigel Harvey Ltd","telephone":"__COMPANY_PHONE__","email":"__COMPANY_EMAIL__","address":{"@type":"PostalAddress","streetAddress":"125 Bushy Hill Drive","addressLocality":"Guildford","postalCode":"GU1 2UG","addressCountry":"GB"},"areaServed":["Guildford","Woking","Farnham","Godalming","Camberley","Aldershot","Leatherhead","Epsom","Weybridge","Cobham","Surrey"],"url":"/","description":"Plumbing and heating services in Surrey and surrounding areas including emergency plumbing, general plumbing, bathroom plumbing and heating repairs."}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Plumber","name":"Nigel Harvey Ltd","telephone":"__COMPANY_PHONE__","email":"__COMPANY_EMAIL__","address":{"@type":"PostalAddress","streetAddress":"125 Bushy Hill Drive","addressLocality":"Guildford","postalCode":"GU1 2UG","addressCountry":"GB"},"areaServed":["Guildford","Woking","Farnham","Godalming","Camberley","Aldershot","Leatherhead","Epsom","Weybridge","Cobham","Surrey"],"url":"__CANONICAL_HOME__","description":"Plumbing and heating services in Surrey and surrounding areas including emergency plumbing, general plumbing, bathroom plumbing and heating repairs."}</script>
 </head>
 <body>
   <div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>Plumbing & Heating in Surrey</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:__COMPANY_PHONE__">Call Now</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/app">Open App</a></div></div></div>
@@ -1538,14 +1550,14 @@ SERVICE_PAGES = [
 def get_company_logo_html(logo_value: str) -> str:
     return f'<img src="{logo_value}" alt="Nigel Harvey Ltd logo" class="logo">' if logo_value else ''
 
-def render_location_page(location_name: str, logo_html: str) -> str:
+def render_location_page(location_name: str, logo_html: str, request: Request | None = None) -> str:
     related = ''.join(
         f'<a href="/plumber-{escape(item["slug"])}">Plumber in {escape(item["name"])}</a>'
         for item in LOCATION_PAGES if item['name'] != location_name
     )
     slug = location_name.lower()
     return f'''<!doctype html>
-<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Plumber in {escape(location_name)} | Nigel Harvey Ltd</title><meta name="description" content="Need a plumber in {escape(location_name)}? Nigel Harvey Ltd provides plumbing and heating services including emergency plumbing, bathroom plumbing, heating repairs and general plumbing in {escape(location_name)} and surrounding Surrey areas."><meta name="keywords" content="plumber {escape(location_name)}, emergency plumber {escape(location_name)}, plumbing {escape(location_name)}, plumber Surrey"><link rel="canonical" href="/plumber-{escape(slug)}"><style>{SEO_CSS}</style></head>
+<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Plumber in {escape(location_name)} | Nigel Harvey Ltd</title><meta name="description" content="Need a plumber in {escape(location_name)}? Nigel Harvey Ltd provides plumbing and heating services including emergency plumbing, bathroom plumbing, heating repairs and general plumbing in {escape(location_name)} and surrounding Surrey areas."><meta name="keywords" content="plumber {escape(location_name)}, emergency plumber {escape(location_name)}, plumbing {escape(location_name)}, plumber Surrey"><link rel="canonical" href="{escape(absolute_url(f"/plumber-{slug}", request))}"><style>{SEO_CSS}</style></head>
 <body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>Plumbing & Heating in {escape(location_name)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
 <div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Local plumber in {escape(location_name)}</div><h1>Plumber in {escape(location_name)}</h1><p class="lead">Looking for a reliable plumber in {escape(location_name)}? Nigel Harvey Ltd provides professional plumbing services including emergency plumbing, bathroom plumbing, heating repairs, radiator work, leaks, toilets, taps, sinks and general plumbing jobs in {escape(location_name)} and surrounding Surrey areas.</p><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Get a Quote</a><a class="btn btn-green" href="https://wa.me/447595725547" target="_blank">WhatsApp Nigel</a></div></div></div>
 <div class="wrap section"><h2>Local plumbing services in {escape(location_name)}</h2><p>Nigel Harvey Ltd helps customers in {escape(location_name)} with tidy, straightforward plumbing and heating work. Whether you need a leaking tap repaired, a toilet issue sorted, a bathroom plumbing job priced or a radiator problem looked at, the focus is on clear communication and dependable local service.</p><p>This page is designed to improve local SEO for plumber {escape(location_name)} and related search terms while also giving customers a clear idea of the services available in the area.</p></div>
@@ -1555,11 +1567,11 @@ def render_location_page(location_name: str, logo_html: str) -> str:
 <div class="wrap"><div class="hero-card cta"><div><h2 style="margin:0 0 8px">Need a plumber in {escape(location_name)}?</h2><div style="color:var(--muted)">Send over your job details and request a quote online today.</div></div><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="mailto:{escape(COMPANY_EMAIL)}">Email Nigel</a></div></div></div>
 <div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing & Heating</div><div>{escape(location_name)}, Surrey and surrounding areas<br>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></div></body></html>'''
 
-def render_service_page(service: dict, logo_html: str) -> str:
+def render_service_page(service: dict, logo_html: str, request: Request | None = None) -> str:
     service_links = ''.join(f'<a href="/{escape(item["slug"])}">{escape(item["title"])}</a>' for item in SERVICE_PAGES if item['slug'] != service['slug'])
     location_links = ''.join(f'<a href="/plumber-{escape(item["slug"])}">Plumber in {escape(item["name"])}</a>' for item in LOCATION_PAGES)
     return f'''<!doctype html>
-<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(service['title'])} | Nigel Harvey Ltd</title><meta name="description" content="{escape(service['meta'])}"><meta name="keywords" content="{escape(service['keywords'])}"><link rel="canonical" href="/{escape(service['slug'])}"><style>{SEO_CSS}</style></head>
+<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(service['title'])} | Nigel Harvey Ltd</title><meta name="description" content="{escape(service['meta'])}"><meta name="keywords" content="{escape(service['keywords'])}"><link rel="canonical" href="{escape(absolute_url(f"/{service['slug']}", request))}"><style>{SEO_CSS}</style></head>
 <body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(service['title'])}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
 <div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Surrey plumbing service</div><h1>{escape(service['heading'])}</h1><p class="lead">{escape(service['intro'])}</p><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Get a Quote</a><a class="btn btn-green" href="https://wa.me/447595725547" target="_blank">WhatsApp Nigel</a></div></div></div>
 <div class="wrap section"><h2>Service overview</h2><p>{escape(service['body'])}</p><p>Nigel Harvey Ltd covers Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead, Epsom and surrounding Surrey areas for this service.</p></div>
@@ -3278,6 +3290,7 @@ def request_quote_page():
     html = LEAD_FORM_HTML.replace("__COMPANY_LOGO_HTML__", logo_html)
     html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
     html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
+    html = html.replace("__CANONICAL_HOME__", absolute_url("/", request))
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -3320,7 +3333,7 @@ def home_app():
 
 
 @app.get("/", response_class=HTMLResponse)
-def landing_home():
+def landing_home(request: Request):
     logo_value = get_company_logo_value()
     logo_html = get_company_logo_html(logo_value)
     html = LANDING_PAGE_HTML.replace("__COMPANY_LOGO_HTML__", logo_html)
@@ -3330,22 +3343,24 @@ def landing_home():
 
 
 @app.get("/robots.txt")
-def robots_txt():
-    return Response(content="User-agent: *\nAllow: /\n", media_type="text/plain; charset=utf-8")
+def robots_txt(request: Request):
+    sitemap_url = absolute_url("/sitemap.xml", request)
+    content = f"User-agent: *\nAllow: /\nSitemap: {sitemap_url}\n"
+    return Response(content=content, media_type="text/plain; charset=utf-8")
 
 
 @app.get("/sitemap.xml")
-def sitemap_xml():
+def sitemap_xml(request: Request):
     urls = ["/", "/request-quote"]
     urls.extend(f"/plumber-{item['slug']}" for item in LOCATION_PAGES)
     urls.extend(f"/{item['slug']}" for item in SERVICE_PAGES)
-    body = "".join(f"<url><loc>{escape(url)}</loc></url>" for url in urls)
+    body = "".join(f"<url><loc>{escape(absolute_url(url, request))}</loc></url>" for url in urls)
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
     return Response(content=xml, media_type="application/xml; charset=utf-8")
 
 
 @app.get("/plumber-{area_slug}", response_class=HTMLResponse)
-def location_page(area_slug: str):
+def location_page(area_slug: str, request: Request):
     page = next((item for item in LOCATION_PAGES if item["slug"] == area_slug.lower()), None)
     if not page:
         raise HTTPException(status_code=404, detail="Area page not found")
