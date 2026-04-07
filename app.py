@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -165,20 +166,20 @@ JOB_TEMPLATES = [
 
 LABOUR_HINTS = {
     "small": [
-        {"keywords": ["tap"], "suggestion": 120, "range": "&#163;100–&#163;140"},
-        {"keywords": ["toilet", "wc"], "suggestion": 180, "range": "&#163;160–&#163;220"},
-        {"keywords": ["waste", "trap"], "suggestion": 120, "range": "&#163;90–&#163;140"},
-        {"keywords": ["outside tap"], "suggestion": 150, "range": "£140–&#163;180"},
+        {"keywords": ["tap"], "suggestion": 120, "range": "£100 - £140"},
+        {"keywords": ["toilet", "wc"], "suggestion": 180, "range": "£160 - £220"},
+        {"keywords": ["waste", "trap"], "suggestion": 120, "range": "£90 - £140"},
+        {"keywords": ["outside tap"], "suggestion": 150, "range": "£140 - £180"},
     ],
     "bathroom": [
-        {"keywords": ["install"], "suggestion": 1800, "range": "£1,600–&#163;2,200"},
-        {"keywords": ["refurb"], "suggestion": 2200, "range": "&#163;2,000–&#163;2,800"},
-        {"keywords": ["bathroom"], "suggestion": 2000, "range": "£1,600–£2,800"},
+        {"keywords": ["install"], "suggestion": 1800, "range": "£1,600 - £2,200"},
+        {"keywords": ["refurb"], "suggestion": 2200, "range": "£2,000 - £2,800"},
+        {"keywords": ["bathroom"], "suggestion": 2000, "range": "£1,600 - £2,800"},
     ],
     "heating": [
-        {"keywords": ["radiator"], "suggestion": 180, "range": "&#163;160–&#163;220"},
-        {"keywords": ["repair"], "suggestion": 150, "range": "&#163;120–£220"},
-        {"keywords": ["system"], "suggestion": 3500, "range": "£3,000–£4,500"},
+        {"keywords": ["radiator"], "suggestion": 180, "range": "£160 - £220"},
+        {"keywords": ["repair"], "suggestion": 150, "range": "£120 - £220"},
+        {"keywords": ["system"], "suggestion": 3500, "range": "£3,000 - £4,500"},
     ],
 }
 
@@ -434,10 +435,10 @@ def find_labour_suggestion(quote_type: str, job_description: str):
             return rule
 
     if quote_type == "bathroom":
-        return {"suggestion": 2000, "range": "£1,600–£2,800"}
+        return {"suggestion": 2000, "range": "£1,600 - £2,800"}
     if quote_type == "heating":
-        return {"suggestion": 180, "range": "&#163;150–£300"}
-    return {"suggestion": 120, "range": "£90–&#163;180"}
+        return {"suggestion": 180, "range": "£150 - £300"}
+    return {"suggestion": 120, "range": "£90 - £180"}
 
 
 def calculate_quote(data: QuoteRequest):
@@ -1446,91 +1447,127 @@ def send_lead_notification_email(lead: dict):
 
 LANDING_PAGE_HTML = r'''
 <!doctype html>
-<html>
+<html lang="en-GB">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nigel Harvey Ltd | Plumbing & Heating</title>
-<meta name="description" content="Reliable plumbing and heating services in Guildford and surrounding areas. Request a quote online with Nigel Harvey Ltd.">
+<title>Plumber in Surrey | Emergency Plumbing & Heating | Nigel Harvey Ltd</title>
+<meta name="description" content="Trusted plumber in Surrey covering Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead, Epsom and surrounding areas. Emergency plumbing, bathroom plumbing, heating repairs and general plumbing from Nigel Harvey Ltd.">
+<meta name="keywords" content="plumber Surrey, plumber Guildford, plumber Woking, emergency plumber Surrey, heating engineer Surrey, bathroom plumber Surrey">
+<link rel="canonical" href="/">
 <style>
-:root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#16a34a;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
+:root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#16a34a;--accent2:#1d4ed8;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
 *{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)} a{text-decoration:none;color:inherit}
-.wrap{max-width:1120px;margin:0 auto;padding:0 16px}
-.top{position:sticky;top:0;background:rgba(245,247,251,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);z-index:10}
+.wrap{max-width:1160px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;background:rgba(245,247,251,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);z-index:10}
 .nav{display:flex;justify-content:space-between;align-items:center;padding:14px 0;gap:12px;flex-wrap:wrap}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
 .nav-actions{display:flex;gap:10px;flex-wrap:wrap}.btn{display:inline-block;padding:14px 20px;border-radius:999px;font-weight:700}.btn-primary{background:var(--brand);color:#fff}.btn-green{background:var(--accent);color:#fff}.btn-light{background:#fff;border:1px solid var(--border)}
-.hero{padding:42px 0 24px}.hero-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:22px;align-items:stretch}.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
-.hero-copy{padding:34px}.tag{display:inline-block;padding:7px 12px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:12px;margin-bottom:12px} h1{font-size:clamp(34px,5vw,58px);line-height:1.02;margin:0 0 14px} .lead{font-size:18px;color:var(--muted);max-width:42rem;margin:0 0 20px}
+.hero{padding:40px 0 22px}.hero-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:22px;align-items:stretch}.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.hero-copy{padding:34px}.tag{display:inline-block;padding:7px 12px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:12px;margin-bottom:12px} h1{font-size:clamp(34px,5vw,58px);line-height:1.03;margin:0 0 14px} .lead{font-size:18px;color:var(--muted);max-width:46rem;margin:0 0 20px;line-height:1.6}
 .hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}.trust{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-weight:700;font-size:14px}
-.panel{padding:24px}.panel h2,.section h2{margin:0 0 10px;font-size:30px}.check{padding:14px 15px;border:1px solid var(--border);border-radius:14px;background:#f8fafc;font-weight:700;margin-bottom:10px}
-.section{padding:18px 0}.section p.copy{margin:0 0 18px;color:var(--muted);max-width:46rem}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.item{padding:22px}.item h3{margin:0 0 8px;font-size:20px}.item p{margin:0;color:var(--muted);line-height:1.55}
-.cta{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:26px;margin:24px 0 44px}.footer{padding:20px 0 36px;color:var(--muted)} .footer-inner{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:18px}
+.panel{padding:24px}.panel h2,.section h2{margin:0 0 12px;font-size:30px}.check{padding:14px 15px;border:1px solid var(--border);border-radius:14px;background:#f8fafc;font-weight:700;margin-bottom:10px}
+.section{padding:18px 0}.section p.copy{margin:0 0 18px;color:var(--muted);max-width:56rem;line-height:1.65}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.item{padding:22px}.item h3{margin:0 0 8px;font-size:20px}.item p{margin:0;color:var(--muted);line-height:1.55}
+.link-grid a,.pill-links a{display:block;padding:14px 16px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);font-weight:700}
+.link-grid a:hover,.pill-links a:hover{border-color:#cbd5e1}
+.pill-links{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.cta{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:26px;margin:24px 0 44px}
+.notice{padding:18px;border-radius:18px;background:#eef6ff;border:1px solid #c7ddff;color:#1e3a8a;font-weight:700}
+.footer{padding:20px 0 36px;color:var(--muted)} .footer-inner{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:18px}
 .logo-box{margin-bottom:14px}.logo-box img{max-width:240px;max-height:90px;object-fit:contain}.logo{max-width:240px;max-height:90px;object-fit:contain}
-@media (max-width:900px){.hero-grid,.grid3{grid-template-columns:1fr}.hero-copy,.panel,.item,.cta{padding:20px} .panel h2,.section h2{font-size:26px}}
+ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
+.faq{padding:18px 20px}.faq h3{margin:0 0 8px;font-size:19px}.faq p{margin:0;color:var(--muted);line-height:1.6}
+@media (max-width:980px){.hero-grid,.grid3,.grid4,.pill-links{grid-template-columns:1fr 1fr}.hero-copy,.panel,.item,.cta,.faq{padding:20px} .panel h2,.section h2{font-size:26px}}
+@media (max-width:640px){.grid3,.grid4,.pill-links{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Plumber","name":"Nigel Harvey Ltd","telephone":"__COMPANY_PHONE__","email":"__COMPANY_EMAIL__","address":{"@type":"PostalAddress","streetAddress":"125 Bushy Hill Drive","addressLocality":"Guildford","postalCode":"GU1 2UG","addressCountry":"GB"},"areaServed":["Guildford","Woking","Farnham","Godalming","Camberley","Aldershot","Leatherhead","Epsom","Weybridge","Cobham","Surrey"],"url":"/","description":"Plumbing and heating services in Surrey and surrounding areas including emergency plumbing, general plumbing, bathroom plumbing and heating repairs."}</script>
 </head>
 <body>
-  <div class="top">
-    <div class="wrap nav">
-      <div class="brand">Nigel Harvey Ltd<small>Plumbing & Heating</small></div>
-      <div class="nav-actions">
-        <a class="btn btn-light" href="tel:__COMPANY_PHONE__">Call Now</a>
-        <a class="btn btn-primary" href="/request-quote">Request a Quote</a>
-        <a class="btn btn-light" href="/app">Open App</a>
-      </div>
-    </div>
-  </div>
-  <div class="wrap hero">
-    <div class="hero-grid">
-      <div class="card hero-copy">
-        <div class="logo-box">__COMPANY_LOGO_HTML__</div>
-        <div class="tag">Local • Reliable • Professional</div>
-        <h1>Trusted plumbing and heating work without the hassle.</h1>
-        <p class="lead">Need a tap replaced, a bathroom upgraded, heating work priced, or a general plumbing repair sorted? Request a quote online and get a fast, straightforward response from Nigel Harvey Ltd.</p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="/request-quote">Get Your Quote</a>
-          <a class="btn btn-green" href="https://wa.me/447595725547" target="_blank">WhatsApp Nigel</a>
-        </div>
-        <div class="trust"><span>Fast quote requests</span><span>Clear pricing</span><span>Friendly local service</span></div>
-      </div>
-      <div class="card panel">
-        <h2>What you can request online</h2>
-        <div class="check">Tap, toilet, sink and waste repairs</div>
-        <div class="check">Bathroom plumbing and refurb work</div>
-        <div class="check">Heating repairs and radiator jobs</div>
-        <div class="check">Outside taps and general plumbing jobs</div>
-        <a class="btn btn-primary" style="width:100%;text-align:center;margin-top:8px" href="/request-quote">Start Your Quote Request</a>
-      </div>
-    </div>
-  </div>
-  <div class="wrap section">
-    <h2>Services</h2>
-    <p class="copy">Whether it’s a quick repair or a larger install, Nigel Harvey Ltd helps customers with practical, tidy, reliable plumbing and heating work.</p>
-    <div class="grid3">
-      <div class="card item"><h3>General Plumbing</h3><p>Taps, leaks, wastes, traps, toilets, valves, kitchen and bathroom plumbing jobs handled clearly and efficiently.</p></div>
-      <div class="card item"><h3>Bathrooms</h3><p>Bathroom plumbing installs and refurb work including sanitaryware connections, first fix and second fix work.</p></div>
-      <div class="card item"><h3>Heating</h3><p>Radiator installs, heating repairs, valves, controls and general heating system work priced properly and carried out professionally.</p></div>
-    </div>
-  </div>
-  <div class="wrap section">
-    <h2>Why customers use Nigel Harvey Ltd</h2>
-    <p class="copy">The aim is simple: make it easy for people to ask for help, get a clear quote, and book reliable work without chasing around.</p>
-    <div class="grid3">
-      <div class="card item"><h3>Simple quote process</h3><p>Customers can send their details and job information online in minutes, making it easier to get back to them fast.</p></div>
-      <div class="card item"><h3>Professional paperwork</h3><p>Branded quotes, invoices, PDFs and clear communication give customers confidence from the start.</p></div>
-      <div class="card item"><h3>Easy payment flow</h3><p>Invoices can include payment links, making it straightforward for customers to pay once work is complete.</p></div>
-    </div>
-  </div>
-  <div class="wrap">
-    <div class="card cta">
-      <div><h2 style="margin:0 0 8px">Need plumbing or heating work priced?</h2><div style="color:var(--muted)">Use the online quote request form and send over the job details. It’s the quickest way to get started.</div></div>
-      <div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="mailto:__COMPANY_EMAIL__">Email Nigel</a></div>
-    </div>
-  </div>
-  <div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing & Heating</div><div>Phone: __COMPANY_PHONE__<br>Email: __COMPANY_EMAIL__<br>Guildford and surrounding areas</div></div></div>
+  <div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>Plumbing & Heating in Surrey</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:__COMPANY_PHONE__">Call Now</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/app">Open App</a></div></div></div>
+  <div class="wrap hero"><div class="hero-grid"><div class="card hero-copy"><div class="logo-box">__COMPANY_LOGO_HTML__</div><div class="tag">Surrey • Guildford • Woking • Surrounding Areas</div><h1>Reliable plumber in Surrey for emergency plumbing, heating repairs and bathroom plumbing.</h1><p class="lead">Nigel Harvey Ltd provides professional plumbing services across Surrey, including Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead, Epsom, Weybridge and surrounding areas. From emergency plumbing and leak repairs to bathroom plumbing, radiator work and general plumbing jobs, the focus is on tidy work, clear communication and dependable local service.</p><div class="hero-actions"><a class="btn btn-primary" href="/request-quote">Get Your Quote</a><a class="btn btn-green" href="https://wa.me/447595725547" target="_blank">WhatsApp Nigel</a></div><div class="trust"><span>Local Surrey business</span><span>Fast quote requests</span><span>Clear pricing</span><span>Friendly reliable service</span></div></div><div class="card panel"><h2>Plumbing services available</h2><div class="check">Emergency plumber callouts in Surrey</div><div class="check">Leaks, taps, toilets, sinks and waste repairs</div><div class="check">Bathroom plumbing and installation work</div><div class="check">Radiators, valves and heating repairs</div><div class="check">Outside taps, kitchen plumbing and general jobs</div><a class="btn btn-primary" style="width:100%;text-align:center;margin-top:8px" href="/request-quote">Start Your Quote Request</a></div></div></div>
+  <div class="wrap section"><div class="notice">Looking for a plumber near you in Surrey? Nigel Harvey Ltd covers Guildford and nearby towns with responsive local plumbing and heating services.</div></div>
+  <div class="wrap section"><h2>Plumber in Surrey</h2><p class="copy">If you are searching for a plumber in Surrey, you want someone local, straightforward and easy to deal with. Nigel Harvey Ltd helps homeowners and customers across Surrey with general plumbing, emergency plumbing, bathroom plumbing and heating repairs. Whether it is a leaking tap, a toilet problem, a radiator issue, pipework changes or a bathroom plumbing job, the aim is to provide practical help with a professional finish.</p><p class="copy">Areas covered include Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead, Epsom, Weybridge, Cobham and surrounding Surrey areas. This strong location coverage helps the website target searches for plumbing services in Surrey and nearby towns while giving customers clear local relevance.</p></div>
+  <div class="wrap section"><h2>Our plumbing and heating services</h2><div class="grid4 link-grid"><a href="/emergency-plumber-surrey">Emergency Plumber Surrey</a><a href="/general-plumbing-surrey">General Plumbing Surrey</a><a href="/bathroom-plumbing-surrey">Bathroom Plumbing Surrey</a><a href="/heating-repairs-surrey">Heating Repairs Surrey</a></div></div>
+  <div class="wrap section"><h2>Areas we cover</h2><p class="copy">Location pages help target search terms such as plumber Guildford, plumber Woking and emergency plumber Farnham. Use these service area pages to strengthen local SEO across Surrey and surrounding areas.</p><div class="pill-links"><a href="/plumber-guildford">Plumber in Guildford</a><a href="/plumber-woking">Plumber in Woking</a><a href="/plumber-farnham">Plumber in Farnham</a><a href="/plumber-godalming">Plumber in Godalming</a><a href="/plumber-camberley">Plumber in Camberley</a><a href="/plumber-aldershot">Plumber in Aldershot</a><a href="/plumber-leatherhead">Plumber in Leatherhead</a><a href="/plumber-epsom">Plumber in Epsom</a></div></div>
+  <div class="wrap section"><h2>Why choose Nigel Harvey Ltd</h2><div class="grid3"><div class="card item"><h3>Local Surrey coverage</h3><p>Focused on Surrey and nearby areas, helping the business appear for local plumbing searches with strong area relevance.</p></div><div class="card item"><h3>Clear communication</h3><p>Customers can request a quote online, send over the job details and get a practical response without chasing around.</p></div><div class="card item"><h3>Professional service</h3><p>Clean presentation, branded paperwork and a tidy straightforward approach help build trust from first visit to final invoice.</p></div></div></div>
+  <div class="wrap section"><h2>Common plumbing jobs we help with</h2><div class="grid3"><div class="card item"><h3>General plumbing repairs</h3><p>Taps, leaks, toilets, sinks, wastes, traps, isolation valves, outside taps and other everyday plumbing repairs completed clearly and efficiently.</p></div><div class="card item"><h3>Bathroom plumbing</h3><p>Bathroom plumbing installations, refurbishments, sanitaryware connections, first fix and second fix work for domestic projects in Surrey.</p></div><div class="card item"><h3>Heating and radiators</h3><p>Radiators, valves, controls and practical heating system plumbing work for homes across Surrey.</p></div></div></div>
+  <div class="wrap section"><h2>Frequently asked questions</h2><div class="grid3"><div class="card faq"><h3>Do you cover all of Surrey?</h3><p>Nigel Harvey Ltd covers Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead, Epsom and surrounding Surrey areas. If you are nearby, get in touch and ask.</p></div><div class="card faq"><h3>Can I request an emergency plumber?</h3><p>Yes. The site includes an emergency plumbing page and quote request form so customers can send details quickly for urgent plumbing issues in Surrey.</p></div><div class="card faq"><h3>What type of plumbing work do you do?</h3><p>General plumbing, bathroom plumbing, heating repairs, radiators, leaks, toilets, taps, sinks, wastes, pipework changes and similar domestic plumbing jobs.</p></div></div></div>
+  <div class="wrap"><div class="card cta"><div><h2 style="margin:0 0 8px">Need plumbing or heating work priced in Surrey?</h2><div style="color:var(--muted)">Use the online quote request form and send over the job details. It is the quickest way to get started.</div></div><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="mailto:__COMPANY_EMAIL__">Email Nigel</a></div></div></div>
+  <div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing & Heating in Surrey</div><div>Phone: __COMPANY_PHONE__<br>Email: __COMPANY_EMAIL__<br>Guildford, Surrey and surrounding areas</div></div></div>
 </body>
 </html>
 '''
+
+SEO_CSS = '''
+:root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#16a34a;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
+*{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)} a{text-decoration:none;color:inherit}
+.wrap{max-width:1100px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;background:rgba(245,247,251,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);z-index:10}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:14px 0;gap:12px;flex-wrap:wrap}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.nav-actions{display:flex;gap:10px;flex-wrap:wrap}.btn{display:inline-block;padding:14px 20px;border-radius:999px;font-weight:700}.btn-primary{background:var(--brand);color:#fff}.btn-green{background:var(--accent);color:#fff}.btn-light{background:#fff;border:1px solid var(--border)}
+.hero{padding:36px 0 18px}.hero-card,.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.hero-card{padding:30px}.eyebrow{display:inline-block;padding:7px 12px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:12px;margin-bottom:12px} h1{font-size:clamp(32px,5vw,54px);line-height:1.05;margin:0 0 14px} .lead{font-size:18px;color:var(--muted);line-height:1.6;margin:0 0 18px}
+.section{padding:18px 0}.section h2{margin:0 0 12px;font-size:30px}.section p{color:var(--muted);line-height:1.7;margin:0 0 16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.item{padding:22px}.item h3{margin:0 0 8px;font-size:20px}.item p{margin:0}
+.pill-links{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.pill-links a{display:block;padding:14px 16px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);font-weight:700}
+.list{margin:0;padding-left:18px;color:var(--muted);line-height:1.8}
+.cta{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:24px;margin:26px 0 40px}
+.footer{padding:20px 0 36px;color:var(--muted)} .footer-inner{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:18px}
+.logo{max-width:240px;max-height:90px;object-fit:contain}
+@media (max-width:900px){.grid3,.pill-links{grid-template-columns:1fr 1fr}.hero-card,.item,.cta{padding:20px}.section h2{font-size:26px}}
+@media (max-width:640px){.grid3,.pill-links{grid-template-columns:1fr}}
+'''
+
+LOCATION_PAGES = [
+    {"slug":"guildford","name":"Guildford"},
+    {"slug":"woking","name":"Woking"},
+    {"slug":"farnham","name":"Farnham"},
+    {"slug":"godalming","name":"Godalming"},
+    {"slug":"camberley","name":"Camberley"},
+    {"slug":"aldershot","name":"Aldershot"},
+    {"slug":"leatherhead","name":"Leatherhead"},
+    {"slug":"epsom","name":"Epsom"},
+]
+
+SERVICE_PAGES = [
+    {"slug":"emergency-plumber-surrey","title":"Emergency Plumber Surrey","meta":"Emergency plumber in Surrey covering Guildford, Woking, Farnham, Godalming, Camberley and surrounding areas. Fast help for leaks, toilets, taps, pipework and urgent plumbing issues.","heading":"Emergency Plumber in Surrey","intro":"Need an emergency plumber in Surrey? Nigel Harvey Ltd provides responsive local plumbing help for urgent leaks, toilet problems, burst pipe issues, faulty taps, waste pipe problems and other domestic plumbing faults that need sorting quickly.","body":"This page is built to target emergency plumber Surrey related searches while clearly explaining the type of urgent plumbing work covered. It also supports nearby searches for emergency plumber Guildford, emergency plumber Woking and similar local terms across Surrey.","keywords":"emergency plumber Surrey, emergency plumber Guildford, emergency plumber Woking"},
+    {"slug":"general-plumbing-surrey","title":"General Plumbing Surrey","meta":"General plumbing services in Surrey from Nigel Harvey Ltd. Taps, toilets, sinks, wastes, leaks, outside taps and domestic plumbing repairs across Guildford and surrounding areas.","heading":"General Plumbing in Surrey","intro":"Nigel Harvey Ltd provides general plumbing services across Surrey for everyday domestic plumbing jobs. This includes tap repairs, toilet issues, sink plumbing, leaks, traps, wastes, outside taps and practical small plumbing jobs.","body":"This service page helps target plumber Surrey, local plumber Surrey and general plumbing Surrey searches while giving customers a clear overview of the work available.","keywords":"general plumbing Surrey, plumber Surrey, local plumber Surrey"},
+    {"slug":"bathroom-plumbing-surrey","title":"Bathroom Plumbing Surrey","meta":"Bathroom plumbing in Surrey including bathroom refurbishments, sanitaryware connections, first fix and second fix plumbing. Covering Guildford, Woking and surrounding areas.","heading":"Bathroom Plumbing in Surrey","intro":"For bathroom plumbing in Surrey, Nigel Harvey Ltd helps with bathroom refurbishments, sanitaryware fitting, pipework changes, first fix plumbing, second fix plumbing and general bathroom plumbing works.","body":"This page is designed to strengthen bathroom plumbing Surrey and bathroom fitter related local search relevance across Guildford and surrounding towns.","keywords":"bathroom plumbing Surrey, bathroom plumber Guildford, bathroom plumbing Woking"},
+    {"slug":"heating-repairs-surrey","title":"Heating Repairs Surrey","meta":"Heating repairs in Surrey including radiators, valves, controls and plumbing-related heating work. Nigel Harvey Ltd covers Guildford and surrounding areas.","heading":"Heating Repairs in Surrey","intro":"Nigel Harvey Ltd provides plumbing-related heating repairs in Surrey, including radiators, valves, controls, pipework adjustments and practical heating jobs for domestic properties.","body":"The page targets heating repairs Surrey, radiator repairs Surrey and similar local plumbing and heating search terms for the business.","keywords":"heating repairs Surrey, radiator repairs Surrey, heating plumber Guildford"},
+]
+
+def get_company_logo_html(logo_value: str) -> str:
+    return f'<img src="{logo_value}" alt="Nigel Harvey Ltd logo" class="logo">' if logo_value else ''
+
+def render_location_page(location_name: str, logo_html: str) -> str:
+    related = ''.join(
+        f'<a href="/plumber-{escape(item["slug"])}">Plumber in {escape(item["name"])}</a>'
+        for item in LOCATION_PAGES if item['name'] != location_name
+    )
+    slug = location_name.lower()
+    return f'''<!doctype html>
+<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Plumber in {escape(location_name)} | Nigel Harvey Ltd</title><meta name="description" content="Need a plumber in {escape(location_name)}? Nigel Harvey Ltd provides plumbing and heating services including emergency plumbing, bathroom plumbing, heating repairs and general plumbing in {escape(location_name)} and surrounding Surrey areas."><meta name="keywords" content="plumber {escape(location_name)}, emergency plumber {escape(location_name)}, plumbing {escape(location_name)}, plumber Surrey"><link rel="canonical" href="/plumber-{escape(slug)}"><style>{SEO_CSS}</style></head>
+<body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>Plumbing & Heating in {escape(location_name)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
+<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Local plumber in {escape(location_name)}</div><h1>Plumber in {escape(location_name)}</h1><p class="lead">Looking for a reliable plumber in {escape(location_name)}? Nigel Harvey Ltd provides professional plumbing services including emergency plumbing, bathroom plumbing, heating repairs, radiator work, leaks, toilets, taps, sinks and general plumbing jobs in {escape(location_name)} and surrounding Surrey areas.</p><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Get a Quote</a><a class="btn btn-green" href="https://wa.me/447595725547" target="_blank">WhatsApp Nigel</a></div></div></div>
+<div class="wrap section"><h2>Local plumbing services in {escape(location_name)}</h2><p>Nigel Harvey Ltd helps customers in {escape(location_name)} with tidy, straightforward plumbing and heating work. Whether you need a leaking tap repaired, a toilet issue sorted, a bathroom plumbing job priced or a radiator problem looked at, the focus is on clear communication and dependable local service.</p><p>This page is designed to improve local SEO for plumber {escape(location_name)} and related search terms while also giving customers a clear idea of the services available in the area.</p></div>
+<div class="wrap section"><h2>Services available in {escape(location_name)}</h2><div class="grid3"><div class="card item"><h3>Emergency plumbing</h3><p>Urgent plumbing help for leaks, toilets, taps, sinks, wastes and similar domestic plumbing issues in {escape(location_name)}.</p></div><div class="card item"><h3>Bathroom plumbing</h3><p>Bathroom plumbing, sanitaryware fitting, refurb plumbing, first fix and second fix plumbing for homes in {escape(location_name)}.</p></div><div class="card item"><h3>Heating repairs</h3><p>Radiators, valves, controls and practical plumbing-related heating repairs in {escape(location_name)} and nearby areas.</p></div></div></div>
+<div class="wrap section"><h2>Why customers in {escape(location_name)} choose Nigel Harvey Ltd</h2><ul class="list"><li>Local Surrey coverage with practical knowledge of nearby areas</li><li>Simple online quote request form</li><li>Clear, professional communication from enquiry to completion</li><li>Strong relevance for searches such as plumber {escape(location_name)} and emergency plumber {escape(location_name)}</li></ul></div>
+<div class="wrap section"><h2>Other nearby service areas</h2><div class="pill-links">{related}</div></div>
+<div class="wrap"><div class="hero-card cta"><div><h2 style="margin:0 0 8px">Need a plumber in {escape(location_name)}?</h2><div style="color:var(--muted)">Send over your job details and request a quote online today.</div></div><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="mailto:{escape(COMPANY_EMAIL)}">Email Nigel</a></div></div></div>
+<div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing & Heating</div><div>{escape(location_name)}, Surrey and surrounding areas<br>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></div></body></html>'''
+
+def render_service_page(service: dict, logo_html: str) -> str:
+    service_links = ''.join(f'<a href="/{escape(item["slug"])}">{escape(item["title"])}</a>' for item in SERVICE_PAGES if item['slug'] != service['slug'])
+    location_links = ''.join(f'<a href="/plumber-{escape(item["slug"])}">Plumber in {escape(item["name"])}</a>' for item in LOCATION_PAGES)
+    return f'''<!doctype html>
+<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(service['title'])} | Nigel Harvey Ltd</title><meta name="description" content="{escape(service['meta'])}"><meta name="keywords" content="{escape(service['keywords'])}"><link rel="canonical" href="/{escape(service['slug'])}"><style>{SEO_CSS}</style></head>
+<body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(service['title'])}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
+<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Surrey plumbing service</div><h1>{escape(service['heading'])}</h1><p class="lead">{escape(service['intro'])}</p><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Get a Quote</a><a class="btn btn-green" href="https://wa.me/447595725547" target="_blank">WhatsApp Nigel</a></div></div></div>
+<div class="wrap section"><h2>Service overview</h2><p>{escape(service['body'])}</p><p>Nigel Harvey Ltd covers Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead, Epsom and surrounding Surrey areas for this service.</p></div>
+<div class="wrap section"><h2>Related plumbing services</h2><div class="pill-links">{service_links}</div></div>
+<div class="wrap section"><h2>Areas covered</h2><div class="pill-links">{location_links}</div></div>
+<div class="wrap"><div class="hero-card cta"><div><h2 style="margin:0 0 8px">Need help with {escape(service['heading']).lower()}?</h2><div style="color:var(--muted)">Use the online form to send your job details and request a quote.</div></div><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="mailto:{escape(COMPANY_EMAIL)}">Email Nigel</a></div></div></div>
+<div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing & Heating in Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}<br>Guildford, Surrey and surrounding areas</div></div></div></body></html>'''
+
 
 LEAD_FORM_HTML = r'''<!doctype html>
 <html>
@@ -1817,7 +1854,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <button type="button" class="btn-light no-print" onclick="addMaterial()">+ Add Manual Material Row</button>
 
       <h3>Pricing</h3>
-      <label for="labour">Labour cost (&#163;)</label>
+      <label for="labour">Labour cost (£)</label>
       <input id="labour" type="number" step="0.01" placeholder="180">
       <div class="small" id="labourSuggestion" style="margin-top:8px;"></div>
 
@@ -2139,14 +2176,14 @@ function updateLabourSuggestion() {
   if (quoteType === "bathroom") message = "Typical bathroom labour is often higher. Adjust to suit your job.";
   if (quoteType === "heating") message = "Heating jobs often vary by size and access. Adjust labour as needed.";
 
-  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around &#163;120. Typical range: &#163;100–&#163;140.";
-  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around &#163;180. Typical range: &#163;160–&#163;220.";
-  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around &#163;120. Typical range: &#163;90–&#163;140.";
-  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around &#163;150. Typical range: £140–&#163;180.";
-  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around &#163;2,200. Typical range: &#163;2,000–&#163;2,800.";
-  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around &#163;1,800. Typical range: £1,600–&#163;2,200.";
-  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around &#163;180. Typical range: &#163;160–&#163;220.";
-  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around &#163;150. Typical range: &#163;120–£220.";
+  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around £120. Typical range: £100 - £140.";
+  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around £180. Typical range: £160 - £220.";
+  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around £120. Typical range: £90 - £140.";
+  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around £150. Typical range: £140 - £180.";
+  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around £2,200. Typical range: £2,000 - £2,800.";
+  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around £1,800. Typical range: £1,600 - £2,200.";
+  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around £180. Typical range: £160 - £220.";
+  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around £150. Typical range: £120 - £220.";
 
   box.innerText = message;
 }
@@ -2183,7 +2220,7 @@ function addMaterial(prefill = null) {
     <label>Product URL</label>
     <input class="m-url" placeholder="https://..." value="${prefill && prefill.url ? escapeHtml(prefill.url) : ""}">
 
-    <label>Manual price (&#163;)</label>
+    <label>Manual price (£)</label>
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${manualPrice}">
 
     <button type="button" class="btn-red" style="margin-top:12px;" onclick="this.parentElement.remove()">Remove</button>
@@ -3285,11 +3322,44 @@ def home_app():
 @app.get("/", response_class=HTMLResponse)
 def landing_home():
     logo_value = get_company_logo_value()
-    logo_html = f'<img src="{logo_value}" alt="Logo" class="logo">' if logo_value else ""
+    logo_html = get_company_logo_html(logo_value)
     html = LANDING_PAGE_HTML.replace("__COMPANY_LOGO_HTML__", logo_html)
     html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
     html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
+
+
+@app.get("/robots.txt")
+def robots_txt():
+    return Response(content="User-agent: *\nAllow: /\n", media_type="text/plain; charset=utf-8")
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    urls = ["/", "/request-quote"]
+    urls.extend(f"/plumber-{item['slug']}" for item in LOCATION_PAGES)
+    urls.extend(f"/{item['slug']}" for item in SERVICE_PAGES)
+    body = "".join(f"<url><loc>{escape(url)}</loc></url>" for url in urls)
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
+    return Response(content=xml, media_type="application/xml; charset=utf-8")
+
+
+@app.get("/plumber-{area_slug}", response_class=HTMLResponse)
+def location_page(area_slug: str):
+    page = next((item for item in LOCATION_PAGES if item["slug"] == area_slug.lower()), None)
+    if not page:
+        raise HTTPException(status_code=404, detail="Area page not found")
+    logo_html = get_company_logo_html(get_company_logo_value())
+    return HTMLResponse(content=render_location_page(page["name"], logo_html), media_type="text/html; charset=utf-8")
+
+
+@app.get("/{service_slug}", response_class=HTMLResponse)
+def service_page(service_slug: str):
+    page = next((item for item in SERVICE_PAGES if item["slug"] == service_slug.lower()), None)
+    if not page:
+        raise HTTPException(status_code=404, detail="Service page not found")
+    logo_html = get_company_logo_html(get_company_logo_value())
+    return HTMLResponse(content=render_service_page(page, logo_html), media_type="text/html; charset=utf-8")
 
 
 @app.get("/api/dashboard")
