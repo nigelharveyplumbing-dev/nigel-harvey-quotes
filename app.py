@@ -3635,7 +3635,7 @@ def sitemap_xml(request: Request):
     urls.extend(f"/plumber-{item['slug']}" for item in LOCATION_PAGES)
     urls.extend(f"/{item['slug']}" for item in SERVICE_PAGES)
     BASE_URL = "https://www.nigelharveyplumbing.co.uk"
-    body = "".join(f"<url><loc>{escape(absolute_url(url, request))}</loc></url>" for url in urls)
+    body = "".join(f"<url><loc>{BASE_URL + url}</loc></url>" for url in urls)
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
     return Response(content=xml, media_type="application/xml; charset=utf-8")
 
