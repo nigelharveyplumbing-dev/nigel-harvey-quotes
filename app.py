@@ -1580,6 +1580,7 @@ LANDING_PAGE_HTML = r'''
 <!doctype html>
 <html lang="en-GB">
 <head>
+<meta name="google-site-verification" content="kxeLIuQDykme_ZE_ptTYZEQz8NnnPc41P97L2wBGwu8" />
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plumber in Surrey | Emergency Plumbing & Heating | Nigel Harvey Ltd</title>
