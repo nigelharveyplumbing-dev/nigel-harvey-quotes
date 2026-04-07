@@ -27,6 +27,36 @@ from reportlab.lib.utils import ImageReader
 
 app = FastAPI(title="Nigel Harvey Ltd Business App")
 
+from fastapi import Request
+import base64
+
+APP_USERNAME = "nigel"
+APP_PASSWORD = "Hmhair0310"
+
+def check_basic_auth(request: Request):
+    auth = request.headers.get("authorization")
+    if not auth or not auth.startswith("Basic "):
+        return False
+    try:
+        encoded = auth.split(" ")[1]
+        decoded = base64.b64decode(encoded).decode("utf-8")
+        user, pwd = decoded.split(":")
+        return user == APP_USERNAME and pwd == APP_PASSWORD
+    except:
+        return False
+
+@app.middleware("http")
+async def protect_app_routes(request: Request, call_next):
+    if request.url.path.startswith("/app"):
+        if not check_basic_auth(request):
+            return Response(
+                status_code=401,
+                headers={"WWW-Authenticate": "Basic"},
+                content="Authentication required"
+            )
+    return await call_next(request)
+
+
 DB_PATH = Path("/var/data/quotes.db")
 UK_TZ = ZoneInfo("Europe/London")
 
