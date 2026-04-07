@@ -1,5 +1,5 @@
-from fastapi import FastAPI, HTTPException, Response, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -13,9 +13,6 @@ import io
 import base64
 import ssl
 import smtplib
-import time
-import hmac
-import hashlib
 from html import escape
 from pathlib import Path
 from email.mime.multipart import MIMEMultipart
@@ -47,89 +44,6 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
 EMAIL_USER = os.getenv("EMAIL_USER", "")
 EMAIL_PASS = os.getenv("EMAIL_PASS", "")
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", COMPANY_NAME)
-
-
-APP_LOGIN_USER = os.getenv("APP_LOGIN_USER", "nigel")
-APP_LOGIN_PASSWORD = os.getenv("APP_LOGIN_PASSWORD", "")
-APP_SESSION_SECRET = os.getenv("APP_SESSION_SECRET", "change-this-secret")
-SESSION_COOKIE_NAME = "nh_admin_session"
-SESSION_MAX_AGE = 60 * 60 * 24 * 30
-
-
-def _session_secret_bytes():
-    return (APP_SESSION_SECRET or "change-this-secret").encode("utf-8")
-
-
-def make_session_cookie_value(username: str) -> str:
-    ts = str(int(time.time()))
-    payload = f"{username}|{ts}"
-    sig = hmac.new(_session_secret_bytes(), payload.encode("utf-8"), hashlib.sha256).hexdigest()
-    return f"{payload}|{sig}"
-
-
-def verify_session_cookie(value: str | None) -> bool:
-    if not value:
-        return False
-    try:
-        username, ts, sig = value.split("|", 2)
-        payload = f"{username}|{ts}"
-        expected = hmac.new(_session_secret_bytes(), payload.encode("utf-8"), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(sig, expected):
-            return False
-        if username != APP_LOGIN_USER:
-            return False
-        if int(time.time()) - int(ts) > SESSION_MAX_AGE:
-            return False
-        return True
-    except Exception:
-        return False
-
-
-def is_admin_logged_in(request: Request) -> bool:
-    return verify_session_cookie(request.cookies.get(SESSION_COOKIE_NAME))
-
-
-def admin_login_page(error: str = "") -> str:
-    error_html = f'<div style="margin-bottom:12px;padding:12px;border-radius:12px;background:#fff1f1;color:#9b1c1c;font-weight:700;">{escape(error)}</div>' if error else ""
-    hint_html = '' if APP_LOGIN_PASSWORD else '<div style="margin-top:12px;color:#856404;background:#fff3cd;border:1px solid #ffe69c;padding:12px;border-radius:12px;">Set APP_LOGIN_USER, APP_LOGIN_PASSWORD and APP_SESSION_SECRET in Render environment variables before using admin login.</div>'
-    return f'''<!doctype html>
-<html>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Admin Login - Nigel Harvey Ltd</title>
-<style>
-body{{font-family:Arial,sans-serif;margin:0;background:#f5f7fb;color:#111827}}
-.wrap{{max-width:460px;margin:0 auto;padding:40px 18px}}
-.card{{background:#fff;border:1px solid #e5e7eb;border-radius:24px;box-shadow:0 10px 30px rgba(0,0,0,.06);padding:26px}}
-h1{{margin:0 0 8px;font-size:32px}}
-p{{color:#667085;margin:0 0 18px}}
-label{{display:block;font-weight:700;margin:12px 0 6px}}
-input{{width:100%;box-sizing:border-box;padding:14px;border:1px solid #d0d5dd;border-radius:14px;font-size:16px}}
-button{{width:100%;padding:14px;border:none;border-radius:999px;background:#111827;color:#fff;font-size:17px;font-weight:700;margin-top:18px;cursor:pointer}}
-.link{{display:inline-block;margin-top:14px;color:#475467}}
-</style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <h1>Admin login</h1>
-      <p>Use your private login to open the Nigel Harvey app.</p>
-      {error_html}
-      <form method="post" action="/login">
-        <input type="hidden" name="next" value="/app">
-        <label>Username</label>
-        <input name="username" autocomplete="username" required>
-        <label>Password</label>
-        <input type="password" name="password" autocomplete="current-password" required>
-        <button type="submit">Log in</button>
-      </form>
-      <a class="link" href="/">Back to website</a>
-      {hint_html}
-    </div>
-  </div>
-</body>
-</html>'''
 
 def get_company_logo_value():
     return os.getenv("COMPANY_LOGO_URL", "").strip() or DEFAULT_COMPANY_LOGO_URL
@@ -251,20 +165,20 @@ JOB_TEMPLATES = [
 
 LABOUR_HINTS = {
     "small": [
-        {"keywords": ["tap"], "suggestion": 120, "range": "&#163;100â&#163;140"},
-        {"keywords": ["toilet", "wc"], "suggestion": 180, "range": "&#163;160â&#163;220"},
-        {"keywords": ["waste", "trap"], "suggestion": 120, "range": "&#163;90â&#163;140"},
-        {"keywords": ["outside tap"], "suggestion": 150, "range": "Â£140â&#163;180"},
+        {"keywords": ["tap"], "suggestion": 120, "range": "&#163;100–&#163;140"},
+        {"keywords": ["toilet", "wc"], "suggestion": 180, "range": "&#163;160–&#163;220"},
+        {"keywords": ["waste", "trap"], "suggestion": 120, "range": "&#163;90–&#163;140"},
+        {"keywords": ["outside tap"], "suggestion": 150, "range": "£140–&#163;180"},
     ],
     "bathroom": [
-        {"keywords": ["install"], "suggestion": 1800, "range": "Â£1,600â&#163;2,200"},
-        {"keywords": ["refurb"], "suggestion": 2200, "range": "&#163;2,000â&#163;2,800"},
-        {"keywords": ["bathroom"], "suggestion": 2000, "range": "Â£1,600âÂ£2,800"},
+        {"keywords": ["install"], "suggestion": 1800, "range": "£1,600–&#163;2,200"},
+        {"keywords": ["refurb"], "suggestion": 2200, "range": "&#163;2,000–&#163;2,800"},
+        {"keywords": ["bathroom"], "suggestion": 2000, "range": "£1,600–£2,800"},
     ],
     "heating": [
-        {"keywords": ["radiator"], "suggestion": 180, "range": "&#163;160â&#163;220"},
-        {"keywords": ["repair"], "suggestion": 150, "range": "&#163;120âÂ£220"},
-        {"keywords": ["system"], "suggestion": 3500, "range": "Â£3,000âÂ£4,500"},
+        {"keywords": ["radiator"], "suggestion": 180, "range": "&#163;160–&#163;220"},
+        {"keywords": ["repair"], "suggestion": 150, "range": "&#163;120–£220"},
+        {"keywords": ["system"], "suggestion": 3500, "range": "£3,000–£4,500"},
     ],
 }
 
@@ -479,14 +393,14 @@ def fetch_price(url: str):
 
         if "cityplumbing" in lower_url:
             domain_patterns = [
-                r'Â£\s?(\d+(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
-                r'Â£\s?(\d+(?:\.\d{2})?)\s*Inc\.?\s*VAT',
-                r'Â£\s?(\d+(?:\.\d{2})?)\s*each',
+                r'£\s?(\d+(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
+                r'£\s?(\d+(?:\.\d{2})?)\s*Inc\.?\s*VAT',
+                r'£\s?(\d+(?:\.\d{2})?)\s*each',
             ]
         elif "toppstiles" in lower_url:
             domain_patterns = [
-                r'Â£\s?(\d+(?:\.\d{2})?)\s*(?:per m2|/m2|m2)',
-                r'Â£\s?(\d+(?:\.\d{2})?)'
+                r'£\s?(\d+(?:\.\d{2})?)\s*(?:per m2|/m2|m2)',
+                r'£\s?(\d+(?:\.\d{2})?)'
             ]
 
         for pattern in domain_patterns:
@@ -496,7 +410,7 @@ def fetch_price(url: str):
                 if price and 0 < price < 100000:
                     return round(price, 2)
 
-        generic_matches = re.findall(r'Â£\s?(\d+(?:\.\d{2})?)', text)
+        generic_matches = re.findall(r'£\s?(\d+(?:\.\d{2})?)', text)
         prices = []
         for match in generic_matches:
             price = safe_float(match, None)
@@ -520,10 +434,10 @@ def find_labour_suggestion(quote_type: str, job_description: str):
             return rule
 
     if quote_type == "bathroom":
-        return {"suggestion": 2000, "range": "Â£1,600âÂ£2,800"}
+        return {"suggestion": 2000, "range": "£1,600–£2,800"}
     if quote_type == "heating":
-        return {"suggestion": 180, "range": "&#163;150âÂ£300"}
-    return {"suggestion": 120, "range": "Â£90â&#163;180"}
+        return {"suggestion": 180, "range": "&#163;150–£300"}
+    return {"suggestion": 120, "range": "£90–&#163;180"}
 
 
 def calculate_quote(data: QuoteRequest):
@@ -1142,7 +1056,7 @@ def get_customer_history(customer_id: int):
 
 
 def pounds_text(value):
-    return f"Â£{safe_float(value, 0):.2f}"
+    return f"£{safe_float(value, 0):.2f}"
 
 
 def build_invoice_public_url(invoice_id: int):
@@ -1241,7 +1155,7 @@ def generate_invoice_pdf_bytes(item: dict):
         terms = terms[:3]
     text_obj = c.beginText(40, y)
     for line in terms:
-        text_obj.textLine(f"â¢ {line}")
+        text_obj.textLine(f"• {line}")
     if item.get("payment_link"):
         text_obj.textLine("")
         text_obj.textLine(f"Payment link: {item['payment_link']}")
@@ -1293,7 +1207,7 @@ def generate_quote_pdf_bytes(item: dict):
     c.setFont("Helvetica", 10)
     text_obj = c.beginText(40, y)
     for line in QUOTE_TERMS:
-        text_obj.textLine(f"â¢ {line}")
+        text_obj.textLine(f"• {line}")
     c.drawText(text_obj)
     c.showPage()
     c.save()
@@ -1562,14 +1476,15 @@ LANDING_PAGE_HTML = r'''
       <div class="nav-actions">
         <a class="btn btn-light" href="tel:__COMPANY_PHONE__">Call Now</a>
         <a class="btn btn-primary" href="/request-quote">Request a Quote</a>
-              </div>
+        <a class="btn btn-light" href="/app">Open App</a>
+      </div>
     </div>
   </div>
   <div class="wrap hero">
     <div class="hero-grid">
       <div class="card hero-copy">
         <div class="logo-box">__COMPANY_LOGO_HTML__</div>
-        <div class="tag">Local â¢ Reliable â¢ Professional</div>
+        <div class="tag">Local • Reliable • Professional</div>
         <h1>Trusted plumbing and heating work without the hassle.</h1>
         <p class="lead">Need a tap replaced, a bathroom upgraded, heating work priced, or a general plumbing repair sorted? Request a quote online and get a fast, straightforward response from Nigel Harvey Ltd.</p>
         <div class="hero-actions">
@@ -1590,7 +1505,7 @@ LANDING_PAGE_HTML = r'''
   </div>
   <div class="wrap section">
     <h2>Services</h2>
-    <p class="copy">Whether itâs a quick repair or a larger install, Nigel Harvey Ltd helps customers with practical, tidy, reliable plumbing and heating work.</p>
+    <p class="copy">Whether it’s a quick repair or a larger install, Nigel Harvey Ltd helps customers with practical, tidy, reliable plumbing and heating work.</p>
     <div class="grid3">
       <div class="card item"><h3>General Plumbing</h3><p>Taps, leaks, wastes, traps, toilets, valves, kitchen and bathroom plumbing jobs handled clearly and efficiently.</p></div>
       <div class="card item"><h3>Bathrooms</h3><p>Bathroom plumbing installs and refurb work including sanitaryware connections, first fix and second fix work.</p></div>
@@ -1608,7 +1523,7 @@ LANDING_PAGE_HTML = r'''
   </div>
   <div class="wrap">
     <div class="card cta">
-      <div><h2 style="margin:0 0 8px">Need plumbing or heating work priced?</h2><div style="color:var(--muted)">Use the online quote request form and send over the job details. Itâs the quickest way to get started.</div></div>
+      <div><h2 style="margin:0 0 8px">Need plumbing or heating work priced?</h2><div style="color:var(--muted)">Use the online quote request form and send over the job details. It’s the quickest way to get started.</div></div>
       <div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="mailto:__COMPANY_EMAIL__">Email Nigel</a></div>
     </div>
   </div>
@@ -1648,7 +1563,7 @@ button{width:100%;padding:15px;border:none;border-radius:12px;background:#111;co
     <div style="text-align:right;">__COMPANY_LOGO_HTML__</div>
     <h1>Request a Quote</h1>
     <div class="sub">Send Nigel Harvey Ltd your job details and get a callback or quote.</div>
-    <div class="small" style="margin-bottom:12px;">Phone: __COMPANY_PHONE__ Â· Email: __COMPANY_EMAIL__</div>
+    <div class="small" style="margin-bottom:12px;">Phone: __COMPANY_PHONE__ · Email: __COMPANY_EMAIL__</div>
     <div class="quick-grid" style="margin-bottom:10px;">
       <div class="quick-btn" onclick="setJobType('small','Tap / toilet / leak / waste repair')">Small plumbing job</div>
       <div class="quick-btn" onclick="setJobType('bathroom','Bathroom install / refurb')">Bathroom</div>
@@ -1667,7 +1582,7 @@ button{width:100%;padding:15px;border:none;border-radius:12px;background:#111;co
     </select>
     <label>Describe the job</label><textarea id="lead_description" placeholder="Tell us what needs doing"></textarea>
     <button type="button" onclick="submitLead()">Send quote request</button>
-    <div id="lead_ok" class="ok">Thanks â your quote request has been sent. Nigel Harvey Ltd will get back to you shortly.</div>
+    <div id="lead_ok" class="ok">Thanks — your quote request has been sent. Nigel Harvey Ltd will get back to you shortly.</div>
     <div id="lead_err" class="err"></div>
   </div>
 </div>
@@ -1875,10 +1790,10 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
           <span>Include tiling</span>
         </div>
 
-        <label for="wall_tiling_m2">Wall tiling (mÂ²)</label>
+        <label for="wall_tiling_m2">Wall tiling (m²)</label>
         <input id="wall_tiling_m2" type="number" step="0.1" placeholder="0">
 
-        <label for="floor_tiling_m2">Floor tiling (mÂ²)</label>
+        <label for="floor_tiling_m2">Floor tiling (m²)</label>
         <input id="floor_tiling_m2" type="number" step="0.1" placeholder="0">
 
         <label for="wall_height">Wall height</label>
@@ -2090,15 +2005,15 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <input id="edit_invoice_customer_phone" placeholder="Customer phone">
       <label for="edit_invoice_job">Job</label>
       <textarea id="edit_invoice_job" placeholder="Job details"></textarea>
-      <label for="edit_invoice_labour">Labour (Â£)</label>
+      <label for="edit_invoice_labour">Labour (£)</label>
       <input id="edit_invoice_labour" type="number" step="0.01" placeholder="0">
-      <label for="edit_invoice_materials">Materials (Â£)</label>
+      <label for="edit_invoice_materials">Materials (£)</label>
       <input id="edit_invoice_materials" type="number" step="0.01" placeholder="0">
       <label for="edit_invoice_due_date">Due date</label>
       <input id="edit_invoice_due_date" placeholder="dd/mm/yyyy">
       <label for="edit_invoice_payment_link">Payment link</label>
       <input id="edit_invoice_payment_link" placeholder="https://...">
-      <label for="edit_invoice_amount_paid">Amount paid (Â£)</label>
+      <label for="edit_invoice_amount_paid">Amount paid (£)</label>
       <input id="edit_invoice_amount_paid" type="number" step="0.01" placeholder="0">
       <div class="history-actions" style="grid-template-columns:1fr 1fr; margin-top:12px;">
         <button type="button" class="btn-blue" onclick="saveInvoiceEdit()">Save Invoice Changes</button>
@@ -2224,14 +2139,14 @@ function updateLabourSuggestion() {
   if (quoteType === "bathroom") message = "Typical bathroom labour is often higher. Adjust to suit your job.";
   if (quoteType === "heating") message = "Heating jobs often vary by size and access. Adjust labour as needed.";
 
-  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around &#163;120. Typical range: &#163;100â&#163;140.";
-  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around &#163;180. Typical range: &#163;160â&#163;220.";
-  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around &#163;120. Typical range: &#163;90â&#163;140.";
-  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around &#163;150. Typical range: Â£140â&#163;180.";
-  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around &#163;2,200. Typical range: &#163;2,000â&#163;2,800.";
-  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around &#163;1,800. Typical range: Â£1,600â&#163;2,200.";
-  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around &#163;180. Typical range: &#163;160â&#163;220.";
-  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around &#163;150. Typical range: &#163;120âÂ£220.";
+  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around &#163;120. Typical range: &#163;100–&#163;140.";
+  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around &#163;180. Typical range: &#163;160–&#163;220.";
+  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around &#163;120. Typical range: &#163;90–&#163;140.";
+  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around &#163;150. Typical range: £140–&#163;180.";
+  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around &#163;2,200. Typical range: &#163;2,000–&#163;2,800.";
+  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around &#163;1,800. Typical range: £1,600–&#163;2,200.";
+  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around &#163;180. Typical range: &#163;160–&#163;220.";
+  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around &#163;150. Typical range: &#163;120–£220.";
 
   box.innerText = message;
 }
@@ -2306,7 +2221,7 @@ function searchMaterials() {
   resultsBox.innerHTML = results.map((item) => `
     <div class="search-item" onclick='addMaterialFromLibrary(${JSON.stringify(item)})'>
       <strong>${escapeHtml(item.name)}</strong><br>
-      <span class="small">${escapeHtml(item.supplier)} Â· ${pounds(item.default_price)}</span>
+      <span class="small">${escapeHtml(item.supplier)} · ${pounds(item.default_price)}</span>
     </div>
   `).join("");
 
@@ -2387,7 +2302,7 @@ function renderQuoteResult(data) {
 
   const lines = data.material_lines || [];
   document.getElementById("r_material_lines").innerHTML = lines.length
-    ? lines.map(x => `<div>${escapeHtml(x.name || "")} Ã ${x.quantity} â ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
+    ? lines.map(x => `<div>${escapeHtml(x.name || "")} × ${x.quantity} — ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
     : "<div>No materials added.</div>";
 
   const internalMode = document.getElementById("internal_mode").checked;
@@ -2720,7 +2635,7 @@ async function loadHistory() {
       <div class="history-item">
         <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
         <div>${escapeHtml(q.job || "")}</div>
-        <div class="small">${escapeHtml(q.created_at || "")} Â· Total ${pounds(q.total_price)} Â· Profit ${pounds(q.gross_profit)} Â· Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
+        <div class="small">${escapeHtml(q.created_at || "")} · Total ${pounds(q.total_price)} · Profit ${pounds(q.gross_profit)} · Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
         <div class="history-actions">
           <button type="button" class="btn-light" onclick="loadSavedQuote(${q.id})">Load</button>
           <button type="button" class="btn-blue" onclick="editSavedQuote(${q.id})">Edit</button>
@@ -2750,9 +2665,9 @@ async function loadInvoices() {
 
     box.innerHTML = data.map(i => `
       <div class="history-item">
-        <div><strong>${escapeHtml(i.invoice_number)}</strong> â ${escapeHtml(i.customer_name || "No customer name")}</div>
+        <div><strong>${escapeHtml(i.invoice_number)}</strong> — ${escapeHtml(i.customer_name || "No customer name")}</div>
         <div>${renderStatusBadge(i.status)}</div>
-        <div class="small">${escapeHtml(i.created_at || "")} Â· Total ${pounds(i.total_price)} Â· Paid ${pounds(i.amount_paid)} Â· Balance ${pounds(i.balance_due)}</div>
+        <div class="small">${escapeHtml(i.created_at || "")} · Total ${pounds(i.total_price)} · Paid ${pounds(i.amount_paid)} · Balance ${pounds(i.balance_due)}</div>
 
         <label style="margin-top:10px;">Update payment</label>
         <div class="row">
@@ -2816,10 +2731,10 @@ async function loadLeads() {
           <div><strong>${escapeHtml(l.name || 'Website lead')}</strong></div>
           <div>${renderLeadBadge(l.status)}</div>
         </div>
-        <div>${escapeHtml(l.phone || '')}${l.email ? ' Â· ' + escapeHtml(l.email) : ''}</div>
+        <div>${escapeHtml(l.phone || '')}${l.email ? ' · ' + escapeHtml(l.email) : ''}</div>
         <div class="small">${escapeHtml(l.address || '')}</div>
         <div style="margin-top:8px;">${escapeHtml(l.description || '')}</div>
-        <div class="small" style="margin-top:8px;">${escapeHtml(l.created_at || '')} Â· ${escapeHtml((l.job_type || 'small').toUpperCase())} Â· ${escapeHtml(l.source || 'website')}</div>
+        <div class="small" style="margin-top:8px;">${escapeHtml(l.created_at || '')} · ${escapeHtml((l.job_type || 'small').toUpperCase())} · ${escapeHtml(l.source || 'website')}</div>
         <div class="history-actions" style="grid-template-columns:repeat(2,1fr);">
           <button type="button" class="btn-light" onclick="startQuoteFromLead(${l.id})">Start Quote</button>
           <button type="button" class="btn-blue" onclick="updateLeadStatus(${l.id}, 'contacted')">Mark Contacted</button>
@@ -2938,9 +2853,9 @@ async function viewCustomerHistory(id) {
 
     box.innerHTML = `
       <div><strong>Quotes:</strong> ${quotes.length}</div>
-      ${quotes.slice(0,5).map(q => `<div>â¢ ${escapeHtml(q.created_at)} â ${escapeHtml(q.job || "")} â ${pounds(q.total_price)}</div>`).join("") || "<div>None</div>"}
+      ${quotes.slice(0,5).map(q => `<div>• ${escapeHtml(q.created_at)} — ${escapeHtml(q.job || "")} — ${pounds(q.total_price)}</div>`).join("") || "<div>None</div>"}
       <div style="margin-top:8px;"><strong>Invoices:</strong> ${invoices.length}</div>
-      ${invoices.slice(0,5).map(i => `<div>â¢ ${escapeHtml(i.invoice_number)} â ${pounds(i.total_price)} â ${escapeHtml(i.status)}</div>`).join("") || "<div>None</div>"}
+      ${invoices.slice(0,5).map(i => `<div>• ${escapeHtml(i.invoice_number)} — ${pounds(i.total_price)} — ${escapeHtml(i.status)}</div>`).join("") || "<div>None</div>"}
     `;
   } catch (e) {
     alert("Could not load customer history.");
@@ -3319,46 +3234,6 @@ loadLeads();
 '''
 
 
-@app.get("/login", response_class=HTMLResponse)
-def login_page():
-    return HTMLResponse(content=admin_login_page(), media_type="text/html; charset=utf-8")
-
-
-@app.post("/login")
-def login_submit(username: str = Form(...), password: str = Form(...), next: str = Form("/app")):
-    if not APP_LOGIN_PASSWORD:
-        return HTMLResponse(content=admin_login_page("Admin login is not set up yet. Add APP_LOGIN_PASSWORD and APP_SESSION_SECRET in Render first."), status_code=503, media_type="text/html; charset=utf-8")
-    if username != APP_LOGIN_USER or password != APP_LOGIN_PASSWORD:
-        return HTMLResponse(content=admin_login_page("Incorrect username or password."), status_code=401, media_type="text/html; charset=utf-8")
-    response = RedirectResponse(url=next or "/app", status_code=303)
-    response.set_cookie(SESSION_COOKIE_NAME, make_session_cookie_value(username), max_age=SESSION_MAX_AGE, httponly=True, samesite="lax")
-    return response
-
-
-@app.get("/logout")
-def logout():
-    response = RedirectResponse(url="/", status_code=303)
-    response.delete_cookie(SESSION_COOKIE_NAME)
-    return response
-
-
-@app.middleware("http")
-async def admin_auth_middleware(request: Request, call_next):
-    path = request.url.path
-    is_public = (
-        path in {"/", "/request-quote", "/login", "/logout", "/favicon.ico"}
-        or (path == "/api/leads" and request.method.upper() == "POST")
-        or path.startswith("/invoice/")
-        or re.fullmatch(r"/api/invoices/\d+/pdf", path) is not None
-    )
-    is_protected = path.startswith("/app") or path.startswith("/api")
-    if is_protected and not is_public and not is_admin_logged_in(request):
-        if path.startswith("/api"):
-            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
-        return RedirectResponse(url="/login", status_code=303)
-    return await call_next(request)
-
-
 @app.get("/request-quote", response_class=HTMLResponse)
 def request_quote_page():
     logo_value = get_company_logo_value()
@@ -3695,4 +3570,5 @@ def api_delete_customer(customer_id: int):
 def api_customer_history(customer_id: int):
     history = get_customer_history(customer_id)
     if not history:
-        raise HTTPExce
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return history
