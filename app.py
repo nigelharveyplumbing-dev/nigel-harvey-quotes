@@ -1580,7 +1580,6 @@ LANDING_PAGE_HTML = r'''
 <!doctype html>
 <html lang="en-GB">
 <head>
-<meta name="google-site-verification" content="kxeLIuQDykme_ZE_ptTYZEQz8NnnPc41P97L2wBGwu8" />
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plumber in Surrey | Emergency Plumbing & Heating | Nigel Harvey Ltd</title>
@@ -3625,7 +3624,7 @@ def landing_home(request: Request):
 
 @app.get("/robots.txt")
 def robots_txt(request: Request):
-    sitemap_url = absolute_url("/sitemap.xml", request)
+    sitemap_url = "https://www.nigelharveyplumbing.co.uk/sitemap.xml"
     content = f"User-agent: *\nAllow: /\nSitemap: {sitemap_url}\n"
     return Response(content=content, media_type="text/plain; charset=utf-8")
 
@@ -3636,7 +3635,7 @@ def sitemap_xml(request: Request):
     urls.extend(f"/plumber-{item['slug']}" for item in LOCATION_PAGES)
     urls.extend(f"/{item['slug']}" for item in SERVICE_PAGES)
     BASE_URL = "https://www.nigelharveyplumbing.co.uk"
-body = ''.join(f"<url><loc>{BASE_URL}{url}</loc></url>" for url in urls)
+    body = "".join(f"<url><loc>{escape(absolute_url(url, request))}</loc></url>" for url in urls)
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
     return Response(content=xml, media_type="application/xml; charset=utf-8")
 
