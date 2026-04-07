@@ -1570,9 +1570,9 @@ def build_reviews_section_html() -> str:
             f'<div class="grid3">{"".join(cards)}</div></div>'
         )
     return (
-        '<div class="wrap section"><h2>Google reviews</h2>'
-        '<p class="copy">This homepage is wired up for Google review SEO. To turn on review schema safely, add your real Google rating and review count in the config values near the top of the file or via environment variables.</p></div>'
-    )
+    '<div class="wrap section"><h2>Trusted local plumber in Surrey</h2>'
+    '<p class="copy">Nigel Harvey Ltd is a local plumbing and heating company serving Surrey and surrounding areas. We focus on providing reliable service, clear communication and quality workmanship on every job.</p>'
+)
 
 
 
