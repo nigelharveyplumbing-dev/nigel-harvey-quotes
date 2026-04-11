@@ -1780,7 +1780,17 @@ ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
     </div>
 
     __REVIEWS_SECTION_HTML__
+<div class="wrap section">
+  <h2>Areas We Cover</h2>
+  <p class="copy">We provide professional plumbing services across Surrey, including:</p>
 
+  <ul>
+    <li><a href="/plumber-guildford">Plumber in Guildford</a></li>
+    <li><a href="/plumber-woking">Plumber in Woking</a></li>
+    <li><a href="/plumber-farnham">Plumber in Farnham</a></li>
+    <li><a href="/plumber-godalming">Plumber in Godalming</a></li>
+    <li><a href="/plumber-camberley">Plumber in Camberley</a></li>
+    <li><a
     <div class="section">
       <h2>Frequently asked questions</h2>
       <div class="faq-grid">
