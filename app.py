@@ -1781,17 +1781,20 @@ ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
 
     __REVIEWS_SECTION_HTML__
 <div class="wrap section">
-  <h2>Areas We Cover</h2>
-  <p class="copy">We provide professional plumbing services across Surrey, including:</p>
+  <h2>Plumbing Services Across Surrey</h2>
+<p>We provide trusted plumbing services across Surrey, covering Guildford, Woking, Farnham, Godalming and Camberley.</p>
 
-  <ul>
-    <li><a href="/plumber-guildford">Plumber in Guildford</a></li>
-    <li><a href="/plumber-woking">Plumber in Woking</a></li>
-    <li><a href="/plumber-farnham">Plumber in Farnham</a></li>
-    <li><a href="/plumber-godalming">Plumber in Godalming</a></li>
-    <li><a href="/plumber-camberley">Plumber in Camberley</a></li>
-    <li><a
-    <div class="section">
+<ul>
+  <li><a href="/plumber-guildford">Plumbing services in Guildford</a></li>
+  <li><a href="/plumber-woking">Emergency plumber in Woking</a></li>
+  <li><a href="/plumber-farnham">Local plumber in Farnham</a></li>
+  <li><a href="/plumber-godalming">Plumbing repairs in Godalming</a></li>
+  <li><a href="/plumber-camberley">Trusted plumber in Camberley</a></li>
+</ul>
+
+<p>Our experienced plumbers are available across Surrey for emergency callouts, repairs and installations, with fast response times in all listed areas.</p>
+
+<div class="section">
       <h2>Frequently asked questions</h2>
       <div class="faq-grid">
         <div class="card faq">
