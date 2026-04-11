@@ -1675,7 +1675,7 @@ ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
   .panel h2,.section h2{font-size:26px}
 }
 .sticky-call{position:fixed;bottom:0;left:0;width:100%;background:#16a34a;color:#fff;text-align:center;padding:14px;font-size:18px;font-weight:700;text-decoration:none;z-index:9999;border-top:2px solid rgba(255,255,255,.2);box-shadow:0 -2px 10px rgba(0,0,0,.15)}
-@media (min-width:768px){.sticky-call{display:none}}
+@media (min-width:768px){.sticky-call{display:block}}
 body{padding-bottom:60px}
 </style>
 </head>
