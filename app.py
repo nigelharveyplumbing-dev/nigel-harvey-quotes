@@ -1910,6 +1910,3977 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
 <div class="wrap section"><h2>Areas nearby</h2><p>We also cover nearby areas across Surrey, helping strengthen local coverage for customers searching for a plumber near {escape(location_name)}.</p><div class="pill-links">{related}</div></div>
 <div class="wrap section"><h2>Frequently asked questions</h2><div class="faq-grid"><div class="card faq"><h3>How quickly can you attend a plumbing job in {escape(location_name)}?</h3><p>Response times depend on the job and the day, but we aim to help customers in {escape(location_name)} as quickly as possible, especially for urgent plumbing issues.</p></div><div class="card faq"><h3>What plumbing work do you cover in {escape(location_name)}?</h3><p>We cover emergency plumbing, leaks, taps, toilets, sinks, pipework changes, bathroom plumbing and practical domestic plumbing repairs.</p></div><div class="card faq"><h3>Can I request a quote online?</h3><p>Yes. Use the online quote form to send your job details and request a fast quote for plumbing work in {escape(location_name)}.</p></div></div></div>
 <div class="wrap"><div class="hero-card cta"><div><h2 style="margin:0 0 8px">Need a plumber in {escape(location_name)}?</h2><div style="color:var(--muted)">Call now or send your job details online for a fast response.</div></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a></div></div></div>
+<div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services</div><div>{escape(location_name)}, Surrey and surrounding areas<br>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></div><a href="tel:{escape(COMPANY_PHONE)}" class="sticky-call">📞 Call Now: {escape(COMPANY_PHONE)}</a></body></html>"""
+
+def render_service_page(service: dict, logo_html: str, request: Request | None = None) -> str:
+    service_links = ''.join(f'<a href="/{escape(item["slug"])}">{escape(item["title"])}</a>' for item in SERVICE_PAGES if item['slug'] != service['slug'])
+    location_links = ''.join(f'<a href="/plumber-{escape(item["slug"])}">Plumber in {escape(item["name"])}</a>' for item in LOCATION_PAGES)
+    canonical = absolute_url(f"/{service['slug']}", request)
+    breadcrumb_schema = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Home", "item": absolute_url("/", request)},
+            {"@type": "ListItem", "position": 2, "name": service["title"], "item": canonical},
+        ],
+    }, ensure_ascii=False)
+    service_schema = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": service["title"],
+        "serviceType": service["heading"],
+        "provider": {"@type": "Plumber", "name": COMPANY_NAME, "telephone": COMPANY_PHONE},
+        "areaServed": [item["name"] for item in LOCATION_PAGES] + ["Surrey"],
+        "url": canonical,
+        "description": service["meta"],
+    }, ensure_ascii=False)
+    return f"""<!doctype html>
+<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(service['title'])} | Nigel Harvey Ltd</title><meta name="description" content="{escape(service['meta'])}"><meta name="keywords" content="{escape(service['keywords'])}"><link rel="canonical" href="{escape(canonical)}"><script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{service_schema}</script><style>{SEO_CSS}</style></head>
+<body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(service['title'])}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
+<main>
+<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Surrey plumbing service</div><h1>{escape(service['heading'])}</h1><p class="lead">{escape(service['intro'])}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE)}">Call {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a></div></div></div>
+<div class="wrap section"><h2>Why customers choose this service</h2><p>{escape(service['body'])}</p><div class="grid3"><div class="card item"><h3>Local Surrey coverage</h3><p>We cover Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead, Epsom and surrounding Surrey areas.</p></div><div class="card item"><h3>Clear pricing and communication</h3><p>Use the quote form to send job details and get a practical response without the runaround.</p></div><div class="card item"><h3>Domestic plumbing focus</h3><p>Our service pages are written for real customer searches and practical domestic plumbing jobs.</p></div></div></div>
+<div class="wrap section"><h2>Areas covered for {escape(service['heading']).lower()}</h2><p>We also cover nearby towns for customers searching for this service in Surrey.</p><div class="pill-links">{location_links}</div></div>
+<div class="wrap section"><h2>Related plumbing services</h2><div class="pill-links">{service_links}</div></div>
+<div class="wrap section"><h2>Frequently asked questions</h2><div class="faq-grid"><div class="card faq"><h3>Do you cover this service across Surrey?</h3><p>Yes. Nigel Harvey Ltd covers Guildford, Woking, Farnham and nearby Surrey towns for this service.</p></div><div class="card faq"><h3>Can I request a quote online?</h3><p>Yes. Send your details through the online quote form for a fast response.</p></div><div class="card faq"><h3>Do you also cover nearby plumbing work?</h3><p>Yes. We also handle related plumbing jobs, which is why the site links service pages and area pages together.</p></div></div></div>
+<div class="wrap"><div class="hero-card cta"><div><h2 style="margin:0 0 8px">Need help with {escape(service['heading']).lower()}?</h2><div style="color:var(--muted)">Call now or send your job details online for a fast response.</div></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a></div></div></div>
+<div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services in Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}<br>Guildford, Surrey and surrounding areas</div></div></div><a href="tel:{escape(COMPANY_PHONE)}" class="sticky-call">📞 Call Now: {escape(COMPANY_PHONE)}</a></body></html>"""
+
+
+LEAD_FORM_HTML = r'''<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request a Quote - Nigel Harvey Ltd</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f5f5f5;margin:0;color:#111;padding:14px;}
+.wrap{max-width:760px;margin:0 auto;}
+.card{background:#fff;border-radius:18px;padding:22px;box-shadow:0 8px 24px rgba(0,0,0,.08);margin-bottom:14px;}
+h1{margin:0 0 8px 0;font-size:30px;}
+.sub{color:#666;margin-bottom:18px;}
+label{display:block;font-weight:700;margin:14px 0 6px;}
+input,textarea,select{width:100%;box-sizing:border-box;padding:14px;border:1px solid #d1d5db;border-radius:12px;font-size:16px;background:#fff;}
+textarea{min-height:120px;resize:vertical;}
+button{width:100%;padding:15px;border:none;border-radius:12px;background:#111;color:#fff;font-size:17px;font-weight:700;cursor:pointer;margin-top:18px;}
+.small{font-size:14px;color:#666;}
+.ok{display:none;margin-top:14px;background:#edf9ed;border:1px solid #b7ddb7;color:#14532d;padding:12px;border-radius:12px;}
+.err{display:none;margin-top:14px;background:#fff4f4;border:1px solid #e8bcbc;color:#9b1c1c;padding:12px;border-radius:12px;}
+.logo{max-height:76px;max-width:220px;display:block;margin:0 0 12px auto;}
+.quick-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.quick-btn{padding:12px;border-radius:12px;border:1px solid #d1d5db;background:#fafafa;text-align:center;font-weight:700;cursor:pointer;}
+@media (max-width:640px){.quick-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<main>
+<div class="wrap">
+  <div class="card">
+    <div style="text-align:right;">__COMPANY_LOGO_HTML__</div>
+    <h1>Request a Quote</h1>
+    <div class="sub">Send Nigel Harvey Ltd your job details and get a callback or quote.</div>
+    <div class="small" style="margin-bottom:12px;">Phone: __COMPANY_PHONE__ · Email: __COMPANY_EMAIL__</div>
+    <div class="quick-grid" style="margin-bottom:10px;">
+      <div class="quick-btn" onclick="setJobType('small','Tap / toilet / leak / waste repair')">Small plumbing job</div>
+      <div class="quick-btn" onclick="setJobType('bathroom','Bathroom install / refurb')">Bathroom</div>
+      <div class="quick-btn" onclick="setJobType('heating','Heating / radiator / system work')">Heating</div>
+      <div class="quick-btn" onclick="setJobType('small','Outside tap / general plumbing')">Outside tap / general</div>
+    </div>
+    <label>Name</label><input id="lead_name" placeholder="Your name">
+    <label>Phone</label><input id="lead_phone" placeholder="Your phone">
+    <label>Email (optional)</label><input id="lead_email" placeholder="Your email">
+    <label>Address</label><textarea id="lead_address" placeholder="Job address"></textarea>
+    <label>Job type</label>
+    <select id="lead_job_type">
+      <option value="small">Small plumbing job</option>
+      <option value="bathroom">Bathroom</option>
+      <option value="heating">Heating</option>
+    </select>
+    <label>Describe the job</label><textarea id="lead_description" placeholder="Tell us what needs doing"></textarea>
+    <button type="button" onclick="submitLead()">Send quote request</button>
+    <div id="lead_ok" class="ok">Thanks — your quote request has been sent. Nigel Harvey Ltd will get back to you shortly.</div>
+    <div id="lead_err" class="err"></div>
+  </div>
+</div>
+</main>
+<script>
+function setJobType(type, text){document.getElementById('lead_job_type').value=type; if(!document.getElementById('lead_description').value.trim()){document.getElementById('lead_description').value=text;}}
+async function submitLead(){
+  const err=document.getElementById('lead_err'); const ok=document.getElementById('lead_ok');
+  err.style.display='none'; ok.style.display='none';
+  const payload={
+    name:document.getElementById('lead_name').value,
+    phone:document.getElementById('lead_phone').value,
+    email:document.getElementById('lead_email').value,
+    address:document.getElementById('lead_address').value,
+    job_type:document.getElementById('lead_job_type').value,
+    description:document.getElementById('lead_description').value,
+    source:'website'
+  };
+  if(!payload.name.trim() || !payload.phone.trim() || !payload.description.trim()){
+    err.textContent='Please add your name, phone number and a short job description.'; err.style.display='block'; return;
+  }
+  try{
+    const res=await fetch('/api/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.detail || 'Could not send quote request.');
+    ok.style.display='block';
+    ['lead_name','lead_phone','lead_email','lead_address','lead_description'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('lead_job_type').value='small';
+  }catch(e){err.textContent=String(e); err.style.display='block';}
+}
+</script>
+</body>
+</html>'''
+
+
+HTML = r'''
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nigel Harvey Ltd Business App</title>
+<style>
+body { font-family: Arial, sans-serif; background:#f5f5f5; margin:0; padding:12px; color:#111; }
+.wrap { max-width:1100px; margin:0 auto; }
+.card { background:white; padding:18px; border-radius:18px; margin-bottom:14px; box-shadow:0 2px 14px rgba(0,0,0,0.06); }
+h1 { margin:0 0 6px 0; font-size:30px; }
+h2 { margin:0 0 12px 0; font-size:22px; }
+h3 { margin:18px 0 8px 0; }
+.sub { color:#666; margin-bottom:16px; }
+label { display:block; font-weight:700; margin:12px 0 6px; }
+input, textarea, select { width:100%; box-sizing:border-box; padding:12px; border:1px solid #ccc; border-radius:10px; font-size:16px; background:white; }
+textarea { min-height:100px; resize:vertical; }
+button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; background:black; color:white; font-size:17px; font-weight:700; text-align:center; text-decoration:none; display:inline-block; box-sizing:border-box; cursor:pointer; min-height:52px; }
+.btn-secondary { background:#1f7a1f; }
+.btn-light { background:#ececec; color:#111; }
+.btn-red { background:#b62323; color:white; }
+.btn-blue { background:#1e5fbf; color:white; }
+.btn-template { background:#333; font-size:15px; padding:10px; }
+.templates, .favourites { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
+.favourites .btn-template { background:#5a4a00; }
+.material-row { border:1px solid #ddd; padding:12px; border-radius:10px; margin-bottom:10px; background:#fafafa; }
+.row { display:flex; justify-content:space-between; gap:10px; margin:8px 0; }
+.muted { color:#666; }
+.result { display:none; background:#f3faf3; border:1px solid #b7d7b7; }
+.error { display:none; background:#fff3f3; border:1px solid #e0b7b7; color:#a33; padding:12px; border-radius:10px; margin-top:12px; }
+.actions { display:grid; gap:10px; margin-top:14px; }
+.notice { display:none; background:#eef7ff; border:1px solid #c7def5; color:#124a7a; padding:12px; border-radius:12px; margin-top:12px; font-weight:700; }
+.print-head { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.logo-box img { max-height:70px; max-width:170px; object-fit:contain; }
+.history-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
+.history-actions { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-top:10px; }
+.history-actions button, .history-actions a { font-size:15px; padding:10px; }
+.small { font-size:14px; color:#666; }
+.hidden { display:none; }
+.check-row { display:flex; align-items:center; gap:10px; margin:12px 0 6px; font-weight:700; }
+.check-row input[type="checkbox"] { width:auto; transform:scale(1.2); }
+.quote-sheet, .invoice-sheet { background:white; }
+.quote-header { border-bottom:2px solid #111; padding-bottom:12px; margin-bottom:14px; }
+.quote-company { font-size:28px; font-weight:800; }
+.quote-meta { color:#444; margin-top:6px; line-height:1.5; }
+.quote-section-title { font-size:18px; font-weight:800; margin-top:18px; margin-bottom:8px; }
+.quote-box { border:1px solid #ddd; border-radius:10px; padding:12px; background:#fafafa; }
+.quote-total { font-size:32px; font-weight:900; }
+.doc-grid-two { display:grid; grid-template-columns:1.15fr 0.85fr; gap:14px; margin-top:14px; }
+.doc-grid-bottom { display:grid; grid-template-columns:1fr 0.95fr; gap:14px; margin-top:14px; align-items:start; }
+.doc-panel { border:1px solid #ddd; border-radius:12px; background:#fafafa; padding:14px; }
+.doc-panel-title { font-size:17px; font-weight:800; margin-bottom:10px; }
+.doc-summary .row { margin:10px 0; }
+.doc-total-box { border-top:1px solid #ddd; margin-top:12px; padding-top:12px; }
+.doc-total-box .quote-total { font-size:40px; line-height:1.05; }
+.doc-notes { margin-top:14px; }
+.doc-notes-content { line-height:1.6; }
+.doc-work-text { line-height:1.6; white-space:pre-wrap; }
+.internal-box { margin-top:16px; border:1px dashed #999; background:#fffdf3; }
+.search-results { border:1px solid #ddd; border-radius:10px; max-height:220px; overflow:auto; background:#fff; margin-top:8px; }
+.search-item { padding:10px; border-bottom:1px solid #eee; cursor:pointer; }
+.search-item:last-child { border-bottom:none; }
+.search-item:hover { background:#f2f2f2; }
+.no-print { display:block; }
+.status-bar { font-size:14px; color:#1f7a1f; margin-top:8px; font-weight:700; }
+.dashboard-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
+.dashboard-item { border:1px solid #ddd; border-radius:10px; padding:12px; background:#fafafa; }
+.dashboard-item .num { font-size:26px; font-weight:800; margin-top:4px; }
+.tabs { display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; margin-bottom:14px; }
+.tabs button { padding:12px; }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+.material-lines { margin-top:10px; }
+.material-lines div { font-size:14px; margin-bottom:6px; }
+.badge { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; background:#ececec; color:#111; }
+.badge.green { background:#dff5df; color:#0c5d0c; }
+.badge.red { background:#ffe3e3; color:#8e1414; }
+.badge.orange { background:#fff0d9; color:#8a5500; }
+.invoice-note { margin-top:10px; font-size:14px; }
+.notice { display:none; padding:12px; border-radius:10px; margin-top:12px; font-weight:700; }
+.notice.success { background:#eef8ee; border:1px solid #b7d7b7; color:#1f7a1f; }
+.notice.error { background:#fff3f3; border:1px solid #e0b7b7; color:#a33; }
+.dashboard-summary { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-top:10px; }
+@media print {
+  .no-print { display:none !important; }
+  body { background:white; padding:0; }
+  .card { box-shadow:none; border:none; padding:0; margin:0 0 12px 0; }
+  .wrap { max-width:100%; }
+  .quote-sheet, .invoice-sheet { page-break-inside: avoid; }
+}
+@media (max-width: 768px) {
+  body { padding:10px; }
+  h1 { font-size:26px; }
+  h2 { font-size:21px; }
+  .tabs { grid-template-columns:repeat(2, 1fr); }
+  .templates, .favourites, .dashboard-grid, .history-actions, .doc-grid-two, .doc-grid-bottom, .dashboard-summary { grid-template-columns:1fr; }
+  .row { flex-direction:column; gap:4px; }
+  .actions { position:sticky; bottom:8px; z-index:5; }
+  .doc-total-box .quote-total { font-size:34px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="appNotice" class="notice" style="display:none;"></div>
+
+  <div class="card">
+    <h1>Nigel Harvey Ltd</h1>
+    <div class="sub">Quotes, invoices, customers, profit tracking</div>
+    <div id="appNotice" class="notice success"></div>
+
+    <div class="tabs no-print">
+      <button class="btn-light" onclick="showTab('dashboardTab')">Dashboard</button>
+      <button class="btn-light" onclick="showTab('quotesTab')">Quotes</button>
+      <button class="btn-light" onclick="showTab('invoicesTab')">Invoices</button>
+      <button class="btn-light" onclick="showTab('customersTab')">Customers</button>
+      <button class="btn-light" onclick="showTab('leadsTab')">Leads</button>
+    </div>
+
+    <div id="dashboardTab" class="tab-panel active">
+      <h2>Dashboard</h2>
+      <div class="small" id="dashboardMonth"></div>
+      <div id="dashboardGrid" class="dashboard-grid"></div>
+      <h3>Monthly profit</h3>
+      <div id="profitChart" class="quote-box small">Loading chart...</div>
+      <div id="dashboardSummary" class="dashboard-summary"></div>
+    </div>
+
+    <div id="quotesTab" class="tab-panel">
+      <h2>Quote Builder</h2>
+      <div id="editingStatus" class="status-bar hidden"></div>
+      <button type="button" class="btn-light no-print" style="margin-bottom:12px;" onclick="startNewQuote()">Start Fresh Quote</button>
+
+      <div class="check-row no-print">
+        <input type="checkbox" id="internal_mode">
+        <span>Internal mode</span>
+      </div>
+
+      <h3>Job templates</h3>
+      <div id="templateButtons" class="templates"></div>
+
+      <h3>Favourite materials</h3>
+      <div id="favouriteButtons" class="favourites"></div>
+
+      <label for="quote_type">Quote type</label>
+      <select id="quote_type" onchange="toggleBathroomFields(); updateLabourSuggestion();">
+        <option value="small">Small Job</option>
+        <option value="bathroom">Bathroom</option>
+        <option value="heating">Heating</option>
+      </select>
+
+      <label for="customer_name">Customer name</label>
+      <input id="customer_name" placeholder="John Smith">
+
+      <label for="customer_address">Customer address</label>
+      <textarea id="customer_address" placeholder="125 Bushy Hill Drive, Guildford, GU1 2UG"></textarea>
+
+      <label for="customer_phone">Customer phone</label>
+      <input id="customer_phone" placeholder="07123 456789">
+
+      <label for="job">Job description</label>
+      <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion()"></textarea>
+
+      <div id="bathroomFields" class="hidden">
+        <h3>Bathroom / tiling</h3>
+
+        <div class="check-row">
+          <input type="checkbox" id="tiling">
+          <span>Include tiling</span>
+        </div>
+
+        <label for="wall_tiling_m2">Wall tiling (m²)</label>
+        <input id="wall_tiling_m2" type="number" step="0.1" placeholder="0">
+
+        <label for="floor_tiling_m2">Floor tiling (m²)</label>
+        <input id="floor_tiling_m2" type="number" step="0.1" placeholder="0">
+
+        <label for="wall_height">Wall height</label>
+        <select id="wall_height">
+          <option value="half">Half height</option>
+          <option value="full">Full height</option>
+        </select>
+
+        <div class="check-row">
+          <input type="checkbox" id="customer_supplies_tiles">
+          <span>Customer supplies tiles</span>
+        </div>
+      </div>
+
+      <h3>Smart material search</h3>
+      <input id="materialSearch" placeholder="Search materials e.g. 15mm speedfit elbow, basin waste, kitchen tap" oninput="searchMaterials()">
+      <div id="searchResults" class="search-results hidden"></div>
+
+      <h3>Materials</h3>
+      <div id="materials"></div>
+      <button type="button" class="btn-light no-print" onclick="addMaterial()">+ Add Manual Material Row</button>
+
+      <h3>Pricing</h3>
+      <label for="labour">Labour cost (£)</label>
+      <input id="labour" type="number" step="0.01" placeholder="180">
+      <div class="small" id="labourSuggestion" style="margin-top:8px;"></div>
+
+      <div class="check-row">
+        <input type="checkbox" id="include_materials_handling" checked>
+        <span>Include materials handling</span>
+      </div>
+
+      <label for="materials_handling_percent">Materials handling %</label>
+      <select id="materials_handling_percent">
+        <option value="20">20%</option>
+        <option value="25" selected>25%</option>
+        <option value="30">30%</option>
+      </select>
+
+      <label for="deposit_percent">Deposit % (optional)</label>
+      <select id="deposit_percent">
+        <option value="0" selected>0%</option>
+        <option value="10">10%</option>
+        <option value="25">25%</option>
+        <option value="50">50%</option>
+      </select>
+
+      <button type="button" class="no-print" onclick="generateQuote()">Generate Quote</button>
+      <div id="error" class="error"></div>
+      <div id="notice" class="notice"></div>
+    </div>
+
+    <div id="invoicesTab" class="tab-panel">
+      <h2>Invoices</h2>
+      <div id="invoiceList" class="small">No invoices yet.</div>
+    </div>
+
+    <div id="customersTab" class="tab-panel">
+      <h2>Customers</h2>
+      <input id="customerSearch" placeholder="Search customer by name, phone or address" oninput="loadCustomers()">
+      <div id="customerList" class="small" style="margin-top:10px;">No customers yet.</div>
+    </div>
+
+    <div id="leadsTab" class="tab-panel">
+      <h2>Lead Generator</h2>
+      <div class="small">Public quote request page: <a href="/request-quote" target="_blank">/request-quote</a></div>
+      <div class="lead-filter-row">
+        <input id="leadSearch" placeholder="Search leads by name, phone, email, address or job" oninput="loadLeads()">
+        <select id="leadStatusFilter" onchange="loadLeads()">
+          <option value="all">All statuses</option>
+          <option value="new">New</option>
+          <option value="contacted">Contacted</option>
+          <option value="quoted">Quoted</option>
+          <option value="won">Won</option>
+          <option value="lost">Lost</option>
+        </select>
+      </div>
+      <div id="leadList" class="small" style="margin-top:10px;">No leads yet.</div>
+    </div>
+  </div>
+
+  <div id="resultCard" class="card result quote-sheet">
+    <div class="quote-header print-head">
+      <div><div class="quote-company">Nigel Harvey Ltd</div>
+      <div class="quote-meta">
+        125 Bushy Hill Drive, Guildford, GU1 2UG<br>
+        07595 725547<br>
+        Nigelharveyplumbing@gmail.com
+      </div>
+      <div class="logo-box">__COMPANY_LOGO_HTML__</div>
+    </div>
+
+    <div class="doc-grid-two">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Works</div>
+        <div id="r_job" class="doc-work-text"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Quote details</div>
+        <div class="row"><span class="muted">Date</span><span id="r_date"></span></div>
+        <div class="row"><span class="muted">Type</span><span id="r_type"></span></div>
+        <div class="row"><span class="muted">Customer</span><span id="r_customer"></span></div>
+        <div class="row"><span class="muted">Phone</span><span id="r_phone"></span></div>
+        <div class="row"><span class="muted">Address</span><span id="r_address"></span></div>
+      </div>
+    </div>
+
+    <div class="doc-grid-bottom">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Materials used</div>
+        <div id="r_material_lines" class="material-lines"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Pricing summary</div>
+        <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
+        <div class="row"><span class="muted">Materials</span><span id="r_materials"></span></div>
+        <div class="row"><span class="muted">Deposit</span><span id="r_deposit"></span></div>
+        <div class="doc-total-box">
+          <div class="muted">Total price</div>
+          <div class="quote-total" id="r_total"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="internalBox" class="quote-box internal-box hidden">
+      <div class="quote-section-title" style="margin-top:0;">Internal only</div>
+      <div class="row"><span class="muted">Raw materials</span><span id="r_internal_raw"></span></div>
+      <div class="row"><span class="muted">Job multiplier</span><span id="r_internal_job_multiplier"></span></div>
+      <div class="row"><span class="muted">After job markup</span><span id="r_internal_after_job"></span></div>
+      <div class="row"><span class="muted">Handling %</span><span id="r_internal_handling_percent"></span></div>
+      <div class="row"><span class="muted">After handling</span><span id="r_internal_after_handling"></span></div>
+      <div class="row"><span class="muted">Hidden uplift</span><span id="r_internal_hidden_uplift"></span></div>
+      <div class="row"><span class="muted">Gross profit</span><span id="r_internal_profit"></span></div>
+      <div class="row"><span class="muted">Margin %</span><span id="r_internal_margin"></span></div>
+    </div>
+
+    <div class="doc-panel doc-notes">
+      <div class="doc-panel-title">Notes</div>
+      <div class="doc-notes-content">
+        Includes labour and materials.<br>
+        Payment due as agreed.<br>
+        Late payment fee may be applied after 14 days.<br>
+        Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
+        Deposit required before works begin where applicable.<br>
+        Quote subject to site conditions and any unforeseen issues.
+      </div>
+    </div>
+
+    <div class="actions no-print">
+      <a id="whatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Quote to WhatsApp</a>
+      <button class="btn-blue" onclick="convertCurrentQuoteToInvoice()">Convert to Invoice</button>
+      <button class="btn-light" type="button" onclick="downloadCurrentQuotePdf()">Download Quote PDF</button>
+    </div>
+  </div>
+
+  <div id="invoiceCard" class="card result invoice-sheet">
+    <div class="quote-header print-head">
+      <div><div class="quote-company">Nigel Harvey Ltd</div>
+      <div class="quote-meta">
+        125 Bushy Hill Drive, Guildford, GU1 2UG<br>
+        07595 725547<br>
+        Nigelharveyplumbing@gmail.com
+      </div>
+    </div>
+
+    <div class="doc-grid-two">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Work</div>
+        <div id="i_job" class="doc-work-text"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Invoice details</div>
+        <div class="row"><span class="muted">Invoice number</span><span id="i_number"></span></div>
+        <div class="row"><span class="muted">Date</span><span id="i_date"></span></div>
+        <div class="row"><span class="muted">Due date</span><span id="i_due_date"></span></div>
+        <div class="row"><span class="muted">Status</span><span id="i_status"></span></div>
+        <div class="row"><span class="muted">Customer</span><span id="i_customer"></span></div>
+        <div class="row"><span class="muted">Phone</span><span id="i_phone"></span></div>
+        <div class="row"><span class="muted">Address</span><span id="i_address"></span></div>
+      </div>
+    </div>
+
+    <div class="doc-grid-bottom">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Payment</div>
+        <div id="i_payment_link_box"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Invoice totals</div>
+        <div class="row"><span class="muted">Labour</span><span id="i_labour"></span></div>
+        <div class="row"><span class="muted">Materials</span><span id="i_materials"></span></div>
+        <div class="row"><span class="muted">Total</span><span id="i_total"></span></div>
+        <div class="row"><span class="muted">Amount paid</span><span id="i_paid"></span></div>
+        <div class="row"><span class="muted">Outstanding</span><span id="i_balance"></span></div>
+        <div class="doc-total-box">
+          <div class="muted">Balance due</div>
+          <div class="quote-total" id="i_balance_big"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="invoiceEditPanel" class="quote-box edit-panel hidden no-print">
+      <div class="quote-section-title" style="margin-top:0;">Edit invoice</div>
+      <label for="edit_invoice_customer_name">Customer name</label>
+      <input id="edit_invoice_customer_name" placeholder="Customer name">
+      <label for="edit_invoice_customer_address">Customer address</label>
+      <textarea id="edit_invoice_customer_address" placeholder="Customer address"></textarea>
+      <label for="edit_invoice_customer_phone">Customer phone</label>
+      <input id="edit_invoice_customer_phone" placeholder="Customer phone">
+      <label for="edit_invoice_job">Job</label>
+      <textarea id="edit_invoice_job" placeholder="Job details"></textarea>
+      <label for="edit_invoice_labour">Labour (£)</label>
+      <input id="edit_invoice_labour" type="number" step="0.01" placeholder="0">
+      <label for="edit_invoice_materials">Materials (£)</label>
+      <input id="edit_invoice_materials" type="number" step="0.01" placeholder="0">
+      <label for="edit_invoice_due_date">Due date</label>
+      <input id="edit_invoice_due_date" placeholder="dd/mm/yyyy">
+      <label for="edit_invoice_payment_link">Payment link</label>
+      <input id="edit_invoice_payment_link" placeholder="https://...">
+      <label for="edit_invoice_amount_paid">Amount paid (£)</label>
+      <input id="edit_invoice_amount_paid" type="number" step="0.01" placeholder="0">
+      <div class="history-actions" style="grid-template-columns:1fr 1fr; margin-top:12px;">
+        <button type="button" class="btn-blue" onclick="saveInvoiceEdit()">Save Invoice Changes</button>
+        <button type="button" class="btn-light" onclick="cancelInvoiceEdit()">Cancel</button>
+      </div>
+    </div>
+
+    <div class="actions no-print">
+      <a id="invoiceWhatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Invoice to WhatsApp</a>
+      <button id="invoiceEmailBtn" class="btn-blue" type="button" onclick="sendInvoiceEmail()">Email Invoice PDF</button>
+      <a id="invoiceOpenBtn" class="btn-link btn-light" href="#" target="_blank">Open Invoice Page</a>
+      <button class="btn-light" type="button" onclick="downloadCurrentInvoicePdf()">Download Invoice PDF</button>
+    </div>
+  </div>
+
+  <div class="card no-print">
+    <h2>Saved Quotes</h2>
+    <div id="historyList" class="small">No saved quotes yet.</div>
+  </div>
+
+</div>
+
+<script>
+const MATERIAL_LIBRARY = __MATERIAL_LIBRARY__;
+const FAVOURITE_MATERIALS = __FAVOURITE_MATERIALS__;
+const JOB_TEMPLATES = __JOB_TEMPLATES__;
+
+let SAVED_QUOTES = [];
+let SAVED_INVOICES = [];
+let SAVED_CUSTOMERS = [];
+let SAVED_LEADS = [];
+let CURRENT_QUOTE_ID = null;
+let CURRENT_QUOTE_DATA = null;
+let CURRENT_INVOICE_ID = null;
+let CURRENT_EDITING_INVOICE_ID = null;
+
+function showNotice(message, type = "success") {
+  const box = document.getElementById("appNotice");
+  if (!box) return;
+  box.className = "notice " + (type === "error" ? "error" : "success");
+  box.innerText = message || "";
+  box.style.display = message ? "block" : "none";
+  if (message) {
+    window.clearTimeout(showNotice._timer);
+    showNotice._timer = window.setTimeout(() => {
+      box.style.display = "none";
+      box.innerText = "";
+    }, 2600);
+  }
+}
+
+function clearNotice() {
+  const box = document.getElementById("appNotice");
+  if (!box) return;
+  box.style.display = "none";
+  box.innerText = "";
+}
+
+function pounds(value) {
+  return String.fromCharCode(163) + Number(value || 0).toFixed(2);
+}
+
+function escapeHtml(text) {
+  return (text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function showNotice(message) {
+  const box = document.getElementById("notice");
+  if (!box) return;
+  box.innerText = message;
+  box.style.display = "block";
+  setTimeout(() => { box.style.display = "none"; }, 4000);
+}
+
+function showTab(id) {
+  document.querySelectorAll(".tab-panel").forEach(x => x.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+function toggleBathroomFields() {
+  const quoteType = document.getElementById("quote_type").value;
+  const bathroomFields = document.getElementById("bathroomFields");
+  if (quoteType === "bathroom") bathroomFields.classList.remove("hidden");
+  else bathroomFields.classList.add("hidden");
+}
+
+function renderTemplates() {
+  const box = document.getElementById("templateButtons");
+  box.innerHTML = JOB_TEMPLATES.map((t, i) => `
+    <button type="button" class="btn-template" onclick="applyTemplate(${i})">${escapeHtml(t.name)}</button>
+  `).join("");
+}
+
+function renderFavourites() {
+  const box = document.getElementById("favouriteButtons");
+  box.innerHTML = FAVOURITE_MATERIALS.map((t, i) => `
+    <button type="button" class="btn-template" onclick="addFavouriteMaterial(${i})">${escapeHtml(t.name)}</button>
+  `).join("");
+}
+
+function applyTemplate(index) {
+  const t = JOB_TEMPLATES[index];
+  document.getElementById("quote_type").value = t.quote_type;
+  document.getElementById("job").value = t.job;
+  document.getElementById("labour").value = t.labour;
+  toggleBathroomFields();
+  updateLabourSuggestion();
+}
+
+function addFavouriteMaterial(index) {
+  addMaterial(FAVOURITE_MATERIALS[index]);
+}
+
+function updateLabourSuggestion() {
+  const quoteType = document.getElementById("quote_type").value;
+  const text = document.getElementById("job").value.toLowerCase();
+  const box = document.getElementById("labourSuggestion");
+
+  let message = "Small jobs: use your judgement and minimum charge where needed.";
+  if (quoteType === "bathroom") message = "Typical bathroom labour is often higher. Adjust to suit your job.";
+  if (quoteType === "heating") message = "Heating jobs often vary by size and access. Adjust labour as needed.";
+
+  if (quoteType === "small" && text.includes("tap")) message = "Suggested labour: around £120. Typical range: £100 - £140.";
+  if (quoteType === "small" && (text.includes("toilet") || text.includes("wc"))) message = "Suggested labour: around £180. Typical range: £160 - £220.";
+  if (quoteType === "small" && (text.includes("waste") || text.includes("trap"))) message = "Suggested labour: around £120. Typical range: £90 - £140.";
+  if (quoteType === "small" && text.includes("outside tap")) message = "Suggested labour: around £150. Typical range: £140 - £180.";
+  if (quoteType === "bathroom" && text.includes("refurb")) message = "Suggested labour: around £2,200. Typical range: £2,000 - £2,800.";
+  if (quoteType === "bathroom" && text.includes("install")) message = "Suggested labour: around £1,800. Typical range: £1,600 - £2,200.";
+  if (quoteType === "heating" && text.includes("radiator")) message = "Suggested labour: around £180. Typical range: £160 - £220.";
+  if (quoteType === "heating" && text.includes("repair")) message = "Suggested labour: around £150. Typical range: £120 - £220.";
+
+  box.innerText = message;
+}
+
+function clearMaterials() {
+  document.getElementById("materials").innerHTML = "";
+}
+
+function addMaterial(prefill = null) {
+  const div = document.createElement("div");
+  div.className = "material-row";
+
+  const qty = prefill && prefill.quantity ? prefill.quantity : 1;
+  const manualPrice = prefill && prefill.manual_price != null
+    ? prefill.manual_price
+    : (prefill && prefill.default_price != null ? prefill.default_price : "");
+
+  div.innerHTML = `
+    <label>Item name</label>
+    <input class="m-name" placeholder="e.g. kitchen tap" value="${prefill ? escapeHtml(prefill.name) : ""}">
+
+    <label>Quantity</label>
+    <input class="m-qty" type="number" step="0.01" placeholder="1" value="${qty}">
+
+    <label>Supplier</label>
+    <select class="m-supplier">
+      <option value="City Plumbing">City Plumbing</option>
+      <option value="Screwfix">Screwfix</option>
+      <option value="Toolstation">Toolstation</option>
+      <option value="Topps Tiles">Topps Tiles</option>
+      <option value="Selco">Selco</option>
+    </select>
+
+    <label>Product URL</label>
+    <input class="m-url" placeholder="https://..." value="${prefill && prefill.url ? escapeHtml(prefill.url) : ""}">
+
+    <label>Manual price (£)</label>
+    <input class="m-manual" type="number" step="0.01" placeholder="0" value="${manualPrice}">
+
+    <button type="button" class="btn-red" style="margin-top:12px;" onclick="this.parentElement.remove()">Remove</button>
+  `;
+  document.getElementById("materials").appendChild(div);
+
+  if (prefill) {
+    div.querySelector(".m-supplier").value = prefill.supplier || "City Plumbing";
+  }
+}
+
+function searchMaterials() {
+  const query = document.getElementById("materialSearch").value.trim().toLowerCase();
+  const resultsBox = document.getElementById("searchResults");
+
+  if (!query) {
+    resultsBox.classList.add("hidden");
+    resultsBox.innerHTML = "";
+    return;
+  }
+
+  const terms = query.split(" ").filter(Boolean);
+
+  const results = MATERIAL_LIBRARY.filter(item => {
+    const hay = (item.name + " " + item.supplier).toLowerCase();
+    return terms.every(term => hay.includes(term));
+  }).slice(0, 15);
+
+  if (!results.length) {
+    resultsBox.innerHTML = `<div class="search-item">No matches found</div>`;
+    resultsBox.classList.remove("hidden");
+    return;
+  }
+
+  resultsBox.innerHTML = results.map((item) => `
+    <div class="search-item" onclick='addMaterialFromLibrary(${JSON.stringify(item)})'>
+      <strong>${escapeHtml(item.name)}</strong><br>
+      <span class="small">${escapeHtml(item.supplier)} · ${pounds(item.default_price)}</span>
+    </div>
+  `).join("");
+
+  resultsBox.classList.remove("hidden");
+}
+
+function addMaterialFromLibrary(item) {
+  addMaterial(item);
+  document.getElementById("materialSearch").value = "";
+  document.getElementById("searchResults").classList.add("hidden");
+  document.getElementById("searchResults").innerHTML = "";
+}
+
+function normalisePhone(phone) {
+  const digits = (phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("44")) return digits;
+  if (digits.startsWith("0")) return "44" + digits.slice(1);
+  return digits;
+}
+
+function setEditingStatus(text = "", show = false) {
+  const box = document.getElementById("editingStatus");
+  if (show) {
+    box.innerText = text;
+    box.classList.remove("hidden");
+  } else {
+    box.innerText = "";
+    box.classList.add("hidden");
+  }
+}
+
+function collectFormPayload() {
+  const materials = [];
+  document.querySelectorAll(".material-row").forEach(row => {
+    materials.push({
+      name: row.querySelector(".m-name").value,
+      quantity: parseFloat(row.querySelector(".m-qty").value || 1),
+      supplier: row.querySelector(".m-supplier").value,
+      url: row.querySelector(".m-url").value,
+      manual_price: parseFloat(row.querySelector(".m-manual").value || 0)
+    });
+  });
+
+  return {
+    quote_type: document.getElementById("quote_type").value,
+    customer_name: document.getElementById("customer_name").value,
+    customer_address: document.getElementById("customer_address").value,
+    customer_phone: document.getElementById("customer_phone").value,
+    job_description: document.getElementById("job").value,
+    labour_cost: parseFloat(document.getElementById("labour").value || 0),
+    include_materials_handling: document.getElementById("include_materials_handling").checked,
+    materials_handling_percent: parseFloat(document.getElementById("materials_handling_percent").value || 25),
+    materials: materials,
+    tiling: document.getElementById("tiling").checked,
+    wall_tiling_m2: parseFloat(document.getElementById("wall_tiling_m2").value || 0),
+    floor_tiling_m2: parseFloat(document.getElementById("floor_tiling_m2").value || 0),
+    wall_height: document.getElementById("wall_height").value,
+    customer_supplies_tiles: document.getElementById("customer_supplies_tiles").checked,
+    deposit_percent: parseFloat(document.getElementById("deposit_percent").value || 0)
+  };
+}
+
+function renderQuoteResult(data) {
+  CURRENT_QUOTE_DATA = data;
+  document.getElementById("invoiceCard").style.display = "none";
+
+  document.getElementById("r_date").innerText = data.created_at || "-";
+  document.getElementById("r_type").innerText = data.quote_type || "-";
+  document.getElementById("r_customer").innerText = data.customer_name || "-";
+  document.getElementById("r_phone").innerText = data.customer_phone || "-";
+  document.getElementById("r_address").innerText = data.customer_address || "-";
+  document.getElementById("r_job").innerText = data.job || "-";
+  document.getElementById("r_labour").innerText = pounds(data.labour);
+  document.getElementById("r_materials").innerText = pounds(data.materials);
+  document.getElementById("r_deposit").innerText = data.deposit_amount ? pounds(data.deposit_amount) + " (" + Number(data.deposit_percent).toFixed(0) + "%)" : String.fromCharCode(163) + "0.00";
+  document.getElementById("r_total").innerText = pounds(data.total_price);
+
+  const lines = data.material_lines || [];
+  document.getElementById("r_material_lines").innerHTML = lines.length
+    ? lines.map(x => `<div>${escapeHtml(x.name || "")} × ${x.quantity} — ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
+    : "<div>No materials added.</div>";
+
+  const internalMode = document.getElementById("internal_mode").checked;
+  const internalBox = document.getElementById("internalBox");
+  if (internalMode) {
+    internalBox.classList.remove("hidden");
+    document.getElementById("r_internal_raw").innerText = pounds(data.internal_raw_materials);
+    document.getElementById("r_internal_job_multiplier").innerText = data.internal_job_multiplier + "x";
+    document.getElementById("r_internal_after_job").innerText = pounds(data.internal_after_job_markup);
+    document.getElementById("r_internal_handling_percent").innerText = data.internal_handling_percent + "%";
+    document.getElementById("r_internal_after_handling").innerText = pounds(data.internal_after_handling);
+    document.getElementById("r_internal_hidden_uplift").innerText = pounds(data.internal_hidden_uplift);
+    document.getElementById("r_internal_profit").innerText = pounds(data.gross_profit);
+    document.getElementById("r_internal_margin").innerText = Number(data.margin_percent || 0).toFixed(1) + "%";
+  } else {
+    internalBox.classList.add("hidden");
+  }
+
+  const message =
+`Nigel Harvey Ltd Quote
+
+Date: ${data.created_at || "-"}
+Type: ${data.quote_type || "-"}
+Customer: ${data.customer_name || "-"}
+Address: ${data.customer_address || "-"}
+
+Job: ${data.job || "-"}
+
+Labour: ${pounds(data.labour)}
+Materials: ${pounds(data.materials)}
+Total price: ${pounds(data.total_price)}
+
+Terms:
+- Payment due as agreed.
+- Late payment fee may be applied after 14 days.
+- Materials remain the property of Nigel Harvey Ltd until paid in full.
+- Deposit required before works begin where applicable.
+
+Nigel Harvey Ltd
+07595 725547
+Nigelharveyplumbing@gmail.com`;
+
+  const cleanPhone = normalisePhone(data.customer_phone || "");
+  document.getElementById("whatsappBtn").href = cleanPhone
+    ? "https://wa.me/" + cleanPhone + "?text=" + encodeURIComponent(message)
+    : "https://wa.me/?text=" + encodeURIComponent(message);
+
+  document.getElementById("resultCard").style.display = "block";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderStatusBadge(status) {
+  const s = (status || "").toLowerCase();
+  if (s === "paid") return '<span class="badge green">Paid</span>';
+  if (s === "part paid") return '<span class="badge orange">Part Paid</span>';
+  return '<span class="badge red">Unpaid</span>';
+}
+
+function renderInvoiceCard(item) {
+  CURRENT_INVOICE_ID = item.id;
+  document.getElementById("resultCard").style.display = "none";
+  document.getElementById("invoiceCard").style.display = "block";
+  cancelInvoiceEdit();
+
+  const invoice = item.invoice;
+  const quoteResult = item.quote_result;
+
+  document.getElementById("i_number").innerText = item.invoice_number || "-";
+  document.getElementById("i_date").innerText = item.created_at || "-";
+  document.getElementById("i_due_date").innerText = item.due_date || "-";
+  document.getElementById("i_status").innerHTML = renderStatusBadge(item.status);
+  document.getElementById("i_customer").innerText = invoice.customer_name || "-";
+  document.getElementById("i_phone").innerText = invoice.customer_phone || "-";
+  document.getElementById("i_address").innerText = invoice.customer_address || "-";
+  document.getElementById("i_job").innerText = invoice.job || "-";
+  document.getElementById("i_labour").innerText = pounds(invoice.labour);
+  document.getElementById("i_materials").innerText = pounds(invoice.materials);
+  document.getElementById("i_total").innerText = pounds(item.total_price);
+  document.getElementById("i_paid").innerText = pounds(item.amount_paid);
+  document.getElementById("i_balance").innerText = pounds(item.balance_due);
+  document.getElementById("i_balance_big").innerText = pounds(item.balance_due);
+
+  const paymentBox = document.getElementById("i_payment_link_box");
+  const isSmallJob = ((quoteResult.quote_type || "").toLowerCase() === "small");
+
+  const termsHtml = isSmallJob
+    ? `
+      <div class="invoice-note">
+        Please pay by the due date shown above.<br>
+        Late payment fee may be applied after 14 days.<br>
+        Materials remain the property of Nigel Harvey Ltd until paid in full.
+      </div>
+    `
+    : `
+      <div class="invoice-note">
+        Please pay by the due date shown above.<br>
+        Late payment fee may be applied after 14 days.<br>
+        Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
+        Deposit required before works begin where applicable.
+      </div>
+    `;
+
+  if (item.payment_link) {
+    paymentBox.innerHTML = `
+      <div><strong>Payment link:</strong> <a href="${item.payment_link}" target="_blank">${escapeHtml(item.payment_link)}</a></div>
+      ${termsHtml}
+    `;
+  } else {
+    paymentBox.innerHTML = `
+      <div>No online payment link set yet.</div>
+      ${termsHtml}
+    `;
+  }
+
+  const invoiceUrl = window.location.origin + "/invoice/" + item.id;
+
+  const msg =
+`Nigel Harvey Ltd Invoice
+
+Invoice: ${item.invoice_number}
+Customer: ${invoice.customer_name || "-"}
+Balance due: ${pounds(item.balance_due)}
+
+View your invoice:
+${invoiceUrl}`;
+
+  const cleanPhone = normalisePhone(invoice.customer_phone || quoteResult.customer_phone || "");
+  document.getElementById("invoiceWhatsappBtn").href = cleanPhone
+    ? "https://wa.me/" + cleanPhone + "?text=" + encodeURIComponent(msg)
+    : "https://wa.me/?text=" + encodeURIComponent(msg);
+
+  document.getElementById("invoiceOpenBtn").href = invoiceUrl;
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function downloadCurrentQuotePdf() {
+  if (!CURRENT_QUOTE_ID) { window.print(); return; }
+  window.open(`/api/quotes/${CURRENT_QUOTE_ID}/pdf`, "_blank");
+}
+
+function downloadCurrentInvoicePdf() {
+  if (!CURRENT_INVOICE_ID) { window.print(); return; }
+  window.open(`/api/invoices/${CURRENT_INVOICE_ID}/pdf`, "_blank");
+}
+
+async function sendInvoiceEmail() {
+  if (!CURRENT_INVOICE_ID) return;
+  const toEmail = prompt("Send invoice PDF to which email address?");
+  if (!toEmail) return;
+  const customMessage = prompt("Optional message to include in the email:", "Please find your invoice attached as a PDF.") || "";
+  try {
+    const r = await fetch(`/api/invoices/${CURRENT_INVOICE_ID}/send-email`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ to_email: toEmail, message: customMessage })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || "Failed to send email");
+    showNotice("Invoice email sent successfully.");
+  } catch (e) {
+    alert(e.message || "Failed to send email");
+  }
+}
+
+function setQuoteButtonMode(isEditing = false) {
+  const btn = document.querySelector('#quotesTab button[onclick="generateQuote()"]');
+  if (btn) btn.innerText = isEditing ? "Update Quote" : "Generate Quote";
+}
+
+function resetQuoteFormState() {
+  CURRENT_QUOTE_ID = null;
+  setEditingStatus("", false);
+  setQuoteButtonMode(false);
+}
+
+function fillFormFromRequest(requestData, quoteId = null) {
+  document.getElementById("quote_type").value = requestData.quote_type || "small";
+  document.getElementById("customer_name").value = requestData.customer_name || "";
+  document.getElementById("customer_address").value = requestData.customer_address || "";
+  document.getElementById("customer_phone").value = requestData.customer_phone || "";
+  document.getElementById("job").value = requestData.job_description || "";
+  document.getElementById("labour").value = requestData.labour_cost || "";
+  document.getElementById("include_materials_handling").checked = !!requestData.include_materials_handling;
+  document.getElementById("materials_handling_percent").value = String(requestData.materials_handling_percent || 25);
+  document.getElementById("tiling").checked = !!requestData.tiling;
+  document.getElementById("wall_tiling_m2").value = requestData.wall_tiling_m2 || "";
+  document.getElementById("floor_tiling_m2").value = requestData.floor_tiling_m2 || "";
+  document.getElementById("wall_height").value = requestData.wall_height || "half";
+  document.getElementById("customer_supplies_tiles").checked = !!requestData.customer_supplies_tiles;
+  document.getElementById("deposit_percent").value = String(requestData.deposit_percent || 0);
+
+  clearMaterials();
+  const materials = requestData.materials || [];
+  if (materials.length) materials.forEach(item => addMaterial(item));
+  else addMaterial();
+
+  CURRENT_QUOTE_ID = quoteId;
+  if (quoteId) {
+    setEditingStatus("Editing saved quote #" + quoteId, true);
+    setQuoteButtonMode(true);
+  } else {
+    setEditingStatus("", false);
+    setQuoteButtonMode(false);
+  }
+
+  toggleBathroomFields();
+  updateLabourSuggestion();
+  showTab("quotesTab");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderProfitChart(data) {
+  const box = document.getElementById("profitChart");
+  if (!data || !data.length) {
+    box.innerHTML = "No monthly data yet.";
+    return;
+  }
+
+  const maxValue = Math.max(...data.map(x => x.profit), 1);
+  box.innerHTML = data.map(x => {
+    const width = Math.max(4, Math.round((x.profit / maxValue) * 100));
+    return `
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <span>${escapeHtml(x.label)}</span>
+          <strong>${pounds(x.profit)}</strong>
+        </div>
+        <div style="background:#e9e9e9;border-radius:999px;height:10px;margin-top:6px;overflow:hidden;">
+          <div style="background:#1f7a1f;height:10px;width:${width}%;"></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderDashboardSummary(data) {
+  const box = document.getElementById("dashboardSummary");
+  if (!box) return;
+  if (!data || !data.length) {
+    box.innerHTML = "";
+    return;
+  }
+
+  const sorted = [...data].sort((a, b) => Number(b.profit || 0) - Number(a.profit || 0));
+  const best = sorted[0];
+  const worst = sorted[sorted.length - 1];
+
+  box.innerHTML = `
+    <div class="dashboard-item">
+      <div class="small">Best profit month</div>
+      <div><strong>${escapeHtml(best.label || "-")}</strong></div>
+      <div class="num">${pounds(best.profit || 0)}</div>
+    </div>
+    <div class="dashboard-item">
+      <div class="small">Lowest profit month</div>
+      <div><strong>${escapeHtml(worst.label || "-")}</strong></div>
+      <div class="num">${pounds(worst.profit || 0)}</div>
+    </div>
+  `;
+}
+
+async function loadDashboard() {
+  try {
+    const [res, chartRes] = await Promise.all([
+      fetch("/api/dashboard"),
+      fetch("/api/dashboard/monthly-profit")
+    ]);
+    const data = await res.json();
+    const chartData = await chartRes.json();
+    document.getElementById("dashboardMonth").innerText = data.month_label || "";
+    document.getElementById("dashboardGrid").innerHTML = `
+      <div class="dashboard-item"><div class="small">Quotes this month</div><div class="num">${data.quote_count}</div></div>
+      <div class="dashboard-item"><div class="small">Quoted total</div><div class="num">${pounds(data.quoted_total)}</div></div>
+      <div class="dashboard-item"><div class="small">Gross profit</div><div class="num">${pounds(data.gross_profit_total)}</div></div>
+      <div class="dashboard-item"><div class="small">Average quote</div><div class="num">${pounds(data.avg_quote)}</div></div>
+      <div class="dashboard-item"><div class="small">Invoices this month</div><div class="num">${data.invoice_count}</div></div>
+      <div class="dashboard-item"><div class="small">Invoiced total</div><div class="num">${pounds(data.invoiced_total)}</div></div>
+      <div class="dashboard-item"><div class="small">Paid this month</div><div class="num">${pounds(data.paid_total)}</div></div>
+      <div class="dashboard-item"><div class="small">Outstanding</div><div class="num">${pounds(data.balance_total)}</div></div>
+      <div class="dashboard-item"><div class="small">Customers</div><div class="num">${data.customer_count}</div></div>
+    `;
+    renderProfitChart(chartData);
+    renderDashboardSummary(chartData);
+  } catch (e) {
+    document.getElementById("profitChart").innerHTML = "Could not load chart.";
+    document.getElementById("dashboardSummary").innerHTML = "";
+  }
+}
+
+async function deleteCustomer(id) {
+  const check = prompt("Type DELETE to confirm");
+  if (!check || check.trim().toUpperCase() !== "DELETE") return;
+
+  try {
+    const res = await fetch("/api/customers/" + id, {
+      method: "DELETE"
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      alert("Delete failed: " + text);
+      return;
+    }
+
+    await loadCustomers();
+    await loadHistory();
+    await loadInvoices();
+    await loadDashboard();
+
+    showNotice("Customer deleted.");
+  } catch (e) {
+    alert("Could not delete customer: " + e);
+  }
+}
+
+async function loadHistory() {
+  try {
+    const res = await fetch("/api/quotes");
+    const data = await res.json();
+    SAVED_QUOTES = data;
+    const history = document.getElementById("historyList");
+
+    if (!data.length) {
+      history.innerHTML = "No saved quotes yet.";
+      return;
+    }
+
+    history.innerHTML = data.map(q => `
+      <div class="history-item">
+        <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
+        <div>${escapeHtml(q.job || "")}</div>
+        <div class="small">${escapeHtml(q.created_at || "")} · Total ${pounds(q.total_price)} · Profit ${pounds(q.gross_profit)} · Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
+        <div class="history-actions">
+          <button type="button" class="btn-light" onclick="loadSavedQuote(${q.id})">Load</button>
+          <button type="button" class="btn-blue" onclick="editSavedQuote(${q.id})">Edit</button>
+          <button type="button" class="btn-secondary" onclick="sendSavedQuoteWhatsApp(${q.id})">WhatsApp</button>
+          <button type="button" class="btn-blue" onclick="convertQuoteToInvoice(${q.id})">To Invoice</button>
+          <button type="button" class="btn-light" onclick="printSavedQuote(${q.id})">Print</button>
+          <button type="button" class="btn-red" onclick="deleteSavedQuote(${q.id})">Delete</button>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    document.getElementById("historyList").innerHTML = "Unable to load saved quotes.";
+  }
+}
+
+async function loadInvoices() {
+  try {
+    const res = await fetch("/api/invoices");
+    const data = await res.json();
+    SAVED_INVOICES = data;
+    const box = document.getElementById("invoiceList");
+
+    if (!data.length) {
+      box.innerHTML = "No invoices yet.";
+      return;
+    }
+
+    box.innerHTML = data.map(i => `
+      <div class="history-item">
+        <div><strong>${escapeHtml(i.invoice_number)}</strong> — ${escapeHtml(i.customer_name || "No customer name")}</div>
+        <div>${renderStatusBadge(i.status)}</div>
+        <div class="small">${escapeHtml(i.created_at || "")} · Total ${pounds(i.total_price)} · Paid ${pounds(i.amount_paid)} · Balance ${pounds(i.balance_due)}</div>
+
+        <label style="margin-top:10px;">Update payment</label>
+        <div class="row">
+          <input id="paid_${i.id}" type="number" step="0.01" placeholder="Amount paid" value="${i.amount_paid || 0}">
+          <button type="button" class="btn-blue" style="max-width:180px;" onclick="updateInvoicePaid(${i.id})">Save Amount</button>
+        </div>
+
+        <label style="margin-top:10px;">Payment link</label>
+        <div class="row">
+          <input id="payment_link_${i.id}" type="text" placeholder="https://..." value="${escapeHtml(i.payment_link || "")}">
+          <button type="button" class="btn-blue" style="max-width:180px;" onclick="savePaymentLink(${i.id})">Save Link</button>
+        </div>
+
+        <div class="history-actions" style="grid-template-columns:repeat(3, 1fr);">
+          <button type="button" class="btn-secondary" onclick="markInvoicePaid(${i.id}, ${i.total_price})">Mark Paid</button>
+          <button type="button" class="btn-light" onclick="markInvoiceUnpaid(${i.id})">Mark Unpaid</button>
+          <button type="button" class="btn-blue" onclick="editInvoice(${i.id})">Edit</button>
+          <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Open</button>
+          <button type="button" class="btn-secondary" onclick="sendInvoiceWhatsApp(${i.id})">WhatsApp</button>
+          <button type="button" class="btn-blue" onclick="emailInvoice(${i.id})">Email</button>
+          <button type="button" class="btn-light" onclick="openInvoicePage(${i.id})">Invoice Page</button>
+          <button type="button" class="btn-light" onclick="printInvoice(${i.id})">Print</button>
+          <button type="button" class="btn-red" onclick="deleteInvoice(${i.id})">Delete</button>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    document.getElementById("invoiceList").innerHTML = "Unable to load invoices.";
+  }
+}
+
+function renderLeadBadge(status) {
+  const s = (status || 'new').toLowerCase();
+  if (s === 'won') return '<span class="badge green">Won</span>';
+  if (s === 'lost') return '<span class="badge red">Lost</span>';
+  if (s === 'quoted') return '<span class="badge blue">Quoted</span>';
+  if (s === 'contacted') return '<span class="badge orange">Contacted</span>';
+  return '<span class="badge gray">New</span>';
+}
+
+async function loadLeads() {
+  try {
+    const res = await fetch('/api/leads');
+    const data = await res.json();
+    SAVED_LEADS = data;
+    const box = document.getElementById('leadList');
+    const q = (document.getElementById('leadSearch')?.value || '').trim().toLowerCase();
+    const status = (document.getElementById('leadStatusFilter')?.value || 'all').toLowerCase();
+    const filtered = data.filter(l => {
+      const hay = `${l.name || ''} ${l.phone || ''} ${l.email || ''} ${l.address || ''} ${l.description || ''}`.toLowerCase();
+      const statusOk = status === 'all' || (l.status || '').toLowerCase() === status;
+      return statusOk && (!q || hay.includes(q));
+    });
+    if (!filtered.length) {
+      box.innerHTML = q || status !== 'all' ? 'No matching leads.' : 'No leads yet.';
+      return;
+    }
+    box.innerHTML = filtered.map(l => `
+      <div class="history-item">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+          <div><strong>${escapeHtml(l.name || 'Website lead')}</strong></div>
+          <div>${renderLeadBadge(l.status)}</div>
+        </div>
+        <div>${escapeHtml(l.phone || '')}${l.email ? ' · ' + escapeHtml(l.email) : ''}</div>
+        <div class="small">${escapeHtml(l.address || '')}</div>
+        <div style="margin-top:8px;">${escapeHtml(l.description || '')}</div>
+        <div class="small" style="margin-top:8px;">${escapeHtml(l.created_at || '')} · ${escapeHtml((l.job_type || 'small').toUpperCase())} · ${escapeHtml(l.source || 'website')}</div>
+        <div class="history-actions" style="grid-template-columns:repeat(2,1fr);">
+          <button type="button" class="btn-light" onclick="startQuoteFromLead(${l.id})">Start Quote</button>
+          <button type="button" class="btn-blue" onclick="updateLeadStatus(${l.id}, 'contacted')">Mark Contacted</button>
+        </div>
+        <div class="history-actions" style="grid-template-columns:repeat(3,1fr);">
+          <button type="button" class="btn-secondary" onclick="updateLeadStatus(${l.id}, 'quoted')">Quoted</button>
+          <button type="button" class="btn-secondary" onclick="updateLeadStatus(${l.id}, 'won')">Won</button>
+          <button type="button" class="btn-red" onclick="updateLeadStatus(${l.id}, 'lost')">Lost</button>
+        </div>
+        <div class="history-actions" style="grid-template-columns:1fr 1fr;">
+          <a class="btn-link btn-secondary" href="${buildLeadWhatsappHref(l)}" target="_blank">WhatsApp</a>
+          <button type="button" class="btn-red" onclick="deleteLead(${l.id})">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    document.getElementById('leadList').innerHTML = 'Unable to load leads.';
+  }
+}
+
+function buildLeadWhatsappHref(lead) {
+  const cleanPhone = normalisePhone(lead.phone || '');
+  const msg = `Hi ${lead.name || ''}, thanks for contacting Nigel Harvey Ltd about: ${lead.description || ''}`.trim();
+  return cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+}
+
+function startQuoteFromLead(id) {
+  const lead = SAVED_LEADS.find(x => x.id === id);
+  if (!lead) return;
+  startNewQuote();
+  document.getElementById('customer_name').value = lead.name || '';
+  document.getElementById('customer_address').value = lead.address || '';
+  document.getElementById('customer_phone').value = lead.phone || '';
+  document.getElementById('quote_type').value = lead.job_type || 'small';
+  document.getElementById('job').value = lead.description || '';
+  toggleBathroomFields();
+  updateLabourSuggestion();
+  showTab('quotesTab');
+  setEditingStatus('Lead loaded into quote builder.', true);
+}
+
+async function updateLeadStatus(id, status) {
+  try {
+    const res = await fetch('/api/leads/' + id + '/status', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not update lead.');
+    await loadLeads();
+    showNotice('Lead updated.');
+  } catch (e) {
+    alert('Could not update lead: ' + e);
+  }
+}
+
+async function deleteLead(id) {
+  if (!confirm('Delete this lead?')) return;
+  try {
+    const res = await fetch('/api/leads/' + id, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not delete lead.');
+    await loadLeads();
+    showNotice('Lead deleted.');
+  } catch (e) {
+    alert('Could not delete lead: ' + e);
+  }
+}
+
+async function loadCustomers() {
+  try {
+    const res = await fetch("/api/customers");
+    const data = await res.json();
+    SAVED_CUSTOMERS = data;
+    const box = document.getElementById("customerList");
+    const q = (document.getElementById("customerSearch")?.value || "").trim().toLowerCase();
+    const filtered = data.filter(c => {
+      const hay = `${c.name || ""} ${c.phone || ""} ${c.address || ""}`.toLowerCase();
+      return !q || hay.includes(q);
+    });
+
+    if (!filtered.length) {
+      box.innerHTML = q ? "No matching customers." : "No customers yet.";
+      return;
+    }
+
+    box.innerHTML = filtered.map(c => `
+      <div class="history-item">
+        <div><strong>${escapeHtml(c.name || "No customer name")}</strong></div>
+        <div>${escapeHtml(c.phone || "")}</div>
+        <div class="small">${escapeHtml(c.address || "")}</div>
+        <div class="history-actions" style="grid-template-columns:1fr 1fr;">
+          <button type="button" class="btn-light" onclick="viewCustomerHistory(${c.id})">View History</button>
+          <button type="button" class="btn-light" onclick="startQuoteForCustomer(${c.id})">Start Quote</button>
+        </div>
+        <div class="history-actions">
+          <button type="button" class="btn-red" onclick="deleteCustomer(${c.id})">Delete Customer</button>
+        </div>
+        <div id="customer_history_${c.id}" class="small" style="margin-top:10px;"></div>
+      </div>
+    `).join("");
+  } catch (e) {
+    document.getElementById("customerList").innerHTML = "Unable to load customers.";
+  }
+}
+
+async function viewCustomerHistory(id) {
+  try {
+    const res = await fetch("/api/customers/" + id + "/history");
+    const data = await res.json();
+    const box = document.getElementById("customer_history_" + id);
+
+    const quotes = data.quotes || [];
+    const invoices = data.invoices || [];
+
+    box.innerHTML = `
+      <div><strong>Quotes:</strong> ${quotes.length}</div>
+      ${quotes.slice(0,5).map(q => `<div>• ${escapeHtml(q.created_at)} — ${escapeHtml(q.job || "")} — ${pounds(q.total_price)}</div>`).join("") || "<div>None</div>"}
+      <div style="margin-top:8px;"><strong>Invoices:</strong> ${invoices.length}</div>
+      ${invoices.slice(0,5).map(i => `<div>• ${escapeHtml(i.invoice_number)} — ${pounds(i.total_price)} — ${escapeHtml(i.status)}</div>`).join("") || "<div>None</div>"}
+    `;
+  } catch (e) {
+    alert("Could not load customer history.");
+  }
+}
+
+function startQuoteForCustomer(id) {
+  const c = SAVED_CUSTOMERS.find(x => x.id === id);
+  if (!c) return;
+  resetQuoteFormState();
+  showTab("quotesTab");
+  document.getElementById("customer_name").value = c.name || "";
+  document.getElementById("customer_address").value = c.address || "";
+  document.getElementById("customer_phone").value = c.phone || "";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function startNewQuote() {
+  resetQuoteFormState();
+  CURRENT_QUOTE_DATA = null;
+  document.getElementById("resultCard").style.display = "none";
+  document.getElementById("invoiceCard").style.display = "none";
+  document.getElementById("quote_type").value = "small";
+  document.getElementById("customer_name").value = "";
+  document.getElementById("customer_address").value = "";
+  document.getElementById("customer_phone").value = "";
+  document.getElementById("job").value = "";
+  document.getElementById("labour").value = "";
+  document.getElementById("include_materials_handling").checked = true;
+  document.getElementById("materials_handling_percent").value = "25";
+  document.getElementById("tiling").checked = false;
+  document.getElementById("wall_tiling_m2").value = "";
+  document.getElementById("floor_tiling_m2").value = "";
+  document.getElementById("wall_height").value = "half";
+  document.getElementById("customer_supplies_tiles").checked = false;
+  document.getElementById("deposit_percent").value = "0";
+  clearMaterials();
+  addMaterial();
+  toggleBathroomFields();
+  updateLabourSuggestion();
+  showTab("quotesTab");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function loadSavedQuote(id) {
+  try {
+    const res = await fetch("/api/quotes/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    fillFormFromRequest(data.request, data.id);
+    renderQuoteResult(data.result);
+  } catch (e) {
+    alert("Could not load saved quote.");
+  }
+}
+
+async function editSavedQuote(id) {
+  try {
+    const res = await fetch("/api/quotes/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    fillFormFromRequest(data.request, data.id);
+    renderQuoteResult(data.result);
+    showNotice("Quote loaded for editing.");
+  } catch (e) {
+    alert("Could not load quote for editing.");
+  }
+}
+
+async function sendSavedQuoteWhatsApp(id) {
+  try {
+    const res = await fetch("/api/quotes/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderQuoteResult(data.result);
+    document.getElementById("whatsappBtn").click();
+  } catch (e) {
+    alert("Could not open WhatsApp for this quote.");
+  }
+}
+
+async function printSavedQuote(id) {
+  try {
+    const res = await fetch("/api/quotes/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderQuoteResult(data.result);
+    window.print();
+  } catch (e) {
+    alert("Could not print this quote.");
+  }
+}
+
+async function deleteSavedQuote(id) {
+  if (!confirm("Delete this saved quote?")) return;
+  try {
+    const res = await fetch("/api/quotes/" + id, { method: "DELETE" });
+    if (!res.ok) throw new Error();
+    await loadHistory();
+    await loadDashboard();
+    showNotice("Saved quote deleted.");
+  } catch (e) {
+    alert("Could not delete saved quote.");
+  }
+}
+
+async function generateQuote() {
+  const errorBox = document.getElementById("error");
+  errorBox.style.display = "none";
+
+  const payload = collectFormPayload();
+  const isEditing = !!CURRENT_QUOTE_ID;
+  const url = isEditing ? "/api/quotes/" + CURRENT_QUOTE_ID : "/api/quote";
+  const method = isEditing ? "PUT" : "POST";
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+
+    CURRENT_QUOTE_ID = data.id || null;
+    setEditingStatus(CURRENT_QUOTE_ID ? "Editing saved quote #" + CURRENT_QUOTE_ID : "", !!CURRENT_QUOTE_ID);
+    setQuoteButtonMode(!!CURRENT_QUOTE_ID);
+
+    renderQuoteResult(data.result);
+    await loadHistory();
+    await loadCustomers();
+    await loadDashboard();
+    showNotice(isEditing ? "Quote updated." : "Quote saved.");
+  } catch (err) {
+    errorBox.innerText = isEditing ? "Something went wrong updating the quote." : "Something went wrong generating the quote.";
+    errorBox.style.display = "block";
+  }
+}
+
+async function convertQuoteToInvoice(quoteId) {
+  try {
+    const res = await fetch("/api/quotes/" + quoteId + "/to-invoice", { method: "POST" });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderInvoiceCard(data);
+    showTab("invoicesTab");
+    await loadInvoices();
+    await loadDashboard();
+    showNotice("Invoice created from quote.");
+  } catch (e) {
+    alert("Could not convert quote to invoice.");
+  }
+}
+
+async function convertCurrentQuoteToInvoice() {
+  if (!CURRENT_QUOTE_ID) {
+    alert("Generate and save the quote first.");
+    return;
+  }
+  await convertQuoteToInvoice(CURRENT_QUOTE_ID);
+}
+
+function populateInvoiceEditForm(item) {
+  const invoice = item.invoice || {};
+  document.getElementById("edit_invoice_customer_name").value = invoice.customer_name || "";
+  document.getElementById("edit_invoice_customer_address").value = invoice.customer_address || "";
+  document.getElementById("edit_invoice_customer_phone").value = invoice.customer_phone || "";
+  document.getElementById("edit_invoice_job").value = invoice.job || "";
+  document.getElementById("edit_invoice_labour").value = invoice.labour || 0;
+  document.getElementById("edit_invoice_materials").value = invoice.materials || 0;
+  document.getElementById("edit_invoice_due_date").value = item.due_date || "";
+  document.getElementById("edit_invoice_payment_link").value = item.payment_link || "";
+  document.getElementById("edit_invoice_amount_paid").value = item.amount_paid || 0;
+}
+
+function showInvoiceEditPanel(item) {
+  CURRENT_EDITING_INVOICE_ID = item.id;
+  populateInvoiceEditForm(item);
+  document.getElementById("invoiceEditPanel").classList.remove("hidden");
+}
+
+function cancelInvoiceEdit() {
+  CURRENT_EDITING_INVOICE_ID = null;
+  document.getElementById("invoiceEditPanel").classList.add("hidden");
+}
+
+async function openInvoice(id) {
+  try {
+    const res = await fetch("/api/invoices/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderInvoiceCard(data);
+  } catch (e) {
+    alert("Could not open invoice.");
+  }
+}
+
+async function editInvoice(id) {
+  try {
+    const res = await fetch("/api/invoices/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderInvoiceCard(data);
+    showInvoiceEditPanel(data);
+    showNotice("Invoice loaded for editing.");
+  } catch (e) {
+    alert("Could not load invoice for editing.");
+  }
+}
+
+async function sendInvoiceWhatsApp(id) {
+  try {
+    const res = await fetch("/api/invoices/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderInvoiceCard(data);
+    document.getElementById("invoiceWhatsappBtn").click();
+  } catch (e) {
+    alert("Could not open WhatsApp for this invoice.");
+  }
+}
+
+function openInvoicePage(id) {
+  window.open("/invoice/" + id, "_blank");
+}
+
+async function emailInvoice(id) {
+  try {
+    const res = await fetch("/api/invoices/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderInvoiceCard(data);
+    document.getElementById("invoiceEmailBtn").click();
+  } catch (e) {
+    alert("Could not open email for this invoice.");
+  }
+}
+
+async function saveInvoiceEdit() {
+  if (!CURRENT_EDITING_INVOICE_ID) return;
+  try {
+    const payload = {
+      customer_name: document.getElementById("edit_invoice_customer_name").value || "",
+      customer_address: document.getElementById("edit_invoice_customer_address").value || "",
+      customer_phone: document.getElementById("edit_invoice_customer_phone").value || "",
+      job: document.getElementById("edit_invoice_job").value || "",
+      labour: parseFloat(document.getElementById("edit_invoice_labour").value || 0),
+      materials: parseFloat(document.getElementById("edit_invoice_materials").value || 0),
+      due_date: document.getElementById("edit_invoice_due_date").value || "",
+      payment_link: document.getElementById("edit_invoice_payment_link").value || "",
+      amount_paid: parseFloat(document.getElementById("edit_invoice_amount_paid").value || 0)
+    };
+
+    const res = await fetch("/api/invoices/" + CURRENT_EDITING_INVOICE_ID, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderInvoiceCard(data);
+    await loadInvoices();
+    await loadCustomers();
+    await loadDashboard();
+    showNotice("Invoice updated.");
+  } catch (e) {
+    alert("Could not save invoice changes.");
+  }
+}
+
+async function savePaymentLink(id) {
+  try {
+    const paymentLink = document.getElementById("payment_link_" + id).value || "";
+    const res = await fetch("/api/invoices/" + id + "/payment-link", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ payment_link: paymentLink })
+    });
+    if (!res.ok) throw new Error();
+    await loadInvoices();
+    showNotice("Payment link saved.");
+  } catch (e) {
+    alert("Could not save payment link.");
+  }
+}
+
+async function printInvoice(id) {
+  try {
+    const res = await fetch("/api/invoices/" + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderInvoiceCard(data);
+    window.print();
+  } catch (e) {
+    alert("Could not print this invoice.");
+  }
+}
+
+async function updateInvoicePaid(id) {
+  try {
+    const amount = parseFloat(document.getElementById("paid_" + id).value || 0);
+    const res = await fetch("/api/invoices/" + id + "/status", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ status: "unpaid", amount_paid: amount })
+    });
+    if (!res.ok) throw new Error();
+    await loadInvoices();
+    await loadDashboard();
+    showNotice("Invoice payment updated.");
+  } catch (e) {
+    alert("Could not update invoice.");
+  }
+}
+
+async function markInvoicePaid(id, total) {
+  try {
+    const res = await fetch("/api/invoices/" + id + "/status", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ status: "paid", amount_paid: total })
+    });
+    if (!res.ok) throw new Error();
+    await loadInvoices();
+    await loadDashboard();
+    showNotice("Invoice marked paid.");
+  } catch (e) {
+    alert("Could not mark invoice as paid.");
+  }
+}
+
+async function markInvoiceUnpaid(id) {
+  try {
+    const res = await fetch("/api/invoices/" + id + "/status", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ status: "unpaid", amount_paid: 0 })
+    });
+    if (!res.ok) throw new Error();
+    await loadInvoices();
+    await loadDashboard();
+    showNotice("Invoice marked unpaid.");
+  } catch (e) {
+    alert("Could not mark invoice as unpaid.");
+  }
+}
+
+async function deleteInvoice(id) {
+  if (!confirm("Delete this invoice?")) return;
+  try {
+    const res = await fetch("/api/invoices/" + id, { method: "DELETE" });
+    if (!res.ok) throw new Error();
+    await loadInvoices();
+    await loadDashboard();
+    showNotice("Invoice deleted.");
+  } catch (e) {
+    alert("Could not delete invoice.");
+  }
+}
+
+toggleBathroomFields();
+renderTemplates();
+renderFavourites();
+addMaterial();
+setQuoteButtonMode(false);
+updateLabourSuggestion();
+loadDashboard();
+loadHistory();
+loadInvoices();
+loadCustomers();
+loadLeads();
+</script>
+</body>
+</html>
+'''
+
+
+@app.get("/request-quote", response_class=HTMLResponse)
+def request_quote_page(request: Request):
+    logo_value = get_company_logo_value()
+    logo_html = f'<img src="{logo_value}" alt="Nigel Harvey Ltd logo" class="logo" width="240" height="90">' if logo_value else ""
+    html = LEAD_FORM_HTML.replace("__COMPANY_LOGO_HTML__", logo_html)
+    html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
+    html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
+    html = html.replace("__CANONICAL_HOME__", absolute_url("/", request))
+    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
+
+
+@app.get("/api/leads")
+def api_leads():
+    return load_leads()
+
+
+@app.post("/api/leads")
+def api_create_lead(data: LeadRequest):
+    lead = save_lead(data)
+    send_lead_notification_email(lead)
+    return JSONResponse(content=lead)
+
+
+@app.put("/api/leads/{lead_id}/status")
+def api_update_lead_status(lead_id: int, data: LeadStatusRequest):
+    lead = update_lead_status(lead_id, data.status)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+
+@app.delete("/api/leads/{lead_id}")
+def api_delete_lead(lead_id: int):
+    if not delete_lead_by_id(lead_id):
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return {"ok": True}
+
+
+@app.get("/app", response_class=HTMLResponse)
+def home_app():
+    html = HTML.replace("__MATERIAL_LIBRARY__", json.dumps(MATERIAL_LIBRARY))
+    html = html.replace("__FAVOURITE_MATERIALS__", json.dumps(FAVOURITE_MATERIALS))
+    html = html.replace("__JOB_TEMPLATES__", json.dumps(JOB_TEMPLATES))
+    logo_value = get_company_logo_value()
+    logo_html = f'<img src="{logo_value}" alt="Logo">' if logo_value else ""
+    html = html.replace("__COMPANY_LOGO_HTML__", logo_html)
+    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
+
+
+@app.get("/", response_class=HTMLResponse)
+def landing_home(request: Request):
+    logo_value = get_company_logo_value()
+    logo_html = get_company_logo_html(logo_value)
+    canonical_home = absolute_url("/", request)
+    html = LANDING_PAGE_HTML.replace("__COMPANY_LOGO_HTML__", logo_html)
+    html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
+    html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
+    html = html.replace("__CANONICAL_HOME__", canonical_home)
+    html = html.replace("__BUSINESS_SCHEMA_JSON__", build_homepage_business_schema(canonical_home))
+    html = html.replace("__FAQ_SCHEMA_JSON__", build_homepage_faq_schema())
+    html = html.replace("__REVIEWS_BADGE_HTML__", build_reviews_badge_html())
+    html = html.replace("__REVIEWS_SECTION_HTML__", build_reviews_section_html())
+    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
+
+
+@app.get("/robots.txt")
+def robots_txt(request: Request):
+    sitemap_url = "https://www.nigelharveyplumbing.co.uk/sitemap.xml"
+    content = f"User-agent: *\nAllow: /\nSitemap: {sitemap_url}\n"
+    return Response(content=content, media_type="text/plain; charset=utf-8")
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml(request: Request):
+    urls = ["/", "/request-quote"]
+    urls.extend(f"/plumber-{item['slug']}" for item in LOCATION_PAGES)
+    urls.extend(f"/{item['slug']}" for item in SERVICE_PAGES)
+    BASE_URL = "https://www.nigelharveyplumbing.co.uk"
+    body = "".join(f"<url><loc>{BASE_URL + url}</loc></url>" for url in urls)
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
+    return Response(content=xml, media_type="application/xml; charset=utf-8")
+
+
+@app.get("/plumber-{area_slug}", response_class=HTMLResponse)
+def location_page(area_slug: str, request: Request):
+    page = next((item for item in LOCATION_PAGES if item["slug"] == area_slug.lower()), None)
+    if not page:
+        raise HTTPException(status_code=404, detail="Area page not found")
+    logo_html = get_company_logo_html(get_company_logo_value())
+    return HTMLResponse(content=render_location_page(page["name"], logo_html), media_type="text/html; charset=utf-8")
+
+
+@app.get("/{service_slug}", response_class=HTMLResponse)
+def service_page(service_slug: str):
+    page = next((item for item in SERVICE_PAGES if item["slug"] == service_slug.lower()), None)
+    if not page:
+        raise HTTPException(status_code=404, detail="Service page not found")
+    logo_html = get_company_logo_html(get_company_logo_value())
+    return HTMLResponse(content=render_service_page(page, logo_html), media_type="text/html; charset=utf-8")
+
+
+@app.get("/api/dashboard")
+def api_dashboard():
+    return get_dashboard()
+
+
+@app.get("/api/dashboard/monthly-profit")
+def api_dashboard_monthly_profit():
+    return get_monthly_profit_series(6)
+
+
+@app.get("/api/quotes")
+def api_quotes():
+    return load_quotes()
+
+
+@app.get("/api/quotes/{quote_id}")
+def api_quote(quote_id: int):
+    quote = get_quote_by_id(quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return quote
+
+
+@app.delete("/api/quotes/{quote_id}")
+def api_delete_quote(quote_id: int):
+    if not delete_quote_by_id(quote_id):
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return {"ok": True}
+
+
+@app.post("/api/quote")
+def api_create_quote(data: QuoteRequest):
+    request_data = data.model_dump()
+    result_data = calculate_quote(data)
+    quote_id = save_quote(request_data, result_data)
+    quote = get_quote_by_id(quote_id)
+    return JSONResponse(content=quote)
+
+
+@app.put("/api/quotes/{quote_id}")
+def api_update_quote(quote_id: int, data: QuoteRequest):
+    request_data = data.model_dump()
+    result_data = calculate_quote(data)
+    quote = update_quote_by_id(quote_id, request_data, result_data)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return JSONResponse(content=quote)
+
+
+@app.post("/api/quotes/{quote_id}/to-invoice")
+def api_quote_to_invoice(quote_id: int):
+    invoice = create_invoice_from_quote(quote_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return invoice
+
+
+@app.get("/invoice/{invoice_id}", response_class=HTMLResponse)
+def public_invoice(invoice_id: int):
+    item = get_invoice_by_id(invoice_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    invoice = item["invoice"]
+    quote_result = item["quote_result"]
+    is_small_job = (quote_result.get("quote_type", "") or "").lower() == "small"
+    terms = INVOICE_TERMS[:3] if is_small_job else INVOICE_TERMS
+    logo_html = f'<img src="{escape(COMPANY_LOGO_URL)}" alt="Logo" class="logo">' if COMPANY_LOGO_URL else ""
+    payment_html = f'<div class="pay-box"><strong>Payment link:</strong> <a href="{escape(item.get("payment_link") or "")}" target="_blank">Pay online</a></div>' if item.get("payment_link") else ""
+
+    html = f"""
+    <!doctype html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Invoice {escape(item['invoice_number'])}</title>
+      <style>
+        body {{ font-family: Arial, sans-serif; background:#f3f4f6; color:#111; margin:0; padding:18px; }}
+        .sheet {{ max-width:900px; margin:0 auto; background:white; border-radius:18px; padding:28px; box-shadow:0 10px 30px rgba(0,0,0,0.08); }}
+        .top {{ display:flex; justify-content:space-between; gap:20px; align-items:flex-start; border-bottom:2px solid #111; padding-bottom:18px; }}
+        .logo {{ max-height:72px; max-width:180px; object-fit:contain; }}
+        .company {{ font-size:30px; font-weight:800; margin-bottom:8px; }}
+        .doc-title {{ font-size:14px; text-transform:uppercase; letter-spacing:1.5px; color:#666; }}
+        .doc-number {{ font-size:24px; font-weight:800; margin-top:6px; }}
+        .grid {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:20px; }}
+        .box {{ border:1px solid #e5e7eb; border-radius:14px; padding:16px; background:#fafafa; }}
+        .label {{ color:#666; font-size:13px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }}
+        .row {{ display:flex; justify-content:space-between; gap:12px; margin:10px 0; }}
+        .muted {{ color:#666; }}
+        .section-title {{ font-size:18px; font-weight:800; margin:24px 0 10px; }}
+        .total {{ font-size:30px; font-weight:900; }}
+        .pay-box {{ margin-top:12px; padding:12px; background:#eef7ff; border:1px solid #cfe5f8; border-radius:12px; }}
+        .actions {{ margin-top:20px; display:flex; gap:10px; flex-wrap:wrap; }}
+        .btn {{ display:inline-block; padding:13px 16px; border-radius:12px; background:black; color:white; text-decoration:none; font-weight:700; }}
+        .btn.light {{ background:#e5e7eb; color:#111; }}
+        ul {{ margin:0; padding-left:18px; }}
+        @media (max-width:700px) {{ .sheet {{ padding:18px; }} .top, .grid, .row {{ display:block; }} .row span:last-child {{ display:block; margin-top:4px; }} .actions a {{ width:100%; text-align:center; box-sizing:border-box; }} }}
+        @media print {{ body {{ background:white; padding:0; }} .sheet {{ box-shadow:none; border-radius:0; max-width:100%; padding:0; }} .actions {{ display:none !important; }} }}
+      </style>
+    </head>
+    <body>
+      <div class="sheet">
+        <div class="top">
+          <div>
+            <div class="company">{escape(COMPANY_NAME)}</div>
+            <div>{escape(COMPANY_ADDRESS)}<br>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div>
+          </div>
+          <div style="text-align:right;">{logo_html}<div class="doc-title">Invoice</div><div class="doc-number">{escape(item['invoice_number'])}</div></div>
+        </div>
+        <div class="grid">
+          <div class="box"><div class="label">Bill To</div>{escape(invoice.get('customer_name', '-') or '-')}<br>{escape(invoice.get('customer_address', '-') or '-')}<br>{escape(invoice.get('customer_phone', '-') or '-')}</div>
+          <div class="box">
+            <div class="row"><span class="muted">Date</span><span>{escape(item['created_at'])}</span></div>
+            <div class="row"><span class="muted">Due date</span><span>{escape(item['due_date'])}</span></div>
+            <div class="row"><span class="muted">Status</span><span>{escape(item['status'].title())}</span></div>
+          </div>
+        </div>
+        <div class="section-title">Work</div>
+        <div class="box">{escape(invoice.get('job', '-') or '-').replace(chr(10), '<br>')}</div>
+        <div class="section-title">Invoice totals</div>
+        <div class="box">
+          <div class="row"><span class="muted">Labour</span><span>{pounds_text(invoice.get('labour', 0))}</span></div>
+          <div class="row"><span class="muted">Materials</span><span>{pounds_text(invoice.get('materials', 0))}</span></div>
+          <div class="row"><span class="muted">Total</span><span>{pounds_text(item['total_price'])}</span></div>
+          <div class="row"><span class="muted">Amount paid</span><span>{pounds_text(item['amount_paid'])}</span></div>
+          <div class="row"><span class="muted">Balance due</span><span class="total">{pounds_text(item['balance_due'])}</span></div>
+        </div>
+        <div class="section-title">Payment terms</div>
+        <div class="box"><ul>{''.join(f'<li>{escape(t)}</li>' for t in terms)}</ul>{payment_html}</div>
+        <div class="actions">
+          <a href="/api/invoices/{item['id']}/pdf" target="_blank" class="btn">Download PDF</a>
+          <a href="javascript:window.print()" class="btn light">Print</a>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
+
+
+
+
+@app.get("/api/quotes/{quote_id}/pdf")
+def api_quote_pdf(quote_id: int):
+    quote = get_quote_by_id(quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    pdf_bytes = generate_quote_pdf_bytes(quote)
+    headers = {"Content-Disposition": f'inline; filename="quote-{quote_id}.pdf"'}
+    return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+
+@app.get("/api/invoices/{invoice_id}/pdf")
+def api_invoice_pdf(invoice_id: int):
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    pdf_bytes = generate_invoice_pdf_bytes(invoice)
+    headers = {"Content-Disposition": f'inline; filename="{invoice["invoice_number"]}.pdf"'}
+    return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+
+@app.post("/api/invoices/{invoice_id}/send-email")
+def api_invoice_send_email(invoice_id: int, data: SendInvoiceEmailRequest):
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    try:
+        send_invoice_email_now(invoice, data.to_email, data.message)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email send failed: {e}")
+    return {"ok": True}
+
+@app.get("/api/invoices")
+def api_invoices():
+    return load_invoices()
+
+
+@app.get("/api/invoices/{invoice_id}")
+def api_invoice(invoice_id: int):
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return invoice
+
+
+@app.put("/api/invoices/{invoice_id}")
+def api_update_invoice(invoice_id: int, data: InvoiceEditRequest):
+    invoice = update_invoice_by_id(invoice_id, data)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return invoice
+
+
+@app.post("/api/invoices/{invoice_id}/status")
+def api_invoice_status(invoice_id: int, data: InvoiceStatusRequest):
+    invoice = update_invoice_status(invoice_id, data.status, data.amount_paid)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return invoice
+
+
+@app.post("/api/invoices/{invoice_id}/payment-link")
+def api_invoice_payment_link(invoice_id: int, data: PaymentLinkUpdateRequest):
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    invoice_payload = invoice["invoice"]
+    invoice_payload["payment_link"] = (data.payment_link or "").strip()
+
+    conn = get_db()
+    conn.execute("""
+        UPDATE invoices
+        SET payment_link = ?, invoice_json = ?
+        WHERE id = ?
+    """, (
+        (data.payment_link or "").strip(),
+        json.dumps(invoice_payload),
+        invoice_id,
+    ))
+    conn.commit()
+    conn.close()
+    return get_invoice_by_id(invoice_id)
+
+
+@app.delete("/api/invoices/{invoice_id}")
+def api_delete_invoice(invoice_id: int):
+    if not delete_invoice_by_id(invoice_id):
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return {"ok": True}
+
+
+@app.get("/api/customers")
+def api_customers():
+    return get_customers()
+
+
+@app.delete("/api/customers/{customer_id}")
+def api_delete_customer(customer_id: int):
+    conn = get_db()
+
+    customer = conn.execute(
+        "SELECT id FROM customers WHERE id = ?", (customer_id,)
+    ).fetchone()
+
+    if not customer:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    deleted_invoices = conn.execute(
+        "DELETE FROM invoices WHERE customer_id = ?", (customer_id,)
+    ).rowcount
+    deleted_quotes = conn.execute(
+        "DELETE FROM quotes WHERE customer_id = ?", (customer_id,)
+    ).rowcount
+    deleted_customers = conn.execute(
+        "DELETE FROM customers WHERE id = ?", (customer_id,)
+    ).rowcount
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "ok": True,
+        "deleted_customers": deleted_customers,
+        "deleted_quotes": deleted_quotes,
+        "deleted_invoices": deleted_invoices,
+    }
+
+
+@app.get("/api/customers/{customer_id}/history")
+def api_customer_history(customer_id: int):
+    history = get_customer_history(customer_id)
+    if not history:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return historyCOMPANY_NAME = "Nigel Harvey Ltd"
+COMPANY_ADDRESS = "125 Bushy Hill Drive, Guildford, GU1 2UG"
+COMPANY_PHONE = "07595 725547"
+COMPANY_EMAIL = "Nigelharveyplumbing@gmail.com"
+DEFAULT_COMPANY_LOGO_URL = "data:image/png;base64,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"
+COMPANY_LOGO_URL = os.getenv("COMPANY_LOGO_URL", DEFAULT_COMPANY_LOGO_URL)
+
+GOOGLE_RATING_VALUE = os.getenv("GOOGLE_RATING_VALUE", "").strip()
+GOOGLE_REVIEW_COUNT = os.getenv("GOOGLE_REVIEW_COUNT", "").strip()
+GOOGLE_REVIEWS_URL = os.getenv("GOOGLE_REVIEWS_URL", "https://www.google.com/search?q=Nigel+Harvey+Ltd+Guildford+reviews").strip()
+GOOGLE_REVIEW_1_TEXT = os.getenv("GOOGLE_REVIEW_1_TEXT", "").strip()
+GOOGLE_REVIEW_1_AUTHOR = os.getenv("GOOGLE_REVIEW_1_AUTHOR", "").strip()
+GOOGLE_REVIEW_2_TEXT = os.getenv("GOOGLE_REVIEW_2_TEXT", "").strip()
+GOOGLE_REVIEW_2_AUTHOR = os.getenv("GOOGLE_REVIEW_2_AUTHOR", "").strip()
+GOOGLE_REVIEW_3_TEXT = os.getenv("GOOGLE_REVIEW_3_TEXT", "").strip()
+GOOGLE_REVIEW_3_AUTHOR = os.getenv("GOOGLE_REVIEW_3_AUTHOR", "").strip()
+
+PAYMENT_LINK_BASE = ""
+
+EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "0") == "1"
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
+EMAIL_USER = os.getenv("EMAIL_USER", "")
+EMAIL_PASS = os.getenv("EMAIL_PASS", "")
+EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", COMPANY_NAME)
+
+def get_company_logo_value():
+    return os.getenv("COMPANY_LOGO_URL", "").strip() or DEFAULT_COMPANY_LOGO_URL
+
+
+def _pdf_logo_reader():
+    logo_value = get_company_logo_value()
+    if not logo_value:
+        return None
+    try:
+        if logo_value.startswith("data:image"):
+            header, encoded = logo_value.split(",", 1)
+            return ImageReader(io.BytesIO(base64.b64decode(encoded)))
+        return ImageReader(logo_value)
+    except Exception:
+        return None
+
+
+QUOTE_TERMS = [
+    "Includes labour and materials.",
+    "Payment due as agreed.",
+    "Late payment fee may be applied after 14 days.",
+    "Materials remain the property of Nigel Harvey Ltd until paid in full.",
+    "Deposit required before works begin where applicable.",
+    "Quote subject to site conditions and any unforeseen issues.",
+]
+
+INVOICE_TERMS = [
+    "Please pay by the due date shown above.",
+    "Late payment fee may be applied after 14 days.",
+    "Materials remain the property of Nigel Harvey Ltd until paid in full.",
+    "Deposit required before works begin where applicable.",
+]
+
+MATERIAL_LIBRARY = [
+    {"name": "15mm Copper Pipe 3m", "supplier": "City Plumbing", "default_price": 18.00},
+    {"name": "22mm Copper Pipe 3m", "supplier": "City Plumbing", "default_price": 32.00},
+    {"name": "15mm Copper Elbow", "supplier": "Screwfix", "default_price": 1.20},
+    {"name": "22mm Copper Elbow", "supplier": "Screwfix", "default_price": 2.10},
+    {"name": "15mm Copper Tee", "supplier": "Screwfix", "default_price": 1.80},
+    {"name": "22mm Copper Tee", "supplier": "Screwfix", "default_price": 3.20},
+    {"name": "15mm Straight Coupler", "supplier": "Toolstation", "default_price": 1.10},
+    {"name": "22mm Straight Coupler", "supplier": "Toolstation", "default_price": 1.90},
+    {"name": "15mm Isolating Valve", "supplier": "Toolstation", "default_price": 3.50},
+    {"name": "22mm Isolating Valve", "supplier": "Toolstation", "default_price": 5.50},
+    {"name": "Flexible Tap Connector", "supplier": "Screwfix", "default_price": 6.50},
+    {"name": "Sink Waste Kit", "supplier": "City Plumbing", "default_price": 22.00},
+    {"name": "Basin Waste", "supplier": "City Plumbing", "default_price": 14.00},
+    {"name": "Pop Up Basin Waste", "supplier": "City Plumbing", "default_price": 18.00},
+    {"name": "P Trap 1.5in", "supplier": "Toolstation", "default_price": 7.50},
+    {"name": "Bottle Trap Chrome", "supplier": "City Plumbing", "default_price": 24.00},
+    {"name": "Outside Tap Kit", "supplier": "Screwfix", "default_price": 18.00},
+    {"name": "Washing Machine Valve", "supplier": "Toolstation", "default_price": 6.00},
+    {"name": "Service Valve", "supplier": "Screwfix", "default_price": 4.00},
+    {"name": "Compression Coupler 15mm", "supplier": "Toolstation", "default_price": 1.80},
+    {"name": "Compression Coupler 22mm", "supplier": "Toolstation", "default_price": 2.90},
+    {"name": "Hep2O 15mm Pipe Coil", "supplier": "City Plumbing", "default_price": 65.00},
+    {"name": "Hep2O 22mm Pipe Coil", "supplier": "City Plumbing", "default_price": 95.00},
+    {"name": "Hep2O 15mm Straight Coupler", "supplier": "City Plumbing", "default_price": 4.50},
+    {"name": "Hep2O 22mm Straight Coupler", "supplier": "City Plumbing", "default_price": 6.80},
+    {"name": "Hep2O 15mm Elbow", "supplier": "City Plumbing", "default_price": 5.20},
+    {"name": "Hep2O 22mm Elbow", "supplier": "City Plumbing", "default_price": 7.20},
+    {"name": "Hep2O 15mm Tee", "supplier": "City Plumbing", "default_price": 6.00},
+    {"name": "Hep2O 22mm Tee", "supplier": "City Plumbing", "default_price": 8.50},
+    {"name": "Speedfit 15mm Pipe Coil", "supplier": "Screwfix", "default_price": 58.00},
+    {"name": "Speedfit 22mm Pipe Coil", "supplier": "Screwfix", "default_price": 90.00},
+    {"name": "Speedfit 15mm Straight Coupler", "supplier": "Screwfix", "default_price": 4.20},
+    {"name": "Speedfit 22mm Straight Coupler", "supplier": "Screwfix", "default_price": 6.20},
+    {"name": "Speedfit 15mm Elbow", "supplier": "Screwfix", "default_price": 5.00},
+    {"name": "Speedfit 22mm Elbow", "supplier": "Screwfix", "default_price": 7.00},
+    {"name": "Speedfit 15mm Tee", "supplier": "Screwfix", "default_price": 5.80},
+    {"name": "Speedfit 22mm Tee", "supplier": "Screwfix", "default_price": 8.00},
+    {"name": "Kitchen Mixer Tap", "supplier": "City Plumbing", "default_price": 85.00},
+    {"name": "Basin Mixer Tap", "supplier": "City Plumbing", "default_price": 65.00},
+    {"name": "Bath Mixer Tap", "supplier": "City Plumbing", "default_price": 95.00},
+    {"name": "Thermostatic Shower Valve", "supplier": "City Plumbing", "default_price": 140.00},
+    {"name": "Toilet Fill Valve", "supplier": "Screwfix", "default_price": 12.00},
+    {"name": "Toilet Flush Valve", "supplier": "Screwfix", "default_price": 18.00},
+    {"name": "Silicone", "supplier": "Toolstation", "default_price": 8.00},
+    {"name": "Tile Adhesive 20kg", "supplier": "Topps Tiles", "default_price": 22.00},
+    {"name": "Tile Grout 5kg", "supplier": "Topps Tiles", "default_price": 14.00},
+    {"name": "Tile Trim 2.5m", "supplier": "Topps Tiles", "default_price": 9.00},
+    {"name": "Ceramic Wall Tile per m2", "supplier": "Topps Tiles", "default_price": 25.00},
+    {"name": "Porcelain Floor Tile per m2", "supplier": "Topps Tiles", "default_price": 35.00},
+    {"name": "TRV Valve", "supplier": "Screwfix", "default_price": 14.00},
+    {"name": "Lockshield Valve", "supplier": "Screwfix", "default_price": 8.00},
+    {"name": "Radiator Valve Set", "supplier": "Screwfix", "default_price": 20.00},
+    {"name": "Motorised Valve", "supplier": "City Plumbing", "default_price": 65.00},
+    {"name": "Magnetic Filter", "supplier": "City Plumbing", "default_price": 95.00},
+    {"name": "Inhibitor 1L", "supplier": "Toolstation", "default_price": 16.00},
+    {"name": "Filling Loop", "supplier": "Toolstation", "default_price": 14.00},
+]
+
+FAVOURITE_MATERIALS = [
+    {"name": "15mm Copper Pipe 3m", "supplier": "City Plumbing", "default_price": 18.00},
+    {"name": "22mm Copper Pipe 3m", "supplier": "City Plumbing", "default_price": 32.00},
+    {"name": "15mm Copper Elbow", "supplier": "Screwfix", "default_price": 1.20},
+    {"name": "15mm Copper Tee", "supplier": "Screwfix", "default_price": 1.80},
+    {"name": "15mm Isolating Valve", "supplier": "Toolstation", "default_price": 3.50},
+    {"name": "Flexible Tap Connector", "supplier": "Screwfix", "default_price": 6.50},
+    {"name": "Basin Waste", "supplier": "City Plumbing", "default_price": 14.00},
+    {"name": "Outside Tap Kit", "supplier": "Screwfix", "default_price": 18.00},
+    {"name": "Silicone", "supplier": "Toolstation", "default_price": 8.00},
+    {"name": "TRV Valve", "supplier": "Screwfix", "default_price": 14.00},
+]
+
+JOB_TEMPLATES = [
+    {"name": "Replace tap", "quote_type": "small", "job": "Remove existing tap and fit new tap including testing for leaks.", "labour": 120},
+    {"name": "Replace toilet", "quote_type": "small", "job": "Remove existing toilet and fit new close-coupled toilet including waste connection and testing.", "labour": 180},
+    {"name": "Basin waste", "quote_type": "small", "job": "Remove faulty basin waste and fit new basin waste including testing for leaks.", "labour": 90},
+    {"name": "Outside tap", "quote_type": "small", "job": "Supply and fit outside tap kit with isolation and testing.", "labour": 150},
+    {"name": "Kitchen sink waste", "quote_type": "small", "job": "Remove existing sink waste and fit new waste/trap arrangement including testing.", "labour": 120},
+    {"name": "Bathroom install", "quote_type": "bathroom", "job": "Bathroom plumbing installation including first fix, second fix and sanitaryware connections.", "labour": 1800},
+    {"name": "Bathroom refurb", "quote_type": "bathroom", "job": "Bathroom refurbishment plumbing works including sanitaryware, wastes and connections.", "labour": 2200},
+    {"name": "Heating repair", "quote_type": "heating", "job": "Heating repair works including diagnosis, replacement parts and testing.", "labour": 150},
+    {"name": "Radiator install", "quote_type": "heating", "job": "Supply and fit radiator including valves and testing.", "labour": 180},
+    {"name": "Full heating system", "quote_type": "heating", "job": "Full heating system installation including pipework, controls, radiators and commissioning.", "labour": 3500},
+]
+
+LABOUR_HINTS = {
+    "small": [
+        {"keywords": ["tap"], "suggestion": 120, "range": "£100 - £140"},
+        {"keywords": ["toilet", "wc"], "suggestion": 180, "range": "£160 - £220"},
+        {"keywords": ["waste", "trap"], "suggestion": 120, "range": "£90 - £140"},
+        {"keywords": ["outside tap"], "suggestion": 150, "range": "£140 - £180"},
+    ],
+    "bathroom": [
+        {"keywords": ["install"], "suggestion": 1800, "range": "£1,600 - £2,200"},
+        {"keywords": ["refurb"], "suggestion": 2200, "range": "£2,000 - £2,800"},
+        {"keywords": ["bathroom"], "suggestion": 2000, "range": "£1,600 - £2,800"},
+    ],
+    "heating": [
+        {"keywords": ["radiator"], "suggestion": 180, "range": "£160 - £220"},
+        {"keywords": ["repair"], "suggestion": 150, "range": "£120 - £220"},
+        {"keywords": ["system"], "suggestion": 3500, "range": "£3,000 - £4,500"},
+    ],
+}
+
+
+class MaterialItem(BaseModel):
+    name: str = ""
+    quantity: float = 1
+    supplier: str = ""
+    url: str = ""
+    manual_price: float = 0
+
+
+class QuoteRequest(BaseModel):
+    quote_type: str = "small"
+    customer_name: str = ""
+    customer_address: str = ""
+    customer_phone: str = ""
+    job_description: str = ""
+    labour_cost: float = 0
+    include_materials_handling: bool = True
+    materials_handling_percent: float = 25
+    materials: list[MaterialItem] = Field(default_factory=list)
+    tiling: bool = False
+    wall_tiling_m2: float = 0
+    floor_tiling_m2: float = 0
+    wall_height: str = "half"
+    customer_supplies_tiles: bool = False
+    deposit_percent: float = 0
+
+
+class InvoiceStatusRequest(BaseModel):
+    status: str
+    amount_paid: float = 0
+
+
+class PaymentLinkUpdateRequest(BaseModel):
+    payment_link: str = ""
+
+
+class SendInvoiceEmailRequest(BaseModel):
+    to_email: str
+    message: str = ""
+
+
+class LeadRequest(BaseModel):
+    name: str = ""
+    phone: str = ""
+    email: str = ""
+    address: str = ""
+    job_type: str = "small"
+    description: str = ""
+    source: str = "website"
+
+
+class LeadStatusRequest(BaseModel):
+    status: str = "new"
+
+
+class InvoiceEditRequest(BaseModel):
+    customer_name: str = ""
+    customer_address: str = ""
+    customer_phone: str = ""
+    job: str = ""
+    labour: float = 0
+    materials: float = 0
+    due_date: str = ""
+    payment_link: str = ""
+    amount_paid: float = 0
+
+
+def now_uk():
+    return datetime.now(UK_TZ)
+
+
+def format_dt(dt: datetime):
+    return dt.strftime("%d/%m/%Y %H:%M")
+
+
+def safe_float(value, default=0.0):
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def month_labels(count=6):
+    now = now_uk()
+    labels = []
+    year = now.year
+    month = now.month
+    for _ in range(count):
+        labels.append(f"{year:04d}-{month:02d}")
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    labels.reverse()
+    return labels
+
+
+def get_db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            address TEXT,
+            phone TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS quotes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id INTEGER,
+            customer_name TEXT,
+            job TEXT,
+            total_price REAL,
+            gross_profit REAL,
+            margin_percent REAL,
+            created_at TEXT NOT NULL,
+            created_at_sort TEXT NOT NULL,
+            request_json TEXT NOT NULL,
+            result_json TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS invoices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            quote_id INTEGER,
+            customer_id INTEGER,
+            invoice_number TEXT NOT NULL,
+            customer_name TEXT,
+            total_price REAL,
+            amount_paid REAL,
+            balance_due REAL,
+            status TEXT NOT NULL,
+            due_date TEXT NOT NULL,
+            payment_link TEXT,
+            created_at TEXT NOT NULL,
+            created_at_sort TEXT NOT NULL,
+            quote_result_json TEXT NOT NULL,
+            invoice_json TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            phone TEXT,
+            email TEXT,
+            address TEXT,
+            job_type TEXT,
+            description TEXT,
+            status TEXT NOT NULL,
+            source TEXT,
+            created_at TEXT NOT NULL,
+            created_at_sort TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+@app.on_event("startup")
+def startup():
+    init_db()
+
+
+def fetch_price(url: str):
+    if not url:
+        return None
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "en-GB,en;q=0.9",
+        }
+        r = requests.get(url, headers=headers, timeout=8, allow_redirects=True)
+        if r.status_code != 200 or not r.text:
+            return None
+
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        meta_candidates = []
+        for selector, attr in [
+            ('meta[property="product:price:amount"]', "content"),
+            ('meta[property="og:price:amount"]', "content"),
+            ('meta[itemprop="price"]', "content"),
+        ]:
+            tag = soup.select_one(selector)
+            if tag and tag.get(attr):
+                meta_candidates.append(tag.get(attr))
+
+        for value in meta_candidates:
+            price = safe_float(value, None)
+            if price and 0 < price < 100000:
+                return round(price, 2)
+
+        text = soup.get_text(" ", strip=True)
+        lower_url = url.lower()
+        domain_patterns = []
+
+        if "cityplumbing" in lower_url:
+            domain_patterns = [
+                r'£\s?(\d+(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
+                r'£\s?(\d+(?:\.\d{2})?)\s*Inc\.?\s*VAT',
+                r'£\s?(\d+(?:\.\d{2})?)\s*each',
+            ]
+        elif "toppstiles" in lower_url:
+            domain_patterns = [
+                r'£\s?(\d+(?:\.\d{2})?)\s*(?:per m2|/m2|m2)',
+                r'£\s?(\d+(?:\.\d{2})?)'
+            ]
+
+        for pattern in domain_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches:
+                price = safe_float(match, None)
+                if price and 0 < price < 100000:
+                    return round(price, 2)
+
+        generic_matches = re.findall(r'£\s?(\d+(?:\.\d{2})?)', text)
+        prices = []
+        for match in generic_matches:
+            price = safe_float(match, None)
+            if price and 0 < price < 100000:
+                prices.append(price)
+
+        if prices:
+            return round(min(prices), 2)
+
+    except Exception:
+        return None
+
+    return None
+
+
+def find_labour_suggestion(quote_type: str, job_description: str):
+    text = (job_description or "").lower()
+    rules = LABOUR_HINTS.get(quote_type, [])
+    for rule in rules:
+        if any(keyword in text for keyword in rule["keywords"]):
+            return rule
+
+    if quote_type == "bathroom":
+        return {"suggestion": 2000, "range": "£1,600 - £2,800"}
+    if quote_type == "heating":
+        return {"suggestion": 180, "range": "£150 - £300"}
+    return {"suggestion": 120, "range": "£90 - £180"}
+
+
+def calculate_quote(data: QuoteRequest):
+    raw_materials = 0.0
+    material_lines = []
+
+    for item in data.materials:
+        url = item.url.strip() if item.url else ""
+        live_price = fetch_price(url) if url else None
+        unit_price = live_price if live_price is not None else (item.manual_price or 0)
+        line_total = unit_price * item.quantity
+        raw_materials += line_total
+
+        material_lines.append({
+            "name": item.name,
+            "quantity": item.quantity,
+            "supplier": item.supplier,
+            "url": item.url,
+            "manual_price": item.manual_price,
+            "unit_price_used": round(unit_price, 2),
+            "line_total": round(line_total, 2),
+            "live_price_used": live_price is not None,
+        })
+
+    tiling_extra_materials = 0.0
+    if data.quote_type == "bathroom" and data.tiling and not data.customer_supplies_tiles:
+        wall_multiplier = 1.2 if data.wall_height == "full" else 1.0
+        wall_materials = data.wall_tiling_m2 * 20 * wall_multiplier
+        floor_materials = data.floor_tiling_m2 * 15
+        tiling_extra_materials += wall_materials + floor_materials
+
+    raw_materials_with_tiling = raw_materials + tiling_extra_materials
+
+    job_multiplier = 1.0
+    if data.quote_type == "bathroom":
+        job_multiplier = 1.5
+    elif data.quote_type == "heating":
+        job_multiplier = 1.3
+
+    materials_after_job_markup = raw_materials_with_tiling * job_multiplier
+
+    handling_percent = 0.0
+    handling_multiplier = 1.0
+    if data.include_materials_handling:
+        handling_percent = data.materials_handling_percent
+        handling_multiplier = 1 + (handling_percent / 100.0)
+
+    quoted_materials = materials_after_job_markup * handling_multiplier
+    labour_total = data.labour_cost
+    total_price = labour_total + quoted_materials
+
+    deposit_percent = max(0.0, min(100.0, data.deposit_percent or 0))
+    deposit_amount = total_price * (deposit_percent / 100.0)
+
+    job_text = data.job_description.strip()
+    if data.tiling and data.quote_type == "bathroom":
+        job_text = f"{job_text} + Tiling" if job_text else "Bathroom works + Tiling"
+
+    hidden_uplift = quoted_materials - raw_materials_with_tiling
+    gross_profit = (quoted_materials - raw_materials_with_tiling) + labour_total
+    margin_percent = (gross_profit / total_price * 100.0) if total_price > 0 else 0.0
+
+    labour_hint = find_labour_suggestion(data.quote_type, data.job_description)
+    now = now_uk()
+
+    return {
+        "quote_type": data.quote_type,
+        "customer_name": data.customer_name,
+        "customer_address": data.customer_address,
+        "customer_phone": data.customer_phone,
+        "job": job_text,
+        "labour": round(labour_total, 2),
+        "materials": round(quoted_materials, 2),
+        "total_price": round(total_price, 2),
+        "deposit_percent": round(deposit_percent, 2),
+        "deposit_amount": round(deposit_amount, 2),
+        "created_at": format_dt(now),
+        "created_at_sort": now.isoformat(),
+        "material_lines": material_lines,
+        "internal_raw_materials": round(raw_materials_with_tiling, 2),
+        "internal_job_multiplier": round(job_multiplier, 2),
+        "internal_after_job_markup": round(materials_after_job_markup, 2),
+        "internal_handling_percent": round(handling_percent, 2),
+        "internal_after_handling": round(quoted_materials, 2),
+        "internal_hidden_uplift": round(hidden_uplift, 2),
+        "gross_profit": round(gross_profit, 2),
+        "margin_percent": round(margin_percent, 2),
+        "labour_suggestion": labour_hint["suggestion"],
+        "labour_range_hint": labour_hint["range"],
+    }
+
+
+def upsert_customer(name: str, address: str, phone: str):
+    name = (name or "").strip()
+    address = (address or "").strip()
+    phone = (phone or "").strip()
+
+    conn = get_db()
+    now = now_uk().isoformat()
+
+    if phone:
+        row = conn.execute("SELECT * FROM customers WHERE phone = ? LIMIT 1", (phone,)).fetchone()
+        if row:
+            conn.execute(
+                "UPDATE customers SET name = ?, address = ?, updated_at = ? WHERE id = ?",
+                (name or row["name"], address or row["address"], now, row["id"])
+            )
+            conn.commit()
+            conn.close()
+            return row["id"]
+
+    if name and address:
+        row = conn.execute(
+            "SELECT * FROM customers WHERE name = ? AND address = ? LIMIT 1",
+            (name, address)
+        ).fetchone()
+        if row:
+            conn.execute(
+                "UPDATE customers SET phone = ?, updated_at = ? WHERE id = ?",
+                (phone or row["phone"], now, row["id"])
+            )
+            conn.commit()
+            conn.close()
+            return row["id"]
+
+    conn.execute(
+        "INSERT INTO customers (name, address, phone, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        (name, address, phone, now, now)
+    )
+    customer_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return customer_id
+
+
+def row_to_quote(row):
+    return {
+        "id": row["id"],
+        "customer_id": row["customer_id"],
+        "customer_name": row["customer_name"] or "",
+        "job": row["job"] or "",
+        "total_price": round(row["total_price"] or 0, 2),
+        "gross_profit": round(row["gross_profit"] or 0, 2),
+        "margin_percent": round(row["margin_percent"] or 0, 2),
+        "created_at": row["created_at"],
+        "request": json.loads(row["request_json"]),
+        "result": json.loads(row["result_json"]),
+    }
+
+
+def row_to_invoice(row):
+    return {
+        "id": row["id"],
+        "quote_id": row["quote_id"],
+        "customer_id": row["customer_id"],
+        "invoice_number": row["invoice_number"],
+        "customer_name": row["customer_name"] or "",
+        "total_price": round(row["total_price"] or 0, 2),
+        "amount_paid": round(row["amount_paid"] or 0, 2),
+        "balance_due": round(row["balance_due"] or 0, 2),
+        "status": row["status"],
+        "due_date": row["due_date"],
+        "payment_link": row["payment_link"] or "",
+        "created_at": row["created_at"],
+        "quote_result": json.loads(row["quote_result_json"]),
+        "invoice": json.loads(row["invoice_json"]),
+    }
+
+
+def save_quote(request_data: dict, result_data: dict):
+    customer_id = upsert_customer(
+        request_data.get("customer_name", ""),
+        request_data.get("customer_address", ""),
+        request_data.get("customer_phone", ""),
+    )
+
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO quotes (
+            customer_id, customer_name, job, total_price, gross_profit, margin_percent,
+            created_at, created_at_sort, request_json, result_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        customer_id,
+        result_data.get("customer_name", ""),
+        result_data.get("job", ""),
+        result_data.get("total_price", 0),
+        result_data.get("gross_profit", 0),
+        result_data.get("margin_percent", 0),
+        result_data.get("created_at", ""),
+        result_data.get("created_at_sort", ""),
+        json.dumps(request_data),
+        json.dumps(result_data),
+    ))
+    quote_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return quote_id
+
+
+def load_quotes():
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT * FROM quotes
+        ORDER BY created_at_sort DESC, id DESC
+        LIMIT 200
+    """).fetchall()
+    conn.close()
+    return [row_to_quote(r) for r in rows]
+
+
+def get_quote_by_id(quote_id: int):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM quotes WHERE id = ?", (quote_id,)).fetchone()
+    conn.close()
+    return row_to_quote(row) if row else None
+
+
+def delete_quote_by_id(quote_id: int):
+    conn = get_db()
+    cur = conn.execute("DELETE FROM quotes WHERE id = ?", (quote_id,))
+    conn.commit()
+    deleted = cur.rowcount > 0
+    conn.close()
+    return deleted
+
+
+def next_invoice_number():
+    year = now_uk().strftime("%Y")
+    conn = get_db()
+    row = conn.execute("""
+        SELECT COUNT(*) AS cnt
+        FROM invoices
+        WHERE invoice_number LIKE ?
+    """, (f"INV-{year}-%",)).fetchone()
+    conn.close()
+    seq = (row["cnt"] or 0) + 1
+    return f"INV-{year}-{seq:04d}"
+
+
+def build_payment_link(invoice_number: str):
+    if PAYMENT_LINK_BASE:
+        return PAYMENT_LINK_BASE.rstrip("/") + "/" + invoice_number
+    return ""
+
+
+def create_invoice_from_quote(quote_id: int):
+    quote = get_quote_by_id(quote_id)
+    if not quote:
+        return None
+
+    result = quote["result"]
+    invoice_number = next_invoice_number()
+    due_date = (now_uk() + timedelta(days=14)).strftime("%d/%m/%Y")
+    payment_link = build_payment_link(invoice_number)
+
+    invoice_payload = {
+        "invoice_number": invoice_number,
+        "quote_id": quote["id"],
+        "customer_name": result.get("customer_name", ""),
+        "customer_address": result.get("customer_address", ""),
+        "customer_phone": result.get("customer_phone", ""),
+        "job": result.get("job", ""),
+        "labour": result.get("labour", 0),
+        "materials": result.get("materials", 0),
+        "total_price": result.get("total_price", 0),
+        "deposit_percent": result.get("deposit_percent", 0),
+        "deposit_amount": result.get("deposit_amount", 0),
+        "due_date": due_date,
+        "payment_link": payment_link,
+        "status": "unpaid",
+        "amount_paid": 0.0,
+        "balance_due": result.get("total_price", 0),
+    }
+
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO invoices (
+            quote_id, customer_id, invoice_number, customer_name, total_price, amount_paid, balance_due,
+            status, due_date, payment_link, created_at, created_at_sort, quote_result_json, invoice_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        quote["id"],
+        quote["customer_id"],
+        invoice_number,
+        result.get("customer_name", ""),
+        result.get("total_price", 0),
+        0.0,
+        result.get("total_price", 0),
+        "unpaid",
+        due_date,
+        payment_link,
+        format_dt(now_uk()),
+        now_uk().isoformat(),
+        json.dumps(result),
+        json.dumps(invoice_payload),
+    ))
+    invoice_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return get_invoice_by_id(invoice_id)
+
+
+def get_invoice_by_id(invoice_id: int):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM invoices WHERE id = ?", (invoice_id,)).fetchone()
+    conn.close()
+    return row_to_invoice(row) if row else None
+
+
+def load_invoices():
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT * FROM invoices
+        ORDER BY created_at_sort DESC, id DESC
+        LIMIT 200
+    """).fetchall()
+    conn.close()
+    return [row_to_invoice(r) for r in rows]
+
+
+def delete_invoice_by_id(invoice_id: int):
+    conn = get_db()
+    cur = conn.execute("DELETE FROM invoices WHERE id = ?", (invoice_id,))
+    conn.commit()
+    deleted = cur.rowcount > 0
+    conn.close()
+    return deleted
+
+
+def update_invoice_status(invoice_id: int, status: str, amount_paid: float):
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        return None
+
+    total = safe_float(invoice["total_price"])
+    amount_paid = max(0.0, min(total, safe_float(amount_paid)))
+    balance_due = max(0.0, total - amount_paid)
+
+    status = (status or "").lower().strip()
+    if status not in {"unpaid", "part paid", "paid"}:
+        status = "unpaid"
+
+    if amount_paid <= 0:
+        status = "unpaid"
+    elif amount_paid >= total:
+        status = "paid"
+    else:
+        status = "part paid"
+
+    invoice_payload = invoice["invoice"]
+    invoice_payload["status"] = status
+    invoice_payload["amount_paid"] = round(amount_paid, 2)
+    invoice_payload["balance_due"] = round(balance_due, 2)
+
+    conn = get_db()
+    conn.execute("""
+        UPDATE invoices
+        SET amount_paid = ?, balance_due = ?, status = ?, invoice_json = ?
+        WHERE id = ?
+    """, (
+        round(amount_paid, 2),
+        round(balance_due, 2),
+        status,
+        json.dumps(invoice_payload),
+        invoice_id,
+    ))
+    conn.commit()
+    conn.close()
+    return get_invoice_by_id(invoice_id)
+
+
+def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict):
+    existing = get_quote_by_id(quote_id)
+    if not existing:
+        return None
+
+    customer_id = upsert_customer(
+        request_data.get("customer_name", ""),
+        request_data.get("customer_address", ""),
+        request_data.get("customer_phone", ""),
+    )
+
+    conn = get_db()
+    conn.execute("""
+        UPDATE quotes
+        SET customer_id = ?, customer_name = ?, job = ?, total_price = ?, gross_profit = ?, margin_percent = ?,
+            created_at = ?, created_at_sort = ?, request_json = ?, result_json = ?
+        WHERE id = ?
+    """, (
+        customer_id,
+        result_data.get("customer_name", ""),
+        result_data.get("job", ""),
+        result_data.get("total_price", 0),
+        result_data.get("gross_profit", 0),
+        result_data.get("margin_percent", 0),
+        result_data.get("created_at", existing["created_at"]),
+        result_data.get("created_at_sort", existing["result"].get("created_at_sort", existing["created_at"])),
+        json.dumps(request_data),
+        json.dumps(result_data),
+        quote_id,
+    ))
+    conn.commit()
+    conn.close()
+    return get_quote_by_id(quote_id)
+
+
+def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        return None
+
+    customer_name = (data.customer_name or "").strip()
+    customer_address = (data.customer_address or "").strip()
+    customer_phone = (data.customer_phone or "").strip()
+    job = (data.job or "").strip()
+    due_date = (data.due_date or "").strip() or invoice["due_date"]
+    payment_link = (data.payment_link or "").strip()
+
+    labour = max(0.0, safe_float(data.labour, 0.0))
+    materials = max(0.0, safe_float(data.materials, 0.0))
+    total_price = round(labour + materials, 2)
+    amount_paid = max(0.0, min(total_price, safe_float(data.amount_paid, 0.0)))
+    balance_due = max(0.0, round(total_price - amount_paid, 2))
+
+    if amount_paid <= 0:
+        status = "unpaid"
+    elif amount_paid >= total_price:
+        status = "paid"
+    else:
+        status = "part paid"
+
+    customer_id = upsert_customer(customer_name, customer_address, customer_phone)
+
+    quote_result = invoice["quote_result"]
+    quote_result["customer_name"] = customer_name
+    quote_result["customer_address"] = customer_address
+    quote_result["customer_phone"] = customer_phone
+    quote_result["job"] = job
+    quote_result["labour"] = round(labour, 2)
+    quote_result["materials"] = round(materials, 2)
+    quote_result["total_price"] = round(total_price, 2)
+    deposit_percent = safe_float(quote_result.get("deposit_percent", 0), 0)
+    quote_result["deposit_amount"] = round(total_price * (deposit_percent / 100.0), 2)
+    gross_profit = round(labour + materials - safe_float(quote_result.get("internal_raw_materials", 0), 0), 2)
+    quote_result["gross_profit"] = gross_profit
+    quote_result["margin_percent"] = round((gross_profit / total_price * 100.0), 2) if total_price > 0 else 0.0
+
+    invoice_payload = invoice["invoice"]
+    invoice_payload.update({
+        "customer_name": customer_name,
+        "customer_address": customer_address,
+        "customer_phone": customer_phone,
+        "job": job,
+        "labour": round(labour, 2),
+        "materials": round(materials, 2),
+        "total_price": round(total_price, 2),
+        "due_date": due_date,
+        "payment_link": payment_link,
+        "status": status,
+        "amount_paid": round(amount_paid, 2),
+        "balance_due": round(balance_due, 2),
+    })
+
+    conn = get_db()
+    conn.execute("""
+        UPDATE invoices
+        SET customer_id = ?, customer_name = ?, total_price = ?, amount_paid = ?, balance_due = ?, status = ?,
+            due_date = ?, payment_link = ?, quote_result_json = ?, invoice_json = ?
+        WHERE id = ?
+    """, (
+        customer_id,
+        customer_name,
+        round(total_price, 2),
+        round(amount_paid, 2),
+        round(balance_due, 2),
+        status,
+        due_date,
+        payment_link,
+        json.dumps(quote_result),
+        json.dumps(invoice_payload),
+        invoice_id,
+    ))
+    conn.commit()
+    conn.close()
+    return get_invoice_by_id(invoice_id)
+
+
+def get_dashboard():
+    now = now_uk()
+    month_prefix = now.strftime("%Y-%m")
+
+    conn = get_db()
+
+    q = conn.execute("""
+        SELECT
+            COUNT(*) AS quote_count,
+            COALESCE(SUM(total_price), 0) AS quoted_total,
+            COALESCE(SUM(gross_profit), 0) AS gross_profit_total
+        FROM quotes
+        WHERE substr(created_at_sort, 1, 7) = ?
+    """, (month_prefix,)).fetchone()
+
+    i = conn.execute("""
+        SELECT
+            COUNT(*) AS invoice_count,
+            COALESCE(SUM(total_price), 0) AS invoiced_total,
+            COALESCE(SUM(amount_paid), 0) AS paid_total,
+            COALESCE(SUM(balance_due), 0) AS balance_total
+        FROM invoices
+        WHERE substr(created_at_sort, 1, 7) = ?
+    """, (month_prefix,)).fetchone()
+
+    avg = conn.execute("""
+        SELECT COALESCE(AVG(total_price), 0) AS avg_quote
+        FROM quotes
+        WHERE substr(created_at_sort, 1, 7) = ?
+    """, (month_prefix,)).fetchone()
+
+    customers = conn.execute("SELECT COUNT(*) AS customer_count FROM customers").fetchone()
+
+    conn.close()
+
+    return {
+        "month_label": now.strftime("%B %Y"),
+        "quote_count": q["quote_count"] or 0,
+        "quoted_total": round(q["quoted_total"] or 0, 2),
+        "gross_profit_total": round(q["gross_profit_total"] or 0, 2),
+        "invoice_count": i["invoice_count"] or 0,
+        "invoiced_total": round(i["invoiced_total"] or 0, 2),
+        "paid_total": round(i["paid_total"] or 0, 2),
+        "balance_total": round(i["balance_total"] or 0, 2),
+        "avg_quote": round(avg["avg_quote"] or 0, 2),
+        "customer_count": customers["customer_count"] or 0,
+    }
+
+
+def get_monthly_profit_series(month_count: int = 6):
+    labels = month_labels(month_count)
+    conn = get_db()
+    out = []
+    for month_prefix in labels:
+        row = conn.execute("""
+            SELECT
+                COALESCE(SUM(total_price), 0) AS revenue,
+                COALESCE(SUM(gross_profit), 0) AS profit
+            FROM quotes
+            WHERE substr(created_at_sort, 1, 7) = ?
+        """, (month_prefix,)).fetchone()
+        out.append({
+            "month_key": month_prefix,
+            "label": datetime.strptime(month_prefix + '-01', '%Y-%m-%d').strftime('%b %Y'),
+            "revenue": round(row['revenue'] or 0, 2),
+            "profit": round(row['profit'] or 0, 2),
+        })
+    conn.close()
+    return out
+
+
+def get_customers():
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT *
+        FROM customers
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 200
+    """).fetchall()
+    conn.close()
+
+    out = []
+    for row in rows:
+        out.append({
+            "id": row["id"],
+            "name": row["name"] or "",
+            "address": row["address"] or "",
+            "phone": row["phone"] or "",
+            "updated_at": row["updated_at"],
+        })
+    return out
+
+
+def get_customer_history(customer_id: int):
+    conn = get_db()
+    customer = conn.execute("SELECT * FROM customers WHERE id = ?", (customer_id,)).fetchone()
+    if not customer:
+        conn.close()
+        return None
+
+    quotes = conn.execute("""
+        SELECT * FROM quotes
+        WHERE customer_id = ?
+        ORDER BY created_at_sort DESC, id DESC
+        LIMIT 50
+    """, (customer_id,)).fetchall()
+
+    invoices = conn.execute("""
+        SELECT * FROM invoices
+        WHERE customer_id = ?
+        ORDER BY created_at_sort DESC, id DESC
+        LIMIT 50
+    """, (customer_id,)).fetchall()
+    conn.close()
+
+    return {
+        "customer": {
+            "id": customer["id"],
+            "name": customer["name"] or "",
+            "address": customer["address"] or "",
+            "phone": customer["phone"] or "",
+        },
+        "quotes": [row_to_quote(r) for r in quotes],
+        "invoices": [row_to_invoice(r) for r in invoices],
+    }
+
+
+
+
+def pounds_text(value):
+    return f"£{safe_float(value, 0):.2f}"
+
+
+def get_public_base_url(request: Request | None = None) -> str:
+    return "https://www.nigelharveyplumbing.co.uk"
+
+
+def absolute_url(path: str, request: Request | None = None) -> str:
+    clean_path = path if path.startswith("/") else f"/{path}"
+    base = get_public_base_url(request)
+    return f"{base}{clean_path}" if base else clean_path
+
+
+def build_invoice_public_url(invoice_id: int, request: Request | None = None):
+    return absolute_url(f"/invoice/{invoice_id}", request)
+
+
+def _pdf_header(c, title: str, ref_number: str):
+    width, height = A4
+    y = height - 48
+    logo_reader = _pdf_logo_reader()
+
+    text_left = 40
+    if logo_reader:
+        try:
+            c.drawImage(logo_reader, 40, y - 52, width=150, height=48, preserveAspectRatio=True, mask='auto')
+            text_left = 205
+        except Exception:
+            text_left = 40
+
+    c.setFont("Helvetica-Bold", 24)
+    c.drawString(text_left, y, COMPANY_NAME)
+    c.setFont("Helvetica", 11)
+    c.drawString(text_left, y - 18, COMPANY_ADDRESS)
+    c.drawString(text_left, y - 34, COMPANY_PHONE)
+    c.drawString(text_left, y - 50, COMPANY_EMAIL)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawRightString(width - 40, y, title)
+    c.setFont("Helvetica", 11)
+    c.drawRightString(width - 40, y - 18, ref_number)
+    c.line(40, y - 62, width - 40, y - 62)
+    return y - 84
+
+
+def _pdf_row(c, y, left, right, bold=False):
+    c.setFont("Helvetica-Bold" if bold else "Helvetica", 11)
+    c.drawString(50, y, str(left))
+    c.drawRightString(A4[0] - 50, y, str(right))
+    return y - 18
+
+
+def generate_invoice_pdf_bytes(item: dict):
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    invoice = item["invoice"]
+    quote_result = item["quote_result"]
+    y = _pdf_header(c, "INVOICE", item["invoice_number"])
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Bill To")
+    c.drawString(320, y, "Invoice Details")
+    y -= 18
+    c.setFont("Helvetica", 11)
+    for line in [invoice.get("customer_name", "-"), invoice.get("customer_address", "-"), invoice.get("customer_phone", "-")]:
+        if line:
+            c.drawString(40, y, str(line)[:65])
+            y -= 15
+    detail_y = y + 30
+    c.drawString(320, detail_y, f"Date: {item['created_at']}")
+    c.drawString(320, detail_y - 15, f"Due: {item['due_date']}")
+    c.drawString(320, detail_y - 30, f"Status: {item['status'].title()}")
+    y -= 8
+    c.line(40, y, A4[0] - 40, y)
+    y -= 22
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Work Description")
+    y -= 18
+    c.setFont("Helvetica", 11)
+    text_obj = c.beginText(40, y)
+    for line in str(invoice.get("job", "-")).splitlines() or ["-"]:
+        text_obj.textLine(line[:105])
+    c.drawText(text_obj)
+    y = text_obj.getY() - 10
+    c.line(40, y, A4[0] - 40, y)
+    y -= 24
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Summary")
+    y -= 20
+    y = _pdf_row(c, y, "Labour", pounds_text(invoice.get("labour", 0)))
+    y = _pdf_row(c, y, "Materials", pounds_text(invoice.get("materials", 0)))
+    y = _pdf_row(c, y, "Total", pounds_text(item.get("total_price", 0)), bold=True)
+    y = _pdf_row(c, y, "Amount Paid", pounds_text(item.get("amount_paid", 0)))
+    y = _pdf_row(c, y, "Balance Due", pounds_text(item.get("balance_due", 0)), bold=True)
+
+    y -= 12
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Payment Terms")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    terms = INVOICE_TERMS[:]
+    if (quote_result.get("quote_type", "") or "").lower() == "small":
+        terms = terms[:3]
+    text_obj = c.beginText(40, y)
+    for line in terms:
+        text_obj.textLine(f"• {line}")
+    if item.get("payment_link"):
+        text_obj.textLine("")
+        text_obj.textLine(f"Payment link: {item['payment_link']}")
+    c.drawText(text_obj)
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def generate_quote_pdf_bytes(item: dict):
+    result = item["result"]
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    y = _pdf_header(c, "QUOTE", f"Quote #{item['id']}")
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Customer")
+    y -= 18
+    c.setFont("Helvetica", 11)
+    for line in [result.get("customer_name", "-"), result.get("customer_address", "-"), result.get("customer_phone", "-")]:
+        if line:
+            c.drawString(40, y, str(line)[:65])
+            y -= 15
+    y -= 8
+    c.line(40, y, A4[0] - 40, y)
+    y -= 22
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Works")
+    y -= 18
+    c.setFont("Helvetica", 11)
+    text_obj = c.beginText(40, y)
+    for line in str(result.get("job", "-")).splitlines() or ["-"]:
+        text_obj.textLine(line[:105])
+    c.drawText(text_obj)
+    y = text_obj.getY() - 10
+    c.line(40, y, A4[0] - 40, y)
+    y -= 24
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Price")
+    y -= 20
+    y = _pdf_row(c, y, "Labour", pounds_text(result.get("labour", 0)))
+    y = _pdf_row(c, y, "Materials", pounds_text(result.get("materials", 0)))
+    y = _pdf_row(c, y, "Deposit", pounds_text(result.get("deposit_amount", 0)))
+    y = _pdf_row(c, y, "Total Price", pounds_text(result.get("total_price", 0)), bold=True)
+    y -= 12
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Terms")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    text_obj = c.beginText(40, y)
+    for line in QUOTE_TERMS:
+        text_obj.textLine(f"• {line}")
+    c.drawText(text_obj)
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def send_invoice_email_now(item: dict, to_email: str, extra_message: str = ""):
+    if not EMAIL_ENABLED or not EMAIL_USER or not EMAIL_PASS:
+        raise RuntimeError("Email sending is not configured yet. Set EMAIL_ENABLED=1, EMAIL_USER and EMAIL_PASS.")
+
+    invoice = item["invoice"]
+    public_url = build_invoice_public_url(item["id"])
+    subject = f"Invoice {item['invoice_number']} - {COMPANY_NAME}"
+
+    greeting = f"Hello {invoice.get('customer_name') or ''},".strip()
+    plain_lines = [
+        greeting,
+        "",
+        extra_message.strip() if extra_message else "Please find your invoice attached as a PDF.",
+        "",
+        f"Invoice number: {item['invoice_number']}",
+        f"Balance due: {pounds_text(item.get('balance_due', 0))}",
+        f"Invoice link: {public_url}",
+        "",
+        COMPANY_NAME,
+        COMPANY_PHONE,
+        COMPANY_EMAIL,
+    ]
+    plain_body = "\n".join([line for line in plain_lines if line is not None])
+
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = subject
+    msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_USER}>"
+    msg["To"] = to_email.strip()
+
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(plain_body, "plain", "utf-8"))
+
+    logo_value = get_company_logo_value()
+    html_logo = ""
+    logo_bytes = None
+    if logo_value:
+        try:
+            if logo_value.startswith("data:image"):
+                _, encoded = logo_value.split(",", 1)
+                logo_bytes = base64.b64decode(encoded)
+                html_logo = '<img src="cid:companylogo" alt="Nigel Harvey Ltd logo" style="max-height:72px; max-width:220px; display:block; margin:0 0 14px auto;">'
+            else:
+                html_logo = f'<img src="{escape(logo_value)}" alt="Nigel Harvey Ltd logo" style="max-height:72px; max-width:220px; display:block; margin:0 0 14px auto;">'
+        except Exception:
+            html_logo = ""
+
+    message_text = escape(extra_message.strip()) if extra_message else "Please find your invoice attached as a PDF."
+    customer_name = escape(invoice.get("customer_name") or "")
+    html_body = f"""
+    <html>
+      <body style="margin:0; padding:0; background:#f4f4f4; font-family:Arial, sans-serif; color:#111;">
+        <div style="max-width:680px; margin:0 auto; padding:24px 14px;">
+          <div style="background:#ffffff; border-radius:16px; padding:28px; box-shadow:0 2px 12px rgba(0,0,0,0.06);">
+            <div style="text-align:right;">{html_logo}</div>
+            <div style="font-size:18px; font-weight:700; margin-bottom:14px;">{greeting}</div>
+            <div style="font-size:16px; line-height:1.6; margin-bottom:18px;">{message_text}</div>
+            <div style="border:1px solid #e5e7eb; border-radius:14px; padding:18px; background:#fafafa; margin-bottom:18px;">
+              <div style="font-size:13px; letter-spacing:.5px; color:#666; text-transform:uppercase; margin-bottom:10px;">Invoice summary</div>
+              <div style="display:flex; justify-content:space-between; gap:12px; margin:8px 0;"><span>Invoice number</span><strong>{escape(item['invoice_number'])}</strong></div>
+              <div style="display:flex; justify-content:space-between; gap:12px; margin:8px 0;"><span>Status</span><strong>{escape(item['status'].title())}</strong></div>
+              <div style="display:flex; justify-content:space-between; gap:12px; margin:8px 0;"><span>Balance due</span><strong>{escape(pounds_text(item.get('balance_due', 0)))}</strong></div>
+            </div>
+            <div style="margin-bottom:18px;">
+              <a href="{escape(public_url)}" style="display:inline-block; background:#111; color:#fff; text-decoration:none; padding:12px 18px; border-radius:12px; font-weight:700;">Open invoice online</a>
+            </div>
+            <div style="font-size:14px; line-height:1.6; color:#444;">
+              {escape(COMPANY_NAME)}<br>
+              {escape(COMPANY_PHONE)}<br>
+              {escape(COMPANY_EMAIL)}
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+    """
+
+    related = MIMEMultipart("related")
+    related.attach(MIMEText(html_body, "html", "utf-8"))
+
+    if logo_bytes:
+        image_part = MIMEImage(logo_bytes, _subtype="png")
+        image_part.add_header("Content-ID", "<companylogo>")
+        image_part.add_header("Content-Disposition", "inline", filename="logo.png")
+        related.attach(image_part)
+
+    alt.attach(related)
+    msg.attach(alt)
+
+    pdf_part = MIMEBase("application", "pdf")
+    pdf_part.set_payload(generate_invoice_pdf_bytes(item))
+    encoders.encode_base64(pdf_part)
+    pdf_part.add_header("Content-Disposition", "attachment", filename=f"{item['invoice_number']}.pdf")
+    msg.attach(pdf_part)
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, context=context) as server:
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.sendmail(EMAIL_USER, [to_email.strip()], msg.as_string())
+
+def row_to_lead(row):
+    return {
+        "id": row["id"],
+        "name": row["name"] or "",
+        "phone": row["phone"] or "",
+        "email": row["email"] or "",
+        "address": row["address"] or "",
+        "job_type": row["job_type"] or "small",
+        "description": row["description"] or "",
+        "status": row["status"] or "new",
+        "source": row["source"] or "website",
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def save_lead(data: LeadRequest):
+    now = now_uk()
+    conn = get_db()
+    conn.execute(
+        """
+        INSERT INTO leads (name, phone, email, address, job_type, description, status, source, created_at, created_at_sort, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            (data.name or "").strip(),
+            (data.phone or "").strip(),
+            (data.email or "").strip(),
+            (data.address or "").strip(),
+            (data.job_type or "small").strip() or "small",
+            (data.description or "").strip(),
+            "new",
+            (data.source or "website").strip() or "website",
+            format_dt(now),
+            now.isoformat(),
+            now.isoformat(),
+        ),
+    )
+    lead_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return get_lead_by_id(lead_id)
+
+
+def get_lead_by_id(lead_id: int):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM leads WHERE id = ?", (lead_id,)).fetchone()
+    conn.close()
+    return row_to_lead(row) if row else None
+
+
+def load_leads():
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT * FROM leads
+        ORDER BY created_at_sort DESC, id DESC
+        LIMIT 300
+        """
+    ).fetchall()
+    conn.close()
+    return [row_to_lead(r) for r in rows]
+
+
+def update_lead_status(lead_id: int, status: str):
+    status = (status or "new").strip().lower()
+    if status not in {"new", "contacted", "quoted", "won", "lost"}:
+        status = "new"
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE leads SET status = ?, updated_at = ? WHERE id = ?",
+        (status, now_uk().isoformat(), lead_id),
+    )
+    conn.commit()
+    conn.close()
+    if cur.rowcount <= 0:
+        return None
+    return get_lead_by_id(lead_id)
+
+
+def delete_lead_by_id(lead_id: int):
+    conn = get_db()
+    cur = conn.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
+    conn.commit()
+    deleted = cur.rowcount > 0
+    conn.close()
+    return deleted
+
+
+def send_lead_notification_email(lead: dict):
+    if not EMAIL_ENABLED or not EMAIL_USER or not EMAIL_PASS:
+        return
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"New quote request - {lead.get('name') or 'Website lead'}"
+        msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_USER}>"
+        msg["To"] = EMAIL_USER
+        public_url = os.getenv("PUBLIC_BASE_URL", "").strip()
+        plain = (
+            f"New website lead\n\n"
+            f"Name: {lead.get('name','')}\n"
+            f"Phone: {lead.get('phone','')}\n"
+            f"Email: {lead.get('email','')}\n"
+            f"Address: {lead.get('address','')}\n"
+            f"Job type: {lead.get('job_type','')}\n"
+            f"Description: {lead.get('description','')}\n\n"
+            f"Open app: {public_url}\n"
+        )
+        html = (
+            '<html><body style="font-family:Arial,sans-serif;">'
+            '<h2>New website lead</h2>'
+            f"<p><strong>Name:</strong> {escape(lead.get('name',''))}<br>"
+            f"<strong>Phone:</strong> {escape(lead.get('phone',''))}<br>"
+            f"<strong>Email:</strong> {escape(lead.get('email',''))}<br>"
+            f"<strong>Address:</strong> {escape(lead.get('address',''))}<br>"
+            f"<strong>Job type:</strong> {escape(lead.get('job_type',''))}</p>"
+            f"<p><strong>Description:</strong><br>{escape(lead.get('description','')).replace(chr(10), '<br>')}</p>"
+            '</body></html>'
+        )
+        msg.attach(MIMEText(plain, "plain", "utf-8"))
+        msg.attach(MIMEText(html, "html", "utf-8"))
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, context=context) as server:
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.sendmail(EMAIL_USER, [EMAIL_USER], msg.as_string())
+    except Exception:
+        return
+
+
+
+def build_homepage_faq_schema() -> str:
+    faq_items = [
+        {
+            "@type": "Question",
+            "name": "Do you cover all of Surrey?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Nigel Harvey Ltd covers Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead, Epsom and surrounding Surrey areas. If you are nearby, get in touch and ask."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "Can I request an emergency plumber?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. The site includes an emergency plumbing page and quote request form so customers can send details quickly for urgent plumbing issues in Surrey."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What type of plumbing work do you do?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "General plumbing, bathroom plumbing, leaks, toilets, taps, sinks, wastes, pipework changes, radiators and similar domestic plumbing jobs."
+            }
+        },
+    ]
+    return json.dumps({"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": faq_items}, ensure_ascii=False)
+
+
+def build_homepage_business_schema(canonical_home: str) -> str:
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "Plumber",
+        "name": COMPANY_NAME,
+        "telephone": COMPANY_PHONE,
+        "email": COMPANY_EMAIL,
+        "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "125 Bushy Hill Drive",
+            "addressLocality": "Guildford",
+            "postalCode": "GU1 2UG",
+            "addressCountry": "GB",
+        },
+        "areaServed": ["Guildford", "Woking", "Farnham", "Godalming", "Camberley", "Aldershot", "Leatherhead", "Epsom", "Weybridge", "Cobham", "Surrey"],
+        "url": canonical_home,
+        "description": "Plumbing services in Surrey and surrounding areas including emergency plumbing, general plumbing, bathroom plumbing, leaks, pipework and domestic plumbing repairs.",
+    }
+    if GOOGLE_RATING_VALUE and GOOGLE_REVIEW_COUNT:
+        schema["aggregateRating"] = {
+            "@type": "AggregateRating",
+            "ratingValue": GOOGLE_RATING_VALUE,
+            "reviewCount": GOOGLE_REVIEW_COUNT,
+            "bestRating": "5",
+            "worstRating": "1",
+        }
+    reviews = []
+    for text_value, author in [
+        (GOOGLE_REVIEW_1_TEXT, GOOGLE_REVIEW_1_AUTHOR),
+        (GOOGLE_REVIEW_2_TEXT, GOOGLE_REVIEW_2_AUTHOR),
+        (GOOGLE_REVIEW_3_TEXT, GOOGLE_REVIEW_3_AUTHOR),
+    ]:
+        if text_value and author:
+            reviews.append({
+                "@type": "Review",
+                "author": {"@type": "Person", "name": author},
+                "reviewBody": text_value,
+                "reviewRating": {"@type": "Rating", "ratingValue": "5", "bestRating": "5", "worstRating": "1"},
+            })
+    if reviews:
+        schema["review"] = reviews
+    return json.dumps(schema, ensure_ascii=False)
+
+
+def build_reviews_badge_html() -> str:
+    if GOOGLE_RATING_VALUE and GOOGLE_REVIEW_COUNT:
+        reviews_link = escape(GOOGLE_REVIEWS_URL, quote=True)
+        return f'<a href="{reviews_link}" target="_blank" rel="noopener noreferrer">Google rating {escape(GOOGLE_RATING_VALUE)}/5</a><span>{escape(GOOGLE_REVIEW_COUNT)} Google reviews</span>'
+    return '<span>Trusted local Surrey plumber</span><span>Ask about recent customer feedback</span>'
+
+
+def build_reviews_section_html() -> str:
+    if GOOGLE_RATING_VALUE and GOOGLE_REVIEW_COUNT:
+        cards = []
+        for text_value, author in [
+            (GOOGLE_REVIEW_1_TEXT, GOOGLE_REVIEW_1_AUTHOR),
+            (GOOGLE_REVIEW_2_TEXT, GOOGLE_REVIEW_2_AUTHOR),
+            (GOOGLE_REVIEW_3_TEXT, GOOGLE_REVIEW_3_AUTHOR),
+        ]:
+            if text_value and author:
+                cards.append(
+                    f'<div class="card faq"><h3>{escape(author)}</h3><p>“{escape(text_value)}”</p></div>'
+                )
+        if not cards:
+            cards.append('<div class="card faq"><h3>Google customer feedback</h3><p>Strong review signals help build trust with both customers and search engines. Add your three best Google reviews here to strengthen the homepage further.</p></div>')
+        reviews_link = escape(GOOGLE_REVIEWS_URL, quote=True)
+        return (
+            '<div class="wrap section"><h2>Google reviews</h2>'
+            f'<p class="copy">Nigel Harvey Ltd currently shows a Google rating of {escape(GOOGLE_RATING_VALUE)}/5 from {escape(GOOGLE_REVIEW_COUNT)} reviews. '
+            f'<a href="{reviews_link}" target="_blank" rel="noopener noreferrer">Read the latest Google reviews</a>.</p>'
+            f'<div class="grid3">{"".join(cards)}</div></div>'
+        )
+    return (
+        '<div class="wrap section"><h2>Trusted local plumber in Surrey</h2>'
+        '<p class="copy">Nigel Harvey Ltd is a local plumbing and heating company serving Surrey and surrounding areas. We focus on providing reliable service, clear communication and quality workmanship on every job.</p></div>'
+    )
+
+
+
+LANDING_PAGE_HTML = r'''
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta name="google-site-verification" content="Dw_MXa0LZioT3zkorUaBVFc1NAgnlecAcVVaaNY_Jdw" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plumber in Surrey | Emergency Plumber & General Plumbing | Nigel Harvey Ltd</title>
+<meta name="description" content="Local plumber in Surrey covering Guildford, Woking, Farnham and surrounding areas. Emergency plumbing, leaks, bathroom plumbing, repairs and installations. Call Nigel Harvey Ltd for a fast response.">
+<meta name="keywords" content="plumber Surrey, emergency plumber Surrey, plumber Guildford, plumber Woking, plumber Farnham, bathroom plumbing Surrey, general plumbing Surrey">
+<link rel="canonical" href="__CANONICAL_HOME__">
+<script type="application/ld+json">__BUSINESS_SCHEMA_JSON__</script>
+<script type="application/ld+json">__FAQ_SCHEMA_JSON__</script>
+<style>
+:root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#0f7a34;--accent2:#1d4ed8;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+a{text-decoration:none;color:inherit}
+.wrap{max-width:1160px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;background:rgba(245,247,251,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);z-index:10}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:14px 0;gap:12px;flex-wrap:wrap}
+.brand{font-size:22px;font-weight:800}
+.brand small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.nav-actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-block;padding:14px 20px;border-radius:999px;font-weight:700}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-green{background:var(--accent);color:#fff}
+.btn-light{background:#fff;border:1px solid var(--border)}
+.hero{padding:38px 0 20px}
+.hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:22px;align-items:stretch}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.hero-copy{padding:34px}
+.hero-copy h1{font-size:clamp(34px,5vw,58px);line-height:1.03;margin:0 0 14px}
+.lead{font-size:18px;color:var(--muted);max-width:46rem;margin:0 0 18px;line-height:1.6}
+.tag{display:inline-block;padding:7px 12px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:12px;margin-bottom:12px}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0 16px}
+.trust{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-weight:700;font-size:14px}
+.panel{padding:24px}
+.panel h2,.section h2{margin:0 0 12px;font-size:30px}
+.panel p,.section p.copy{margin:0 0 18px;color:var(--muted);line-height:1.65}
+.check{padding:14px 15px;border:1px solid var(--border);border-radius:14px;background:#f8fafc;font-weight:700;margin-bottom:10px}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}
+.stat{padding:16px;border-radius:16px;background:#f8fafc;border:1px solid var(--border)}
+.stat strong{display:block;font-size:20px;margin-bottom:4px}
+.section{padding:18px 0}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.item{padding:22px}
+.item h3{margin:0 0 8px;font-size:20px}
+.item p{margin:0;color:var(--muted);line-height:1.55}
+.link-grid,.pill-links{display:grid;gap:12px}
+.link-grid{grid-template-columns:repeat(4,1fr)}
+.pill-links{grid-template-columns:repeat(4,1fr)}
+.link-grid a,.pill-links a{display:block;padding:14px 16px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);font-weight:700}
+.link-grid a:hover,.pill-links a:hover{border-color:#cbd5e1}
+ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
+.cta{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:26px;margin:26px 0 20px}
+.footer{padding:20px 0 36px;color:var(--muted)}
+.footer-inner{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:18px}
+.logo-box{margin-bottom:14px}
+.logo-box img{max-width:240px;max-height:90px;object-fit:contain}
+.faq-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.faq{padding:20px}
+.faq h3{margin:0 0 8px;font-size:19px}
+.faq p{margin:0;color:var(--muted);line-height:1.6}
+.reviews-wrap{margin-top:22px}
+@media (max-width: 960px){
+  .hero-grid,.grid3,.faq-grid,.link-grid,.pill-links{grid-template-columns:1fr 1fr}
+}
+@media (max-width: 720px){
+  .hero-grid,.grid3,.faq-grid,.link-grid,.pill-links,.stats{grid-template-columns:1fr}
+  .hero-copy{padding:26px}
+  .panel h2,.section h2{font-size:26px}
+}
+.sticky-call{position:fixed;bottom:0;left:0;width:100%;background:#16a34a;color:#fff;text-align:center;padding:14px;font-size:18px;font-weight:700;text-decoration:none;z-index:9999;border-top:2px solid rgba(255,255,255,.2);box-shadow:0 -2px 10px rgba(0,0,0,.15)}
+@media (min-width:768px){.sticky-call{display:block}}
+body{padding-bottom:60px}
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="wrap nav">
+      <div class="brand">Nigel Harvey Ltd<small>Plumbing in Surrey</small></div>
+      <div class="nav-actions">
+        <a class="btn btn-light" href="tel:__COMPANY_PHONE__">Call Now</a>
+        <a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a>
+        <a class="btn btn-light" href="/app">Open App</a>
+      </div>
+    </div>
+  </div>
+
+  <main>
+  <section class="hero section">
+    <div class="wrap">
+      <span class="eyebrow">Local Plumbing Services in Guildford</span>
+      <h1>Plumber in Guildford</h1>
+      <p class="copy">Need a reliable plumber in Guildford? We provide fast, professional plumbing services for emergencies, repairs, installations and general plumbing work across Guildford and surrounding areas.</p>
+      <div class="nav-actions">
+        <a class="btn btn-green" href="tel:07595725547">Call Now: 07595 725547</a>
+        <a class="btn btn-primary" href="/request-quote">Get a fast quote</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>Trusted Local Plumbers in Guildford</h2>
+      <p>Our experienced plumbers work across Guildford, helping homeowners and landlords with everything from leaking pipes and blocked drains to bathroom plumbing, repairs and urgent callouts. If you need a trusted local plumber in Guildford, we’re here to help.</p>
+      <p>We aim to provide a fast, reliable service with clear communication and high-quality workmanship on every job.</p>
+    </div>
+  </section>
+
+  <section class="section alt">
+    <div class="wrap">
+      <h2>Our Plumbing Services in Guildford</h2>
+      <div class="grid3">
+        <div class="card item">
+          <h3>Emergency Plumbing</h3>
+          <p>Fast response for urgent plumbing issues including leaks, burst pipes, overflowing toilets and other emergency problems.</p>
+        </div>
+        <div class="card item">
+          <h3>General Plumbing Repairs</h3>
+          <p>We handle day-to-day plumbing repairs, faulty taps, pipework issues, water pressure problems and more.</p>
+        </div>
+        <div class="card item">
+          <h3>Leak Detection</h3>
+          <p>We identify and repair hidden leaks quickly to help prevent water damage and ongoing plumbing issues.</p>
+        </div>
+        <div class="card item">
+          <h3>Blocked Drains and Waste Pipes</h3>
+          <p>Help with blocked sinks, slow drainage, pipe blockages and related plumbing problems.</p>
+        </div>
+        <div class="card item">
+          <h3>Bathroom Plumbing</h3>
+          <p>Installation and repair work for toilets, basins, showers, baths and bathroom pipework.</p>
+        </div>
+        <div class="card item">
+          <h3>Pipe Repairs and Installations</h3>
+          <p>Professional pipework repairs, replacements and new plumbing installations for homes in Guildford.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>Why Choose Our Guildford Plumbing Service?</h2>
+      <ul>
+        <li>Fast response across Guildford and nearby areas</li>
+        <li>Reliable help for emergency and planned plumbing work</li>
+        <li>Clear quotes and honest advice</li>
+        <li>Professional workmanship</li>
+        <li>Friendly local service</li>
+      </ul>
+      <p>If you are looking for a plumber in Guildford who turns up on time, communicates clearly and gets the job done properly, we’re ready to help.</p>
+    </div>
+  </section>
+
+  <section class="section alt">
+    <div class="wrap">
+      <h2>Plumbing Help Across Guildford</h2>
+      <p>We provide plumbing services throughout Guildford, including residential areas and nearby locations. Whether you need an urgent repair, help with a persistent leak or plumbing work for your bathroom or kitchen, we offer dependable local support.</p>
+      <p>We also cover surrounding areas across Surrey. You can also view our other location pages below:</p>
+      <ul>
+        <li><a href="/plumber-woking">Plumber in Woking</a></li>
+        <li><a href="/plumber-farnham">Plumber in Farnham</a></li>
+        <li><a href="/plumber-godalming">Plumber in Godalming</a></li>
+        <li><a href="/plumber-camberley">Plumber in Camberley</a></li>
+        <li><a href="/emergency-plumber">Emergency plumbing services</a></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>Need an Emergency Plumber in Guildford?</h2>
+      <p>If you have a burst pipe, major leak, overflowing toilet or another urgent plumbing issue, contact us as soon as possible. We provide fast emergency plumbing support in Guildford and aim to respond quickly when urgent help is needed.</p>
+      <div class="nav-actions">
+        <a class="btn btn-green" href="tel:07595725547">Call Now: 07595 725547</a>
+        <a class="btn btn-primary" href="/request-quote">Request a quote</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt">
+    <div class="wrap">
+      <h2>Frequently Asked Questions</h2>
+      <div class="faq-grid">
+        <div class="card faq">
+          <h3>Do you provide emergency plumbing in Guildford?</h3>
+          <p>Yes, we provide fast-response emergency plumbing services in Guildford for urgent issues such as leaks, burst pipes and other serious plumbing problems.</p>
+        </div>
+        <div class="card faq">
+          <h3>What plumbing work do you carry out?</h3>
+          <p>We help with general plumbing, emergency repairs, leak detection, blocked drains, pipe repairs, bathroom plumbing and installation work.</p>
+        </div>
+        <div class="card faq">
+          <h3>Do you only work in Guildford?</h3>
+          <p>No, we cover Guildford and surrounding parts of Surrey, including Woking, Farnham, Godalming and Camberley.</p>
+        </div>
+        <div class="card faq">
+          <h3>Can I request a quote online?</h3>
+          <p>Yes, you can request a quote online and we will get back to you as quickly as possible.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>Contact Your Local Guildford Plumber</h2>
+      <p>If you need a dependable plumber in Guildford, get in touch today. We’re available for emergency plumbing, repairs, installations and general plumbing work.</p>
+      <div class="nav-actions">
+        <a class="btn btn-green" href="tel:07595725547">Call Now: 07595 725547</a>
+        <a class="btn btn-primary" href="/request-quote">Get a fast quote online</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <div class="footer">
+      <div class="footer-inner">
+        <div><strong>Nigel Harvey Ltd</strong><br>Plumbing &amp; Heating in Surrey</div>
+        <div>Phone: __COMPANY_PHONE__<br>Email: __COMPANY_EMAIL__<br>Guildford, Surrey and surrounding areas</div>
+      </div>
+    </div>
+  </div>
+</main>
+<a href="tel:07595725547" class="sticky-call">📞 Call Now: 07595 725547</a>
+</body>
+</html>
+'''
+
+SEO_CSS = '''
+:root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#0f7a34;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
+*{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)} a{text-decoration:none;color:inherit}
+.wrap{max-width:1100px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;background:rgba(245,247,251,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);z-index:10}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:14px 0;gap:12px;flex-wrap:wrap}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.nav-actions{display:flex;gap:10px;flex-wrap:wrap}.btn{display:inline-block;padding:14px 20px;border-radius:999px;font-weight:700}.btn-primary{background:var(--brand);color:#fff}.btn-green{background:var(--accent);color:#fff}.btn-light{background:#fff;border:1px solid var(--border)}
+.hero{padding:36px 0 18px}.hero-card,.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.hero-card{padding:30px}.eyebrow{display:inline-block;padding:7px 12px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:12px;margin-bottom:12px} h1{font-size:clamp(32px,5vw,54px);line-height:1.05;margin:0 0 14px} .lead{font-size:18px;color:var(--muted);line-height:1.6;margin:0 0 18px}
+.section{padding:18px 0}.section h2{margin:0 0 12px;font-size:30px}.section p{color:var(--muted);line-height:1.7;margin:0 0 16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.item{padding:22px}.item h3{margin:0 0 8px;font-size:20px}.item p{margin:0}
+.pill-links{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.pill-links a{display:block;padding:14px 16px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);font-weight:700}
+.list{margin:0;padding-left:18px;color:var(--muted);line-height:1.8}
+.cta{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:24px;margin:26px 0 40px}
+.footer{padding:20px 0 36px;color:var(--muted)} .footer-inner{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:18px}
+.logo{max-width:240px;max-height:90px;object-fit:contain}
+@media (max-width:900px){.grid3,.pill-links{grid-template-columns:1fr 1fr}.hero-card,.item,.cta{padding:20px}.section h2{font-size:26px}}
+@media (max-width:640px){.grid3,.pill-links{grid-template-columns:1fr}}
+'''
+
+LOCATION_PAGES = [
+    {"slug":"guildford","name":"Guildford"},
+    {"slug":"woking","name":"Woking"},
+    {"slug":"farnham","name":"Farnham"},
+    {"slug":"godalming","name":"Godalming"},
+    {"slug":"camberley","name":"Camberley"},
+    {"slug":"aldershot","name":"Aldershot"},
+    {"slug":"leatherhead","name":"Leatherhead"},
+    {"slug":"epsom","name":"Epsom"},
+]
+
+SERVICE_PAGES = [
+    {"slug":"emergency-plumber-surrey","title":"Emergency Plumber Surrey","meta":"Emergency plumber in Surrey covering Guildford, Woking, Farnham, Godalming, Camberley and surrounding areas. Fast help for leaks, toilets, taps, pipework and urgent plumbing issues.","heading":"Emergency Plumber in Surrey","intro":"Need an emergency plumber in Surrey? Nigel Harvey Ltd provides responsive local plumbing help for urgent leaks, toilet problems, burst pipe issues, faulty taps, waste pipe problems and other domestic plumbing faults that need sorting quickly.","body":"This page helps customers searching for an emergency plumber in Surrey understand the type of urgent plumbing work covered, while also supporting nearby searches such as emergency plumber Guildford, emergency plumber Woking and similar local terms across Surrey.","keywords":"emergency plumber Surrey, emergency plumber Guildford, emergency plumber Woking"},
+    {"slug":"general-plumbing-surrey","title":"General Plumbing Surrey","meta":"General plumbing services in Surrey from Nigel Harvey Ltd. Taps, toilets, sinks, wastes, leaks, outside taps and domestic plumbing repairs across Guildford and surrounding areas.","heading":"General Plumbing in Surrey","intro":"Nigel Harvey Ltd provides general plumbing services across Surrey for everyday domestic plumbing jobs. This includes tap repairs, toilet issues, sink plumbing, leaks, traps, wastes, outside taps and practical small plumbing jobs.","body":"This service page supports plumber Surrey, local plumber Surrey and general plumbing Surrey searches while giving customers a clear overview of the domestic plumbing work available.","keywords":"general plumbing Surrey, plumber Surrey, local plumber Surrey"},
+    {"slug":"bathroom-plumbing-surrey","title":"Bathroom Plumbing Surrey","meta":"Bathroom plumbing in Surrey including bathroom refurbishments, sanitaryware connections, first fix and second fix plumbing. Covering Guildford, Woking and surrounding areas.","heading":"Bathroom Plumbing in Surrey","intro":"For bathroom plumbing in Surrey, Nigel Harvey Ltd helps with bathroom refurbishments, sanitaryware fitting, pipework changes, first fix plumbing, second fix plumbing and general bathroom plumbing works.","body":"This page is designed to strengthen bathroom plumbing Surrey related local search relevance across Guildford and surrounding towns while giving customers a clearer idea of the bathroom plumbing work available.","keywords":"bathroom plumbing Surrey, bathroom plumber Guildford, bathroom plumbing Woking"},
+    {"slug":"heating-repairs-surrey","title":"Heating Repairs Surrey","meta":"Heating repairs in Surrey including radiators, valves, controls and plumbing-related heating work. Nigel Harvey Ltd covers Guildford and surrounding areas.","heading":"Heating Repairs in Surrey","intro":"Nigel Harvey Ltd provides plumbing-related heating repairs in Surrey, including radiators, valves, controls, pipework adjustments and practical heating jobs for domestic properties.","body":"The page targets heating repairs Surrey, radiator repairs Surrey and similar local plumbing and heating search terms for the business.","keywords":"heating repairs Surrey, radiator repairs Surrey, heating plumber Guildford"},
+]
+
+def get_company_logo_html(logo_value: str) -> str:
+    return f'<img src="{logo_value}" alt="Nigel Harvey Ltd logo" class="logo" width="240" height="90">' if logo_value else ''
+
+def render_location_page(location_name: str, logo_html: str, request: Request | None = None) -> str:
+    related = ''.join(
+        f'<a href="/plumber-{escape(item["slug"])}">Plumber in {escape(item["name"])}</a>'
+        for item in LOCATION_PAGES if item['name'] != location_name
+    )
+    slug = location_name.lower()
+    canonical = absolute_url(f"/plumber-{slug}", request)
+    breadcrumb_schema = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Home", "item": absolute_url("/", request)},
+            {"@type": "ListItem", "position": 2, "name": f"Plumber in {location_name}", "item": canonical},
+        ],
+    }, ensure_ascii=False)
+    local_schema = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "Plumber",
+        "name": COMPANY_NAME,
+        "url": canonical,
+        "telephone": COMPANY_PHONE,
+        "email": COMPANY_EMAIL,
+        "areaServed": [location_name, "Surrey"],
+        "serviceType": ["Emergency plumbing", "General plumbing", "Bathroom plumbing", "Leaks and pipework repairs"],
+        "description": f"Reliable plumber in {location_name} for emergency plumbing, leaks, bathroom plumbing, taps, toilets and general plumbing work.",
+    }, ensure_ascii=False)
+    return f"""<!doctype html>
+<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Plumber in {escape(location_name)} | Reliable Local Plumbing Services | Nigel Harvey Ltd</title><meta name="description" content="Looking for a plumber in {escape(location_name)}? Nigel Harvey Ltd provides emergency plumbing, leaks, bathroom plumbing and general plumbing services in {escape(location_name)} and surrounding Surrey areas."><meta name="keywords" content="plumber {escape(location_name)}, emergency plumber {escape(location_name)}, plumbing {escape(location_name)}, plumber Surrey"><link rel="canonical" href="{escape(canonical)}"><script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{local_schema}</script><style>{SEO_CSS}</style></head>
+<body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>Plumber in {escape(location_name)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
+<main>
+<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Local plumber in {escape(location_name)}</div><h1>Plumber in {escape(location_name)} - Reliable Local Plumbing Services</h1><p class="lead">Looking for a reliable plumber in {escape(location_name)}? Nigel Harvey Ltd provides fast, professional plumbing services for homes and landlords across {escape(location_name)} and surrounding Surrey areas. From leaks and repairs to bathroom plumbing, the focus is on a straightforward service you can trust.</p><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE)}">Call {escape(COMPANY_PHONE)}</a></div></div></div>
+<div class="wrap section"><h2>Our {escape(location_name)} plumbing services</h2><p>Customers in {escape(location_name)} contact Nigel Harvey Ltd for urgent plumbing issues, everyday repairs and planned bathroom plumbing work. We cover domestic plumbing jobs such as leaks, taps, toilets, sinks, wastes, first fix and second fix plumbing, pipework changes and practical general plumbing work.</p><div class="pill-links"><a href="/emergency-plumber-surrey">Emergency Plumber Surrey</a><a href="/general-plumbing-surrey">General Plumbing Surrey</a><a href="/bathroom-plumbing-surrey">Bathroom Plumbing Surrey</a></div></div>
+<div class="wrap section"><h2>Why choose Nigel Harvey Ltd in {escape(location_name)}?</h2><div class="grid3"><div class="card item"><h3>Fast local response</h3><p>We focus on Surrey and nearby areas, helping customers in {escape(location_name)} get a quicker and more reliable response.</p></div><div class="card item"><h3>Clear communication</h3><p>From first contact to final visit, the process is straightforward, practical and easy to deal with.</p></div><div class="card item"><h3>Tidy workmanship</h3><p>We aim to deliver neat, professional plumbing work with a focus on quality and long-term results.</p></div></div></div>
+<div class="wrap section"><h2>Areas nearby</h2><p>We also cover nearby areas across Surrey, helping strengthen local coverage for customers searching for a plumber near {escape(location_name)}.</p><div class="pill-links">{related}</div></div>
+<div class="wrap section"><h2>Frequently asked questions</h2><div class="faq-grid"><div class="card faq"><h3>How quickly can you attend a plumbing job in {escape(location_name)}?</h3><p>Response times depend on the job and the day, but we aim to help customers in {escape(location_name)} as quickly as possible, especially for urgent plumbing issues.</p></div><div class="card faq"><h3>What plumbing work do you cover in {escape(location_name)}?</h3><p>We cover emergency plumbing, leaks, taps, toilets, sinks, pipework changes, bathroom plumbing and practical domestic plumbing repairs.</p></div><div class="card faq"><h3>Can I request a quote online?</h3><p>Yes. Use the online quote form to send your job details and request a fast quote for plumbing work in {escape(location_name)}.</p></div></div></div>
+<div class="wrap"><div class="hero-card cta"><div><h2 style="margin:0 0 8px">Need a plumber in {escape(location_name)}?</h2><div style="color:var(--muted)">Call now or send your job details online for a fast response.</div></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a></div></div></div>
 <div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services</div><div>{escape(location_name)}, Surrey and surrounding areas<br>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></div></body></html>"""
 
 def render_service_page(service: dict, logo_html: str, request: Request | None = None) -> str:
