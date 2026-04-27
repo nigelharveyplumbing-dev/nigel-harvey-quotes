@@ -1749,6 +1749,11 @@ body{padding-bottom:72px}
         <a href="/plumber-godalming">Plumber in Godalming</a>
         <a href="/plumber-camberley">Plumber in Camberley</a>
       <li><a href="/plumber-chilworth">Plumber in Chilworth</a></li>
+  <li><a href="/plumber-shalford">Plumber in Shalford</a></li>
+  <li><a href="/plumber-burpham">Plumber in Burpham</a></li>
+  <li><a href="/plumber-merrow">Plumber in Merrow</a></li>
+  <li><a href="/plumber-worplesdon">Plumber in Worplesdon</a></li>
+  <li><a href="/plumber-fairlands">Plumber in Fairlands</a></li>
         <a href="/plumber-aldershot">Plumber in Aldershot</a>
         <a href="/plumber-leatherhead">Plumber in Leatherhead</a>
         <a href="/plumber-epsom">Plumber in Epsom</a>
@@ -1860,6 +1865,11 @@ LOCATION_PAGES = [
     {"slug":"aldershot","name":"Aldershot"},
     {"slug":"leatherhead","name":"Leatherhead"},
     {"slug":"epsom","name":"Epsom"},
+    {"slug":"fairlands","name":"Fairlands"},
+    {"slug":"worplesdon","name":"Worplesdon"},
+    {"slug":"merrow","name":"Merrow"},
+    {"slug":"burpham","name":"Burpham"},
+    {"slug":"shalford","name":"Shalford"},
 ]
 
 SERVICE_PAGES = [
@@ -1943,6 +1953,137 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
 <div class="wrap section"><h2>Frequently asked questions</h2><div class="faq-grid"><div class="card faq"><h3>Do you cover this service across Surrey?</h3><p>Yes. Nigel Harvey Ltd covers Guildford, Woking, Farnham and nearby Surrey towns for this service.</p></div><div class="card faq"><h3>Can I request a quote online?</h3><p>Yes. Send your details through the online quote form for a fast response.</p></div><div class="card faq"><h3>Do you also cover nearby plumbing work?</h3><p>Yes. We also handle related plumbing jobs, which is why the site links service pages and area pages together.</p></div></div></div>
 <div class="wrap"><div class="hero-card cta"><div><h2 style="margin:0 0 8px">Need help with {escape(service['heading']).lower()}?</h2><div style="color:var(--muted)">Call now or send your job details online for a fast response.</div></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a></div></div></div>
 <div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services in Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}<br>Guildford, Surrey and surrounding areas</div></div></div><a href="tel:{escape(COMPANY_PHONE_TEL)}" class="sticky-call">📞 Call Now: {escape(COMPANY_PHONE)}</a></body></html>"""
+
+
+
+
+# Full-scale local service pages for SEO.
+# These create pages like:
+# /emergency-plumber-guildford
+# /toilet-repair-guildford
+# /leak-repair-guildford
+# /bathroom-plumbing-guildford
+# /blocked-drains-guildford
+LOCAL_SERVICE_PAGES = [
+    {
+        "slug": "emergency-plumber",
+        "title": "Emergency Plumber",
+        "heading": "Emergency Plumber in {area}",
+        "intro": "Need an emergency plumber in {area}? Nigel Harvey Ltd provides fast local help for urgent leaks, burst pipes, overflowing toilets, faulty taps and other plumbing problems that need sorting quickly.",
+        "service": "emergency plumbing",
+        "keywords": "emergency plumber {area}, urgent plumber {area}, plumber {area}",
+        "problems": ["Burst pipes", "Leaks", "Overflowing toilets", "Faulty taps", "Urgent pipework repairs"],
+    },
+    {
+        "slug": "toilet-repair",
+        "title": "Toilet Repair",
+        "heading": "Toilet Repairs in {area}",
+        "intro": "We provide toilet repairs in {area}, including leaks, flushing problems, running toilets, blockages, faulty cisterns and replacement parts.",
+        "service": "toilet repair",
+        "keywords": "toilet repair {area}, toilet plumber {area}, plumber {area}",
+        "problems": ["Toilets not flushing", "Running toilets", "Leaking toilets", "Blocked toilets", "Faulty cistern parts"],
+    },
+    {
+        "slug": "leak-repair",
+        "title": "Leak Repair",
+        "heading": "Leak Repairs in {area}",
+        "intro": "Nigel Harvey Ltd helps with leak repairs in {area}, from visible pipe leaks and dripping fittings to hidden plumbing leaks that need careful investigation.",
+        "service": "leak repair",
+        "keywords": "leak repair {area}, leaking pipe {area}, plumber {area}",
+        "problems": ["Leaking pipes", "Dripping fittings", "Water damage concerns", "Hidden leaks", "Bathroom and kitchen leaks"],
+    },
+    {
+        "slug": "bathroom-plumbing",
+        "title": "Bathroom Plumbing",
+        "heading": "Bathroom Plumbing in {area}",
+        "intro": "We provide bathroom plumbing in {area}, including pipework changes, toilet fitting, basin plumbing, shower connections and bathroom repair work.",
+        "service": "bathroom plumbing",
+        "keywords": "bathroom plumbing {area}, bathroom plumber {area}, plumber {area}",
+        "problems": ["Toilet fitting", "Basin plumbing", "Shower pipework", "Bath connections", "Bathroom leaks"],
+    },
+    {
+        "slug": "blocked-drains",
+        "title": "Blocked Drains",
+        "heading": "Blocked Drains and Waste Pipes in {area}",
+        "intro": "We help with blocked drains and waste pipe issues in {area}, including slow-draining sinks, blocked wastes, toilet blockages and drainage-related plumbing problems.",
+        "service": "blocked drains and waste pipes",
+        "keywords": "blocked drains {area}, blocked sink {area}, plumber {area}",
+        "problems": ["Blocked sinks", "Slow drains", "Blocked wastes", "Toilet blockages", "Kitchen and bathroom drainage issues"],
+    },
+]
+
+def render_local_service_location_page(service: dict, location: dict, logo_html: str, request: Request | None = None) -> str:
+    area = location["name"]
+    area_slug = location["slug"]
+    service_slug = service["slug"]
+    title = service["title"]
+    heading = service["heading"].format(area=area)
+    intro = service["intro"].format(area=area)
+    keywords = service["keywords"].format(area=area)
+    canonical = absolute_url(f"/{service_slug}-{area_slug}", request)
+    problem_items = "".join(f"<li>{escape(item)}</li>" for item in service["problems"])
+    related_locations = "".join(
+        f'<a href="/{escape(service_slug)}-{escape(item["slug"])}">{escape(title)} in {escape(item["name"])}</a>'
+        for item in LOCATION_PAGES if item["slug"] != area_slug
+    )
+    related_services = "".join(
+        f'<a href="/{escape(item["slug"])}-{escape(area_slug)}">{escape(item["title"])} in {escape(area)}</a>'
+        for item in LOCAL_SERVICE_PAGES if item["slug"] != service_slug
+    )
+    breadcrumb_schema = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Home", "item": absolute_url("/", request)},
+            {"@type": "ListItem", "position": 2, "name": f"{title} in {area}", "item": canonical},
+        ],
+    }, ensure_ascii=False)
+    service_schema = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": f"{title} in {area}",
+        "provider": {
+            "@type": "Plumber",
+            "name": COMPANY_NAME,
+            "telephone": COMPANY_PHONE,
+            "email": COMPANY_EMAIL,
+        },
+        "areaServed": [area, "Surrey"],
+        "serviceType": service["service"],
+        "url": canonical,
+        "description": intro,
+    }, ensure_ascii=False)
+
+    return f"""<!doctype html>
+<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{escape(title)} in {escape(area)} | Nigel Harvey Ltd</title>
+<meta name="description" content="{escape(intro)} Call Nigel Harvey Ltd on {escape(COMPANY_PHONE)} for reliable local plumbing help.">
+<meta name="keywords" content="{escape(keywords)}">
+<link rel="canonical" href="{escape(canonical)}">
+<script type="application/ld+json">{breadcrumb_schema}</script>
+<script type="application/ld+json">{service_schema}</script>
+<style>{SEO_CSS}</style></head>
+<body>
+<div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(title)} in {escape(area)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
+<main>
+<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Local plumbing help in {escape(area)}</div><h1>{escape(heading)}</h1><p class="lead">{escape(intro)}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
+
+<div class="wrap section"><h2>{escape(title)} Services in {escape(area)}</h2><p>If you are looking for {escape(service["service"])} in {escape(area)}, we provide practical, reliable help for local homes, landlords and small businesses.</p><ul class="list">{problem_items}</ul></div>
+
+<div class="wrap section"><div class="grid3">
+<div class="card item"><h3>Fast Local Response</h3><p>We cover {escape(area)} and nearby Surrey areas for urgent and planned plumbing work.</p></div>
+<div class="card item"><h3>Clear Communication</h3><p>You get straightforward advice and a clear explanation of the work needed.</p></div>
+<div class="card item"><h3>Trusted Local Plumber</h3><p>Nigel Harvey Ltd provides dependable domestic plumbing services across Guildford and Surrey.</p></div>
+</div></div>
+
+<div class="wrap section"><h2>Other Plumbing Services in {escape(area)}</h2><div class="pill-links">{related_services}</div></div>
+<div class="wrap section"><h2>Nearby Areas We Cover</h2><div class="pill-links">{related_locations}</div></div>
+
+<div class="wrap cta card"><div><h2>Need {escape(title.lower())} in {escape(area)}?</h2><p>Call now or request a fast quote online.</p></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a></div></div>
+</main>
+<div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services in Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}<br>{escape(area)}, Surrey and surrounding areas</div></div></div>
+<a href="tel:{escape(COMPANY_PHONE_TEL)}" class="sticky-call">📞 Call Now: {escape(COMPANY_PHONE)}</a>
+</body></html>"""
 
 
 LEAD_FORM_HTML = r'''<!doctype html>
@@ -3728,6 +3869,11 @@ def sitemap_xml(request: Request):
     urls = ["/", "/request-quote"]
     urls.extend(f"/plumber-{item['slug']}" for item in LOCATION_PAGES)
     urls.extend(f"/{item['slug']}" for item in SERVICE_PAGES)
+    urls.extend(
+        f"/{service['slug']}-{location['slug']}"
+        for service in LOCAL_SERVICE_PAGES
+        for location in LOCATION_PAGES
+    )
     BASE_URL = "https://www.nigelharveyplumbing.co.uk"
     body = "".join(f"<url><loc>{BASE_URL + url}</loc></url>" for url in urls)
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
@@ -3742,6 +3888,19 @@ def location_page(area_slug: str, request: Request):
     logo_html = get_company_logo_html(get_company_logo_value())
     return HTMLResponse(content=render_location_page(page["name"], logo_html), media_type="text/html; charset=utf-8")
 
+
+
+@app.get("/{service_slug}-{area_slug}", response_class=HTMLResponse)
+def local_service_location_page(service_slug: str, area_slug: str, request: Request):
+    service = next((item for item in LOCAL_SERVICE_PAGES if item["slug"] == service_slug.lower()), None)
+    location = next((item for item in LOCATION_PAGES if item["slug"] == area_slug.lower()), None)
+    if not service or not location:
+        raise HTTPException(status_code=404, detail="Local service page not found")
+    logo_html = get_company_logo_html(get_company_logo_value())
+    return HTMLResponse(
+        content=render_local_service_location_page(service, location, logo_html, request),
+        media_type="text/html; charset=utf-8"
+    )
 
 @app.get("/{service_slug}", response_class=HTMLResponse)
 def service_page(service_slug: str):
