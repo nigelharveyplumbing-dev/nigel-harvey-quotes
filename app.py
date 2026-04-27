@@ -1624,7 +1624,7 @@ a{text-decoration:none;color:inherit}
 .nav{display:flex;justify-content:space-between;align-items:center;padding:14px 0;gap:12px;flex-wrap:wrap}
 .brand{font-size:22px;font-weight:800}
 .brand small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
-.nav-actions{display:flex;gap:10px;flex-wrap:wrap}
+.nav-actions{display:flex;gap:12px;flex-wrap:wrap}
 .btn{display:inline-block;padding:14px 20px;border-radius:999px;font-weight:700}
 .btn-primary{background:var(--brand);color:#fff}
 .btn-green{background:var(--accent);color:#fff}
@@ -1674,9 +1674,6 @@ ul.clean{margin:0;padding-left:18px;color:var(--muted);line-height:1.7}
   .hero-copy{padding:26px}
   .panel h2,.section h2{font-size:26px}
 }
-.sticky-call{position:fixed;bottom:0;left:0;width:100%;background:#16a34a;color:#fff;text-align:center;padding:14px;font-size:18px;font-weight:700;text-decoration:none;z-index:9999;border-top:2px solid rgba(255,255,255,.2);box-shadow:0 -2px 10px rgba(0,0,0,.15)}
-@media (min-width:768px){.sticky-call{display:block}}
-body{padding-bottom:60px}
 </style>
 </head>
 <body>
@@ -1692,134 +1689,129 @@ body{padding-bottom:60px}
   </div>
 
   <main>
-  <section class="hero section">
-    <div class="wrap">
-      <span class="eyebrow">Local Plumbing Services in Guildford</span>
-      <h1>Plumber in Guildford</h1>
-      <p class="copy">Need a reliable plumber in Guildford? We provide fast, professional plumbing services for emergencies, repairs, installations and general plumbing work across Guildford and surrounding areas.</p>
-      <div class="nav-actions">
-        <a class="btn btn-green" href="tel:07595725547">Call Now: 07595 725547</a>
-        <a class="btn btn-primary" href="/request-quote">Get a fast quote</a>
+  <div class="hero">
+    <div class="wrap hero-grid">
+      <div class="card hero-copy">
+        <div class="logo-box">__COMPANY_LOGO_HTML__</div>
+        <span class="tag">Trusted local plumber across Surrey</span>
+        <h1>Reliable Plumber in Surrey</h1>
+        <p class="lead">Need a plumber in Guildford, Woking, Farnham or nearby? Nigel Harvey Ltd provides fast, reliable plumbing services across Surrey, including emergency plumbing, leaks, pipework repairs, bathroom plumbing and general plumbing work with a straightforward service you can trust.</p>
+        <div class="hero-actions">
+          <a class="btn btn-green" href="tel:__COMPANY_PHONE__">Call __COMPANY_PHONE__</a>
+          <a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a>
+        </div>
+        <div class="trust">
+          <span>Fast response across Surrey</span>
+          <span>Clear communication</span>
+          <span>Professional finish</span>
+        </div>
+        <div class="reviews-wrap">__REVIEWS_BADGE_HTML__</div>
+      </div>
+
+      <div class="card panel">
+        <h2>Local Plumbing Experts in Surrey</h2>
+        <p>We are a local Surrey plumbing company focused on clear communication, fair pricing and tidy workmanship. From small repairs to bathroom plumbing and pipework upgrades, every job is handled with care and attention to detail.</p>
+        <div class="check">Emergency plumbing services</div>
+        <div class="check">Leaks, pipework repairs and general plumbing</div>
+        <div class="check">Bathroom plumbing and installations</div>
+        <div class="check">Covering Surrey towns and nearby areas</div>
+        <div class="stats">
+          <div class="stat"><strong>Surrey coverage</strong><span>Guildford, Woking, Farnham and surrounding areas.</span></div>
+          <div class="stat"><strong>Simple process</strong><span>Call, request a quote online, or open the app.</span></div>
+        </div>
       </div>
     </div>
-  </section>
+  </div>
 
-  <section class="section">
-    <div class="wrap">
-      <h2>Trusted Local Plumbers in Guildford</h2>
-      <p>Our experienced plumbers work across Guildford, helping homeowners and landlords with everything from leaking pipes and blocked drains to bathroom plumbing, repairs and urgent callouts. If you need a trusted local plumber in Guildford, we’re here to help.</p>
-      <p>We aim to provide a fast, reliable service with clear communication and high-quality workmanship on every job.</p>
+  <div class="wrap">
+    <div class="section">
+      <h2>Our Surrey plumbing services</h2>
+      <p class="copy">From urgent leaks to planned bathroom plumbing work, we provide practical domestic plumbing services that help homeowners and landlords across Surrey get the job sorted properly.</p>
+      <div class="pill-links">
+        <a href="/emergency-plumber-surrey">Emergency Plumber Surrey</a>
+        <a href="/general-plumbing-surrey">General Plumbing Surrey</a>
+        <a href="/bathroom-plumbing-surrey">Bathroom Plumbing Surrey</a>
+        <a href="/heating-repairs-surrey">Heating Repairs Surrey</a>
+      </div>
     </div>
-  </section>
 
-  <section class="section alt">
-    <div class="wrap">
-      <h2>Our Plumbing Services in Guildford</h2>
+    <div class="section">
+      <h2>Areas we cover</h2>
+      <p class="copy">We provide plumbing services across Surrey including Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead and Epsom. Select your area below to learn more about our local plumbing services.</p>
+      <div class="link-grid">
+        <a href="/plumber-guildford">Plumber in Guildford</a>
+        <a href="/plumber-woking">Plumber in Woking</a>
+        <a href="/plumber-farnham">Plumber in Farnham</a>
+        <a href="/plumber-godalming">Plumber in Godalming</a>
+        <a href="/plumber-camberley">Plumber in Camberley</a>
+        <a href="/plumber-aldershot">Plumber in Aldershot</a>
+        <a href="/plumber-leatherhead">Plumber in Leatherhead</a>
+        <a href="/plumber-epsom">Plumber in Epsom</a>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Why choose Nigel Harvey Ltd</h2>
       <div class="grid3">
         <div class="card item">
-          <h3>Emergency Plumbing</h3>
-          <p>Fast response for urgent plumbing issues including leaks, burst pipes, overflowing toilets and other emergency problems.</p>
+          <h3>Local Surrey coverage</h3>
+          <p>We focus on Surrey and nearby areas, allowing us to respond quickly and provide a reliable local service.</p>
         </div>
         <div class="card item">
-          <h3>General Plumbing Repairs</h3>
-          <p>We handle day-to-day plumbing repairs, faulty taps, pipework issues, water pressure problems and more.</p>
+          <h3>Clear communication</h3>
+          <p>We keep things simple, honest and straightforward from first contact to job completion.</p>
         </div>
         <div class="card item">
-          <h3>Leak Detection</h3>
-          <p>We identify and repair hidden leaks quickly to help prevent water damage and ongoing plumbing issues.</p>
-        </div>
-        <div class="card item">
-          <h3>Blocked Drains and Waste Pipes</h3>
-          <p>Help with blocked sinks, slow drainage, pipe blockages and related plumbing problems.</p>
-        </div>
-        <div class="card item">
-          <h3>Bathroom Plumbing</h3>
-          <p>Installation and repair work for toilets, basins, showers, baths and bathroom pipework.</p>
-        </div>
-        <div class="card item">
-          <h3>Pipe Repairs and Installations</h3>
-          <p>Professional pipework repairs, replacements and new plumbing installations for homes in Guildford.</p>
+          <h3>Professional service</h3>
+          <p>Clean, tidy work with a focus on quality and long-term solutions.</p>
         </div>
       </div>
     </div>
-  </section>
 
-  <section class="section">
-    <div class="wrap">
-      <h2>Why Choose Our Guildford Plumbing Service?</h2>
-      <ul>
-        <li>Fast response across Guildford and nearby areas</li>
-        <li>Reliable help for emergency and planned plumbing work</li>
-        <li>Clear quotes and honest advice</li>
-        <li>Professional workmanship</li>
-        <li>Friendly local service</li>
-      </ul>
-      <p>If you are looking for a plumber in Guildford who turns up on time, communicates clearly and gets the job done properly, we’re ready to help.</p>
-    </div>
-  </section>
-
-  <section class="section alt">
-    <div class="wrap">
-      <h2>Plumbing Help Across Guildford</h2>
-      <p>We provide plumbing services throughout Guildford, including residential areas and nearby locations. Whether you need an urgent repair, help with a persistent leak or plumbing work for your bathroom or kitchen, we offer dependable local support.</p>
-      <p>We also cover surrounding areas across Surrey. You can also view our other location pages below:</p>
-      <ul>
-        <li><a href="/plumber-woking">Plumber in Woking</a></li>
-        <li><a href="/plumber-farnham">Plumber in Farnham</a></li>
-        <li><a href="/plumber-godalming">Plumber in Godalming</a></li>
-        <li><a href="/plumber-camberley">Plumber in Camberley</a></li>
-        <li><a href="/emergency-plumber">Emergency plumbing services</a></li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="wrap">
-      <h2>Need an Emergency Plumber in Guildford?</h2>
-      <p>If you have a burst pipe, major leak, overflowing toilet or another urgent plumbing issue, contact us as soon as possible. We provide fast emergency plumbing support in Guildford and aim to respond quickly when urgent help is needed.</p>
+    <div class="card cta">
+      <div>
+        <h2>Need a plumber in Surrey?</h2>
+        <p class="copy" style="margin-bottom:0">If you need a reliable plumber for an emergency, repair or installation, get in touch today.</p>
+      </div>
       <div class="nav-actions">
-        <a class="btn btn-green" href="tel:07595725547">Call Now: 07595 725547</a>
-        <a class="btn btn-primary" href="/request-quote">Request a quote</a>
-      </div>
-    </div>
-  </section>
-
-  <section class="section alt">
-    <div class="wrap">
-      <h2>Frequently Asked Questions</h2>
-      <div class="faq-grid">
-        <div class="card faq">
-          <h3>Do you provide emergency plumbing in Guildford?</h3>
-          <p>Yes, we provide fast-response emergency plumbing services in Guildford for urgent issues such as leaks, burst pipes and other serious plumbing problems.</p>
-        </div>
-        <div class="card faq">
-          <h3>What plumbing work do you carry out?</h3>
-          <p>We help with general plumbing, emergency repairs, leak detection, blocked drains, pipe repairs, bathroom plumbing and installation work.</p>
-        </div>
-        <div class="card faq">
-          <h3>Do you only work in Guildford?</h3>
-          <p>No, we cover Guildford and surrounding parts of Surrey, including Woking, Farnham, Godalming and Camberley.</p>
-        </div>
-        <div class="card faq">
-          <h3>Can I request a quote online?</h3>
-          <p>Yes, you can request a quote online and we will get back to you as quickly as possible.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="wrap">
-      <h2>Contact Your Local Guildford Plumber</h2>
-      <p>If you need a dependable plumber in Guildford, get in touch today. We’re available for emergency plumbing, repairs, installations and general plumbing work.</p>
-      <div class="nav-actions">
-        <a class="btn btn-green" href="tel:07595725547">Call Now: 07595 725547</a>
+        <a class="btn btn-green" href="tel:__COMPANY_PHONE__">Call __COMPANY_PHONE__</a>
         <a class="btn btn-primary" href="/request-quote">Get a fast quote online</a>
       </div>
     </div>
-  </section>
 
-  <div class="wrap">
+    __REVIEWS_SECTION_HTML__
+<div class="wrap section">
+  <h2>Plumbing Services Across Surrey</h2>
+<p>We provide trusted plumbing services across Surrey, covering Guildford, Woking, Farnham, Godalming and Camberley.</p>
+
+<ul>
+  <li><a href="/plumber-guildford">Plumbing services in Guildford</a></li>
+  <li><a href="/plumber-woking">Emergency plumber in Woking</a></li>
+  <li><a href="/plumber-farnham">Local plumber in Farnham</a></li>
+  <li><a href="/plumber-godalming">Plumbing repairs in Godalming</a></li>
+  <li><a href="/plumber-camberley">Trusted plumber in Camberley</a></li>
+</ul>
+
+<p>Our experienced plumbers are available across Surrey for emergency callouts, repairs and installations, with fast response times in all listed areas.</p>
+
+<div class="section">
+      <h2>Frequently asked questions</h2>
+      <div class="faq-grid">
+        <div class="card faq">
+          <h3>Do you offer emergency plumbing in Surrey?</h3>
+          <p>Yes, we provide emergency plumbing services across Surrey and aim to respond as quickly as possible.</p>
+        </div>
+        <div class="card faq">
+          <h3>What areas do you cover?</h3>
+          <p>We cover Guildford, Woking, Farnham, Godalming, Camberley, Aldershot, Leatherhead, Epsom and surrounding areas.</p>
+        </div>
+        <div class="card faq">
+          <h3>What type of plumbing work do you do?</h3>
+          <p>We handle general plumbing, general plumbing, leaks, pipework repairs, bathroom plumbing and more.</p>
+        </div>
+      </div>
+    </div>
+
     <div class="footer">
       <div class="footer-inner">
         <div><strong>Nigel Harvey Ltd</strong><br>Plumbing &amp; Heating in Surrey</div>
@@ -1827,8 +1819,7 @@ body{padding-bottom:60px}
       </div>
     </div>
   </div>
-</main>
-<a href="tel:07595725547" class="sticky-call">📞 Call Now: 07595 725547</a>
+  </main>
 </body>
 </html>
 '''
@@ -1839,13 +1830,13 @@ SEO_CSS = '''
 .wrap{max-width:1100px;margin:0 auto;padding:0 16px}
 .top{position:sticky;top:0;background:rgba(245,247,251,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);z-index:10}
 .nav{display:flex;justify-content:space-between;align-items:center;padding:14px 0;gap:12px;flex-wrap:wrap}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
-.nav-actions{display:flex;gap:10px;flex-wrap:wrap}.btn{display:inline-block;padding:14px 20px;border-radius:999px;font-weight:700}.btn-primary{background:var(--brand);color:#fff}.btn-green{background:var(--accent);color:#fff}.btn-light{background:#fff;border:1px solid var(--border)}
+.nav-actions{display:flex;gap:12px;flex-wrap:wrap}.btn{display:inline-block;padding:14px 20px;border-radius:999px;font-weight:700}.btn-primary{background:var(--brand);color:#fff}.btn-green{background:var(--accent);color:#fff}.btn-light{background:#fff;border:1px solid var(--border)}
 .hero{padding:36px 0 18px}.hero-card,.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
 .hero-card{padding:30px}.eyebrow{display:inline-block;padding:7px 12px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:12px;margin-bottom:12px} h1{font-size:clamp(32px,5vw,54px);line-height:1.05;margin:0 0 14px} .lead{font-size:18px;color:var(--muted);line-height:1.6;margin:0 0 18px}
 .section{padding:18px 0}.section h2{margin:0 0 12px;font-size:30px}.section p{color:var(--muted);line-height:1.7;margin:0 0 16px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.item{padding:22px}.item h3{margin:0 0 8px;font-size:20px}.item p{margin:0}
-.pill-links{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.pill-links a{display:block;padding:14px 16px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);font-weight:700}
-.list{margin:0;padding-left:18px;color:var(--muted);line-height:1.8}
+.pill-links{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.pill-links a{display:flex;align-items:center;justify-content:center;min-height:56px;padding:18px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);font-weight:700;line-height:1.35;text-align:center}
+.list{margin:0;padding-left:18px;color:var(--muted);line-height:1.8}.list li{margin:0 0 10px}.list li a,.section ul li a{display:inline-block;padding:8px 0;line-height:1.45}.section ul li{margin-bottom:8px}
 .cta{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:24px;margin:26px 0 40px}
 .footer{padding:20px 0 36px;color:var(--muted)} .footer-inner{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:18px}
 .logo{max-width:240px;max-height:90px;object-fit:contain}
