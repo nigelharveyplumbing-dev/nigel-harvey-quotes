@@ -489,16 +489,25 @@ def calculate_quote(data: QuoteRequest):
     for item in data.materials:
         url = item.url.strip() if item.url else ""
         live_price = fetch_price(url) if url else None
-        unit_price = live_price if live_price is not None else (item.manual_price or 0)
-        line_total = unit_price * item.quantity
+
+        # Unit price is the price for ONE item/length/pack.
+        unit_price = safe_float(live_price, None) if live_price is not None else safe_float(item.manual_price, 0)
+
+        # Quantity must be included in the maths.
+        # This fixes multi-quantity materials such as "15mm pipe x 4".
+        quantity = safe_float(item.quantity, 1)
+        if quantity <= 0:
+            quantity = 1
+
+        line_total = unit_price * quantity
         raw_materials += line_total
 
         material_lines.append({
             "name": item.name,
-            "quantity": item.quantity,
+            "quantity": quantity,
             "supplier": item.supplier,
             "url": item.url,
-            "manual_price": item.manual_price,
+            "manual_price": round(safe_float(item.manual_price, 0), 2),
             "unit_price_used": round(unit_price, 2),
             "line_total": round(line_total, 2),
             "live_price_used": live_price is not None,
@@ -570,7 +579,6 @@ def calculate_quote(data: QuoteRequest):
         "labour_suggestion": labour_hint["suggestion"],
         "labour_range_hint": labour_hint["range"],
     }
-
 
 def upsert_customer(name: str, address: str, phone: str):
     name = (name or "").strip()
@@ -2858,7 +2866,7 @@ function renderQuoteResult(data) {
 
   const lines = data.material_lines || [];
   document.getElementById("r_material_lines").innerHTML = lines.length
-    ? lines.map(x => `<div>${escapeHtml(x.name || "")} × ${x.quantity} — ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
+    ? lines.map(x => `<div>${escapeHtml(x.name || "")} × ${x.quantity} @ ${pounds(x.unit_price_used || 0)} each — ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
     : "<div>No materials added.</div>";
 
   const internalMode = document.getElementById("internal_mode").checked;
