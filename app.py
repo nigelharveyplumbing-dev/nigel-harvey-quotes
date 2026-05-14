@@ -1326,6 +1326,103 @@ def _pdf_row(c, y, left, right, bold=False):
     c.drawRightString(A4[0] - 50, y, str(right))
     return y - 18
 
+def _pdf_new_page_if_needed(c, y, min_y=70):
+    if y < min_y:
+        c.showPage()
+        return A4[1] - 50
+    return y
+
+
+def _pdf_draw_wrapped_text(c, text, x, y, max_chars=95, font="Helvetica", size=10, leading=12):
+    c.setFont(font, size)
+    for raw_line in str(text or "").splitlines() or [""]:
+        line = raw_line.strip()
+        if not line:
+            y -= leading
+            continue
+        while len(line) > max_chars:
+            cut = line.rfind(" ", 0, max_chars)
+            if cut <= 0:
+                cut = max_chars
+            c.drawString(x, y, line[:cut])
+            y -= leading
+            line = line[cut:].strip()
+            y = _pdf_new_page_if_needed(c, y)
+            c.setFont(font, size)
+        c.drawString(x, y, line)
+        y -= leading
+        y = _pdf_new_page_if_needed(c, y)
+        c.setFont(font, size)
+    return y
+
+
+def _pdf_draw_materials_section(c, y, result):
+    material_lines = result.get("material_lines") or []
+    if not material_lines:
+        return y
+
+    y = _pdf_new_page_if_needed(c, y, 150)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Materials Used")
+    y -= 18
+
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(40, y, "Item")
+    c.drawRightString(390, y, "Qty")
+    c.drawRightString(470, y, "Unit")
+    c.drawRightString(555, y, "Line total")
+    y -= 10
+    c.line(40, y, A4[0] - 40, y)
+    y -= 14
+
+    c.setFont("Helvetica", 9)
+    for item in material_lines:
+        y = _pdf_new_page_if_needed(c, y, 90)
+        name = str(item.get("name", "Material"))
+        qty = item.get("quantity", 1)
+        unit_price = item.get("unit_price_used", 0)
+        line_total = item.get("line_total", 0)
+        source = item.get("price_source") or ("live" if item.get("live_price_used") else "manual")
+        source_label = "cached live" if source == "cached" else source
+
+        left_text = f"{name} ({source_label})"
+        c.setFont("Helvetica", 9)
+        if len(left_text) <= 62:
+            c.drawString(40, y, left_text)
+            used_lines = 1
+        else:
+            first = left_text[:62]
+            cut = first.rfind(" ")
+            if cut > 20:
+                first = left_text[:cut]
+                rest = left_text[cut:].strip()
+            else:
+                rest = left_text[62:].strip()
+            c.drawString(40, y, first)
+            used_lines = 1
+            while rest:
+                y -= 11
+                part = rest[:62]
+                cut = part.rfind(" ")
+                if cut > 20 and len(rest) > 62:
+                    part = rest[:cut]
+                    rest = rest[cut:].strip()
+                else:
+                    rest = rest[len(part):].strip()
+                c.drawString(40, y, part)
+                used_lines += 1
+
+        top_y = y + (used_lines - 1) * 11
+        c.drawRightString(390, top_y, str(qty))
+        c.drawRightString(470, top_y, pounds_text(unit_price))
+        c.drawRightString(555, top_y, pounds_text(line_total))
+        y -= 15
+
+    y -= 6
+    c.line(40, y, A4[0] - 40, y)
+    y -= 18
+    return y
+
 
 def generate_invoice_pdf_bytes(item: dict):
     buffer = io.BytesIO()
@@ -1363,11 +1460,21 @@ def generate_invoice_pdf_bytes(item: dict):
     c.line(40, y, A4[0] - 40, y)
     y -= 24
 
+    y = _pdf_draw_materials_section(c, y, quote_result)
+
     c.setFont("Helvetica-Bold", 12)
     c.drawString(40, y, "Summary")
     y -= 20
+
+    materials_base = quote_result.get("materials_base", invoice.get("materials", 0))
+    procurement_amount = quote_result.get("materials_procurement_amount", 0)
+    procurement_percent = quote_result.get("materials_procurement_percent", 0)
+
     y = _pdf_row(c, y, "Labour", pounds_text(invoice.get("labour", 0)))
-    y = _pdf_row(c, y, "Materials", pounds_text(invoice.get("materials", 0)))
+    y = _pdf_row(c, y, "Materials supplied", pounds_text(materials_base))
+    if safe_float(procurement_amount, 0) > 0:
+        y = _pdf_row(c, y, f"Materials procurement & handling ({safe_float(procurement_percent, 0):.0f}%)", pounds_text(procurement_amount))
+    y = _pdf_row(c, y, "Materials total", pounds_text(invoice.get("materials", 0)))
     y = _pdf_row(c, y, "Total", pounds_text(item.get("total_price", 0)), bold=True)
     y = _pdf_row(c, y, "Amount Paid", pounds_text(item.get("amount_paid", 0)))
     y = _pdf_row(c, y, "Balance Due", pounds_text(item.get("balance_due", 0)), bold=True)
@@ -1398,44 +1505,66 @@ def generate_quote_pdf_bytes(item: dict):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     y = _pdf_header(c, "QUOTE", f"Quote #{item['id']}")
+
     c.setFont("Helvetica-Bold", 12)
     c.drawString(40, y, "Customer")
     y -= 18
     c.setFont("Helvetica", 11)
     for line in [result.get("customer_name", "-"), result.get("customer_address", "-"), result.get("customer_phone", "-")]:
         if line:
-            c.drawString(40, y, str(line)[:65])
+            c.drawString(40, y, str(line)[:75])
             y -= 15
+
     y -= 8
     c.line(40, y, A4[0] - 40, y)
     y -= 22
+
     c.setFont("Helvetica-Bold", 12)
     c.drawString(40, y, "Works")
     y -= 18
-    c.setFont("Helvetica", 11)
-    text_obj = c.beginText(40, y)
-    for line in str(result.get("job", "-")).splitlines() or ["-"]:
-        text_obj.textLine(line[:105])
-    c.drawText(text_obj)
-    y = text_obj.getY() - 10
+    y = _pdf_draw_wrapped_text(c, result.get("job", "-"), 40, y, max_chars=95, font="Helvetica", size=10, leading=14)
+    y -= 8
     c.line(40, y, A4[0] - 40, y)
     y -= 24
+
+    # Itemised materials list for customer PDF
+    y = _pdf_draw_materials_section(c, y, result)
+
+    y = _pdf_new_page_if_needed(c, y, 170)
     c.setFont("Helvetica-Bold", 12)
     c.drawString(40, y, "Price")
     y -= 20
+
+    materials_base = result.get("materials_base", result.get("materials", 0))
+    procurement_amount = result.get("materials_procurement_amount", 0)
+    procurement_percent = result.get("materials_procurement_percent", 0)
+
     y = _pdf_row(c, y, "Labour", pounds_text(result.get("labour", 0)))
-    y = _pdf_row(c, y, "Materials", pounds_text(result.get("materials", 0)))
+    y = _pdf_row(c, y, "Materials supplied", pounds_text(materials_base))
+
+    if safe_float(procurement_amount, 0) > 0:
+        y = _pdf_row(
+            c,
+            y,
+            f"Materials procurement & handling ({safe_float(procurement_percent, 0):.0f}%)",
+            pounds_text(procurement_amount)
+        )
+
+    y = _pdf_row(c, y, "Materials total", pounds_text(result.get("materials", 0)))
     y = _pdf_row(c, y, "Deposit", pounds_text(result.get("deposit_amount", 0)))
     y = _pdf_row(c, y, "Total Price", pounds_text(result.get("total_price", 0)), bold=True)
+
     y -= 12
+    y = _pdf_new_page_if_needed(c, y, 130)
     c.setFont("Helvetica-Bold", 12)
     c.drawString(40, y, "Terms")
     y -= 18
-    c.setFont("Helvetica", 10)
+    c.setFont("Helvetica", 9)
     text_obj = c.beginText(40, y)
     for line in QUOTE_TERMS:
         text_obj.textLine(f"• {line}")
     c.drawText(text_obj)
+
     c.showPage()
     c.save()
     buffer.seek(0)
