@@ -390,6 +390,23 @@ def init_db():
             updated_at TEXT NOT NULL
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS material_price_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT NOT NULL UNIQUE,
+            name TEXT,
+            supplier TEXT,
+            last_price REAL,
+            last_live_price REAL,
+            last_manual_price REAL,
+            last_status TEXT NOT NULL,
+            times_used INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            last_checked_at TEXT,
+            last_success_at TEXT
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -399,63 +416,178 @@ def startup():
     init_db()
 
 
-def fetch_price(url: str):
+def normalize_material_url(url: str):
+    return (url or "").strip()
+
+
+def upsert_material_price_cache(url: str, name: str = "", supplier: str = "", price=None, manual_price=None, status: str = "live"):
+    url = normalize_material_url(url)
+    if not url:
+        return
+
+    now = now_uk().isoformat()
+    price_value = safe_float(price, None) if price is not None else None
+    manual_value = safe_float(manual_price, None) if manual_price is not None else None
+
+    existing = get_cached_material_price(url)
+    conn = get_db()
+    if existing:
+        last_price = price_value if price_value is not None else existing.get("last_price")
+        last_live_price = price_value if status == "live" and price_value is not None else existing.get("last_live_price")
+        last_manual_price = manual_value if manual_value is not None and manual_value > 0 else existing.get("last_manual_price")
+        last_success_at = now if status == "live" and price_value is not None else existing.get("last_success_at")
+
+        conn.execute("""
+            UPDATE material_price_cache
+            SET name = COALESCE(NULLIF(?, ''), name),
+                supplier = COALESCE(NULLIF(?, ''), supplier),
+                last_price = ?,
+                last_live_price = ?,
+                last_manual_price = ?,
+                last_status = ?,
+                times_used = times_used + 1,
+                updated_at = ?,
+                last_checked_at = ?,
+                last_success_at = ?
+            WHERE url = ?
+        """, (
+            name or "",
+            supplier or "",
+            last_price,
+            last_live_price,
+            last_manual_price,
+            status,
+            now,
+            now,
+            last_success_at,
+            url,
+        ))
+    else:
+        conn.execute("""
+            INSERT INTO material_price_cache (
+                url, name, supplier, last_price, last_live_price, last_manual_price,
+                last_status, times_used, created_at, updated_at, last_checked_at, last_success_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            url,
+            name or "",
+            supplier or "",
+            price_value if price_value is not None else manual_value,
+            price_value if status == "live" and price_value is not None else None,
+            manual_value if manual_value is not None and manual_value > 0 else None,
+            status,
+            1,
+            now,
+            now,
+            now,
+            now if status == "live" and price_value is not None else None,
+        ))
+
+    conn.commit()
+    conn.close()
+
+
+def get_cached_material_price(url: str):
+    url = normalize_material_url(url)
+    if not url:
+        return None
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT * FROM material_price_cache WHERE url = ?", (url,)).fetchone()
+        conn.close()
+        if not row:
+            return None
+        return dict(row)
+    except Exception:
+        return None
+
+
+def scrape_live_price(url: str):
     if not url:
         return None
 
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0",
+            "User-Agent": "Mozilla/5.0 (compatible; NigelHarveyLtd/1.0; +https://www.nigelharveyplumbing.co.uk)",
             "Accept-Language": "en-GB,en;q=0.9",
+            "Cache-Control": "no-cache",
         }
-        r = requests.get(url, headers=headers, timeout=8, allow_redirects=True)
+        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
         if r.status_code != 200 or not r.text:
             return None
 
         soup = BeautifulSoup(r.text, "html.parser")
 
+        # Structured/meta price data first
         meta_candidates = []
         for selector, attr in [
             ('meta[property="product:price:amount"]', "content"),
             ('meta[property="og:price:amount"]', "content"),
             ('meta[itemprop="price"]', "content"),
+            ('span[itemprop="price"]', "content"),
+            ('span[itemprop="price"]', "data-price"),
         ]:
             tag = soup.select_one(selector)
             if tag and tag.get(attr):
                 meta_candidates.append(tag.get(attr))
+            elif tag and tag.get_text(strip=True):
+                meta_candidates.append(tag.get_text(strip=True))
+
+        # JSON-LD product offers
+        for script in soup.select('script[type="application/ld+json"]'):
+            try:
+                payload = json.loads(script.get_text(strip=True))
+                items = payload if isinstance(payload, list) else [payload]
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    offers = item.get("offers")
+                    offers_list = offers if isinstance(offers, list) else [offers]
+                    for offer in offers_list:
+                        if isinstance(offer, dict):
+                            val = offer.get("price") or offer.get("lowPrice")
+                            if val is not None:
+                                meta_candidates.append(str(val))
+            except Exception:
+                pass
 
         for value in meta_candidates:
-            price = safe_float(value, None)
+            price = safe_float(str(value).replace("£", "").replace(",", ""), None)
             if price and 0 < price < 100000:
                 return round(price, 2)
 
-        text = soup.get_text(" ", strip=True)
+        page_text = soup.get_text(" ", strip=True)
         lower_url = url.lower()
         domain_patterns = []
 
         if "cityplumbing" in lower_url:
             domain_patterns = [
-                r'£\s?(\d+(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
-                r'£\s?(\d+(?:\.\d{2})?)\s*Inc\.?\s*VAT',
-                r'£\s?(\d+(?:\.\d{2})?)\s*each',
+                r'£\s?(\d+(?:,\d{3})*(?:\.\d{2})?)\s*each,\s*Inc\.?\s*VAT',
+                r'£\s?(\d+(?:,\d{3})*(?:\.\d{2})?)\s*Inc\.?\s*VAT',
+                r'£\s?(\d+(?:,\d{3})*(?:\.\d{2})?)\s*each',
+                r'Inc\.?\s*VAT\s*£\s?(\d+(?:,\d{3})*(?:\.\d{2})?)',
             ]
         elif "toppstiles" in lower_url:
             domain_patterns = [
-                r'£\s?(\d+(?:\.\d{2})?)\s*(?:per m2|/m2|m2)',
-                r'£\s?(\d+(?:\.\d{2})?)'
+                r'£\s?(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:per m2|/m2|m2)',
+                r'£\s?(\d+(?:,\d{3})*(?:\.\d{2})?)'
+            ]
+        else:
+            domain_patterns = [
+                r'£\s?(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:each|inc\.?\s*vat)?'
             ]
 
         for pattern in domain_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
+            matches = re.findall(pattern, page_text, re.IGNORECASE)
             for match in matches:
-                price = safe_float(match, None)
+                price = safe_float(str(match).replace(",", ""), None)
                 if price and 0 < price < 100000:
                     return round(price, 2)
 
-        generic_matches = re.findall(r'£\s?(\d+(?:\.\d{2})?)', text)
+        generic_matches = re.findall(r'£\s?(\d+(?:,\d{3})*(?:\.\d{2})?)', page_text)
         prices = []
         for match in generic_matches:
-            price = safe_float(match, None)
+            price = safe_float(str(match).replace(",", ""), None)
             if price and 0 < price < 100000:
                 prices.append(price)
 
@@ -467,6 +599,35 @@ def fetch_price(url: str):
 
     return None
 
+
+def fetch_tracked_price(url: str, name: str = "", supplier: str = "", manual_price: float = 0):
+    url = normalize_material_url(url)
+    if not url:
+        return None, "manual"
+
+    live_price = scrape_live_price(url)
+    if live_price is not None:
+        upsert_material_price_cache(url, name, supplier, price=live_price, manual_price=manual_price, status="live")
+        return live_price, "live"
+
+    cached = get_cached_material_price(url)
+    if cached:
+        cached_price = cached.get("last_live_price") or cached.get("last_price")
+        cached_price = safe_float(cached_price, None)
+        if cached_price is not None and cached_price > 0:
+            upsert_material_price_cache(url, name, supplier, price=cached_price, manual_price=manual_price, status="cached")
+            return cached_price, "cached"
+
+    # Keep the URL in the database even if the live scrape fails today.
+    if manual_price and manual_price > 0:
+        upsert_material_price_cache(url, name, supplier, price=None, manual_price=manual_price, status="manual")
+
+    return None, "manual"
+
+
+def fetch_price(url: str):
+    price, _source = fetch_tracked_price(url)
+    return price
 
 def find_labour_suggestion(quote_type: str, job_description: str):
     text = (job_description or "").lower()
@@ -488,10 +649,10 @@ def calculate_quote(data: QuoteRequest):
 
     for item in data.materials:
         url = item.url.strip() if item.url else ""
-        live_price = fetch_price(url) if url else None
+        tracked_price, price_source = fetch_tracked_price(url, item.name, item.supplier, item.manual_price) if url else (None, "manual")
 
         # Unit price is the price for ONE item/length/pack.
-        unit_price = safe_float(live_price, None) if live_price is not None else safe_float(item.manual_price, 0)
+        unit_price = safe_float(tracked_price, None) if tracked_price is not None else safe_float(item.manual_price, 0)
 
         # Quantity must be included in the maths.
         # This fixes multi-quantity materials such as "15mm pipe x 4".
@@ -510,7 +671,8 @@ def calculate_quote(data: QuoteRequest):
             "manual_price": round(safe_float(item.manual_price, 0), 2),
             "unit_price_used": round(unit_price, 2),
             "line_total": round(line_total, 2),
-            "live_price_used": live_price is not None,
+            "live_price_used": price_source in ("live", "cached"),
+            "price_source": price_source,
         })
 
     tiling_extra_materials = 0.0
@@ -2866,7 +3028,13 @@ function renderQuoteResult(data) {
 
   const lines = data.material_lines || [];
   document.getElementById("r_material_lines").innerHTML = lines.length
-    ? lines.map(x => `<div>${escapeHtml(x.name || "")} × ${x.quantity} @ ${pounds(x.unit_price_used || 0)} each — ${pounds(x.line_total)} ${x.live_price_used ? '<span class="badge green">live</span>' : '<span class="badge">manual</span>'}</div>`).join("")
+    ? lines.map(x => {
+        const source = x.price_source || (x.live_price_used ? "live" : "manual");
+        const badge = source === "live"
+          ? '<span class="badge green">live</span>'
+          : (source === "cached" ? '<span class="badge green">cached live</span>' : '<span class="badge">manual</span>');
+        return `<div>${escapeHtml(x.name || "")} × ${x.quantity} @ ${pounds(x.unit_price_used || 0)} each — ${pounds(x.line_total)} ${badge}</div>`;
+      }).join("")
     : "<div>No materials added.</div>";
 
   const internalMode = document.getElementById("internal_mode").checked;
@@ -3959,6 +4127,45 @@ def service_page(service_slug: str):
         raise HTTPException(status_code=404, detail="Service page not found")
     logo_html = get_company_logo_html(get_company_logo_value())
     return HTMLResponse(content=render_service_page(page, logo_html), media_type="text/html; charset=utf-8")
+
+
+
+@app.get("/api/material-prices")
+def api_material_prices(request: Request):
+    if not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT id, url, name, supplier, last_price, last_live_price, last_manual_price,
+               last_status, times_used, created_at, updated_at, last_checked_at, last_success_at
+        FROM material_price_cache
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 500
+    """).fetchall()
+    conn.close()
+    return JSONResponse([dict(row) for row in rows])
+
+
+@app.post("/api/material-prices/refresh")
+def api_refresh_material_prices(request: Request):
+    if not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    conn = get_db()
+    rows = conn.execute("SELECT url, name, supplier, last_manual_price FROM material_price_cache ORDER BY updated_at DESC LIMIT 200").fetchall()
+    conn.close()
+
+    refreshed = []
+    for row in rows:
+        price, source = fetch_tracked_price(row["url"], row["name"] or "", row["supplier"] or "", row["last_manual_price"] or 0)
+        refreshed.append({
+            "url": row["url"],
+            "name": row["name"],
+            "supplier": row["supplier"],
+            "price": price,
+            "source": source,
+        })
+
+    return JSONResponse({"refreshed": refreshed})
 
 
 @app.get("/api/dashboard")
