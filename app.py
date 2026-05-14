@@ -2755,6 +2755,34 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
     </div>
   </div>
 
+
+  <div id="materialsDbTab" class="tab-content hidden">
+    <h2>Material Price Database</h2>
+    <p class="small">These are materials saved from product URLs you use in quotes. Live prices are refreshed from the supplier where possible, otherwise the app keeps the last saved live price.</p>
+
+    <div class="grid2">
+      <div>
+        <label for="materialDbSearch">Search materials</label>
+        <input id="materialDbSearch" placeholder="Search name, supplier or URL" oninput="renderMaterialDbList()">
+      </div>
+      <div>
+        <label for="materialDbSupplier">Supplier filter</label>
+        <select id="materialDbSupplier" onchange="renderMaterialDbList()">
+          <option value="">All suppliers</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:10px;margin:12px 0;">
+      <button type="button" class="btn-primary" onclick="loadMaterialDb()">Reload Database</button>
+      <button type="button" class="btn-green" onclick="refreshMaterialDbPrices()">Refresh Live Prices</button>
+    </div>
+
+    <div class="small" id="materialDbSummary" style="margin:8px 0;"></div>
+    <div id="materialDbList" class="history-list">No saved materials yet.</div>
+  </div>
+
+
   <div class="card no-print">
     <h2>Saved Quotes</h2>
     <div id="historyList" class="small">No saved quotes yet.</div>
@@ -2763,7 +2791,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 </div>
 
 <script>
-const MATERIAL_LIBRARY = __MATERIAL_LIBRARY__;
+let MATERIAL_LIBRARY = __MATERIAL_LIBRARY__;
 const FAVOURITE_MATERIALS = __FAVOURITE_MATERIALS__;
 const JOB_TEMPLATES = __JOB_TEMPLATES__;
 
@@ -2771,6 +2799,7 @@ let SAVED_QUOTES = [];
 let SAVED_INVOICES = [];
 let SAVED_CUSTOMERS = [];
 let SAVED_LEADS = [];
+let SAVED_MATERIAL_DB = [];
 let CURRENT_QUOTE_ID = null;
 let CURRENT_QUOTE_DATA = null;
 let CURRENT_INVOICE_ID = null;
@@ -2921,6 +2950,40 @@ function addMaterial(prefill = null) {
   }
 }
 
+let MATERIAL_SEARCH_TIMER = null;
+
+function renderMaterialSearchResults(results) {
+  const resultsBox = document.getElementById("searchResults");
+
+  if (!results.length) {
+    resultsBox.innerHTML = `<div class="search-item">No matches found</div>`;
+    resultsBox.classList.remove("hidden");
+    return;
+  }
+
+  resultsBox.innerHTML = results.map((item) => {
+    const source = item.source === "saved" ? "saved database" : "built-in";
+    const status = item.last_status ? " · " + escapeHtml(item.last_status) : "";
+    const used = item.times_used ? " · used " + item.times_used + "x" : "";
+    return `
+      <div class="search-item" onclick='addMaterialFromLibrary(${JSON.stringify(item)})'>
+        <strong>${escapeHtml(item.name)}</strong><br>
+        <span class="small">${escapeHtml(item.supplier || "")} · ${pounds(item.default_price || 0)} · ${source}${status}${used}</span>
+      </div>
+    `;
+  }).join("");
+
+  resultsBox.classList.remove("hidden");
+}
+
+function localMaterialSearch(query) {
+  const terms = query.split(" ").filter(Boolean);
+  return MATERIAL_LIBRARY.filter(item => {
+    const hay = ((item.name || "") + " " + (item.supplier || "") + " " + (item.url || "")).toLowerCase();
+    return terms.every(term => hay.includes(term));
+  }).slice(0, 15);
+}
+
 function searchMaterials() {
   const query = document.getElementById("materialSearch").value.trim().toLowerCase();
   const resultsBox = document.getElementById("searchResults");
@@ -2931,27 +2994,30 @@ function searchMaterials() {
     return;
   }
 
-  const terms = query.split(" ").filter(Boolean);
+  renderMaterialSearchResults(localMaterialSearch(query));
 
-  const results = MATERIAL_LIBRARY.filter(item => {
-    const hay = (item.name + " " + item.supplier).toLowerCase();
-    return terms.every(term => hay.includes(term));
-  }).slice(0, 15);
+  window.clearTimeout(MATERIAL_SEARCH_TIMER);
+  MATERIAL_SEARCH_TIMER = window.setTimeout(async () => {
+    try {
+      const res = await fetch("/api/material-search?q=" + encodeURIComponent(query));
+      if (!res.ok) return;
+      const results = await res.json();
 
-  if (!results.length) {
-    resultsBox.innerHTML = `<div class="search-item">No matches found</div>`;
-    resultsBox.classList.remove("hidden");
-    return;
-  }
+      // Keep new saved DB items in the browser list too, so future typing feels instant.
+      const seen = new Set(MATERIAL_LIBRARY.map(x => `${(x.name||"").toLowerCase()}|${(x.supplier||"").toLowerCase()}|${x.url||""}`));
+      results.forEach(item => {
+        const key = `${(item.name||"").toLowerCase()}|${(item.supplier||"").toLowerCase()}|${item.url||""}`;
+        if (!seen.has(key)) {
+          MATERIAL_LIBRARY.push(item);
+          seen.add(key);
+        }
+      });
 
-  resultsBox.innerHTML = results.map((item) => `
-    <div class="search-item" onclick='addMaterialFromLibrary(${JSON.stringify(item)})'>
-      <strong>${escapeHtml(item.name)}</strong><br>
-      <span class="small">${escapeHtml(item.supplier)} · ${pounds(item.default_price)}</span>
-    </div>
-  `).join("");
-
-  resultsBox.classList.remove("hidden");
+      renderMaterialSearchResults(results);
+    } catch (e) {
+      // Keep local results if backend search fails.
+    }
+  }, 250);
 }
 
 function addMaterialFromLibrary(item) {
@@ -3537,6 +3603,138 @@ async function deleteLead(id) {
   }
 }
 
+
+function formatMaterialDate(value) {
+  if (!value) return "";
+  try {
+    const d = new Date(value);
+    if (!isNaN(d.getTime())) return d.toLocaleString();
+  } catch (e) {}
+  return value;
+}
+
+async function loadMaterialDb() {
+  try {
+    const res = await fetch("/api/material-prices");
+    if (!res.ok) throw new Error();
+    SAVED_MATERIAL_DB = await res.json();
+
+    const suppliers = [...new Set(SAVED_MATERIAL_DB.map(x => x.supplier || "").filter(Boolean))].sort();
+    const supplierSelect = document.getElementById("materialDbSupplier");
+    const current = supplierSelect.value;
+    supplierSelect.innerHTML = '<option value="">All suppliers</option>' + suppliers.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+    supplierSelect.value = current;
+
+    renderMaterialDbList();
+  } catch (e) {
+    document.getElementById("materialDbList").innerHTML = "Unable to load material database.";
+  }
+}
+
+function renderMaterialDbList() {
+  const box = document.getElementById("materialDbList");
+  const summary = document.getElementById("materialDbSummary");
+  if (!box) return;
+
+  const q = (document.getElementById("materialDbSearch")?.value || "").trim().toLowerCase();
+  const supplier = document.getElementById("materialDbSupplier")?.value || "";
+
+  let rows = SAVED_MATERIAL_DB.filter(item => {
+    const hay = `${item.name || ""} ${item.supplier || ""} ${item.url || ""}`.toLowerCase();
+    const supplierOk = !supplier || (item.supplier || "") === supplier;
+    return supplierOk && (!q || hay.includes(q));
+  });
+
+  summary.innerText = `${rows.length} shown / ${SAVED_MATERIAL_DB.length} saved materials`;
+
+  if (!rows.length) {
+    box.innerHTML = "No saved materials found yet. Add product URLs to a quote first, then generate the quote.";
+    return;
+  }
+
+  box.innerHTML = rows.map(item => {
+    const price = item.last_live_price || item.last_price || item.last_manual_price || 0;
+    const status = item.last_status || "unknown";
+    const badge = status === "live"
+      ? '<span class="badge green">live</span>'
+      : (status === "cached" ? '<span class="badge green">cached live</span>' : '<span class="badge">manual</span>');
+
+    return `
+      <div class="history-item">
+        <div><strong>${escapeHtml(item.name || "Unnamed material")}</strong> ${badge}</div>
+        <div class="small">${escapeHtml(item.supplier || "")}</div>
+        <div style="font-size:22px;font-weight:800;margin:6px 0;">${pounds(price)}</div>
+        <div class="small">Times used: ${item.times_used || 0}</div>
+        <div class="small">Last checked: ${escapeHtml(formatMaterialDate(item.last_checked_at || ""))}</div>
+        <div class="small">Last live success: ${escapeHtml(formatMaterialDate(item.last_success_at || ""))}</div>
+        <div class="small" style="word-break:break-all;">${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank">${escapeHtml(item.url)}</a>` : ""}</div>
+
+        <details style="margin-top:10px;">
+          <summary>Edit material</summary>
+          <label>Name</label>
+          <input id="mat_name_${item.id}" value="${escapeHtml(item.name || "")}">
+          <label>Supplier</label>
+          <input id="mat_supplier_${item.id}" value="${escapeHtml(item.supplier || "")}">
+          <label>Product URL</label>
+          <input id="mat_url_${item.id}" value="${escapeHtml(item.url || "")}">
+          <label>Manual fallback price (£)</label>
+          <input id="mat_manual_${item.id}" type="number" step="0.01" value="${Number(item.last_manual_price || item.last_price || 0).toFixed(2)}">
+          <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+            <button type="button" class="btn-primary" onclick="saveMaterialDbItem(${item.id})">Save</button>
+            <button type="button" class="btn-red" onclick="deleteMaterialDbItem(${item.id})">Delete</button>
+          </div>
+        </details>
+      </div>
+    `;
+  }).join("");
+}
+
+async function saveMaterialDbItem(id) {
+  try {
+    const payload = {
+      name: document.getElementById("mat_name_" + id).value,
+      supplier: document.getElementById("mat_supplier_" + id).value,
+      url: document.getElementById("mat_url_" + id).value,
+      manual_price: parseFloat(document.getElementById("mat_manual_" + id).value || 0),
+    };
+    const res = await fetch("/api/material-prices/" + id, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error();
+    await loadMaterialDb();
+    showNotice("Material updated.");
+  } catch (e) {
+    alert("Could not update material.");
+  }
+}
+
+async function deleteMaterialDbItem(id) {
+  if (!confirm("Delete this material from the database?")) return;
+  try {
+    const res = await fetch("/api/material-prices/" + id, { method: "DELETE" });
+    if (!res.ok) throw new Error();
+    await loadMaterialDb();
+    showNotice("Material deleted.");
+  } catch (e) {
+    alert("Could not delete material.");
+  }
+}
+
+async function refreshMaterialDbPrices() {
+  try {
+    showNotice("Refreshing material prices...");
+    const res = await fetch("/api/material-prices/refresh", { method: "POST" });
+    if (!res.ok) throw new Error();
+    await loadMaterialDb();
+    showNotice("Material prices refreshed.");
+  } catch (e) {
+    alert("Could not refresh live prices.");
+  }
+}
+
+
 async function loadCustomers() {
   try {
     const res = await fetch("/api/customers");
@@ -4049,7 +4247,7 @@ def api_delete_lead(lead_id: int):
 
 @app.get("/app", response_class=HTMLResponse)
 def home_app():
-    html = HTML.replace("__MATERIAL_LIBRARY__", json.dumps(MATERIAL_LIBRARY))
+    html = HTML.replace("__MATERIAL_LIBRARY__", json.dumps(get_material_search_library()))
     html = html.replace("__FAVOURITE_MATERIALS__", json.dumps(FAVOURITE_MATERIALS))
     html = html.replace("__JOB_TEMPLATES__", json.dumps(JOB_TEMPLATES))
     logo_value = get_company_logo_value()
@@ -4130,6 +4328,72 @@ def service_page(service_slug: str):
 
 
 
+
+def get_material_search_library():
+    items = []
+
+    for item in MATERIAL_LIBRARY:
+        row = dict(item)
+        row["source"] = "built-in"
+        items.append(row)
+
+    try:
+        conn = get_db()
+        rows = conn.execute("""
+            SELECT url, name, supplier, last_price, last_live_price, last_manual_price,
+                   last_status, times_used, updated_at, last_success_at
+            FROM material_price_cache
+            WHERE COALESCE(name, '') != ''
+            ORDER BY times_used DESC, updated_at DESC
+            LIMIT 500
+        """).fetchall()
+        conn.close()
+
+        seen = set((item.get("name", "").lower(), item.get("supplier", "").lower(), item.get("url", "")) for item in items)
+
+        for row in rows:
+            name = row["name"] or ""
+            supplier = row["supplier"] or ""
+            url = row["url"] or ""
+            key = (name.lower(), supplier.lower(), url)
+            if key in seen:
+                continue
+
+            price = row["last_live_price"] or row["last_price"] or row["last_manual_price"] or 0
+            items.append({
+                "name": name,
+                "supplier": supplier,
+                "url": url,
+                "default_price": round(safe_float(price, 0), 2),
+                "last_status": row["last_status"],
+                "times_used": row["times_used"],
+                "source": "saved",
+            })
+            seen.add(key)
+    except Exception:
+        pass
+
+    return items
+
+
+@app.get("/api/material-search")
+def api_material_search(q: str = "", request: Request = None):
+    if request is not None and not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    query = (q or "").strip().lower()
+    terms = [term for term in re.split(r"\s+", query) if term]
+    items = get_material_search_library()
+
+    if terms:
+        def matches(item):
+            hay = f"{item.get('name','')} {item.get('supplier','')} {item.get('url','')}".lower()
+            return all(term in hay for term in terms)
+        items = [item for item in items if matches(item)]
+
+    return JSONResponse(items[:30])
+
+
 @app.get("/api/material-prices")
 def api_material_prices(request: Request):
     if not check_basic_auth(request):
@@ -4166,6 +4430,56 @@ def api_refresh_material_prices(request: Request):
         })
 
     return JSONResponse({"refreshed": refreshed})
+
+
+
+class MaterialCacheUpdateRequest(BaseModel):
+    name: str = ""
+    supplier: str = ""
+    url: str = ""
+    manual_price: float = 0
+
+
+@app.put("/api/material-prices/{material_id}")
+def api_update_material_price(material_id: int, data: MaterialCacheUpdateRequest, request: Request):
+    if not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    now = now_uk().isoformat()
+    conn = get_db()
+    cur = conn.execute("""
+        UPDATE material_price_cache
+        SET name = ?, supplier = ?, url = ?, last_manual_price = ?, updated_at = ?
+        WHERE id = ?
+    """, (
+        data.name.strip(),
+        data.supplier.strip(),
+        normalize_material_url(data.url),
+        safe_float(data.manual_price, 0),
+        now,
+        material_id,
+    ))
+    conn.commit()
+    conn.close()
+
+    if cur.rowcount <= 0:
+        raise HTTPException(status_code=404, detail="Material not found")
+    return {"ok": True}
+
+
+@app.delete("/api/material-prices/{material_id}")
+def api_delete_material_price(material_id: int, request: Request):
+    if not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    conn = get_db()
+    cur = conn.execute("DELETE FROM material_price_cache WHERE id = ?", (material_id,))
+    conn.commit()
+    conn.close()
+
+    if cur.rowcount <= 0:
+        raise HTTPException(status_code=404, detail="Material not found")
+    return {"ok": True}
 
 
 @app.get("/api/dashboard")
