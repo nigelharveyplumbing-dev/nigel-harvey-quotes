@@ -2412,7 +2412,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 .dashboard-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
 .dashboard-item { border:1px solid #ddd; border-radius:10px; padding:12px; background:#fafafa; }
 .dashboard-item .num { font-size:26px; font-weight:800; margin-top:4px; }
-.tabs { display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; margin-bottom:14px; }
+.tabs { display:grid; grid-template-columns:repeat(6, 1fr); gap:8px; margin-bottom:14px; }
 .tabs button { padding:12px; }
 .tab-panel { display:none; }
 .tab-panel.active { display:block; }
@@ -2462,6 +2462,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <button class="btn-light" onclick="showTab('invoicesTab')">Invoices</button>
       <button class="btn-light" onclick="showTab('customersTab')">Customers</button>
       <button class="btn-light" onclick="showTab('leadsTab')">Leads</button>
+      <button class="btn-light" onclick="showTab('materialsDbTab')">Material Database</button>
     </div>
 
     <div id="dashboardTab" class="tab-panel active">
@@ -2599,6 +2600,32 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
       <div id="leadList" class="small" style="margin-top:10px;">No leads yet.</div>
     </div>
+    <div id="materialsDbTab" class="tab-panel">
+      <h2>Material Price Database</h2>
+      <p class="small">These are materials saved from product URLs you use in quotes. Live prices are refreshed from the supplier where possible, otherwise the app keeps the last saved live price.</p>
+
+      <div class="grid2">
+        <div>
+          <label for="materialDbSearch">Search materials</label>
+          <input id="materialDbSearch" placeholder="Search name, supplier or URL" oninput="renderMaterialDbList()">
+        </div>
+        <div>
+          <label for="materialDbSupplier">Supplier filter</label>
+          <select id="materialDbSupplier" onchange="renderMaterialDbList()">
+            <option value="">All suppliers</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:10px;margin:12px 0;">
+        <button type="button" class="btn-primary" onclick="loadMaterialDb()">Reload Database</button>
+        <button type="button" class="btn-green" onclick="refreshMaterialDbPrices()">Refresh Live Prices</button>
+      </div>
+
+      <div class="small" id="materialDbSummary" style="margin:8px 0;"></div>
+      <div id="materialDbList" class="history-list">No saved materials yet.</div>
+    </div>
+
   </div>
 
   <div id="resultCard" class="card result quote-sheet">
@@ -2755,34 +2782,6 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
     </div>
   </div>
 
-
-  <div id="materialsDbTab" class="tab-content hidden">
-    <h2>Material Price Database</h2>
-    <p class="small">These are materials saved from product URLs you use in quotes. Live prices are refreshed from the supplier where possible, otherwise the app keeps the last saved live price.</p>
-
-    <div class="grid2">
-      <div>
-        <label for="materialDbSearch">Search materials</label>
-        <input id="materialDbSearch" placeholder="Search name, supplier or URL" oninput="renderMaterialDbList()">
-      </div>
-      <div>
-        <label for="materialDbSupplier">Supplier filter</label>
-        <select id="materialDbSupplier" onchange="renderMaterialDbList()">
-          <option value="">All suppliers</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:10px;margin:12px 0;">
-      <button type="button" class="btn-primary" onclick="loadMaterialDb()">Reload Database</button>
-      <button type="button" class="btn-green" onclick="refreshMaterialDbPrices()">Refresh Live Prices</button>
-    </div>
-
-    <div class="small" id="materialDbSummary" style="margin:8px 0;"></div>
-    <div id="materialDbList" class="history-list">No saved materials yet.</div>
-  </div>
-
-
   <div class="card no-print">
     <h2>Saved Quotes</h2>
     <div id="historyList" class="small">No saved quotes yet.</div>
@@ -2848,7 +2847,15 @@ function showNotice(message) {
 
 function showTab(id) {
   document.querySelectorAll(".tab-panel").forEach(x => x.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
+  const panel = document.getElementById(id);
+  if (panel) panel.classList.add("active");
+
+  if (id === "dashboardTab") loadDashboard();
+  if (id === "quotesTab") loadHistory();
+  if (id === "invoicesTab") loadInvoices();
+  if (id === "customersTab") loadCustomers();
+  if (id === "leadsTab") loadLeads();
+  if (id === "materialsDbTab") loadMaterialDb();
 }
 
 function toggleBathroomFields() {
@@ -3621,13 +3628,16 @@ async function loadMaterialDb() {
 
     const suppliers = [...new Set(SAVED_MATERIAL_DB.map(x => x.supplier || "").filter(Boolean))].sort();
     const supplierSelect = document.getElementById("materialDbSupplier");
-    const current = supplierSelect.value;
-    supplierSelect.innerHTML = '<option value="">All suppliers</option>' + suppliers.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
-    supplierSelect.value = current;
+    if (supplierSelect) {
+      const current = supplierSelect.value;
+      supplierSelect.innerHTML = '<option value="">All suppliers</option>' + suppliers.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+      supplierSelect.value = current;
+    }
 
     renderMaterialDbList();
   } catch (e) {
-    document.getElementById("materialDbList").innerHTML = "Unable to load material database.";
+    const box = document.getElementById("materialDbList");
+    if (box) box.innerHTML = "Unable to load material database.";
   }
 }
 
@@ -3645,7 +3655,7 @@ function renderMaterialDbList() {
     return supplierOk && (!q || hay.includes(q));
   });
 
-  summary.innerText = `${rows.length} shown / ${SAVED_MATERIAL_DB.length} saved materials`;
+  if (summary) summary.innerText = `${rows.length} shown / ${SAVED_MATERIAL_DB.length} saved materials`;
 
   if (!rows.length) {
     box.innerHTML = "No saved materials found yet. Add product URLs to a quote first, then generate the quote.";
