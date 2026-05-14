@@ -105,7 +105,8 @@ def _pdf_logo_reader():
 
 
 QUOTE_TERMS = [
-    "Includes labour and materials.",
+    "Includes labour, supplied materials and materials procurement where selected.",
+    "Materials procurement covers sourcing, collection, transportation, supplier coordination and warranty handling.",
     "Payment due as agreed.",
     "Late payment fee may be applied after 14 days.",
     "Materials remain the property of Nigel Harvey Ltd until paid in full.",
@@ -114,6 +115,7 @@ QUOTE_TERMS = [
 ]
 
 INVOICE_TERMS = [
+    "Materials procurement covers sourcing, collection, transportation, supplier coordination and warranty handling.",
     "Please pay by the due date shown above.",
     "Late payment fee may be applied after 14 days.",
     "Materials remain the property of Nigel Harvey Ltd until paid in full.",
@@ -724,6 +726,9 @@ def calculate_quote(data: QuoteRequest):
         "job": job_text,
         "labour": round(labour_total, 2),
         "materials": round(quoted_materials, 2),
+        "materials_base": round(materials_after_job_markup, 2),
+        "materials_procurement_percent": round(handling_percent, 2),
+        "materials_procurement_amount": round(quoted_materials - materials_after_job_markup, 2),
         "total_price": round(total_price, 2),
         "deposit_percent": round(deposit_percent, 2),
         "deposit_amount": round(deposit_amount, 2),
@@ -1091,6 +1096,9 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     quote_result["job"] = job
     quote_result["labour"] = round(labour, 2)
     quote_result["materials"] = round(materials, 2)
+    quote_result["materials_base"] = round(quote_result.get("materials_base", materials), 2)
+    quote_result["materials_procurement_amount"] = round(quote_result.get("materials_procurement_amount", 0), 2)
+    quote_result["materials_procurement_percent"] = round(quote_result.get("materials_procurement_percent", 0), 2)
     quote_result["total_price"] = round(total_price, 2)
     deposit_percent = safe_float(quote_result.get("deposit_percent", 0), 0)
     quote_result["deposit_amount"] = round(total_price * (deposit_percent / 100.0), 2)
@@ -2550,10 +2558,10 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 
       <div class="check-row">
         <input type="checkbox" id="include_materials_handling" checked>
-        <span>Include materials handling</span>
+        <span>Include materials procurement & handling</span>
       </div>
 
-      <label for="materials_handling_percent">Materials handling %</label>
+      <label for="materials_handling_percent">Materials procurement & handling %</label>
       <select id="materials_handling_percent">
         <option value="20">20%</option>
         <option value="25" selected>25%</option>
@@ -2662,7 +2670,9 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <div class="doc-panel doc-summary">
         <div class="doc-panel-title">Pricing summary</div>
         <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
-        <div class="row"><span class="muted">Materials</span><span id="r_materials"></span></div>
+        <div class="row"><span class="muted">Materials supplied</span><span id="r_materials_base"></span></div>
+        <div class="row" id="r_procurement_row"><span class="muted">Materials procurement &amp; handling <span id="r_procurement_percent"></span></span><span id="r_procurement_amount"></span></div>
+        <div class="row"><span class="muted">Materials total</span><span id="r_materials"></span></div>
         <div class="row"><span class="muted">Deposit</span><span id="r_deposit"></span></div>
         <div class="doc-total-box">
           <div class="muted">Total price</div>
@@ -2686,7 +2696,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
     <div class="doc-panel doc-notes">
       <div class="doc-panel-title">Notes</div>
       <div class="doc-notes-content">
-        Includes labour and materials.<br>
+        Includes labour, supplied materials and materials procurement where selected.<br>
+        Materials procurement covers sourcing, collection, transportation, supplier coordination and warranty handling.<br>
         Payment due as agreed.<br>
         Late payment fee may be applied after 14 days.<br>
         Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
@@ -3096,6 +3107,15 @@ function renderQuoteResult(data) {
   document.getElementById("r_job").innerText = data.job || "-";
   document.getElementById("r_labour").innerText = pounds(data.labour);
   document.getElementById("r_materials").innerText = pounds(data.materials);
+
+  const materialsBase = data.materials_base != null ? Number(data.materials_base) : Number(data.materials || 0);
+  const procurementAmount = Number(data.materials_procurement_amount || 0);
+  const procurementPercent = Number(data.materials_procurement_percent || 0);
+  document.getElementById("r_materials_base").innerText = pounds(materialsBase);
+  document.getElementById("r_procurement_amount").innerText = pounds(procurementAmount);
+  document.getElementById("r_procurement_percent").innerText = procurementPercent > 0 ? "(" + procurementPercent.toFixed(0) + "%)" : "";
+  document.getElementById("r_procurement_row").style.display = procurementAmount > 0 ? "flex" : "none";
+
   document.getElementById("r_deposit").innerText = data.deposit_amount ? pounds(data.deposit_amount) + " (" + Number(data.deposit_percent).toFixed(0) + "%)" : String.fromCharCode(163) + "0.00";
   document.getElementById("r_total").innerText = pounds(data.total_price);
 
