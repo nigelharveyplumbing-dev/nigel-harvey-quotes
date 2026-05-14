@@ -3415,11 +3415,43 @@ async function viewCustomerHistory(id) {
     const quotes = data.quotes || [];
     const invoices = data.invoices || [];
 
+    const quoteRows = quotes.length
+      ? quotes.slice(0,10).map(q => `
+          <div class="history-item" style="margin-top:10px;padding:10px;background:#fff;">
+            <div><strong>${escapeHtml(q.created_at || "")}</strong> — ${pounds(q.total_price || 0)}</div>
+            <div>${escapeHtml(q.job || "")}</div>
+            <div class="history-actions" style="grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px;">
+              <button type="button" class="btn-light" onclick="loadSavedQuote(${q.id})">Open</button>
+              <button type="button" class="btn-light" onclick="editSavedQuote(${q.id})">Edit</button>
+              <button type="button" class="btn-green" onclick="sendSavedQuoteWhatsApp(${q.id})">WhatsApp</button>
+              <button type="button" class="btn-primary" onclick="convertQuoteToInvoice(${q.id})">Invoice</button>
+            </div>
+            <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+              <button type="button" class="btn-light" onclick="printSavedQuote(${q.id})">Print / PDF</button>
+              <button type="button" class="btn-red" onclick="deleteSavedQuote(${q.id}); setTimeout(() => viewCustomerHistory(${id}), 500);">Delete Quote</button>
+            </div>
+          </div>
+        `).join("")
+      : "<div>None</div>";
+
+    const invoiceRows = invoices.length
+      ? invoices.slice(0,10).map(i => `
+          <div class="history-item" style="margin-top:10px;padding:10px;background:#fff;">
+            <div><strong>${escapeHtml(i.invoice_number || "")}</strong> — ${pounds(i.total_price || 0)} — ${escapeHtml(i.status || "")}</div>
+            <div class="history-actions" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
+              <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Open</button>
+              <button type="button" class="btn-light" onclick="editInvoice(${i.id})">Edit</button>
+              <button type="button" class="btn-primary" onclick="window.open('/invoice/${i.id}', '_blank')">Public Link</button>
+            </div>
+          </div>
+        `).join("")
+      : "<div>None</div>";
+
     box.innerHTML = `
       <div><strong>Quotes:</strong> ${quotes.length}</div>
-      ${quotes.slice(0,5).map(q => `<div>• ${escapeHtml(q.created_at)} — ${escapeHtml(q.job || "")} — ${pounds(q.total_price)}</div>`).join("") || "<div>None</div>"}
-      <div style="margin-top:8px;"><strong>Invoices:</strong> ${invoices.length}</div>
-      ${invoices.slice(0,5).map(i => `<div>• ${escapeHtml(i.invoice_number)} — ${pounds(i.total_price)} — ${escapeHtml(i.status)}</div>`).join("") || "<div>None</div>"}
+      ${quoteRows}
+      <div style="margin-top:12px;"><strong>Invoices:</strong> ${invoices.length}</div>
+      ${invoiceRows}
     `;
   } catch (e) {
     alert("Could not load customer history.");
@@ -3471,6 +3503,9 @@ async function loadSavedQuote(id) {
     const data = await res.json();
     fillFormFromRequest(data.request, data.id);
     renderQuoteResult(data.result);
+    showTab("quotesTab");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    showNotice("Quote opened.");
   } catch (e) {
     alert("Could not load saved quote.");
   }
@@ -3483,6 +3518,8 @@ async function editSavedQuote(id) {
     const data = await res.json();
     fillFormFromRequest(data.request, data.id);
     renderQuoteResult(data.result);
+    showTab("quotesTab");
+    window.scrollTo({ top: 0, behavior: "smooth" });
     showNotice("Quote loaded for editing.");
   } catch (e) {
     alert("Could not load quote for editing.");
@@ -3494,8 +3531,10 @@ async function sendSavedQuoteWhatsApp(id) {
     const res = await fetch("/api/quotes/" + id);
     if (!res.ok) throw new Error();
     const data = await res.json();
+    fillFormFromRequest(data.request, data.id);
     renderQuoteResult(data.result);
-    document.getElementById("whatsappBtn").click();
+    showTab("quotesTab");
+    setTimeout(() => document.getElementById("whatsappBtn").click(), 250);
   } catch (e) {
     alert("Could not open WhatsApp for this quote.");
   }
@@ -3506,8 +3545,10 @@ async function printSavedQuote(id) {
     const res = await fetch("/api/quotes/" + id);
     if (!res.ok) throw new Error();
     const data = await res.json();
+    fillFormFromRequest(data.request, data.id);
     renderQuoteResult(data.result);
-    window.print();
+    showTab("quotesTab");
+    setTimeout(() => window.print(), 250);
   } catch (e) {
     alert("Could not print this quote.");
   }
@@ -3519,6 +3560,7 @@ async function deleteSavedQuote(id) {
     const res = await fetch("/api/quotes/" + id, { method: "DELETE" });
     if (!res.ok) throw new Error();
     await loadHistory();
+    await loadCustomers();
     await loadDashboard();
     showNotice("Saved quote deleted.");
   } catch (e) {
