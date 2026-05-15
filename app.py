@@ -2979,6 +2979,21 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <div id="materialIntelligenceList" class="small">No price history yet.</div>
     </div>
 
+
+    <div id="safetyTab" class="tab-panel">
+      <h2>Safety & Backups</h2>
+      <p class="small">Use this before big changes. It protects your customers, quotes, invoices and material database.</p>
+
+      <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <button type="button" class="btn-primary" onclick="createBackupNow()">Create Backup Now</button>
+        <button type="button" class="btn-light" onclick="loadSafety()">Reload Status</button>
+      </div>
+
+      <div id="safetyStatus" class="quote-box small" style="margin-top:12px;">Click Reload Status to check backups.</div>
+      <h3 style="margin-top:16px;">Backups</h3>
+      <div id="backupList" class="history-list small" style="margin-top:12px;">No backups loaded.</div>
+    </div>
+
   <div id="resultCard" class="card result quote-sheet">
     <div class="quote-header print-head">
       <div><div class="quote-company">Nigel Harvey Ltd</div>
