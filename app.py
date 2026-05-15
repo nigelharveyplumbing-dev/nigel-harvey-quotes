@@ -10,6 +10,7 @@ import re
 import json
 import sqlite3
 import os
+import shutil
 import io
 import base64
 import ssl
@@ -57,7 +58,9 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
+APP_VERSION = "foundation-intelligence-v2-safety"
 DB_PATH = Path("/var/data/quotes.db")
+DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
 
 COMPANY_NAME = "Nigel Harvey Ltd"
@@ -473,8 +476,103 @@ def init_db():
             created_at TEXT NOT NULL
         )
     """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS app_backups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            path TEXT NOT NULL,
+            reason TEXT,
+            size_bytes INTEGER,
+            created_at TEXT NOT NULL
+        )
+    """)
     conn.commit()
     conn.close()
+
+
+def create_db_backup(reason: str = "manual"):
+    """Create a physical SQLite backup file in persistent Render storage."""
+    DB_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+    if not DB_PATH.exists():
+        return None
+
+    timestamp = now_uk().strftime("%Y%m%d-%H%M%S")
+    safe_reason = re.sub(r"[^a-zA-Z0-9_-]+", "-", reason or "manual").strip("-")[:40] or "manual"
+    filename = f"quotes-backup-{timestamp}-{safe_reason}.db"
+    backup_path = DB_BACKUP_DIR / filename
+
+    # Use SQLite backup API where possible for a cleaner copy.
+    src_conn = sqlite3.connect(DB_PATH)
+    dst_conn = sqlite3.connect(backup_path)
+    try:
+        src_conn.backup(dst_conn)
+    finally:
+        dst_conn.close()
+        src_conn.close()
+
+    size_bytes = backup_path.stat().st_size if backup_path.exists() else 0
+    created_at = now_uk().isoformat()
+
+    try:
+        conn = get_db()
+        conn.execute("""
+            INSERT INTO app_backups (filename, path, reason, size_bytes, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (filename, str(backup_path), reason, size_bytes, created_at))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+    prune_old_backups(keep=30)
+    return {
+        "filename": filename,
+        "path": str(backup_path),
+        "reason": reason,
+        "size_bytes": size_bytes,
+        "created_at": created_at,
+    }
+
+
+def prune_old_backups(keep: int = 30):
+    try:
+        backups = sorted(DB_BACKUP_DIR.glob("quotes-backup-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in backups[keep:]:
+            try:
+                old.unlink()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def list_db_backups():
+    DB_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    items = []
+    for path in sorted(DB_BACKUP_DIR.glob("quotes-backup-*.db"), key=lambda p: p.stat().st_mtime, reverse=True):
+        items.append({
+            "filename": path.name,
+            "path": str(path),
+            "size_bytes": path.stat().st_size,
+            "created_at": datetime.fromtimestamp(path.stat().st_mtime, UK_TZ).isoformat(),
+        })
+    return items
+
+
+def database_counts():
+    conn = get_db()
+    tables = ["customers", "quotes", "invoices", "leads", "material_price_cache"]
+    counts = {}
+    for table in tables:
+        try:
+            counts[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        except Exception:
+            counts[table] = None
+    conn.close()
+    return counts
+
 
 
 @app.on_event("startup")
@@ -925,6 +1023,7 @@ def save_quote_intelligence(quote_id: int, result_data: dict):
 
 
 def save_quote(request_data: dict, result_data: dict):
+    create_db_backup("before-save-quote")
     customer_id = upsert_customer(
         request_data.get("customer_name", ""),
         request_data.get("customer_address", ""),
@@ -1003,6 +1102,7 @@ def build_payment_link(invoice_number: str):
 
 
 def create_invoice_from_quote(quote_id: int):
+    create_db_backup("before-create-invoice")
     quote = get_quote_by_id(quote_id)
     if not quote:
         return None
@@ -1129,6 +1229,7 @@ def update_invoice_status(invoice_id: int, status: str, amount_paid: float):
 
 
 def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict):
+    create_db_backup("before-update-quote")
     existing = get_quote_by_id(quote_id)
     if not existing:
         return None
@@ -2700,6 +2801,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <button class="btn-light" onclick="showTab('invoicesTab')">Invoices</button>
       <button class="btn-light" onclick="showTab('customersTab')">Customers</button>
       <button class="btn-light" onclick="showTab('leadsTab')">Leads</button>
+      <button class="btn-light" onclick="showTab('safetyTab')">Safety</button>
       <button class="btn-light" onclick="showTab('materialsDbTab')">Material Database</button>
       <button class="btn-light" onclick="showTab('intelligenceTab')">Intelligence</button>
     </div>
@@ -3107,6 +3209,7 @@ function showTab(id) {
   if (id === "invoicesTab") loadInvoices();
   if (id === "customersTab") loadCustomers();
   if (id === "leadsTab") loadLeads();
+  if (id === "safetyTab") loadSafety();
   if (id === "materialsDbTab") loadMaterialDb();
   if (id === "intelligenceTab") loadIntelligence();
 }
@@ -4083,6 +4186,57 @@ async function refreshMaterialDbPrices() {
 }
 
 
+
+async function loadSafety() {
+  const statusBox = document.getElementById("safetyStatus");
+  const backupBox = document.getElementById("backupList");
+  if (!statusBox || !backupBox) return;
+
+  try {
+    const res = await fetch("/api/backups");
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const counts = data.counts || {};
+
+    statusBox.innerHTML = `
+      <strong>App version:</strong> ${escapeHtml(data.version || "-")}<br>
+      <strong>Customers:</strong> ${counts.customers ?? "-"}<br>
+      <strong>Quotes:</strong> ${counts.quotes ?? "-"}<br>
+      <strong>Invoices:</strong> ${counts.invoices ?? "-"}<br>
+      <strong>Leads:</strong> ${counts.leads ?? "-"}<br>
+      <strong>Saved materials:</strong> ${counts.material_price_cache ?? "-"}<br>
+      <strong>Backups:</strong> ${(data.backups || []).length}
+    `;
+
+    const backups = data.backups || [];
+    backupBox.innerHTML = backups.length ? backups.map(b => `
+      <div class="history-item">
+        <div><strong>${escapeHtml(b.filename)}</strong></div>
+        <div>${Number((b.size_bytes || 0) / 1024).toFixed(1)} KB</div>
+        <div>${escapeHtml(b.created_at || "")}</div>
+        <div class="history-actions">
+          <a class="btn-link btn-light" href="/api/backups/${encodeURIComponent(b.filename)}" target="_blank">Download Backup</a>
+        </div>
+      </div>
+    `).join("") : "No backups yet.";
+  } catch (e) {
+    statusBox.innerHTML = "Could not load safety status.";
+    backupBox.innerHTML = "";
+  }
+}
+
+async function createBackupNow() {
+  try {
+    const res = await fetch("/api/backups", { method: "POST" });
+    if (!res.ok) throw new Error();
+    await loadSafety();
+    showNotice("Backup created.");
+  } catch (e) {
+    alert("Could not create backup.");
+  }
+}
+
+
 async function loadCustomers() {
   try {
     const res = await fetch("/api/customers");
@@ -4865,6 +5019,56 @@ def api_intelligence(request: Request):
         "jobs": [dict(row) for row in jobs],
         "materials": [dict(row) for row in materials],
     })
+
+
+
+@app.get("/api/health")
+def api_health():
+    return {
+        "ok": True,
+        "version": APP_VERSION,
+        "db_exists": DB_PATH.exists(),
+        "db_path": str(DB_PATH),
+        "db_size_bytes": DB_PATH.stat().st_size if DB_PATH.exists() else 0,
+        "counts": database_counts(),
+        "backup_count": len(list_db_backups()),
+        "time": now_uk().isoformat(),
+    }
+
+
+@app.get("/api/backups")
+def api_list_backups(request: Request):
+    if not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return {
+        "version": APP_VERSION,
+        "backups": list_db_backups(),
+        "counts": database_counts(),
+    }
+
+
+@app.post("/api/backups")
+def api_create_backup(request: Request):
+    if not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    backup = create_db_backup("manual")
+    if not backup:
+        raise HTTPException(status_code=404, detail="Database not found")
+    return backup
+
+
+@app.get("/api/backups/{filename}")
+def api_download_backup(filename: str, request: Request):
+    if not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    safe_name = Path(filename).name
+    backup_path = DB_BACKUP_DIR / safe_name
+    if not backup_path.exists() or not safe_name.startswith("quotes-backup-") or backup_path.suffix != ".db":
+        raise HTTPException(status_code=404, detail="Backup not found")
+
+    headers = {"Content-Disposition": f'attachment; filename="{safe_name}"'}
+    return Response(content=backup_path.read_bytes(), media_type="application/octet-stream", headers=headers)
 
 
 @app.get("/api/dashboard")
