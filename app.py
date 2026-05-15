@@ -3224,6 +3224,46 @@ function collectFormPayload() {
   };
 }
 
+
+function buildQuoteMaterialsWhatsappText(data) {
+  const lines = data.material_lines || [];
+  if (!lines.length) return "Materials used:\n- No itemised materials listed";
+
+  const rows = lines.map(x => {
+    const source = x.price_source || (x.live_price_used ? "live" : "manual");
+    const sourceLabel = source === "cached" ? "cached live" : source;
+    return `- ${x.name || "Material"}\n  Qty: ${x.quantity || 1} × ${pounds(x.unit_price_used || 0)} each = ${pounds(x.line_total || 0)} (${sourceLabel})`;
+  });
+
+  return "Materials used:\n" + rows.join("\n");
+}
+
+function buildQuoteWhatsappMessage(data) {
+  const quotePdfUrl = CURRENT_QUOTE_ID
+    ? `${window.location.origin}/api/quotes/${CURRENT_QUOTE_ID}/pdf`
+    : "";
+
+  const pdfLine = quotePdfUrl
+    ? `View/download your quote PDF:\n${quotePdfUrl}`
+    : "I can send the PDF once the quote is saved.";
+
+  const customerName = data.customer_name ? ` ${data.customer_name}` : "";
+
+  return `Hi${customerName},
+
+Please find your quote below.
+
+Quote total: ${pounds(data.total_price)}
+
+${pdfLine}
+
+If you have any questions, just let me know.
+
+Nigel Harvey Ltd
+07595 725547`;
+}
+
+
 function renderQuoteResult(data) {
   CURRENT_QUOTE_DATA = data;
   document.getElementById("invoiceCard").style.display = "none";
@@ -3275,29 +3315,7 @@ function renderQuoteResult(data) {
     internalBox.classList.add("hidden");
   }
 
-  const message =
-`Nigel Harvey Ltd Quote
-
-Date: ${data.created_at || "-"}
-Type: ${data.quote_type || "-"}
-Customer: ${data.customer_name || "-"}
-Address: ${data.customer_address || "-"}
-
-Job: ${data.job || "-"}
-
-Labour: ${pounds(data.labour)}
-Materials: ${pounds(data.materials)}
-Total price: ${pounds(data.total_price)}
-
-Terms:
-- Payment due as agreed.
-- Late payment fee may be applied after 14 days.
-- Materials remain the property of Nigel Harvey Ltd until paid in full.
-- Deposit required before works begin where applicable.
-
-Nigel Harvey Ltd
-07595 725547
-Nigelharveyplumbing@gmail.com`;
+  const message = buildQuoteWhatsappMessage(data);
 
   const cleanPhone = normalisePhone(data.customer_phone || "");
   document.getElementById("whatsappBtn").href = cleanPhone
@@ -4785,22 +4803,24 @@ def public_invoice(invoice_id: int):
 
 
 @app.get("/api/quotes/{quote_id}/pdf")
-def api_quote_pdf(quote_id: int):
+def api_quote_pdf(quote_id: int, request: Request):
     quote = get_quote_by_id(quote_id)
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
     pdf_bytes = generate_quote_pdf_bytes(quote)
-    headers = {"Content-Disposition": f'inline; filename="quote-{quote_id}.pdf"'}
+    disposition = "inline" if request.query_params.get("view") == "1" else "attachment"
+    headers = {"Content-Disposition": f'{disposition}; filename="quote-{quote_id}.pdf"'}
     return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
 
 
 @app.get("/api/invoices/{invoice_id}/pdf")
-def api_invoice_pdf(invoice_id: int):
+def api_invoice_pdf(invoice_id: int, request: Request):
     invoice = get_invoice_by_id(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     pdf_bytes = generate_invoice_pdf_bytes(invoice)
-    headers = {"Content-Disposition": f'inline; filename="{invoice["invoice_number"]}.pdf"'}
+    disposition = "inline" if request.query_params.get("view") == "1" else "attachment"
+    headers = {"Content-Disposition": f'{disposition}; filename="{invoice["invoice_number"]}.pdf"'}
     return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
 
 
