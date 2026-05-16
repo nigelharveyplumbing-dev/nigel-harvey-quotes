@@ -245,6 +245,30 @@ JOB_TEMPLATES = [
         {"name": "Magnetic Filter", "quantity": 1},
         {"name": "Inhibitor 1L", "quantity": 2},
     ]},
+    {"name": "Outside tap - pipework run", "quote_type": "small", "job": "Supply hot and cold plus waste pipe for outside sink. Supply cold feed for new outside tap. Redo pipework as required, test all pipework and leave ready for customer-supplied sink.", "labour": 200, "materials": [
+        {"name": "Plumbright Compression Coupling Male 15mm x 1/4", "quantity": 1},
+        {"name": "Plumbright Hose Union Bib Tap Dbl Check 1/2", "quantity": 1},
+        {"name": "3m Copper pipe 15mm", "quantity": 4},
+        {"name": "Plumbright Isolating Valve 15mm Chrome Plated", "quantity": 4},
+        {"name": "Plumbright Drain Off Cock 15mm", "quantity": 2},
+        {"name": "Plumbright Endfeed Elbow 90 Degree 15mm", "quantity": 10},
+        {"name": "Plumbright Endfeed Equal Tee 15mm", "quantity": 6},
+        {"name": "Plumbright Solvent Waste Pipe Clips 32mm", "quantity": 2},
+    ]},
+    {"name": "Fridge cold water feed", "quote_type": "small", "job": "Supply and connect cold water feed for fridge, including isolation valve, pipework, fittings and testing for leaks.", "labour": 120, "materials": [
+        {"name": "15mm Isolating Valve", "quantity": 1},
+        {"name": "15mm Copper Pipe 3m", "quantity": 1},
+        {"name": "Compression Coupler 15mm", "quantity": 2},
+    ]},
+    {"name": "Leak repair - bathroom", "quote_type": "small", "job": "Attend bathroom leak, identify source of leak, repair faulty pipework/fitting and test on completion.", "labour": 150, "materials": [
+        {"name": "15mm Copper Pipe 3m", "quantity": 1},
+        {"name": "15mm Copper Elbow", "quantity": 4},
+        {"name": "15mm Straight Coupler", "quantity": 2},
+    ]},
+    {"name": "Replace bath taps", "quote_type": "small", "job": "Remove existing bath taps and fit replacement bath taps, including testing for leaks and checking connections.", "labour": 180, "materials": [
+        {"name": "Flexible Tap Connector", "quantity": 2},
+        {"name": "15mm Isolating Valve", "quantity": 2},
+    ]}
 ]
 
 LABOUR_HINTS = {
@@ -1053,6 +1077,181 @@ def save_quote(request_data: dict, result_data: dict):
     conn.close()
     save_quote_intelligence(quote_id, result_data)
     return quote_id
+
+
+
+STOP_WORDS = {
+    "the", "and", "for", "with", "from", "into", "onto", "this", "that", "then", "than",
+    "pipe", "pipes", "plumbing", "work", "works", "supply", "fit", "install", "repair",
+    "replace", "new", "old", "existing", "including", "include", "test", "testing",
+    "customer", "job", "to", "of", "in", "on", "a", "an"
+}
+
+
+def learning_tokens(text: str):
+    words = re.findall(r"[a-zA-Z0-9]+", (text or "").lower())
+    return [w for w in words if len(w) >= 3 and w not in STOP_WORDS]
+
+
+def quote_similarity_score(query_tokens, quote: dict):
+    if not query_tokens:
+        return 0
+
+    job = quote.get("job", "") or ""
+    result = quote.get("result", {}) or {}
+    request = quote.get("request", {}) or {}
+
+    material_names = []
+    for line in result.get("material_lines", []) or []:
+        material_names.append(str(line.get("name", "")))
+
+    haystack = " ".join([
+        job,
+        result.get("quote_type", ""),
+        request.get("quote_type", ""),
+        " ".join(material_names),
+    ]).lower()
+
+    score = 0
+    for token in query_tokens:
+        if token in haystack:
+            score += 3
+        # crude plural/singular help
+        if token.endswith("s") and token[:-1] in haystack:
+            score += 1
+        if (token + "s") in haystack:
+            score += 1
+
+    job_tokens = set(learning_tokens(job))
+    score += len(set(query_tokens) & job_tokens) * 2
+    return score
+
+
+def analyse_similar_quotes(query: str, quote_type: str = ""):
+    query_tokens = learning_tokens(query)
+    if not query_tokens:
+        return {
+            "query": query,
+            "similar_count": 0,
+            "similar_quotes": [],
+            "common_materials": [],
+            "averages": {},
+            "message": "Type a job description to learn from previous quotes."
+        }
+
+    quotes = load_quotes()
+    scored = []
+    for quote in quotes:
+        if quote_type and quote_type != "all":
+            q_type = (quote.get("result", {}) or {}).get("quote_type") or (quote.get("request", {}) or {}).get("quote_type")
+            if q_type and q_type != quote_type:
+                continue
+
+        score = quote_similarity_score(query_tokens, quote)
+        if score > 0:
+            scored.append((score, quote))
+
+    scored.sort(key=lambda x: (x[0], x[1].get("id", 0)), reverse=True)
+    matches = [q for _score, q in scored[:12]]
+
+    if not matches:
+        return {
+            "query": query,
+            "similar_count": 0,
+            "similar_quotes": [],
+            "common_materials": [],
+            "averages": {},
+            "message": "No similar quotes found yet. Once you quote jobs like this, the app will start learning."
+        }
+
+    labour_values = []
+    material_values = []
+    total_values = []
+    material_counter = {}
+
+    for quote in matches:
+        result = quote.get("result", {}) or {}
+        labour_values.append(safe_float(result.get("labour", 0), 0))
+        material_values.append(safe_float(result.get("materials", 0), 0))
+        total_values.append(safe_float(result.get("total_price", 0), 0))
+
+        for line in result.get("material_lines", []) or []:
+            name = (line.get("name") or "").strip()
+            if not name:
+                continue
+            key = name.lower()
+            entry = material_counter.setdefault(key, {
+                "name": name,
+                "count": 0,
+                "quantity_total": 0,
+                "unit_prices": [],
+                "suppliers": {},
+                "urls": {},
+                "source_types": {},
+            })
+            entry["count"] += 1
+            entry["quantity_total"] += safe_float(line.get("quantity", 1), 1)
+            unit = safe_float(line.get("unit_price_used", 0), 0)
+            if unit > 0:
+                entry["unit_prices"].append(unit)
+            supplier = line.get("supplier") or ""
+            if supplier:
+                entry["suppliers"][supplier] = entry["suppliers"].get(supplier, 0) + 1
+            url = line.get("url") or ""
+            if url:
+                entry["urls"][url] = entry["urls"].get(url, 0) + 1
+            source = line.get("price_source") or ("live" if line.get("live_price_used") else "manual")
+            entry["source_types"][source] = entry["source_types"].get(source, 0) + 1
+
+    common_materials = []
+    for entry in material_counter.values():
+        avg_qty = entry["quantity_total"] / max(entry["count"], 1)
+        avg_unit = sum(entry["unit_prices"]) / len(entry["unit_prices"]) if entry["unit_prices"] else 0
+        supplier = max(entry["suppliers"], key=entry["suppliers"].get) if entry["suppliers"] else "City Plumbing"
+        url = max(entry["urls"], key=entry["urls"].get) if entry["urls"] else ""
+        source = max(entry["source_types"], key=entry["source_types"].get) if entry["source_types"] else "manual"
+
+        common_materials.append({
+            "name": entry["name"],
+            "used_count": entry["count"],
+            "used_percent": round((entry["count"] / len(matches)) * 100, 0),
+            "average_quantity": round(avg_qty, 2),
+            "average_unit_price": round(avg_unit, 2),
+            "supplier": supplier,
+            "url": url,
+            "price_source": source,
+        })
+
+    common_materials.sort(key=lambda x: (x["used_count"], x["used_percent"]), reverse=True)
+
+    def avg(values):
+        values = [safe_float(v, 0) for v in values if safe_float(v, 0) > 0]
+        return round(sum(values) / len(values), 2) if values else 0
+
+    similar_quotes = []
+    for quote in matches[:6]:
+        result = quote.get("result", {}) or {}
+        similar_quotes.append({
+            "id": quote.get("id"),
+            "created_at": quote.get("created_at"),
+            "job": quote.get("job", ""),
+            "labour": round(safe_float(result.get("labour", 0), 0), 2),
+            "materials": round(safe_float(result.get("materials", 0), 0), 2),
+            "total_price": round(safe_float(result.get("total_price", 0), 0), 2),
+        })
+
+    return {
+        "query": query,
+        "similar_count": len(matches),
+        "similar_quotes": similar_quotes,
+        "common_materials": common_materials[:20],
+        "averages": {
+            "labour": avg(labour_values),
+            "materials": avg(material_values),
+            "total_price": avg(total_values),
+        },
+        "message": f"Found {len(matches)} similar previous quote(s)."
+    }
 
 
 def load_quotes():
@@ -2825,6 +3024,17 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
         <span>Internal mode</span>
       </div>
 
+      <h3>Quote Accelerator</h3>
+      <div class="quote-box small">
+        <label for="templateSearch">Search job template</label>
+        <input id="templateSearch" placeholder="e.g. outside tap, leak, bath taps, fridge feed" oninput="renderTemplateSearch()">
+        <div id="templateSearchResults" class="search-results hidden"></div>
+        <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+          <button type="button" class="btn-light" onclick="clearQuoteMaterials()">Clear Materials</button>
+          <button type="button" class="btn-light" onclick="duplicateLastMaterial()">Duplicate Last Material</button>
+        </div>
+      </div>
+
       <h3>Job templates</h3>
       <div id="templateButtons" class="templates"></div>
 
@@ -2832,7 +3042,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <div id="favouriteButtons" class="favourites"></div>
 
       <label for="quote_type">Quote type</label>
-      <select id="quote_type" onchange="toggleBathroomFields(); updateLabourSuggestion();">
+      <select id="quote_type" onchange="toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning();">
         <option value="small">Small Job</option>
         <option value="bathroom">Bathroom</option>
         <option value="heating">Heating</option>
@@ -2848,7 +3058,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <input id="customer_phone" placeholder="07123 456789">
 
       <label for="job">Job description</label>
-      <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion()"></textarea>
+      <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning()"></textarea>
 
       <div id="bathroomFields" class="hidden">
         <h3>Bathroom / tiling</h3>
@@ -2888,6 +3098,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <label for="labour">Labour cost (£)</label>
       <input id="labour" type="number" step="0.01" placeholder="180">
       <div class="small" id="labourSuggestion" style="margin-top:8px;"></div>
+      <div id="learningInsights" class="quote-box small" style="margin-top:10px; display:none;"></div>
 
       <div class="check-row">
         <input type="checkbox" id="include_materials_handling" checked>
@@ -3291,6 +3502,140 @@ function addFavouriteMaterial(index) {
   addMaterial(FAVOURITE_MATERIALS[index]);
 }
 
+
+let QUOTE_LEARNING_TIMER = null;
+let LAST_LEARNING_DATA = null;
+
+function currentMaterialNames() {
+  return [...document.querySelectorAll("#materials .m-name")]
+    .map(x => (x.value || "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function scheduleQuoteLearning() {
+  window.clearTimeout(QUOTE_LEARNING_TIMER);
+  QUOTE_LEARNING_TIMER = window.setTimeout(loadQuoteLearning, 450);
+}
+
+function renderQuoteLearning(data) {
+  LAST_LEARNING_DATA = data;
+  const box = document.getElementById("learningInsights");
+  if (!box) return;
+
+  if (!data || !data.query || data.query.trim().length < 3) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    return;
+  }
+
+  const averages = data.averages || {};
+  const common = data.common_materials || [];
+  const similar = data.similar_quotes || [];
+  const currentNames = currentMaterialNames();
+
+  const missing = common.filter(m => {
+    const name = (m.name || "").toLowerCase();
+    const already = currentNames.some(n => n.includes(name) || name.includes(n));
+    return !already && Number(m.used_percent || 0) >= 40;
+  }).slice(0, 6);
+
+  const materialHtml = common.slice(0, 8).map(m => `
+    <div class="history-item" style="padding:8px;margin-top:6px;">
+      <strong>${escapeHtml(m.name)}</strong><br>
+      <span>Used in ${m.used_percent}% of similar quotes · avg qty ${m.average_quantity} · avg unit ${pounds(m.average_unit_price || 0)}</span>
+      <div class="history-actions" style="grid-template-columns:1fr;margin-top:6px;">
+        <button type="button" class="btn-light" onclick='addLearningMaterial(${JSON.stringify(m)})'>Add to quote</button>
+      </div>
+    </div>
+  `).join("");
+
+  const missingHtml = missing.length ? `
+    <div style="margin-top:10px;padding:10px;border:1px solid #f59e0b;border-radius:12px;background:#fffbeb;">
+      <strong>Possible missing materials</strong><br>
+      ${missing.map(m => `• ${escapeHtml(m.name)} — used in ${m.used_percent}% of similar quotes`).join("<br>")}
+    </div>
+  ` : "";
+
+  const similarHtml = similar.length ? `
+    <details style="margin-top:10px;">
+      <summary>Similar quotes found (${data.similar_count})</summary>
+      ${similar.map(q => `
+        <div class="history-item" style="padding:8px;margin-top:6px;">
+          <strong>Quote #${q.id}</strong> — ${escapeHtml(q.created_at || "")}<br>
+          ${escapeHtml((q.job || "").slice(0, 160))}<br>
+          Labour ${pounds(q.labour)} · Materials ${pounds(q.materials)} · Total ${pounds(q.total_price)}
+        </div>
+      `).join("")}
+    </details>
+  ` : "";
+
+  box.innerHTML = `
+    <strong>Learning from previous quotes</strong><br>
+    ${escapeHtml(data.message || "")}<br>
+    <div style="margin-top:8px;">
+      Avg labour: <strong>${pounds(averages.labour || 0)}</strong> ·
+      Avg materials: <strong>${pounds(averages.materials || 0)}</strong> ·
+      Avg total: <strong>${pounds(averages.total_price || 0)}</strong>
+    </div>
+    ${missingHtml}
+    <details style="margin-top:10px;" ${common.length ? "open" : ""}>
+      <summary>Common materials</summary>
+      ${materialHtml || "No common materials yet."}
+    </details>
+    ${similarHtml}
+  `;
+  box.style.display = "block";
+}
+
+async function loadQuoteLearning() {
+  const job = document.getElementById("job")?.value || "";
+  const quoteType = document.getElementById("quote_type")?.value || "";
+  const box = document.getElementById("learningInsights");
+
+  if (!job.trim() || job.trim().length < 3) {
+    if (box) {
+      box.style.display = "none";
+      box.innerHTML = "";
+    }
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/quote-learning?q=${encodeURIComponent(job)}&quote_type=${encodeURIComponent(quoteType)}`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderQuoteLearning(data);
+  } catch (e) {
+    if (box) {
+      box.style.display = "block";
+      box.innerHTML = "Could not load quote learning.";
+    }
+  }
+}
+
+function addLearningMaterial(m) {
+  addMaterial({
+    name: m.name || "",
+    quantity: m.average_quantity || 1,
+    supplier: m.supplier || "City Plumbing",
+    url: m.url || "",
+    manual_price: m.average_unit_price || 0,
+    default_price: m.average_unit_price || 0,
+  });
+  scheduleQuoteLearning();
+  showNotice("Material added from quote history.");
+}
+
+function applyLearningLabour() {
+  if (!LAST_LEARNING_DATA || !LAST_LEARNING_DATA.averages) return;
+  const labour = Number(LAST_LEARNING_DATA.averages.labour || 0);
+  if (labour > 0) {
+    document.getElementById("labour").value = labour.toFixed(2);
+    showNotice("Average labour applied.");
+  }
+}
+
+
 function updateLabourSuggestion() {
   const quoteType = document.getElementById("quote_type").value;
   const text = document.getElementById("job").value.toLowerCase();
@@ -3432,6 +3777,125 @@ function addMaterialFromLibrary(item) {
   document.getElementById("searchResults").classList.add("hidden");
   document.getElementById("searchResults").innerHTML = "";
 }
+
+
+function findBestMaterialForTemplate(name) {
+  const target = (name || "").toLowerCase().trim();
+  if (!target) return null;
+
+  const saved = MATERIAL_LIBRARY.filter(x => x.source === "saved");
+  let found = saved.find(x => (x.name || "").toLowerCase() === target);
+  if (found) return found;
+
+  found = saved.find(x => (x.name || "").toLowerCase().includes(target) || target.includes((x.name || "").toLowerCase()));
+  if (found) return found;
+
+  found = MATERIAL_LIBRARY.find(x => (x.name || "").toLowerCase() === target);
+  if (found) return found;
+
+  found = MATERIAL_LIBRARY.find(x => (x.name || "").toLowerCase().includes(target) || target.includes((x.name || "").toLowerCase()));
+  return found || { name: name, quantity: 1, supplier: "City Plumbing", default_price: 0 };
+}
+
+function applyJobTemplate(templateName) {
+  const template = JOB_TEMPLATES.find(t => t.name === templateName);
+  if (!template) return;
+
+  document.getElementById("quote_type").value = template.quote_type || "small";
+  document.getElementById("job").value = template.job || "";
+  document.getElementById("labour").value = template.labour || "";
+  toggleBathroomFields();
+  updateLabourSuggestion();
+  scheduleQuoteLearning();
+
+  const materialsBox = document.getElementById("materials");
+  materialsBox.innerHTML = "";
+
+  (template.materials || []).forEach(templateMaterial => {
+    const material = findBestMaterialForTemplate(templateMaterial.name);
+    addMaterial({
+      ...material,
+      quantity: templateMaterial.quantity || 1,
+      manual_price: material.default_price || material.last_price || material.last_live_price || material.last_manual_price || 0
+    });
+  });
+
+  const search = document.getElementById("templateSearch");
+  const results = document.getElementById("templateSearchResults");
+  if (search) search.value = "";
+  if (results) {
+    results.classList.add("hidden");
+    results.innerHTML = "";
+  }
+
+  showNotice("Template loaded: " + template.name);
+}
+
+function renderTemplateSearch() {
+  const input = document.getElementById("templateSearch");
+  const box = document.getElementById("templateSearchResults");
+  if (!input || !box) return;
+
+  const q = input.value.trim().toLowerCase();
+  if (!q) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+
+  const terms = q.split(/\s+/).filter(Boolean);
+  const matches = JOB_TEMPLATES.filter(t => {
+    const hay = `${t.name || ""} ${t.job || ""} ${(t.materials || []).map(m => m.name).join(" ")}`.toLowerCase();
+    return terms.every(term => hay.includes(term));
+  }).slice(0, 12);
+
+  if (!matches.length) {
+    box.innerHTML = '<div class="search-item">No template found</div>';
+    box.classList.remove("hidden");
+    return;
+  }
+
+  box.innerHTML = matches.map(t => `
+    <div class="search-item" onclick='applyJobTemplate(${JSON.stringify(t.name)})'>
+      <strong>${escapeHtml(t.name)}</strong><br>
+      <span class="small">Labour: ${pounds(t.labour || 0)} · ${(t.materials || []).length} materials</span><br>
+      <span class="small">${escapeHtml((t.job || "").slice(0, 120))}</span>
+    </div>
+  `).join("");
+  box.classList.remove("hidden");
+}
+
+function clearQuoteMaterials() {
+  if (!confirm("Clear all materials from this quote?")) return;
+  document.getElementById("materials").innerHTML = "";
+  showNotice("Materials cleared.");
+}
+
+function duplicateLastMaterial() {
+  const rows = [...document.querySelectorAll("#materials .material-row")];
+  if (!rows.length) {
+    addMaterial();
+    return;
+  }
+  const last = rows[rows.length - 1];
+  addMaterial({
+    name: last.querySelector(".m-name")?.value || "",
+    quantity: last.querySelector(".m-qty")?.value || 1,
+    supplier: last.querySelector(".m-supplier")?.value || "City Plumbing",
+    url: last.querySelector(".m-url")?.value || "",
+    manual_price: last.querySelector(".m-manual")?.value || 0,
+  });
+  showNotice("Last material duplicated.");
+}
+
+function renderTemplateButtons() {
+  const box = document.getElementById("templateButtons");
+  if (!box) return;
+  box.innerHTML = JOB_TEMPLATES.slice(0, 16).map(t => `
+    <button type="button" class="btn-light" onclick='applyJobTemplate(${JSON.stringify(t.name)})'>${escapeHtml(t.name)}</button>
+  `).join("");
+}
+
 
 function normalisePhone(phone) {
   const digits = (phone || "").replace(/\D/g, "");
@@ -4003,6 +4467,7 @@ function startQuoteFromLead(id) {
   document.getElementById('job').value = lead.description || '';
   toggleBathroomFields();
   updateLabourSuggestion();
+  scheduleQuoteLearning();
   showTab('quotesTab');
   setEditingStatus('Lead loaded into quote builder.', true);
 }
@@ -4712,6 +5177,7 @@ renderFavourites();
 addMaterial();
 setQuoteButtonMode(false);
 updateLabourSuggestion();
+renderTemplateButtons();
 loadDashboard();
 loadHistory();
 loadInvoices();
@@ -5114,6 +5580,12 @@ def api_delete_quote(quote_id: int):
     if not delete_quote_by_id(quote_id):
         raise HTTPException(status_code=404, detail="Quote not found")
     return {"ok": True}
+
+
+
+@app.get("/api/quote-learning")
+def api_quote_learning(q: str = "", quote_type: str = ""):
+    return JSONResponse(content=analyse_similar_quotes(q, quote_type))
 
 
 @app.post("/api/quote")
