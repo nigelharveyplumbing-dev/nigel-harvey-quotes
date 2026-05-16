@@ -621,6 +621,26 @@ MATERIAL_ALIAS_RULES = [
         "canonical": "15mm copper olive",
         "keywords": ["15mm olive", "compression olive"],
         "category": "fittings"
+    },
+{
+        "canonical": "fluidmaster bottom entry fill valve",
+        "keywords": ["fluidmaster bottom entry", "bottom entry fill valve"],
+        "category": "toilet"
+    },
+    {
+        "canonical": "dual flush valve",
+        "keywords": ["dual flush valve", "flush valve"],
+        "category": "toilet"
+    },
+    {
+        "canonical": "straight pan connector",
+        "keywords": ["straight pan connector"],
+        "category": "toilet"
+    },
+    {
+        "canonical": "doughnut washer",
+        "keywords": ["doughnut washer", "close coupling washer"],
+        "category": "toilet"
     }
 
 ]
@@ -1228,6 +1248,55 @@ TRADE_JOB_LIBRARY = [
         ],
         "common": [
             {"name": "appliance waste spigot", "quantity": 1}
+        ],
+        "optional": []
+    },
+{
+        "name": "Toilet not filling",
+        "category": "Toilet repair",
+        "quote_type": "small",
+        "job": "Repair toilet not filling including fill valve replacement.",
+        "typical_labour": 110,
+        "labour_range": "£90 - £160",
+        "risk_notes": ["Check side or bottom entry."],
+        "essential": [
+            {"name": "fluidmaster bottom entry fill valve", "quantity": 1},
+            {"name": "15mm isolating valve", "quantity": 1}
+        ],
+        "common": [
+            {"name": "15mm x 1/2 flexi hose", "quantity": 1}
+        ],
+        "optional": []
+    },
+    {
+        "name": "Toilet constantly running",
+        "category": "Toilet repair",
+        "quote_type": "small",
+        "job": "Repair toilet constantly running including flush valve replacement.",
+        "typical_labour": 110,
+        "labour_range": "£90 - £160",
+        "risk_notes": ["Check flush valve compatibility."],
+        "essential": [
+            {"name": "dual flush valve", "quantity": 1},
+            {"name": "doughnut washer", "quantity": 1}
+        ],
+        "common": [],
+        "optional": []
+    },
+    {
+        "name": "Replace toilet",
+        "category": "Toilet repair",
+        "quote_type": "small",
+        "job": "Replace toilet including pan connector and testing.",
+        "typical_labour": 220,
+        "labour_range": "£180 - £320",
+        "risk_notes": ["Check pan alignment."],
+        "essential": [
+            {"name": "straight pan connector", "quantity": 1},
+            {"name": "toilet fixing kit", "quantity": 1}
+        ],
+        "common": [
+            {"name": "doughnut washer", "quantity": 1}
         ],
         "optional": []
     }
