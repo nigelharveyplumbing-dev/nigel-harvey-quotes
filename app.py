@@ -1211,15 +1211,24 @@ def analyse_similar_quotes(query: str, quote_type: str = ""):
         url = max(entry["urls"], key=entry["urls"].get) if entry["urls"] else ""
         source = max(entry["source_types"], key=entry["source_types"].get) if entry["source_types"] else "manual"
 
+        used_percent = round((entry["count"] / len(matches)) * 100, 0)
+        if used_percent >= 80:
+            bundle_status = "essential"
+        elif used_percent >= 40:
+            bundle_status = "common"
+        else:
+            bundle_status = "optional"
+
         common_materials.append({
             "name": entry["name"],
             "used_count": entry["count"],
-            "used_percent": round((entry["count"] / len(matches)) * 100, 0),
+            "used_percent": used_percent,
             "average_quantity": round(avg_qty, 2),
             "average_unit_price": round(avg_unit, 2),
             "supplier": supplier,
             "url": url,
             "price_source": source,
+            "bundle_status": bundle_status,
         })
 
     common_materials.sort(key=lambda x: (x["used_count"], x["used_percent"]), reverse=True)
@@ -1227,6 +1236,14 @@ def analyse_similar_quotes(query: str, quote_type: str = ""):
     def avg(values):
         values = [safe_float(v, 0) for v in values if safe_float(v, 0) > 0]
         return round(sum(values) / len(values), 2) if values else 0
+
+
+    suggested_bundle = {
+        "name": "Suggested bundle from previous quotes",
+        "essential": [m for m in common_materials if m.get("bundle_status") == "essential"],
+        "common": [m for m in common_materials if m.get("bundle_status") == "common"],
+        "optional": [m for m in common_materials if m.get("bundle_status") == "optional"][:8],
+    }
 
     similar_quotes = []
     for quote in matches[:6]:
@@ -1245,6 +1262,7 @@ def analyse_similar_quotes(query: str, quote_type: str = ""):
         "similar_count": len(matches),
         "similar_quotes": similar_quotes,
         "common_materials": common_materials[:20],
+        "suggested_bundle": suggested_bundle,
         "averages": {
             "labour": avg(labour_values),
             "materials": avg(material_values),
@@ -3556,6 +3574,45 @@ function renderQuoteLearning(data) {
     </div>
   ` : "";
 
+  const bundle = data.suggested_bundle || {};
+  const essential = bundle.essential || [];
+  const commonBundle = bundle.common || [];
+  const optional = bundle.optional || [];
+  const bundleItems = [...essential, ...commonBundle];
+
+  const bundleHtml = bundleItems.length ? `
+    <div style="margin-top:10px;padding:10px;border:1px solid #16a34a;border-radius:12px;background:#f0fdf4;">
+      <strong>Suggested material bundle</strong><br>
+      <span class="small">Built from previous similar quotes. Essential = used in 80%+ of similar quotes. Common = used in 40%+.</span>
+
+      <div style="margin-top:8px;">
+        ${essential.length ? `<strong>Essential</strong><br>${essential.map(m => `• ${escapeHtml(m.name)} × ${m.average_quantity} (${m.used_percent}%)`).join("<br>")}` : ""}
+        ${commonBundle.length ? `<br><strong>Common</strong><br>${commonBundle.map(m => `• ${escapeHtml(m.name)} × ${m.average_quantity} (${m.used_percent}%)`).join("<br>")}` : ""}
+      </div>
+
+      <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+        <button type="button" class="btn-green" onclick="addLearningBundle('core')">Add Full Bundle</button>
+        <button type="button" class="btn-light" onclick="addLearningBundle('essential')">Add Essential Only</button>
+      </div>
+
+      ${optional.length ? `
+        <details style="margin-top:8px;">
+          <summary>Optional extras</summary>
+          ${optional.map(m => `
+            <div class="history-item" style="padding:8px;margin-top:6px;">
+              <strong>${escapeHtml(m.name)}</strong><br>
+              <span class="small">Used in ${m.used_percent}% · avg qty ${m.average_quantity}</span>
+              <div class="history-actions" style="grid-template-columns:1fr;margin-top:6px;">
+                <button type="button" class="btn-light" onclick='addLearningMaterial(${JSON.stringify(m)})'>Add optional item</button>
+              </div>
+            </div>
+          `).join("")}
+        </details>
+      ` : ""}
+    </div>
+  ` : "";
+
+
   const similarHtml = similar.length ? `
     <details style="margin-top:10px;">
       <summary>Similar quotes found (${data.similar_count})</summary>
@@ -3578,6 +3635,7 @@ function renderQuoteLearning(data) {
       Avg total: <strong>${pounds(averages.total_price || 0)}</strong>
     </div>
     ${missingHtml}
+    ${bundleHtml}
     <details style="margin-top:10px;" ${common.length ? "open" : ""}>
       <summary>Common materials</summary>
       ${materialHtml || "No common materials yet."}
@@ -3613,7 +3671,42 @@ async function loadQuoteLearning() {
   }
 }
 
-function addLearningMaterial(m) {
+
+function materialAlreadyInQuote(materialName) {
+  const name = (materialName || "").trim().toLowerCase();
+  if (!name) return false;
+  return currentMaterialNames().some(existing => existing.includes(name) || name.includes(existing));
+}
+
+function addLearningBundle(mode = "core") {
+  if (!LAST_LEARNING_DATA || !LAST_LEARNING_DATA.suggested_bundle) {
+    alert("No suggested bundle available yet.");
+    return;
+  }
+
+  const bundle = LAST_LEARNING_DATA.suggested_bundle;
+  let items = [];
+
+  if (mode === "essential") {
+    items = bundle.essential || [];
+  } else {
+    items = [...(bundle.essential || []), ...(bundle.common || [])];
+  }
+
+  const newItems = items.filter(m => !materialAlreadyInQuote(m.name));
+
+  if (!newItems.length) {
+    showNotice("Bundle materials are already in this quote.");
+    return;
+  }
+
+  newItems.forEach(m => addLearningMaterial(m, false));
+  scheduleQuoteLearning();
+  showNotice(`${newItems.length} bundle material(s) added.`);
+}
+
+
+function addLearningMaterial(m, refresh = true) {
   addMaterial({
     name: m.name || "",
     quantity: m.average_quantity || 1,
@@ -3622,7 +3715,7 @@ function addLearningMaterial(m) {
     manual_price: m.average_unit_price || 0,
     default_price: m.average_unit_price || 0,
   });
-  scheduleQuoteLearning();
+  if (refresh) scheduleQuoteLearning();
   showNotice("Material added from quote history.");
 }
 
