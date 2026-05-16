@@ -316,7 +316,20 @@ MATERIAL_ALIAS_RULES = [
     },
     {
         "canonical": "15mm endfeed elbow",
-        "keywords": ["endfeed elbow 15", "elbow 90 15", "15mm elbow", "end feed elbow"],
+        "keywords": [
+            "endfeed elbow 15",
+            "endfeed elbow 90",
+            "endfeed elbow 90 degree",
+            "endfeed elbow 90 degree 15mm",
+            "elbow 90 15",
+            "elbow 90 degree 15",
+            "90 degree elbow 15",
+            "90 degree elbow 15mm",
+            "15mm endfeed elbow",
+            "15mm elbow",
+            "end feed elbow",
+            "plumbright endfeed elbow 90 degree 15mm"
+        ],
         "category": "fittings",
     },
     {
