@@ -432,6 +432,176 @@ MATERIAL_ALIAS_RULES = [
         "keywords": ["inhibitor", "central heating inhibitor", "sentinel x100", "fernox inhibitor"],
         "category": "heating",
     },
+{
+        "canonical": "32mm bottle trap",
+        "keywords": ["32mm bottle trap", "bottle trap 32", "basin bottle trap", "chrome bottle trap", "plastic bottle trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "40mm bottle trap",
+        "keywords": ["40mm bottle trap", "bottle trap 40", "sink bottle trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "32mm p trap",
+        "keywords": ["32mm p trap", "p trap 32", "basin p trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "40mm p trap",
+        "keywords": ["40mm p trap", "p trap 40", "sink p trap", "kitchen p trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "32mm s trap",
+        "keywords": ["32mm s trap", "s trap 32", "basin s trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "40mm s trap",
+        "keywords": ["40mm s trap", "s trap 40", "sink s trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "32mm shallow trap",
+        "keywords": ["32mm shallow trap", "shallow basin trap", "low profile basin trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "40mm shallow trap",
+        "keywords": ["40mm shallow trap", "shallow sink trap", "low profile sink trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "anti-syphon trap",
+        "keywords": ["anti syphon trap", "anti-syphon trap", "resealing trap", "anti vacuum trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "32mm compression waste bend",
+        "keywords": ["32mm compression bend", "32mm waste bend", "waste bend 32", "32mm knuckle bend"],
+        "category": "waste",
+    },
+    {
+        "canonical": "40mm compression waste bend",
+        "keywords": ["40mm compression bend", "40mm waste bend", "waste bend 40", "40mm knuckle bend"],
+        "category": "waste",
+    },
+    {
+        "canonical": "32mm compression waste coupler",
+        "keywords": ["32mm compression coupler", "32mm waste coupler", "32mm waste coupling", "waste coupling 32"],
+        "category": "waste",
+    },
+    {
+        "canonical": "40mm compression waste coupler",
+        "keywords": ["40mm compression coupler", "40mm waste coupler", "40mm waste coupling", "waste coupling 40"],
+        "category": "waste",
+    },
+    {
+        "canonical": "32mm solvent weld bend",
+        "keywords": ["32mm solvent bend", "32mm solvent weld bend", "solvent bend 32", "32mm swept bend"],
+        "category": "waste",
+    },
+    {
+        "canonical": "40mm solvent weld bend",
+        "keywords": ["40mm solvent bend", "40mm solvent weld bend", "solvent bend 40", "40mm swept bend"],
+        "category": "waste",
+    },
+    {
+        "canonical": "32mm solvent weld coupler",
+        "keywords": ["32mm solvent coupler", "32mm solvent weld coupling", "solvent coupling 32"],
+        "category": "waste",
+    },
+    {
+        "canonical": "40mm solvent weld coupler",
+        "keywords": ["40mm solvent coupler", "40mm solvent weld coupling", "solvent coupling 40"],
+        "category": "waste",
+    },
+    {
+        "canonical": "32mm waste tee",
+        "keywords": ["32mm waste tee", "waste tee 32", "32mm swept tee"],
+        "category": "waste",
+    },
+    {
+        "canonical": "40mm waste tee",
+        "keywords": ["40mm waste tee", "waste tee 40", "40mm swept tee"],
+        "category": "waste",
+    },
+    {
+        "canonical": "slotted basin waste",
+        "keywords": ["slotted basin waste", "basin waste slotted", "click clack slotted", "pop up slotted"],
+        "category": "waste",
+    },
+    {
+        "canonical": "unslotted basin waste",
+        "keywords": ["unslotted basin waste", "basin waste unslotted", "click clack unslotted", "pop up unslotted"],
+        "category": "waste",
+    },
+    {
+        "canonical": "click clack basin waste",
+        "keywords": ["click clack basin waste", "clicker waste", "basin clicker waste"],
+        "category": "waste",
+    },
+    {
+        "canonical": "bath waste and overflow",
+        "keywords": ["bath waste", "bath waste overflow", "bath waste and overflow", "pop up bath waste"],
+        "category": "waste",
+    },
+    {
+        "canonical": "bath trap 40mm",
+        "keywords": ["bath trap", "40mm bath trap", "shallow bath trap", "low level bath trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "shower trap 40mm",
+        "keywords": ["shower trap", "40mm shower trap", "fast flow shower trap", "low profile shower trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "90mm shower waste",
+        "keywords": ["90mm shower waste", "90mm shower trap", "shower waste 90mm"],
+        "category": "waste",
+    },
+    {
+        "canonical": "kitchen basket strainer waste",
+        "keywords": ["basket strainer", "basket strainer waste", "kitchen basket waste", "sink basket waste"],
+        "category": "waste",
+    },
+    {
+        "canonical": "single bowl sink waste kit",
+        "keywords": ["single bowl waste kit", "single sink waste kit", "single bowl sink waste"],
+        "category": "waste",
+    },
+    {
+        "canonical": "1.5 bowl sink waste kit",
+        "keywords": ["1.5 bowl waste kit", "one and half bowl waste", "1 1/2 bowl sink waste", "1.5 sink waste"],
+        "category": "waste",
+    },
+    {
+        "canonical": "double bowl sink waste kit",
+        "keywords": ["double bowl waste kit", "double sink waste kit", "two bowl sink waste"],
+        "category": "waste",
+    },
+    {
+        "canonical": "appliance waste spigot",
+        "keywords": ["appliance waste spigot", "washing machine spigot", "dishwasher spigot", "appliance connector"],
+        "category": "waste",
+    },
+    {
+        "canonical": "washing machine trap",
+        "keywords": ["washing machine trap", "standpipe trap", "appliance trap", "washing machine waste trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "tundish",
+        "keywords": ["tundish", "unvented tundish", "condensate tundish"],
+        "category": "waste",
+    },
+    {
+        "canonical": "solvent weld cement",
+        "keywords": ["solvent weld cement", "solvent cement", "waste pipe cement"],
+        "category": "consumables",
+    }
 ]
 
 
@@ -924,6 +1094,89 @@ TRADE_JOB_LIBRARY = [
             {"name": "Radiator Tail Extension", "quantity": 1},
         ],
     },
+{
+        "name": "Replace basin bottle trap",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Remove existing basin trap and fit new 32mm bottle trap, including waste alignment and leak testing.",
+        "typical_labour": 90,
+        "labour_range": "£80 - £140",
+        "risk_notes": ["Check slotted/unslotted waste.", "Old chrome traps can be seized.", "Check waste pipe alignment."],
+        "essential": [
+            {"name": "32mm bottle trap", "quantity": 1},
+            {"name": "32mm waste pipe", "quantity": 1}
+        ],
+        "common": [
+            {"name": "32mm compression waste coupler", "quantity": 1},
+            {"name": "32mm waste pipe clips", "quantity": 2}
+        ],
+        "optional": [
+            {"name": "slotted basin waste", "quantity": 1},
+            {"name": "unslotted basin waste", "quantity": 1}
+        ],
+    },
+    {
+        "name": "Replace kitchen sink trap",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Remove faulty kitchen sink trap/waste and fit new 40mm trap arrangement, including appliance connections where required and leak testing.",
+        "typical_labour": 120,
+        "labour_range": "£100 - £180",
+        "risk_notes": ["Check single, 1.5 bowl or double bowl sink.", "Confirm dishwasher/washing machine spigots.", "Check existing waste is compression or solvent weld."],
+        "essential": [
+            {"name": "40mm p trap", "quantity": 1},
+            {"name": "40mm waste pipe", "quantity": 1}
+        ],
+        "common": [
+            {"name": "40mm compression waste bend", "quantity": 2},
+            {"name": "40mm compression waste coupler", "quantity": 1},
+            {"name": "appliance waste spigot", "quantity": 1}
+        ],
+        "optional": [
+            {"name": "single bowl sink waste kit", "quantity": 1},
+            {"name": "1.5 bowl sink waste kit", "quantity": 1},
+            {"name": "double bowl sink waste kit", "quantity": 1}
+        ],
+    },
+    {
+        "name": "Replace bath waste",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Remove existing bath waste/overflow and fit replacement bath waste and trap, including testing for leaks.",
+        "typical_labour": 150,
+        "labour_range": "£120 - £220",
+        "risk_notes": ["Bath access panel may be poor.", "Old bath waste can be seized.", "Check trap depth and floor void."],
+        "essential": [
+            {"name": "bath waste and overflow", "quantity": 1},
+            {"name": "bath trap 40mm", "quantity": 1}
+        ],
+        "common": [
+            {"name": "40mm compression waste coupler", "quantity": 1},
+            {"name": "40mm waste pipe", "quantity": 1}
+        ],
+        "optional": [
+            {"name": "40mm shallow trap", "quantity": 1}
+        ],
+    },
+    {
+        "name": "Replace shower trap",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Remove and replace shower trap/waste where accessible, including sealing and leak testing.",
+        "typical_labour": 150,
+        "labour_range": "£120 - £250",
+        "risk_notes": ["Access below tray is critical.", "Some trays require removal to replace trap.", "Check 90mm or low profile trap size."],
+        "essential": [
+            {"name": "shower trap 40mm", "quantity": 1}
+        ],
+        "common": [
+            {"name": "90mm shower waste", "quantity": 1},
+            {"name": "40mm compression waste coupler", "quantity": 1}
+        ],
+        "optional": [
+            {"name": "40mm shallow trap", "quantity": 1}
+        ],
+    }
 ]
 
 
