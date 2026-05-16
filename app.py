@@ -271,6 +271,356 @@ JOB_TEMPLATES = [
     ]}
 ]
 
+
+TRADE_JOB_LIBRARY = [
+    {
+        "name": "Outside tap",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Supply and fit outside tap with isolation, double check protection, pipework, clips and testing.",
+        "typical_labour": 150,
+        "labour_range": "£140 - £220",
+        "risk_notes": [
+            "Check pipe route and wall thickness.",
+            "Add drain off where pipework may freeze.",
+            "Lag external pipework where exposed.",
+            "Confirm double check valve/backflow protection.",
+        ],
+        "essential": [
+            {"name": "Hose Union Bib Tap 1/2", "quantity": 1},
+            {"name": "15mm Isolating Valve", "quantity": 1},
+            {"name": "Double Check Valve 15mm", "quantity": 1},
+            {"name": "Wall Plate Elbow 15mm x 1/2", "quantity": 1},
+            {"name": "15mm Copper Pipe 3m", "quantity": 1},
+            {"name": "Pipe Clips 15mm", "quantity": 6},
+        ],
+        "common": [
+            {"name": "Drain Off Cock 15mm", "quantity": 1},
+            {"name": "PTFE Tape", "quantity": 1},
+            {"name": "Pipe Lagging 15mm", "quantity": 1},
+        ],
+        "optional": [
+            {"name": "Outside Tap Cover", "quantity": 1},
+            {"name": "Non Return Valve", "quantity": 1},
+        ],
+    },
+    {
+        "name": "Fridge cold water feed",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Supply and connect cold water feed for fridge with isolation valve, pipework, fittings and testing.",
+        "typical_labour": 120,
+        "labour_range": "£100 - £180",
+        "risk_notes": [
+            "Confirm fridge connection size before attending.",
+            "Check route from nearest cold supply.",
+            "Isolation valve should be accessible.",
+        ],
+        "essential": [
+            {"name": "15mm Isolating Valve", "quantity": 1},
+            {"name": "15mm Copper Pipe 3m", "quantity": 1},
+            {"name": "Compression Coupler 15mm", "quantity": 2},
+        ],
+        "common": [
+            {"name": "Appliance Valve", "quantity": 1},
+            {"name": "PTFE Tape", "quantity": 1},
+            {"name": "Pipe Clips 15mm", "quantity": 4},
+        ],
+        "optional": [
+            {"name": "Water Filter Inline", "quantity": 1},
+        ],
+    },
+    {
+        "name": "Washing machine feed",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Install washing machine cold feed and waste connection, including isolation valve and testing.",
+        "typical_labour": 120,
+        "labour_range": "£100 - £180",
+        "risk_notes": [
+            "Check waste height and trap connection.",
+            "Make sure appliance valve remains accessible.",
+        ],
+        "essential": [
+            {"name": "Washing Machine Valve 15mm x 3/4", "quantity": 1},
+            {"name": "15mm Copper Pipe 3m", "quantity": 1},
+            {"name": "Compression Coupler 15mm", "quantity": 2},
+            {"name": "Appliance Waste Trap", "quantity": 1},
+        ],
+        "common": [
+            {"name": "Pipe Clips 15mm", "quantity": 4},
+            {"name": "PTFE Tape", "quantity": 1},
+            {"name": "Waste Pipe 40mm", "quantity": 1},
+        ],
+        "optional": [
+            {"name": "Non Return Valve", "quantity": 1},
+        ],
+    },
+    {
+        "name": "Dishwasher feed",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Install dishwasher cold feed and waste connection, including isolation valve and testing.",
+        "typical_labour": 120,
+        "labour_range": "£100 - £180",
+        "risk_notes": [
+            "Check sink waste has appliance spigot.",
+            "Check hose route and kinks.",
+        ],
+        "essential": [
+            {"name": "Washing Machine Valve 15mm x 3/4", "quantity": 1},
+            {"name": "Appliance Waste Trap", "quantity": 1},
+            {"name": "15mm Copper Pipe 3m", "quantity": 1},
+        ],
+        "common": [
+            {"name": "Compression Coupler 15mm", "quantity": 2},
+            {"name": "Pipe Clips 15mm", "quantity": 4},
+            {"name": "PTFE Tape", "quantity": 1},
+        ],
+        "optional": [
+            {"name": "Y Piece Appliance Connector", "quantity": 1},
+        ],
+    },
+    {
+        "name": "Kitchen sink waste",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Remove existing kitchen sink waste and fit new waste/trap arrangement including testing for leaks.",
+        "typical_labour": 120,
+        "labour_range": "£90 - £180",
+        "risk_notes": [
+            "Check single or double bowl sink.",
+            "Check whether appliance connections are needed.",
+            "Allow for solvent weld or compression depending on existing waste.",
+        ],
+        "essential": [
+            {"name": "Kitchen Sink Waste Kit", "quantity": 1},
+            {"name": "P Trap 40mm", "quantity": 1},
+            {"name": "Waste Pipe 40mm", "quantity": 1},
+        ],
+        "common": [
+            {"name": "Waste Pipe Clips 40mm", "quantity": 4},
+            {"name": "Solvent Weld Cement", "quantity": 1},
+            {"name": "Silicone", "quantity": 1},
+        ],
+        "optional": [
+            {"name": "Appliance Waste Connector", "quantity": 1},
+            {"name": "Basket Strainer Waste", "quantity": 1},
+        ],
+    },
+    {
+        "name": "Basin waste",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Remove faulty basin waste and fit new basin waste and trap, including testing for leaks.",
+        "typical_labour": 90,
+        "labour_range": "£80 - £140",
+        "risk_notes": [
+            "Check slotted or unslotted waste.",
+            "Check bottle trap condition.",
+            "Old wastes can be seized.",
+        ],
+        "essential": [
+            {"name": "Basin Waste", "quantity": 1},
+            {"name": "Bottle Trap 32mm", "quantity": 1},
+        ],
+        "common": [
+            {"name": "Waste Pipe 32mm", "quantity": 1},
+            {"name": "Waste Pipe Clips 32mm", "quantity": 2},
+            {"name": "Silicone", "quantity": 1},
+        ],
+        "optional": [
+            {"name": "Chrome Bottle Trap", "quantity": 1},
+        ],
+    },
+    {
+        "name": "Replace bath taps",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Remove existing bath taps and fit replacement bath taps, including connection checks and testing for leaks.",
+        "typical_labour": 180,
+        "labour_range": "£150 - £260",
+        "risk_notes": [
+            "Access behind bath may be poor.",
+            "Old tap nuts may be seized.",
+            "Check if isolation valves are present.",
+        ],
+        "essential": [
+            {"name": "Bath Tap Connectors", "quantity": 2},
+            {"name": "Flexible Tap Connector", "quantity": 2},
+            {"name": "PTFE Tape", "quantity": 1},
+        ],
+        "common": [
+            {"name": "15mm Isolating Valve", "quantity": 2},
+            {"name": "Tap Back Nut Spanner", "quantity": 1},
+        ],
+        "optional": [
+            {"name": "Bath Taps", "quantity": 1},
+        ],
+    },
+    {
+        "name": "Toilet repair",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Repair toilet fault including inlet/fill valve, flush valve or siphon as required, then test operation.",
+        "typical_labour": 120,
+        "labour_range": "£100 - £180",
+        "risk_notes": [
+            "Identify whether it is fill valve, flush valve, siphon, button or overflow issue.",
+            "Old cistern fittings can be brittle.",
+        ],
+        "essential": [
+            {"name": "Toilet Fill Valve", "quantity": 1},
+            {"name": "Toilet Flush Valve", "quantity": 1},
+        ],
+        "common": [
+            {"name": "Close Coupling Kit", "quantity": 1},
+            {"name": "15mm Isolating Valve", "quantity": 1},
+        ],
+        "optional": [
+            {"name": "Toilet Button", "quantity": 1},
+            {"name": "Toilet Siphon", "quantity": 1},
+        ],
+    },
+    {
+        "name": "Toilet replacement",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Remove existing toilet and fit replacement toilet including pan connector, inlet connection and testing.",
+        "typical_labour": 180,
+        "labour_range": "£160 - £260",
+        "risk_notes": [
+            "Check soil outlet direction and distance.",
+            "Check floor fixing condition.",
+            "Allow for new isolation valve if old one fails.",
+        ],
+        "essential": [
+            {"name": "Pan Connector", "quantity": 1},
+            {"name": "15mm Isolating Valve", "quantity": 1},
+            {"name": "Flexible Tap Connector", "quantity": 1},
+            {"name": "Sanitary Silicone", "quantity": 1},
+        ],
+        "common": [
+            {"name": "Toilet Fixing Kit", "quantity": 1},
+            {"name": "Close Coupling Kit", "quantity": 1},
+        ],
+        "optional": [
+            {"name": "Offset Pan Connector", "quantity": 1},
+        ],
+    },
+    {
+        "name": "Leak repair",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Attend leak, identify source, repair faulty pipework or fitting and test on completion.",
+        "typical_labour": 150,
+        "labour_range": "£120 - £250",
+        "risk_notes": [
+            "Leak source may not be visible immediately.",
+            "Access damage may be required.",
+            "Allow for isolation and drain down time.",
+        ],
+        "essential": [
+            {"name": "15mm Copper Pipe 3m", "quantity": 1},
+            {"name": "15mm Straight Coupler", "quantity": 2},
+            {"name": "15mm Copper Elbow", "quantity": 4},
+        ],
+        "common": [
+            {"name": "PTFE Tape", "quantity": 1},
+            {"name": "Pipe Clips 15mm", "quantity": 4},
+            {"name": "15mm Isolating Valve", "quantity": 1},
+        ],
+        "optional": [
+            {"name": "22mm Copper Pipe 3m", "quantity": 1},
+            {"name": "22mm Coupler", "quantity": 2},
+        ],
+    },
+    {
+        "name": "Stopcock replacement",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Replace faulty stopcock including isolation, pipework adjustment and testing.",
+        "typical_labour": 180,
+        "labour_range": "£150 - £280",
+        "risk_notes": [
+            "External stopcock may be needed to isolate supply.",
+            "Old pipework may be seized or brittle.",
+            "Check pipe size before attending.",
+        ],
+        "essential": [
+            {"name": "Stopcock 15mm", "quantity": 1},
+            {"name": "15mm Copper Pipe 3m", "quantity": 1},
+            {"name": "Compression Coupler 15mm", "quantity": 2},
+        ],
+        "common": [
+            {"name": "PTFE Tape", "quantity": 1},
+            {"name": "Pipe Clips 15mm", "quantity": 2},
+        ],
+        "optional": [
+            {"name": "Stopcock 22mm", "quantity": 1},
+        ],
+    },
+    {
+        "name": "Radiator valve replacement",
+        "category": "Heating",
+        "quote_type": "heating",
+        "job": "Replace radiator valves/TRV, refill, test and bleed radiator.",
+        "typical_labour": 150,
+        "labour_range": "£120 - £220",
+        "risk_notes": [
+            "System may need partial or full drain down.",
+            "Old valve tails can be seized.",
+            "Check lockshield and TRV sizes.",
+        ],
+        "essential": [
+            {"name": "TRV Valve", "quantity": 1},
+            {"name": "Lockshield Valve", "quantity": 1},
+            {"name": "PTFE Tape", "quantity": 1},
+        ],
+        "common": [
+            {"name": "Inhibitor 1L", "quantity": 1},
+            {"name": "15mm Copper Olive", "quantity": 2},
+        ],
+        "optional": [
+            {"name": "Radiator Tail Extension", "quantity": 1},
+        ],
+    },
+]
+
+
+def get_all_job_templates():
+    trade_templates = []
+    for job in TRADE_JOB_LIBRARY:
+        materials = []
+        for group in ("essential", "common"):
+            for item in job.get(group, []):
+                copied = dict(item)
+                copied["bundle_group"] = group
+                materials.append(copied)
+
+        trade_templates.append({
+            "name": job["name"],
+            "category": job.get("category", ""),
+            "quote_type": job.get("quote_type", "small"),
+            "job": job.get("job", ""),
+            "labour": job.get("typical_labour", 0),
+            "labour_range": job.get("labour_range", ""),
+            "risk_notes": job.get("risk_notes", []),
+            "materials": materials,
+            "essential": job.get("essential", []),
+            "common": job.get("common", []),
+            "optional": job.get("optional", []),
+            "source": "trade_knowledge",
+        })
+
+    existing_names = {t.get("name", "").lower() for t in JOB_TEMPLATES}
+    combined = list(JOB_TEMPLATES)
+    for template in trade_templates:
+        if template["name"].lower() not in existing_names:
+            combined.append(template)
+    return combined
+
+
 LABOUR_HINTS = {
     "small": [
         {"keywords": ["tap"], "suggestion": 120, "range": "£100 - £140"},
@@ -3895,7 +4245,11 @@ function applyJobTemplate(templateName) {
   if (!template) return;
 
   document.getElementById("quote_type").value = template.quote_type || "small";
-  document.getElementById("job").value = template.job || "";
+  let jobText = template.job || "";
+  if (template.risk_notes && template.risk_notes.length) {
+    jobText += "\n\nNotes to check:\n" + template.risk_notes.map(n => "- " + n).join("\n");
+  }
+  document.getElementById("job").value = jobText;
   document.getElementById("labour").value = template.labour || "";
   toggleBathroomFields();
   updateLabourSuggestion();
@@ -3951,7 +4305,7 @@ function renderTemplateSearch() {
   box.innerHTML = matches.map(t => `
     <div class="search-item" onclick='applyJobTemplate(${JSON.stringify(t.name)})'>
       <strong>${escapeHtml(t.name)}</strong><br>
-      <span class="small">Labour: ${pounds(t.labour || 0)} · ${(t.materials || []).length} materials</span><br>
+      <span class="small">${t.source === "trade_knowledge" ? "Trade library" : "Saved template"} · Labour: ${pounds(t.labour || 0)} · ${(t.materials || []).length} materials</span><br>
       <span class="small">${escapeHtml((t.job || "").slice(0, 120))}</span>
     </div>
   `).join("");
@@ -5325,7 +5679,7 @@ def api_delete_lead(lead_id: int):
 def home_app():
     html = HTML.replace("__MATERIAL_LIBRARY__", json.dumps(get_material_search_library()))
     html = html.replace("__FAVOURITE_MATERIALS__", json.dumps(FAVOURITE_MATERIALS))
-    html = html.replace("__JOB_TEMPLATES__", json.dumps(JOB_TEMPLATES))
+    html = html.replace("__JOB_TEMPLATES__", json.dumps(get_all_job_templates()))
     logo_value = get_company_logo_value()
     logo_html = f'<img src="{logo_value}" alt="Logo">' if logo_value else ""
     html = html.replace("__COMPANY_LOGO_HTML__", logo_html)
@@ -5674,6 +6028,12 @@ def api_delete_quote(quote_id: int):
         raise HTTPException(status_code=404, detail="Quote not found")
     return {"ok": True}
 
+
+
+
+@app.get("/api/trade-jobs")
+def api_trade_jobs():
+    return JSONResponse(content=get_all_job_templates())
 
 
 @app.get("/api/quote-learning")
