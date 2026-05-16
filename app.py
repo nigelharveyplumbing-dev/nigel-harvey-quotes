@@ -3755,6 +3755,17 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <h3>Favourite materials</h3>
       <div id="favouriteButtons" class="favourites"></div>
 
+      <h3>Master material library</h3>
+      <div class="quote-box small">
+        <p class="small">Core plumbing fittings grouped by proper material names. This is the clean material brain the quote learning uses.</p>
+        <div id="masterMaterialSearchBox" style="margin-bottom:10px;">
+          <label for="masterMaterialSearch">Search master materials</label>
+          <input id="masterMaterialSearch" placeholder="e.g. copper, elbow, valve, waste, pan connector" oninput="renderMasterMaterialSuggestions()">
+        </div>
+        <div id="master-material-library" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;"></div>
+      </div>
+
+
       <label for="quote_type">Quote type</label>
       <select id="quote_type" onchange="toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning();">
         <option value="small">Small Job</option>
@@ -4179,6 +4190,7 @@ function showTab(id) {
   if (id === "safetyTab") loadSafety();
   if (id === "materialsDbTab") loadMaterialDb();
   if (id === "intelligenceTab") loadIntelligence();
+  if (id === "quotesTab") renderMasterMaterialSuggestions();
 }
 
 function toggleBathroomFields() {
@@ -4263,12 +4275,40 @@ function renderMasterMaterialSuggestions() {
   const box = document.getElementById("master-material-library");
   if (!box) return;
 
-  box.innerHTML = MATERIAL_ALIAS_RULES.slice(0, 12).map(rule => `
+  const input = document.getElementById("masterMaterialSearch");
+  const q = input ? input.value.trim().toLowerCase() : "";
+
+  const rules = MATERIAL_ALIAS_RULES.filter(rule => {
+    if (!q) return true;
+    const hay = `${rule.canonical || ""} ${rule.category || ""} ${(rule.keywords || []).join(" ")}`.toLowerCase();
+    return hay.includes(q);
+  }).slice(0, 24);
+
+  box.innerHTML = rules.length ? rules.map((rule, idx) => `
     <div class="card">
-      <strong>${rule.canonical}</strong><br>
-      <small>${rule.category || "other"}</small>
+      <strong>${escapeHtml(rule.canonical)}</strong><br>
+      <small>${escapeHtml(rule.category || "other")}</small><br>
+      <small>Aliases: ${escapeHtml((rule.keywords || []).slice(0, 3).join(", "))}</small>
+      <div style="margin-top:8px;">
+        <button type="button" class="btn-light" onclick="addMasterMaterialByIndex(${idx})">Add to quote</button>
+      </div>
     </div>
-  `).join("");
+  `).join("") : "No master materials found.";
+
+  window.CURRENT_MASTER_MATERIAL_RESULTS = rules;
+}
+
+function addMasterMaterialByIndex(index) {
+  const list = window.CURRENT_MASTER_MATERIAL_RESULTS || MATERIAL_ALIAS_RULES;
+  const item = list[index];
+  if (!item) return;
+  addMaterial({
+    name: item.canonical,
+    quantity: 1,
+    supplier: "City Plumbing",
+    manual_price: 0
+  });
+  showNotice("Master material added.");
 }
 
 
@@ -6028,6 +6068,7 @@ addMaterial();
 setQuoteButtonMode(false);
 updateLabourSuggestion();
 renderTemplateButtons();
+renderMasterMaterialSuggestions();
 loadDashboard();
 loadHistory();
 loadInvoices();
