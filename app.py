@@ -601,7 +601,28 @@ MATERIAL_ALIAS_RULES = [
         "canonical": "solvent weld cement",
         "keywords": ["solvent weld cement", "solvent cement", "waste pipe cement"],
         "category": "consumables",
+    },
+{
+        "canonical": "full bore isolating valve 15mm",
+        "keywords": ["full bore isolating valve", "full bore valve 15"],
+        "category": "valves"
+    },
+    {
+        "canonical": "washing machine valve",
+        "keywords": ["washing machine valve", "appliance valve"],
+        "category": "valves"
+    },
+    {
+        "canonical": "flexi hose 300mm",
+        "keywords": ["300mm flexi", "300mm flexible hose"],
+        "category": "taps"
+    },
+    {
+        "canonical": "15mm copper olive",
+        "keywords": ["15mm olive", "compression olive"],
+        "category": "fittings"
     }
+
 ]
 
 
@@ -1176,7 +1197,41 @@ TRADE_JOB_LIBRARY = [
         "optional": [
             {"name": "40mm shallow trap", "quantity": 1}
         ],
+    },
+{
+        "name": "Replace kitchen tap",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Remove existing kitchen tap and fit replacement tap.",
+        "typical_labour": 140,
+        "labour_range": "£120 - £220",
+        "risk_notes": ["Check access under sink."],
+        "essential": [
+            {"name": "flexi hose 300mm", "quantity": 2},
+            {"name": "15mm isolating valve", "quantity": 2}
+        ],
+        "common": [
+            {"name": "15mm copper olive", "quantity": 2}
+        ],
+        "optional": []
+    },
+    {
+        "name": "Install washing machine",
+        "category": "Small plumbing",
+        "quote_type": "small",
+        "job": "Install washing machine feed and waste.",
+        "typical_labour": 120,
+        "labour_range": "£100 - £180",
+        "risk_notes": ["Check waste spigot."],
+        "essential": [
+            {"name": "washing machine valve", "quantity": 1}
+        ],
+        "common": [
+            {"name": "appliance waste spigot", "quantity": 1}
+        ],
+        "optional": []
     }
+
 ]
 
 
