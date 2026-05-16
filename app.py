@@ -641,7 +641,42 @@ MATERIAL_ALIAS_RULES = [
         "canonical": "doughnut washer",
         "keywords": ["doughnut washer", "close coupling washer"],
         "category": "toilet"
-    }
+    },
+{
+    "canonical": "thermostatic radiator valve",
+    "keywords": ["trv", "radiator valve", "thermostatic radiator valve"],
+    "category": "heating"
+},
+{
+    "canonical": "lockshield valve",
+    "keywords": ["lockshield", "lockshield valve"],
+    "category": "heating"
+},
+{
+    "canonical": "radiator bleed valve",
+    "keywords": ["bleed valve", "bleed vent"],
+    "category": "heating"
+},
+{
+    "canonical": "radiator tail extension",
+    "keywords": ["radiator tail", "tail extension"],
+    "category": "heating"
+},
+{
+    "canonical": "central heating inhibitor",
+    "keywords": ["inhibitor", "fernox inhibitor"],
+    "category": "heating"
+},
+{
+    "canonical": "filling loop",
+    "keywords": ["boiler filling loop", "filling loop"],
+    "category": "heating"
+},
+{
+    "canonical": "automatic air vent",
+    "keywords": ["automatic air vent", "aav"],
+    "category": "heating"
+},
 
 ]
 
@@ -1299,7 +1334,80 @@ TRADE_JOB_LIBRARY = [
             {"name": "doughnut washer", "quantity": 1}
         ],
         "optional": []
-    }
+    },
+{
+    "name": "Replace TRV",
+    "category": "Heating repair",
+    "quote_type": "small",
+    "job": "Replace faulty thermostatic radiator valve and rebalance radiator.",
+    "typical_labour": 120,
+    "labour_range": "£100 - £180",
+    "risk_notes": ["Check valve compatibility.", "May require draining."],
+    "essential": [
+        {"name": "thermostatic radiator valve", "quantity": 1},
+        {"name": "lockshield valve", "quantity": 1}
+    ],
+    "common": [
+        {"name": "central heating inhibitor", "quantity": 1}
+    ],
+    "optional": [],
+    "source": "trade_knowledge"
+},
+{
+    "name": "Radiator replacement",
+    "category": "Heating repair",
+    "quote_type": "medium",
+    "job": "Remove existing radiator and install replacement radiator including valves and inhibitor.",
+    "typical_labour": 240,
+    "labour_range": "£180 - £350",
+    "risk_notes": ["Check wall condition.", "Pipework alterations may be required."],
+    "essential": [
+        {"name": "thermostatic radiator valve", "quantity": 1},
+        {"name": "lockshield valve", "quantity": 1},
+        {"name": "radiator tail extension", "quantity": 2}
+    ],
+    "common": [
+        {"name": "central heating inhibitor", "quantity": 1},
+        {"name": "radiator bleed valve", "quantity": 1}
+    ],
+    "optional": [],
+    "source": "trade_knowledge"
+},
+{
+    "name": "Heating leak repair",
+    "category": "Heating repair",
+    "quote_type": "small",
+    "job": "Investigate and repair heating leak including refill and inhibitor dosing.",
+    "typical_labour": 140,
+    "labour_range": "£120 - £240",
+    "risk_notes": ["Leak location may increase labour.", "System may require partial drain."],
+    "essential": [
+        {"name": "automatic air vent", "quantity": 1},
+        {"name": "central heating inhibitor", "quantity": 1}
+    ],
+    "common": [
+        {"name": "15mm compression elbow", "quantity": 2}
+    ],
+    "optional": [],
+    "source": "trade_knowledge"
+},
+{
+    "name": "System repressurisation",
+    "category": "Heating repair",
+    "quote_type": "small",
+    "job": "Diagnose pressure loss and repressurise heating system.",
+    "typical_labour": 90,
+    "labour_range": "£80 - £140",
+    "risk_notes": ["Pressure loss may indicate hidden leak."],
+    "essential": [
+        {"name": "filling loop", "quantity": 1}
+    ],
+    "common": [
+        {"name": "central heating inhibitor", "quantity": 1}
+    ],
+    "optional": [],
+    "source": "trade_knowledge"
+},
 
 ]
 
