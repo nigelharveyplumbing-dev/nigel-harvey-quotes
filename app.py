@@ -464,6 +464,153 @@ def canonical_material_name(name: str):
     return material_alias_info(name)["canonical"]
 
 
+
+MASTER_MATERIAL_LIBRARY = [
+    {
+        "canonical": "15mm copper pipe",
+        "category": "pipework",
+        "default_supplier": "City Plumbing",
+        "typical_quantity": 2,
+        "aliases": ["15mm copper", "copper pipe 15mm", "15mm copper tube"],
+        "use_cases": ["outside tap", "sink install", "tap replacement", "pipe repair"],
+    },
+    {
+        "canonical": "22mm copper pipe",
+        "category": "pipework",
+        "default_supplier": "City Plumbing",
+        "typical_quantity": 2,
+        "aliases": ["22mm copper", "copper pipe 22mm"],
+        "use_cases": ["main feeds", "heating", "cylinder work"],
+    },
+    {
+        "canonical": "15mm endfeed elbow",
+        "category": "fittings",
+        "default_supplier": "City Plumbing",
+        "typical_quantity": 4,
+        "aliases": ["15mm elbow", "endfeed elbow 15"],
+        "use_cases": ["general pipework", "outside tap", "sink install"],
+    },
+    {
+        "canonical": "15mm endfeed tee",
+        "category": "fittings",
+        "default_supplier": "City Plumbing",
+        "typical_quantity": 2,
+        "aliases": ["15mm tee", "endfeed tee 15"],
+        "use_cases": ["branch pipework", "outside tap"],
+    },
+    {
+        "canonical": "15mm compression coupler",
+        "category": "fittings",
+        "default_supplier": "City Plumbing",
+        "typical_quantity": 2,
+        "aliases": ["15mm coupler", "compression coupling 15"],
+        "use_cases": ["repairs", "extensions"],
+    },
+    {
+        "canonical": "15mm isolating valve",
+        "category": "valves",
+        "default_supplier": "City Plumbing",
+        "typical_quantity": 2,
+        "aliases": ["service valve", "iso valve"],
+        "use_cases": ["tap installs", "appliance feeds"],
+    },
+    {
+        "canonical": "double check valve 15mm",
+        "category": "valves",
+        "default_supplier": "City Plumbing",
+        "typical_quantity": 1,
+        "aliases": ["dcv", "double check"],
+        "use_cases": ["outside taps"],
+    },
+    {
+        "canonical": "drain off cock 15mm",
+        "category": "valves",
+        "default_supplier": "City Plumbing",
+        "typical_quantity": 1,
+        "aliases": ["drain cock", "drain valve"],
+        "use_cases": ["outside taps", "winter drain down"],
+    },
+    {
+        "canonical": "wall plate elbow 15mm x 1/2",
+        "category": "fittings",
+        "default_supplier": "City Plumbing",
+        "typical_quantity": 1,
+        "aliases": ["wallplate elbow", "back plate elbow"],
+        "use_cases": ["outside taps", "fixed tap points"],
+    },
+    {
+        "canonical": "hose union bib tap",
+        "category": "taps",
+        "default_supplier": "City Plumbing",
+        "typical_quantity": 1,
+        "aliases": ["outside tap", "garden tap"],
+        "use_cases": ["outside taps"],
+    },
+    {
+        "canonical": "32mm waste pipe",
+        "category": "waste",
+        "default_supplier": "Screwfix",
+        "typical_quantity": 1,
+        "aliases": ["32mm solvent waste"],
+        "use_cases": ["basins", "condensate"],
+    },
+    {
+        "canonical": "40mm waste pipe",
+        "category": "waste",
+        "default_supplier": "Screwfix",
+        "typical_quantity": 1,
+        "aliases": ["40mm solvent waste"],
+        "use_cases": ["sinks", "showers"],
+    },
+    {
+        "canonical": "pan connector",
+        "category": "toilet",
+        "default_supplier": "City Plumbing",
+        "typical_quantity": 1,
+        "aliases": ["wc connector", "toilet connector"],
+        "use_cases": ["toilet install"],
+    },
+    {
+        "canonical": "flexible tap connector",
+        "category": "taps",
+        "default_supplier": "Toolstation",
+        "typical_quantity": 2,
+        "aliases": ["tap flexi", "flexi hose"],
+        "use_cases": ["tap replacement"],
+    },
+    {
+        "canonical": "ptfe tape",
+        "category": "consumables",
+        "default_supplier": "Toolstation",
+        "typical_quantity": 1,
+        "aliases": ["thread tape"],
+        "use_cases": ["all threaded fittings"],
+    },
+    {
+        "canonical": "silicone",
+        "category": "consumables",
+        "default_supplier": "Toolstation",
+        "typical_quantity": 1,
+        "aliases": ["sealant", "sanitary silicone"],
+        "use_cases": ["sanitary sealing"],
+    },
+]
+
+
+def get_master_material(canonical_name: str):
+    canonical_name = (canonical_name or "").strip().lower()
+    for item in MASTER_MATERIAL_LIBRARY:
+        if item["canonical"].lower() == canonical_name:
+            return item
+    return None
+
+
+def get_materials_by_category(category: str):
+    return [
+        item for item in MASTER_MATERIAL_LIBRARY
+        if item.get("category", "").lower() == (category or "").lower()
+    ]
+
 TRADE_JOB_LIBRARY = [
     {
         "name": "Outside tap",
@@ -4111,6 +4258,20 @@ function scheduleQuoteLearning() {
   QUOTE_LEARNING_TIMER = window.setTimeout(loadQuoteLearning, 450);
 }
 
+
+function renderMasterMaterialSuggestions() {
+  const box = document.getElementById("master-material-library");
+  if (!box) return;
+
+  box.innerHTML = MATERIAL_ALIAS_RULES.slice(0, 12).map(rule => `
+    <div class="card">
+      <strong>${rule.canonical}</strong><br>
+      <small>${rule.category || "other"}</small>
+    </div>
+  `).join("");
+}
+
+
 function renderQuoteLearning(data) {
   LAST_LEARNING_DATA = data;
   const box = document.getElementById("learningInsights");
@@ -6273,6 +6434,14 @@ def api_delete_quote(quote_id: int):
 
 
 
+
+
+
+@app.get("/api/master-materials")
+def api_master_materials(category: str = ""):
+    if category:
+        return JSONResponse(content=get_materials_by_category(category))
+    return JSONResponse(content=MASTER_MATERIAL_LIBRARY)
 
 
 @app.get("/api/material-alias")
