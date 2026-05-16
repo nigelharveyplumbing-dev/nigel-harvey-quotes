@@ -272,6 +272,185 @@ JOB_TEMPLATES = [
 ]
 
 
+
+MATERIAL_ALIAS_RULES = [
+    {
+        "canonical": "15mm copper pipe",
+        "keywords": ["15mm copper", "copper pipe 15", "copper tube 15", "3m copper pipe 15", "plumbright copper pipe 15"],
+        "category": "pipework",
+    },
+    {
+        "canonical": "22mm copper pipe",
+        "keywords": ["22mm copper", "copper pipe 22", "copper tube 22", "3m copper pipe 22"],
+        "category": "pipework",
+    },
+    {
+        "canonical": "15mm isolating valve",
+        "keywords": ["15mm isolating", "isolation valve 15", "isolating valve", "service valve 15", "iso valve"],
+        "category": "valves",
+    },
+    {
+        "canonical": "double check valve 15mm",
+        "keywords": ["double check", "dbl check", "check valve 15", "dcv"],
+        "category": "valves",
+    },
+    {
+        "canonical": "drain off cock 15mm",
+        "keywords": ["drain off", "drain cock", "doc 15", "drain valve"],
+        "category": "valves",
+    },
+    {
+        "canonical": "wall plate elbow 15mm x 1/2",
+        "keywords": ["wall plate elbow", "wallplate elbow", "back plate elbow", "15mm x 1/2 wall plate", "compression wall plate elbow"],
+        "category": "fittings",
+    },
+    {
+        "canonical": "hose union bib tap",
+        "keywords": ["hose union bib", "bib tap", "outside tap", "garden tap"],
+        "category": "taps",
+    },
+    {
+        "canonical": "15mm compression coupler",
+        "keywords": ["compression coupler 15", "compression coupling 15", "15mm coupler", "15mm coupling"],
+        "category": "fittings",
+    },
+    {
+        "canonical": "15mm endfeed elbow",
+        "keywords": ["endfeed elbow 15", "elbow 90 15", "15mm elbow", "end feed elbow"],
+        "category": "fittings",
+    },
+    {
+        "canonical": "15mm endfeed tee",
+        "keywords": ["endfeed equal tee 15", "endfeed tee 15", "15mm tee", "equal tee 15"],
+        "category": "fittings",
+    },
+    {
+        "canonical": "32mm waste pipe",
+        "keywords": ["32mm waste pipe", "waste pipe 32", "solvent waste pipe 32"],
+        "category": "waste",
+    },
+    {
+        "canonical": "40mm waste pipe",
+        "keywords": ["40mm waste pipe", "waste pipe 40", "solvent waste pipe 40"],
+        "category": "waste",
+    },
+    {
+        "canonical": "32mm waste pipe clips",
+        "keywords": ["32mm waste clips", "waste pipe clips 32", "solvent waste pipe clips 32"],
+        "category": "waste",
+    },
+    {
+        "canonical": "40mm waste pipe clips",
+        "keywords": ["40mm waste clips", "waste pipe clips 40"],
+        "category": "waste",
+    },
+    {
+        "canonical": "basin waste",
+        "keywords": ["basin waste", "sink basin waste", "slotted basin waste", "unslotted basin waste"],
+        "category": "waste",
+    },
+    {
+        "canonical": "bottle trap 32mm",
+        "keywords": ["bottle trap", "chrome bottle trap", "32mm bottle trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "kitchen sink waste kit",
+        "keywords": ["sink waste kit", "kitchen waste kit", "basket strainer waste", "sink strainer waste"],
+        "category": "waste",
+    },
+    {
+        "canonical": "p trap 40mm",
+        "keywords": ["p trap 40", "40mm trap", "sink trap", "kitchen trap"],
+        "category": "waste",
+    },
+    {
+        "canonical": "pan connector",
+        "keywords": ["pan connector", "toilet connector", "wc connector", "offset pan connector", "straight pan connector"],
+        "category": "toilet",
+    },
+    {
+        "canonical": "toilet fill valve",
+        "keywords": ["fill valve", "inlet valve", "toilet inlet", "cistern inlet"],
+        "category": "toilet",
+    },
+    {
+        "canonical": "toilet flush valve",
+        "keywords": ["flush valve", "dual flush", "toilet siphon", "syphon"],
+        "category": "toilet",
+    },
+    {
+        "canonical": "flexible tap connector",
+        "keywords": ["flexi tap", "flexible tap", "flexi connector", "tap flexi", "tap tails"],
+        "category": "taps",
+    },
+    {
+        "canonical": "bath tap connectors",
+        "keywords": ["bath tap connector", "bath tap connectors", "bath flexi", "bath tap tails"],
+        "category": "taps",
+    },
+    {
+        "canonical": "ptfe tape",
+        "keywords": ["ptfe", "thread tape"],
+        "category": "consumables",
+    },
+    {
+        "canonical": "silicone",
+        "keywords": ["silicone", "sanitary silicone", "sealant"],
+        "category": "consumables",
+    },
+    {
+        "canonical": "pipe clips 15mm",
+        "keywords": ["15mm pipe clips", "pipe clip 15", "copper clips 15"],
+        "category": "clips",
+    },
+    {
+        "canonical": "trv valve",
+        "keywords": ["trv", "thermostatic radiator valve", "radiator trv"],
+        "category": "heating",
+    },
+    {
+        "canonical": "lockshield valve",
+        "keywords": ["lockshield", "radiator lockshield"],
+        "category": "heating",
+    },
+    {
+        "canonical": "inhibitor 1l",
+        "keywords": ["inhibitor", "central heating inhibitor", "sentinel x100", "fernox inhibitor"],
+        "category": "heating",
+    },
+]
+
+
+def clean_material_name_for_matching(name: str):
+    cleaned = (name or "").lower()
+    cleaned = re.sub(r"https?://\S+", " ", cleaned)
+    cleaned = re.sub(r"[^a-z0-9/.\- ]+", " ", cleaned)
+    cleaned = re.sub(r"\b(plumbright|plumbright|city plumbing|screwfix|toolstation|topps tiles|white|chrome|each|pack|pack of)\b", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def material_alias_info(name: str):
+    cleaned = clean_material_name_for_matching(name)
+    for rule in MATERIAL_ALIAS_RULES:
+        if any(keyword in cleaned for keyword in rule["keywords"]):
+            return {
+                "canonical": rule["canonical"],
+                "category": rule.get("category", "other"),
+                "matched": True,
+            }
+    return {
+        "canonical": cleaned or (name or "").strip().lower(),
+        "category": "other",
+        "matched": False,
+    }
+
+
+def canonical_material_name(name: str):
+    return material_alias_info(name)["canonical"]
+
+
 TRADE_JOB_LIBRARY = [
     {
         "name": "Outside tap",
@@ -1529,9 +1708,13 @@ def analyse_similar_quotes(query: str, quote_type: str = ""):
             name = (line.get("name") or "").strip()
             if not name:
                 continue
-            key = name.lower()
+            alias = material_alias_info(name)
+            key = alias["canonical"]
             entry = material_counter.setdefault(key, {
-                "name": name,
+                "name": alias["canonical"],
+                "example_name": name,
+                "category": alias.get("category", "other"),
+                "alias_matched": alias.get("matched", False),
                 "count": 0,
                 "quantity_total": 0,
                 "unit_prices": [],
@@ -1571,6 +1754,9 @@ def analyse_similar_quotes(query: str, quote_type: str = ""):
 
         common_materials.append({
             "name": entry["name"],
+            "example_name": entry.get("example_name", entry["name"]),
+            "category": entry.get("category", "other"),
+            "alias_matched": entry.get("alias_matched", False),
             "used_count": entry["count"],
             "used_percent": used_percent,
             "average_quantity": round(avg_qty, 2),
@@ -3742,6 +3928,33 @@ let MATERIAL_LIBRARY = __MATERIAL_LIBRARY__;
 const FAVOURITE_MATERIALS = __FAVOURITE_MATERIALS__;
 const JOB_TEMPLATES = __JOB_TEMPLATES__;
 
+const MATERIAL_ALIAS_RULES = __MATERIAL_ALIAS_RULES__;
+
+function cleanMaterialNameForMatching(name) {
+  return (name || "")
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[^a-z0-9/.\- ]+/g, " ")
+    .replace(/\b(plumbright|plumbright|city plumbing|screwfix|toolstation|topps tiles|white|chrome|each|pack|pack of)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function materialAliasInfo(name) {
+  const cleaned = cleanMaterialNameForMatching(name);
+  for (const rule of MATERIAL_ALIAS_RULES) {
+    if ((rule.keywords || []).some(k => cleaned.includes(k))) {
+      return { canonical: rule.canonical, category: rule.category || "other", matched: true };
+    }
+  }
+  return { canonical: cleaned || (name || "").trim().toLowerCase(), category: "other", matched: false };
+}
+
+function canonicalMaterialName(name) {
+  return materialAliasInfo(name).canonical;
+}
+
+
 let SAVED_QUOTES = [];
 let SAVED_INVOICES = [];
 let SAVED_CUSTOMERS = [];
@@ -3903,14 +4116,18 @@ function renderQuoteLearning(data) {
 
   const missing = common.filter(m => {
     const name = (m.name || "").toLowerCase();
-    const already = currentNames.some(n => n.includes(name) || name.includes(n));
+    const canonical = canonicalMaterialName(name);
+    const already = currentNames.some(n => {
+      const existingCanonical = canonicalMaterialName(n);
+      return existingCanonical === canonical || n.includes(name) || name.includes(n);
+    });
     return !already && Number(m.used_percent || 0) >= 40;
   }).slice(0, 6);
 
   const materialHtml = common.slice(0, 8).map(m => `
     <div class="history-item" style="padding:8px;margin-top:6px;">
-      <strong>${escapeHtml(m.name)}</strong><br>
-      <span>Used in ${m.used_percent}% of similar quotes · avg qty ${m.average_quantity} · avg unit ${pounds(m.average_unit_price || 0)}</span>
+      <strong>${escapeHtml(m.name)}</strong>${m.alias_matched ? ' <span class="badge green">grouped</span>' : ""}<br>
+      <span>Used in ${m.used_percent}% of similar quotes · avg qty ${m.average_quantity} · avg unit ${pounds(m.average_unit_price || 0)} · ${escapeHtml(m.category || "other")}</span>
       <div class="history-actions" style="grid-template-columns:1fr;margin-top:6px;">
         <button type="button" class="btn-light" onclick='addLearningMaterial(${JSON.stringify(m)})'>Add to quote</button>
       </div>
@@ -3950,7 +4167,7 @@ function renderQuoteLearning(data) {
           <summary>Optional extras</summary>
           ${optional.map(m => `
             <div class="history-item" style="padding:8px;margin-top:6px;">
-              <strong>${escapeHtml(m.name)}</strong><br>
+              <strong>${escapeHtml(m.name)}</strong>${m.alias_matched ? ' <span class="badge green">grouped</span>' : ""}<br>
               <span class="small">Used in ${m.used_percent}% · avg qty ${m.average_quantity}</span>
               <div class="history-actions" style="grid-template-columns:1fr;margin-top:6px;">
                 <button type="button" class="btn-light" onclick='addLearningMaterial(${JSON.stringify(m)})'>Add optional item</button>
@@ -4025,7 +4242,11 @@ async function loadQuoteLearning() {
 function materialAlreadyInQuote(materialName) {
   const name = (materialName || "").trim().toLowerCase();
   if (!name) return false;
-  return currentMaterialNames().some(existing => existing.includes(name) || name.includes(existing));
+  const canonical = canonicalMaterialName(name);
+  return currentMaterialNames().some(existing => {
+    const existingCanonical = canonicalMaterialName(existing);
+    return existingCanonical === canonical || existing.includes(name) || name.includes(existing);
+  });
 }
 
 function addLearningBundle(mode = "core") {
@@ -4226,11 +4447,19 @@ function findBestMaterialForTemplate(name) {
   const target = (name || "").toLowerCase().trim();
   if (!target) return null;
 
+  const targetCanonical = canonicalMaterialName(target);
   const saved = MATERIAL_LIBRARY.filter(x => x.source === "saved");
-  let found = saved.find(x => (x.name || "").toLowerCase() === target);
+
+  let found = saved.find(x => canonicalMaterialName(x.name || "") === targetCanonical);
+  if (found) return found;
+
+  found = saved.find(x => (x.name || "").toLowerCase() === target);
   if (found) return found;
 
   found = saved.find(x => (x.name || "").toLowerCase().includes(target) || target.includes((x.name || "").toLowerCase()));
+  if (found) return found;
+
+  found = MATERIAL_LIBRARY.find(x => canonicalMaterialName(x.name || "") === targetCanonical);
   if (found) return found;
 
   found = MATERIAL_LIBRARY.find(x => (x.name || "").toLowerCase() === target);
@@ -5680,6 +5909,7 @@ def home_app():
     html = HTML.replace("__MATERIAL_LIBRARY__", json.dumps(get_material_search_library()))
     html = html.replace("__FAVOURITE_MATERIALS__", json.dumps(FAVOURITE_MATERIALS))
     html = html.replace("__JOB_TEMPLATES__", json.dumps(get_all_job_templates()))
+    html = html.replace("__MATERIAL_ALIAS_RULES__", json.dumps(MATERIAL_ALIAS_RULES))
     logo_value = get_company_logo_value()
     logo_html = f'<img src="{logo_value}" alt="Logo">' if logo_value else ""
     html = html.replace("__COMPANY_LOGO_HTML__", logo_html)
@@ -6029,6 +6259,12 @@ def api_delete_quote(quote_id: int):
     return {"ok": True}
 
 
+
+
+
+@app.get("/api/material-alias")
+def api_material_alias(q: str = ""):
+    return JSONResponse(content=material_alias_info(q))
 
 
 @app.get("/api/trade-jobs")
