@@ -5034,6 +5034,50 @@ function addMaterialFromLibrary(item) {
 }
 
 
+
+function normaliseTemplateNameForDedup(name) {
+  return (name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\breplace\b/g, "")
+    .replace(/\breplacement\b/g, "")
+    .replace(/\binstall\b/g, "")
+    .replace(/\bfit\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function templatePriority(t) {
+  let score = 0;
+  if (t.source === "trade_knowledge") score += 100;
+  if (t.risk_notes && t.risk_notes.length) score += 20;
+  if (t.materials && t.materials.length) score += t.materials.length;
+  if (t.essential && t.essential.length) score += t.essential.length;
+  if ((t.name || "").toLowerCase().includes("toilet replacement")) score += 10;
+  return score;
+}
+
+function getCleanJobTemplates() {
+  const map = new Map();
+
+  JOB_TEMPLATES.forEach(t => {
+    let key = normaliseTemplateNameForDedup(t.name);
+
+    // Merge obvious naming variants.
+    if (key === "toilet" || key === "toilet ") key = "toilet";
+    if ((t.name || "").toLowerCase() === "replace toilet") key = "toilet";
+    if ((t.name || "").toLowerCase() === "toilet replacement") key = "toilet";
+
+    const existing = map.get(key);
+    if (!existing || templatePriority(t) > templatePriority(existing)) {
+      map.set(key, t);
+    }
+  });
+
+  return Array.from(map.values());
+}
+
+
 function findBestMaterialForTemplate(name) {
   const target = (name || "").toLowerCase().trim();
   if (!target) return null;
@@ -5061,7 +5105,7 @@ function findBestMaterialForTemplate(name) {
 }
 
 function applyJobTemplate(templateName) {
-  const template = JOB_TEMPLATES.find(t => t.name === templateName);
+  const template = getCleanJobTemplates().find(t => t.name === templateName);
   if (!template) return;
 
   document.getElementById("quote_type").value = template.quote_type || "small";
@@ -5111,7 +5155,7 @@ function renderTemplateSearch() {
   }
 
   const terms = q.split(/\s+/).filter(Boolean);
-  const matches = JOB_TEMPLATES.filter(t => {
+  const matches = getCleanJobTemplates().filter(t => {
     const hay = `${t.name || ""} ${t.job || ""} ${(t.materials || []).map(m => m.name).join(" ")}`.toLowerCase();
     return terms.every(term => hay.includes(term));
   }).slice(0, 12);
@@ -5158,7 +5202,7 @@ function duplicateLastMaterial() {
 function renderTemplateButtons() {
   const box = document.getElementById("templateButtons");
   if (!box) return;
-  box.innerHTML = JOB_TEMPLATES.slice(0, 16).map(t => `
+  box.innerHTML = getCleanJobTemplates().slice(0, 16).map(t => `
     <button type="button" class="btn-light" onclick='applyJobTemplate(${JSON.stringify(t.name)})'>${escapeHtml(t.name)}</button>
   `).join("");
 }
