@@ -677,6 +677,26 @@ MATERIAL_ALIAS_RULES = [
     "keywords": ["automatic air vent", "aav"],
     "category": "heating"
 },
+{
+    "canonical": "braided filling loop",
+    "keywords": ["braided filling loop", "filling loop braided", "boiler filling loop"],
+    "category": "heating"
+},
+{
+    "canonical": "angled trv",
+    "keywords": ["angled trv", "angled thermostatic radiator valve", "angle trv"],
+    "category": "heating"
+},
+{
+    "canonical": "angled lockshield valve",
+    "keywords": ["angled lockshield", "angle lockshield", "radiator lockshield angled"],
+    "category": "heating"
+},
+{
+    "canonical": "radiator valve tail",
+    "keywords": ["radiator tail", "radiator valve tail", "rad tail"],
+    "category": "heating"
+},
 
 ]
 
@@ -1345,10 +1365,13 @@ TRADE_JOB_LIBRARY = [
     "labour_range": "£100 - £180",
     "risk_notes": ["Check valve compatibility.", "May require draining."],
     "essential": [
-        {"name": "thermostatic radiator valve", "quantity": 1},
-        {"name": "lockshield valve", "quantity": 1}
+        {"name": "angled trv", "quantity": 1},
+        {"name": "angled lockshield valve", "quantity": 1},
+        {"name": "radiator valve tail", "quantity": 2}
     ],
     "common": [
+        {"name": "ptfe tape", "quantity": 1},
+        {"name": "15mm copper olive", "quantity": 2},
         {"name": "central heating inhibitor", "quantity": 1}
     ],
     "optional": [],
@@ -1364,8 +1387,8 @@ TRADE_JOB_LIBRARY = [
     "labour_range": "£180 - £350",
     "risk_notes": ["Check wall condition.", "Pipework alterations may be required."],
     "essential": [
-        {"name": "thermostatic radiator valve", "quantity": 1},
-        {"name": "lockshield valve", "quantity": 1},
+        {"name": "angled trv", "quantity": 1},
+        {"name": "angled lockshield valve", "quantity": 1},
         {"name": "radiator tail extension", "quantity": 2}
     ],
     "common": [
@@ -1404,9 +1427,11 @@ TRADE_JOB_LIBRARY = [
     "labour_range": "£80 - £140",
     "risk_notes": ["Pressure loss may indicate hidden leak."],
     "essential": [
-        {"name": "filling loop", "quantity": 1}
+        {"name": "braided filling loop", "quantity": 1}
     ],
     "common": [
+        {"name": "15mm isolating valve", "quantity": 2},
+        {"name": "double check valve 15mm", "quantity": 1},
         {"name": "central heating inhibitor", "quantity": 1}
     ],
     "optional": [],
@@ -5349,7 +5374,7 @@ function renderTemplateSearch() {
   box.innerHTML = matches.map(t => `
     <div class="search-item" onclick='applyJobTemplate(${JSON.stringify(t.name)})'>
       <strong>${escapeHtml(t.name)}</strong><br>
-      <span class="small">${t.source === "trade_knowledge" ? "Trade library" : "Saved template"} · Labour: ${pounds(t.labour || 0)} · ${(t.materials || []).length} materials</span><br>
+      <span class="small">${t.source === "trade_knowledge" ? "Trade library" : "Saved template"} · Labour: ${pounds(t.labour || 0)} · ${(t.materials || []).length} materials · auto-loads kit</span><br>
       <span class="small">${escapeHtml((t.job || "").slice(0, 120))}</span>
     </div>
   `).join("");
