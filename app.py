@@ -948,6 +948,17 @@ def get_material_charging_rule(name: str):
     })
 
 
+def material_quote_unit_price(name: str, full_price: float, override_price=None):
+    if override_price is not None:
+        override = safe_float(override_price, None)
+        if override is not None:
+            return override
+    rule = get_material_charging_rule(name)
+    if rule.get("charge_method") in ("partial", "small_part") and rule.get("default_charge") is not None:
+        return safe_float(rule.get("default_charge"), full_price)
+    return full_price
+
+
 TRADE_JOB_LIBRARY = [
     {
         "name": "Outside tap",
@@ -1630,6 +1641,9 @@ class MaterialItem(BaseModel):
     supplier: str = ""
     url: str = ""
     manual_price: float = 0
+    quote_charge_override: float | None = None
+    material_type: str = "chargeable"
+    charge_method: str = "full"
 
 
 class QuoteRequest(BaseModel):
@@ -2181,11 +2195,13 @@ def calculate_quote(data: QuoteRequest):
         url = item.url.strip() if item.url else ""
         tracked_price, price_source = fetch_tracked_price(url, item.name, item.supplier, item.manual_price) if url else (None, "manual")
 
-        # Unit price is the price for ONE item/length/pack.
-        unit_price = safe_float(tracked_price, None) if tracked_price is not None else safe_float(item.manual_price, 0)
+        # Full product price is remembered separately.
+        full_unit_price = safe_float(tracked_price, None) if tracked_price is not None else safe_float(item.manual_price, 0)
+
+        # Quote unit price may be a smaller allowance for consumables/sundries.
+        unit_price = material_quote_unit_price(item.name, full_unit_price, item.quote_charge_override)
 
         # Quantity must be included in the maths.
-        # This fixes multi-quantity materials such as "15mm pipe x 4".
         quantity = safe_float(item.quantity, 1)
         if quantity <= 0:
             quantity = 1
@@ -2199,10 +2215,13 @@ def calculate_quote(data: QuoteRequest):
             "supplier": item.supplier,
             "url": item.url,
             "manual_price": round(safe_float(item.manual_price, 0), 2),
+            "full_unit_price": round(full_unit_price, 2),
             "unit_price_used": round(unit_price, 2),
             "line_total": round(line_total, 2),
             "live_price_used": price_source in ("live", "cached"),
             "price_source": price_source,
+            "material_type": item.material_type,
+            "charge_method": item.charge_method,
         })
 
     tiling_extra_materials = 0.0
@@ -4810,12 +4829,10 @@ function applyChargingRuleToMaterial(material) {
   out.customer_label = rule.customer_label;
   out.charge_note = rule.note;
 
+  // Keep the full product/manual price for memory.
+  // Use a separate quote charge for partial consumables.
   if ((rule.charge_method === "partial" || rule.charge_method === "small_part") && Number(rule.default_charge || 0) > 0) {
-    const existingPrice = Number(out.manual_price || out.default_price || out.price || 0);
-    if (!existingPrice || existingPrice > Number(rule.default_charge)) {
-      out.manual_price = Number(rule.default_charge).toFixed(2);
-      out.default_price = Number(rule.default_charge);
-    }
+    out.quote_charge_override = Number(rule.default_charge);
   }
 
   return out;
@@ -5256,11 +5273,34 @@ function updateLabourSuggestion() {
   box.innerText = message;
 }
 
+
+function materialQuoteUnitPrice(material) {
+  const ruled = applyChargingRuleToMaterial(material || {});
+  if (ruled.quote_charge_override !== undefined && ruled.quote_charge_override !== null && Number(ruled.quote_charge_override) >= 0) {
+    return Number(ruled.quote_charge_override);
+  }
+  return Number(ruled.live_price || ruled.manual_price || ruled.default_price || ruled.price || 0);
+}
+
 function clearMaterials() {
   document.getElementById("materials").innerHTML = "";
 }
 
 function addMaterial(prefill = null) {
+  if (prefill) prefill = applyChargingRuleToMaterial(prefill);
+
+  // Consumable/small-part duplicate guard
+  if (prefill && prefill.name) {
+    const incomingRule = getMaterialChargingRule(prefill.name || "");
+    const incomingCanonical = canonicalMaterialName(prefill.name || "");
+    if (incomingRule.charge_method === "partial" || incomingRule.charge_method === "small_part") {
+      const exists = [...document.querySelectorAll("#materials .m-name")].some(input => canonicalMaterialName(input.value || "") === incomingCanonical);
+      if (exists) {
+        showNotice(`${incomingCanonical} is already in this quote.`);
+        return;
+      }
+    }
+  }
   const div = document.createElement("div");
   div.className = "material-row";
 
@@ -5668,13 +5708,16 @@ function setEditingStatus(text = "", show = false) {
 function collectFormPayload() {
   const materials = [];
   document.querySelectorAll(".material-row").forEach(row => {
-    materials.push({
-      name: row.querySelector(".m-name").value,
+    const name = row.querySelector(".m-name").value;
+    const baseMaterial = {
+      name,
       quantity: parseFloat(row.querySelector(".m-qty").value || 1),
       supplier: row.querySelector(".m-supplier").value,
       url: row.querySelector(".m-url").value,
       manual_price: parseFloat(row.querySelector(".m-manual").value || 0)
-    });
+    };
+    const chargedMaterial = applyChargingRuleToMaterial(baseMaterial);
+    materials.push(chargedMaterial);
   });
 
   return {
