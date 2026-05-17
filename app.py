@@ -697,6 +697,26 @@ MATERIAL_ALIAS_RULES = [
     "keywords": ["radiator tail", "radiator valve tail", "rad tail"],
     "category": "heating"
 },
+{
+    "canonical": "pressure relief valve",
+    "keywords": ["prv", "pressure relief valve", "safety valve", "3 bar prv"],
+    "category": "heating"
+},
+{
+    "canonical": "expansion vessel",
+    "keywords": ["expansion vessel", "ev", "vessel", "boiler vessel"],
+    "category": "heating"
+},
+{
+    "canonical": "radiator bleed valve",
+    "keywords": ["bleed valve", "radiator bleed valve", "bleed vent", "air bleed"],
+    "category": "heating"
+},
+{
+    "canonical": "radiator air lock",
+    "keywords": ["air lock", "cold radiator", "radiator not heating", "no heat radiator"],
+    "category": "heating"
+}
 
 ]
 
@@ -1437,6 +1457,65 @@ TRADE_JOB_LIBRARY = [
     "optional": [],
     "source": "trade_knowledge"
 },
+{
+    "name": "Automatic air vent replacement",
+    "category": "Heating repair",
+    "quote_type": "small",
+    "search_terms": ["aav", "automatic air vent", "air vent", "leaking aav", "heating air vent"],
+    "job": "Replace leaking or faulty automatic air vent, refill/vent system and test.",
+    "typical_labour": 130,
+    "labour_range": "£110 - £200",
+    "risk_notes": ["Check access to AAV.", "System may need partial drain down.", "Check pressure after repair."],
+    "essential": [
+        {"name": "automatic air vent", "quantity": 1},
+        {"name": "central heating inhibitor", "quantity": 1}
+    ],
+    "common": [
+        {"name": "ptfe tape", "quantity": 1},
+        {"name": "15mm isolating valve", "quantity": 1}
+    ],
+    "optional": [],
+    "source": "trade_knowledge"
+},
+{
+    "name": "Pressure relief valve check",
+    "category": "Heating repair",
+    "quote_type": "small",
+    "search_terms": ["prv", "pressure relief valve", "prv discharge", "overflow pipe dripping", "pressure dropping"],
+    "job": "Check pressure relief valve discharge and diagnose heating pressure loss.",
+    "typical_labour": 130,
+    "labour_range": "£110 - £220",
+    "risk_notes": ["Check expansion vessel charge.", "Do not replace PRV without finding cause.", "Check discharge pipe outside."],
+    "essential": [
+        {"name": "pressure relief valve", "quantity": 1}
+    ],
+    "common": [
+        {"name": "central heating inhibitor", "quantity": 1}
+    ],
+    "optional": [
+        {"name": "expansion vessel", "quantity": 1}
+    ],
+    "source": "trade_knowledge"
+},
+{
+    "name": "Cold radiator diagnosis",
+    "category": "Heating repair",
+    "quote_type": "small",
+    "search_terms": ["cold radiator", "radiator not heating", "no heating radiator", "air lock", "bleed radiator", "stuck trv"],
+    "job": "Diagnose radiator not heating, bleed/test radiator and check TRV/lockshield operation.",
+    "typical_labour": 100,
+    "labour_range": "£90 - £160",
+    "risk_notes": ["Could be air, stuck TRV, balancing issue or sludge.", "Do not promise fix without diagnosis."],
+    "essential": [
+        {"name": "radiator bleed valve", "quantity": 1}
+    ],
+    "common": [
+        {"name": "angled trv", "quantity": 1},
+        {"name": "central heating inhibitor", "quantity": 1}
+    ],
+    "optional": [],
+    "source": "trade_knowledge"
+}
 
 ]
 
@@ -5318,18 +5397,21 @@ function getTemplateSearchHaystack(t) {
 }
 
 function expandTradeSearchTerms(q) {
-  const raw = (q || "").toLowerCase();
+  const raw = (q || "").toLowerCase().trim();
   const expansions = [raw];
 
   const rules = [
-    [["aav"], "automatic air vent heating leak pressure loss"],
-    [["filling loop"], "system repressurisation boiler pressure low pressure top up pressure"],
-    [["pressure dropping", "low pressure", "boiler pressure"], "system repressurisation filling loop heating leak"],
-    [["trv"], "thermostatic radiator valve radiator valve replace trv"],
+    [["aav", "auto air vent", "automatic air vent", "air vent"], "automatic air vent aav heating leak pressure loss air vent replacement"],
+    [["filling loop", "fill loop", "boiler filling loop"], "system repressurisation boiler pressure low pressure top up pressure braided filling loop"],
+    [["pressure dropping", "low pressure", "boiler pressure", "pressure loss", "keeps losing pressure"], "system repressurisation filling loop heating leak prv expansion vessel"],
+    [["prv", "pressure relief", "overflow pipe dripping", "discharge pipe"], "pressure relief valve prv discharge expansion vessel pressure loss"],
+    [["expansion vessel", "vessel", "ev"], "expansion vessel pressure dropping low pressure prv"],
+    [["trv", "thermostatic radiator valve"], "thermostatic radiator valve angled trv radiator valve replace trv"],
+    [["lockshield"], "lockshield valve radiator valve balancing"],
     [["rad"], "radiator"],
-    [["leaking radiator", "radiator leak"], "heating leak repair trv lockshield valve"],
-    [["not heating"], "radiator not heating balancing bleed valve trv"],
-    [["bleed"], "radiator bleed valve air in radiator"],
+    [["leaking radiator", "radiator leak", "leaking rad"], "heating leak repair trv lockshield valve radiator valve"],
+    [["not heating", "cold radiator", "cold rad", "air lock"], "cold radiator diagnosis radiator not heating bleed valve stuck trv balancing"],
+    [["bleed", "bleeding radiator"], "radiator bleed valve air in radiator cold radiator"],
   ];
 
   rules.forEach(([triggers, extra]) => {
@@ -5353,17 +5435,39 @@ function renderTemplateSearch() {
   }
 
   const expandedQuery = expandTradeSearchTerms(q);
-  const terms = expandedQuery.split(/\s+/).filter(Boolean);
-  const matches = getCleanJobTemplates().filter(t => {
+  const rawTerms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const expandedTerms = expandedQuery.split(/\s+/).filter(Boolean);
+
+  function templateScore(t) {
     const hay = getTemplateSearchHaystack(t);
-    return terms.some(term => hay.includes(term)) && q.split(/\s+/).filter(Boolean).some(term => hay.includes(term) || expandedQuery.includes(term));
-  }).sort((a, b) => {
-    const ha = getTemplateSearchHaystack(a);
-    const hb = getTemplateSearchHaystack(b);
-    const qa = q.toLowerCase();
-    const score = h => (h.includes(qa) ? 20 : 0) + terms.filter(term => h.includes(term)).length;
-    return score(hb) - score(ha);
-  }).slice(0, 12);
+    const name = (t.name || "").toLowerCase();
+    const searchTerms = ((t.search_terms || []).join(" ")).toLowerCase();
+
+    let score = 0;
+
+    rawTerms.forEach(term => {
+      if (name.includes(term)) score += 30;
+      if (searchTerms.includes(term)) score += 25;
+      if (hay.includes(term)) score += 8;
+    });
+
+    expandedTerms.forEach(term => {
+      if (name.includes(term)) score += 8;
+      if (searchTerms.includes(term)) score += 6;
+      if (hay.includes(term)) score += 2;
+    });
+
+    if (hay.includes(q.toLowerCase())) score += 40;
+    if (t.category && String(t.category).toLowerCase().includes("heating")) score += 3;
+    return score;
+  }
+
+  const matches = getCleanJobTemplates()
+    .map(t => ({ t, score: templateScore(t) }))
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(x => x.t)
+    .slice(0, 12);
 
   if (!matches.length) {
     box.innerHTML = '<div class="search-item">No template found</div>';
