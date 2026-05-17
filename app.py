@@ -1339,6 +1339,7 @@ TRADE_JOB_LIBRARY = [
     "name": "Replace TRV",
     "category": "Heating repair",
     "quote_type": "small",
+    "search_terms": ["trv", "thermostatic radiator valve", "radiator valve", "stuck valve", "valve leaking"],
     "job": "Replace faulty thermostatic radiator valve and rebalance radiator.",
     "typical_labour": 120,
     "labour_range": "£100 - £180",
@@ -1356,7 +1357,8 @@ TRADE_JOB_LIBRARY = [
 {
     "name": "Radiator replacement",
     "category": "Heating repair",
-    "quote_type": "medium",
+    "quote_type": "heating",
+    "search_terms": ["replace radiator", "new radiator", "radiator install", "radiator swap", "rad replacement"],
     "job": "Remove existing radiator and install replacement radiator including valves and inhibitor.",
     "typical_labour": 240,
     "labour_range": "£180 - £350",
@@ -1377,6 +1379,7 @@ TRADE_JOB_LIBRARY = [
     "name": "Heating leak repair",
     "category": "Heating repair",
     "quote_type": "small",
+    "search_terms": ["aav", "automatic air vent", "heating leak", "radiator leak", "pressure loss", "leaking pipe", "leaking valve"],
     "job": "Investigate and repair heating leak including refill and inhibitor dosing.",
     "typical_labour": 140,
     "labour_range": "£120 - £240",
@@ -1395,6 +1398,7 @@ TRADE_JOB_LIBRARY = [
     "name": "System repressurisation",
     "category": "Heating repair",
     "quote_type": "small",
+    "search_terms": ["filling loop", "pressure dropping", "low pressure", "boiler pressure", "repressurise", "top up pressure"],
     "job": "Diagnose pressure loss and repressurise heating system.",
     "typical_labour": 90,
     "labour_range": "£80 - £140",
@@ -5250,6 +5254,67 @@ function applyJobTemplate(templateName) {
   showNotice("Template loaded: " + template.name);
 }
 
+
+function getMaterialAliasKeywordsForTemplate(t) {
+  const materialNames = [];
+  (t.materials || []).forEach(m => materialNames.push(m.name || ""));
+  (t.essential || []).forEach(m => materialNames.push(m.name || ""));
+  (t.common || []).forEach(m => materialNames.push(m.name || ""));
+  (t.optional || []).forEach(m => materialNames.push(m.name || ""));
+
+  const keywords = [];
+  materialNames.forEach(name => {
+    const alias = materialAliasInfo(name);
+    keywords.push(name);
+    keywords.push(alias.canonical || "");
+    keywords.push(alias.category || "");
+
+    MATERIAL_ALIAS_RULES.forEach(rule => {
+      if ((rule.canonical || "").toLowerCase() === (alias.canonical || "").toLowerCase()) {
+        keywords.push(rule.canonical || "");
+        (rule.keywords || []).forEach(k => keywords.push(k));
+      }
+    });
+  });
+
+  return keywords.join(" ");
+}
+
+function getTemplateSearchHaystack(t) {
+  return [
+    t.name || "",
+    t.category || "",
+    t.quote_type || "",
+    t.job || "",
+    (t.search_terms || []).join(" "),
+    (t.risk_notes || []).join(" "),
+    getMaterialAliasKeywordsForTemplate(t)
+  ].join(" ").toLowerCase();
+}
+
+function expandTradeSearchTerms(q) {
+  const raw = (q || "").toLowerCase();
+  const expansions = [raw];
+
+  const rules = [
+    [["aav"], "automatic air vent heating leak pressure loss"],
+    [["filling loop"], "system repressurisation boiler pressure low pressure top up pressure"],
+    [["pressure dropping", "low pressure", "boiler pressure"], "system repressurisation filling loop heating leak"],
+    [["trv"], "thermostatic radiator valve radiator valve replace trv"],
+    [["rad"], "radiator"],
+    [["leaking radiator", "radiator leak"], "heating leak repair trv lockshield valve"],
+    [["not heating"], "radiator not heating balancing bleed valve trv"],
+    [["bleed"], "radiator bleed valve air in radiator"],
+  ];
+
+  rules.forEach(([triggers, extra]) => {
+    if (triggers.some(trigger => raw.includes(trigger))) expansions.push(extra);
+  });
+
+  return expansions.join(" ");
+}
+
+
 function renderTemplateSearch() {
   const input = document.getElementById("templateSearch");
   const box = document.getElementById("templateSearchResults");
@@ -5262,10 +5327,17 @@ function renderTemplateSearch() {
     return;
   }
 
-  const terms = q.split(/\s+/).filter(Boolean);
+  const expandedQuery = expandTradeSearchTerms(q);
+  const terms = expandedQuery.split(/\s+/).filter(Boolean);
   const matches = getCleanJobTemplates().filter(t => {
-    const hay = `${t.name || ""} ${t.job || ""} ${(t.materials || []).map(m => m.name).join(" ")}`.toLowerCase();
-    return terms.every(term => hay.includes(term));
+    const hay = getTemplateSearchHaystack(t);
+    return terms.some(term => hay.includes(term)) && q.split(/\s+/).filter(Boolean).some(term => hay.includes(term) || expandedQuery.includes(term));
+  }).sort((a, b) => {
+    const ha = getTemplateSearchHaystack(a);
+    const hb = getTemplateSearchHaystack(b);
+    const qa = q.toLowerCase();
+    const score = h => (h.includes(qa) ? 20 : 0) + terms.filter(term => h.includes(term)).length;
+    return score(hb) - score(ha);
   }).slice(0, 12);
 
   if (!matches.length) {
