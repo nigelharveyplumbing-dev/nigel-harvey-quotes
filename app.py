@@ -897,6 +897,57 @@ def get_materials_by_category(category: str):
         if item.get("category", "").lower() == (category or "").lower()
     ]
 
+
+MATERIAL_CHARGING_RULES = {
+    "ptfe tape": {
+        "material_type": "consumable",
+        "charge_method": "partial",
+        "default_charge": 0.50,
+        "customer_label": "Small consumable allowance",
+        "note": "Partial use only. Do not charge whole roll unless specifically supplied."
+    },
+    "silicone": {
+        "material_type": "consumable",
+        "charge_method": "partial",
+        "default_charge": 3.00,
+        "customer_label": "Sealant allowance",
+        "note": "Partial tube use unless full tube supplied."
+    },
+    "solvent weld cement": {
+        "material_type": "consumable",
+        "charge_method": "partial",
+        "default_charge": 2.00,
+        "customer_label": "Solvent cement allowance",
+        "note": "Partial use only."
+    },
+    "central heating inhibitor": {
+        "material_type": "chargeable",
+        "charge_method": "full",
+        "default_charge": None,
+        "customer_label": "Central heating inhibitor",
+        "note": "Normally charged as full bottle when used."
+    },
+    "15mm copper olive": {
+        "material_type": "small_part",
+        "charge_method": "small_part",
+        "default_charge": 0.30,
+        "customer_label": "Compression olives",
+        "note": "Small fittings normally charged individually or absorbed into sundries."
+    },
+}
+
+
+def get_material_charging_rule(name: str):
+    canonical = canonical_material_name(name)
+    return MATERIAL_CHARGING_RULES.get(canonical, {
+        "material_type": "chargeable",
+        "charge_method": "full",
+        "default_charge": None,
+        "customer_label": canonical,
+        "note": "Full chargeable material."
+    })
+
+
 TRADE_JOB_LIBRARY = [
     {
         "name": "Outside tap",
@@ -3628,7 +3679,14 @@ LANDING_PAGE_HTML = r'''
 <meta name="description" content="Local plumber in Surrey covering Guildford, Woking, Farnham and surrounding areas. Emergency plumbing, leaks, bathroom plumbing, repairs and installations. Call Nigel Harvey Ltd for a fast response.">
 <meta name="keywords" content="plumber Surrey, emergency plumber Surrey, plumber Guildford, plumber Woking, plumber Farnham, bathroom plumbing Surrey, general plumbing Surrey">
 <link rel="canonical" href="__CANONICAL_HOME__">
-<script type="application/ld+json">__BUSINESS_SCHEMA_JSON__</script>
+<script type="application/ld+json">__BUSINESS_SCHEMA_JSON__
+document.addEventListener('input', function(e) {
+  if (e.target && e.target.classList && e.target.classList.contains('m-name')) {
+    updateChargingNotes();
+  }
+});
+
+</script>
 <script type="application/ld+json">__FAQ_SCHEMA_JSON__</script>
 <style>
 :root{--bg:#f5f7fb;--card:#ffffff;--text:#101828;--muted:#667085;--brand:#111827;--accent:#065f46;--accent2:#1d4ed8;--border:#e5e7eb;--shadow:0 10px 30px rgba(0,0,0,.06);--radius:22px}
@@ -4694,6 +4752,76 @@ const JOB_TEMPLATES = __JOB_TEMPLATES__;
 
 const MATERIAL_ALIAS_RULES = __MATERIAL_ALIAS_RULES__;
 
+
+const MATERIAL_CHARGING_RULES = {
+  "ptfe tape": {
+    material_type: "consumable",
+    charge_method: "partial",
+    default_charge: 0.50,
+    customer_label: "Small consumable allowance",
+    note: "Partial use only. Do not charge whole roll unless specifically supplied."
+  },
+  "silicone": {
+    material_type: "consumable",
+    charge_method: "partial",
+    default_charge: 3.00,
+    customer_label: "Sealant allowance",
+    note: "Partial tube use unless full tube supplied."
+  },
+  "solvent weld cement": {
+    material_type: "consumable",
+    charge_method: "partial",
+    default_charge: 2.00,
+    customer_label: "Solvent cement allowance",
+    note: "Partial use only."
+  },
+  "central heating inhibitor": {
+    material_type: "chargeable",
+    charge_method: "full",
+    default_charge: null,
+    customer_label: "Central heating inhibitor",
+    note: "Normally charged as full bottle when used."
+  },
+  "15mm copper olive": {
+    material_type: "small_part",
+    charge_method: "small_part",
+    default_charge: 0.30,
+    customer_label: "Compression olives",
+    note: "Small fittings normally charged individually or absorbed into sundries."
+  }
+};
+
+function getMaterialChargingRule(name) {
+  const canonical = canonicalMaterialName(name);
+  return MATERIAL_CHARGING_RULES[canonical] || {
+    material_type: "chargeable",
+    charge_method: "full",
+    default_charge: null,
+    customer_label: canonical,
+    note: "Full chargeable material."
+  };
+}
+
+function applyChargingRuleToMaterial(material) {
+  const rule = getMaterialChargingRule(material.name || "");
+  const out = {...material};
+  out.material_type = rule.material_type;
+  out.charge_method = rule.charge_method;
+  out.customer_label = rule.customer_label;
+  out.charge_note = rule.note;
+
+  if ((rule.charge_method === "partial" || rule.charge_method === "small_part") && Number(rule.default_charge || 0) > 0) {
+    const existingPrice = Number(out.manual_price || out.default_price || out.price || 0);
+    if (!existingPrice || existingPrice > Number(rule.default_charge)) {
+      out.manual_price = Number(rule.default_charge).toFixed(2);
+      out.default_price = Number(rule.default_charge);
+    }
+  }
+
+  return out;
+}
+
+
 function cleanMaterialNameForMatching(name) {
   return (name || "")
     .toLowerCase()
@@ -5161,6 +5289,7 @@ function addMaterial(prefill = null) {
     <input class="m-url" placeholder="https://..." value="${prefill && prefill.url ? escapeHtml(prefill.url) : ""}">
 
     <label>Manual price (£)</label>
+      <div class="small charging-note"></div>
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${manualPrice}">
 
     <button type="button" class="btn-red" style="margin-top:12px;" onclick="this.parentElement.remove()">Remove</button>
@@ -7213,6 +7342,12 @@ def api_master_materials(category: str = ""):
     if category:
         return JSONResponse(content=get_materials_by_category(category))
     return JSONResponse(content=MASTER_MATERIAL_LIBRARY)
+
+
+
+@app.get("/api/material-charging")
+def api_material_charging(q: str = ""):
+    return JSONResponse(content=get_material_charging_rule(q))
 
 
 @app.get("/api/material-alias")
