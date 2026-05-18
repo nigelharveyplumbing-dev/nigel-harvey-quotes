@@ -3822,9 +3822,35 @@ LANDING_PAGE_HTML = r'''
 document.addEventListener('input', function(e) {
   if (e.target && e.target.classList && e.target.classList.contains('m-name')) {
     updateChargingNotes();
-  updateQuantityLearningNotes();
+  if (typeof updateQuantityLearningNotes === 'function') updateQuantityLearningNotes();
   }
 });
+
+
+function updateQuantityLearningNotes() {
+  try {
+    document.querySelectorAll("#materials .material-row").forEach(row => {
+      const nameInput = row.querySelector(".m-name");
+      const noteBox = row.querySelector(".quantity-learning-note");
+      if (!nameInput || !noteBox) return;
+
+      if (typeof suggestMaterialQuantityInfo !== "function") {
+        noteBox.innerHTML = "";
+        return;
+      }
+
+      const info = suggestMaterialQuantityInfo(nameInput.value || "");
+      if (info && info.source === "learned" && Number(info.used_count || 0) > 0) {
+        noteBox.innerHTML = `Quantity learned from history: avg ${Number(info.average_quantity || 0).toFixed(2)} used ${info.used_count} time(s). Suggested ${info.quantity}.`;
+      } else {
+        noteBox.innerHTML = "";
+      }
+    });
+  } catch (e) {
+    // Never let a display helper break quote/customer actions.
+  }
+}
+
 
 </script>
 <script type="application/ld+json">__FAQ_SCHEMA_JSON__</script>
@@ -5137,7 +5163,7 @@ function showNotice(message) {
   if (!box) return;
   box.innerText = message;
   box.style.display = "block";
-  updateQuantityLearningNotes();
+  if (typeof updateQuantityLearningNotes === 'function') updateQuantityLearningNotes();
   setTimeout(() => { box.style.display = "none"; }, 4000);
 }
 
@@ -7058,6 +7084,13 @@ async function generateQuote() {
     setQuoteButtonMode(!!CURRENT_QUOTE_ID);
 
     renderQuoteResult(data.result);
+
+    // Clear any stale error message after a successful save/update.
+    if (errorBox) {
+      errorBox.innerText = "";
+      errorBox.style.display = "none";
+    }
+
     await loadHistory();
     await loadCustomers();
     await loadDashboard();
@@ -7090,6 +7123,24 @@ async function convertCurrentQuoteToInvoice() {
   }
   await convertQuoteToInvoice(CURRENT_QUOTE_ID);
 }
+
+
+function normaliseQuoteForEditingPayload(data) {
+  const q = data && (data.request || data.quote || data.result || data);
+  return {
+    quote_type: q.quote_type || q.type || "small",
+    customer_name: q.customer_name || q.customer || "",
+    customer_address: q.customer_address || q.address || "",
+    customer_phone: q.customer_phone || q.phone || "",
+    job_description: q.job_description || q.job || "",
+    labour_cost: q.labour_cost || q.labour || 0,
+    include_materials_handling: q.include_materials_handling !== false,
+    materials_handling_percent: q.materials_handling_percent || 25,
+    deposit_percent: q.deposit_percent || 0,
+    materials: q.materials || q.material_lines || []
+  };
+}
+
 
 function populateInvoiceEditForm(item) {
   const invoice = item.invoice || {};
