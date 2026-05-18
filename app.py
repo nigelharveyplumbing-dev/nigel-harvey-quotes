@@ -1004,6 +1004,35 @@ def suggest_material_quantity(name: str, job_text: str = ""):
     return best.get("default_quantity", 1) if best else 1
 
 
+def learned_material_quantity_from_quotes(material_name: str, job_text: str = "", quote_type: str = ""):
+    canonical = canonical_material_name(material_name)
+    analysis = analyse_similar_quotes(job_text or material_name, quote_type or "")
+    similar_count = safe_float(analysis.get("similar_count", 0), 0)
+
+    for item in analysis.get("common_materials", []) or []:
+        if canonical_material_name(item.get("name", "")) == canonical:
+            avg_qty = safe_float(item.get("average_quantity", 0), 0)
+            used_count = safe_float(item.get("used_count", 0), 0)
+            if avg_qty > 0 and used_count >= 1:
+                return {
+                    "quantity": round(avg_qty, 2),
+                    "rounded_quantity": max(1, round(avg_qty)),
+                    "source": "learned",
+                    "used_count": int(used_count),
+                    "similar_count": int(similar_count),
+                    "used_percent": item.get("used_percent", 0),
+                }
+
+    return {
+        "quantity": suggest_material_quantity(material_name, job_text),
+        "rounded_quantity": suggest_material_quantity(material_name, job_text),
+        "source": "rule",
+        "used_count": 0,
+        "similar_count": int(similar_count),
+        "used_percent": 0,
+    }
+
+
 TRADE_JOB_LIBRARY = [
     {
         "name": "Outside tap",
@@ -1689,6 +1718,9 @@ class MaterialItem(BaseModel):
     quote_charge_override: float | None = None
     material_type: str = "chargeable"
     charge_method: str = "full"
+    quantity_source: str = "rule"
+    learned_average_quantity: float | None = None
+    learned_used_count: float | None = None
 
 
 class QuoteRequest(BaseModel):
@@ -2267,6 +2299,9 @@ def calculate_quote(data: QuoteRequest):
             "price_source": price_source,
             "material_type": item.material_type,
             "charge_method": item.charge_method,
+            "quantity_source": getattr(item, "quantity_source", "rule"),
+            "learned_average_quantity": getattr(item, "learned_average_quantity", None),
+            "learned_used_count": getattr(item, "learned_used_count", None),
         })
 
     tiling_extra_materials = 0.0
@@ -3747,6 +3782,7 @@ LANDING_PAGE_HTML = r'''
 document.addEventListener('input', function(e) {
   if (e.target && e.target.classList && e.target.classList.contains('m-name')) {
     updateChargingNotes();
+  updateQuantityLearningNotes();
   }
 });
 
@@ -4837,7 +4873,31 @@ const SMART_QUANTITY_RULES = [
   {match: ["silicone"], default_quantity: 1, job_keywords: ["bath", "basin", "toilet", "sink"]}
 ];
 
-function suggestMaterialQuantity(name, jobText = "") {
+function learnedQuantityFromCurrentJob(name) {
+  if (!LAST_LEARNING_DATA || !LAST_LEARNING_DATA.common_materials) return null;
+
+  const canonical = canonicalMaterialName(name || "");
+  const match = (LAST_LEARNING_DATA.common_materials || []).find(m => canonicalMaterialName(m.name || "") === canonical);
+
+  if (!match) return null;
+
+  const avgQty = Number(match.average_quantity || 0);
+  const usedCount = Number(match.used_count || 0);
+
+  if (avgQty > 0 && usedCount >= 1) {
+    return {
+      quantity: Math.max(1, Math.round(avgQty)),
+      average_quantity: avgQty,
+      used_count: usedCount,
+      used_percent: Number(match.used_percent || 0),
+      source: "learned"
+    };
+  }
+
+  return null;
+}
+
+function ruleQuantitySuggestion(name, jobText = "") {
   const canonical = canonicalMaterialName(name || "");
   const hay = `${canonical} ${name || ""}`.toLowerCase();
   const job = (jobText || document.getElementById("job")?.value || "").toLowerCase();
@@ -4864,12 +4924,33 @@ function suggestMaterialQuantity(name, jobText = "") {
   return best ? Number(best.default_quantity || 1) : 1;
 }
 
+function suggestMaterialQuantityInfo(name, jobText = "") {
+  const learned = learnedQuantityFromCurrentJob(name);
+  if (learned) return learned;
+
+  return {
+    quantity: ruleQuantitySuggestion(name, jobText),
+    average_quantity: null,
+    used_count: 0,
+    used_percent: 0,
+    source: "rule"
+  };
+}
+
+function suggestMaterialQuantity(name, jobText = "") {
+  return Number(suggestMaterialQuantityInfo(name, jobText).quantity || 1);
+}
+
 function applySmartQuantityToMaterial(material) {
   const out = {...material};
   const hasExplicitQty = out.quantity !== undefined && out.quantity !== null && String(out.quantity).trim() !== "";
   if (!hasExplicitQty || Number(out.quantity) === 1) {
-    const suggested = suggestMaterialQuantity(out.name || "");
+    const info = suggestMaterialQuantityInfo(out.name || "");
+    const suggested = Number(info.quantity || 1);
     if (suggested && suggested > 1) out.quantity = suggested;
+    out.quantity_source = info.source;
+    out.learned_average_quantity = info.average_quantity;
+    out.learned_used_count = info.used_count;
   }
   return out;
 }
@@ -5015,6 +5096,7 @@ function showNotice(message) {
   if (!box) return;
   box.innerText = message;
   box.style.display = "block";
+  updateQuantityLearningNotes();
   setTimeout(() => { box.style.display = "none"; }, 4000);
 }
 
@@ -5434,6 +5516,7 @@ function addMaterial(prefill = null) {
 
     <label>Manual price (£)</label>
       <div class="small charging-note"></div>
+      <div class="small quantity-learning-note"></div>
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${manualPrice}">
 
     <button type="button" class="btn-red" style="margin-top:12px;" onclick="this.parentElement.remove()">Remove</button>
@@ -7494,10 +7577,16 @@ def api_master_materials(category: str = ""):
 
 
 @app.get("/api/material-quantity")
-def api_material_quantity(q: str = "", job: str = ""):
+def api_material_quantity(q: str = "", job: str = "", quote_type: str = ""):
+    learned = learned_material_quantity_from_quotes(q, job, quote_type)
     return JSONResponse(content={
         "name": q,
-        "suggested_quantity": suggest_material_quantity(q, job)
+        "suggested_quantity": learned.get("rounded_quantity", 1),
+        "average_quantity": learned.get("quantity", 1),
+        "source": learned.get("source", "rule"),
+        "used_count": learned.get("used_count", 0),
+        "similar_count": learned.get("similar_count", 0),
+        "used_percent": learned.get("used_percent", 0),
     })
 
 
