@@ -4518,7 +4518,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 
 
       <label for="quote_type">Quote type</label>
-      <select id="quote_type" onchange="toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning();">
+      <select id="quote_type" onchange="toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence();">
         <option value="small">Small Job</option>
         <option value="bathroom">Bathroom</option>
         <option value="heating">Heating</option>
@@ -4534,7 +4534,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <input id="customer_phone" placeholder="07123 456789">
 
       <label for="job">Job description</label>
-      <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning()"></textarea>
+      <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence()"></textarea>
 
       <div id="bathroomFields" class="hidden">
         <h3>Bathroom / tiling</h3>
@@ -4572,9 +4572,10 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 
       <h3>Pricing</h3>
       <label for="labour">Labour cost (£)</label>
-      <input id="labour" type="number" step="0.01" placeholder="180">
+      <input id="labour" type="number" step="0.01" placeholder="180" oninput="scheduleLabourIntelligence()">
       <div class="small" id="labourSuggestion" style="margin-top:8px;"></div>
       <div id="learningInsights" class="quote-box small" style="margin-top:10px; display:none;"></div>
+      <div id="labourIntelligence" class="quote-box small" style="margin-top:10px; display:none;"></div>
 
       <div class="check-row">
         <input type="checkbox" id="include_materials_handling" checked>
@@ -5179,6 +5180,103 @@ function addFavouriteMaterial(index) {
 }
 
 
+
+let LABOUR_INTELLIGENCE_TIMER = null;
+
+function scheduleLabourIntelligence() {
+  window.clearTimeout(LABOUR_INTELLIGENCE_TIMER);
+  LABOUR_INTELLIGENCE_TIMER = window.setTimeout(loadLabourIntelligence, 500);
+}
+
+async function loadLabourIntelligence() {
+  const box = document.getElementById("labourIntelligence");
+  if (!box) return;
+
+  const job = document.getElementById("job")?.value || "";
+  const quoteType = document.getElementById("quote_type")?.value || "";
+  const labour = Number(document.getElementById("labour")?.value || 0);
+
+  if (!job.trim() || job.trim().length < 3) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/labour-intelligence?job=${encodeURIComponent(job)}&quote_type=${encodeURIComponent(quoteType)}&labour=${encodeURIComponent(labour)}`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderLabourIntelligence(data);
+  } catch (e) {
+    box.style.display = "none";
+    box.innerHTML = "";
+  }
+}
+
+function renderLabourIntelligence(data) {
+  const box = document.getElementById("labourIntelligence");
+  if (!box) return;
+
+  if (!data || !Number(data.average_labour || 0)) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    return;
+  }
+
+  const status = data.status || "unknown";
+  let border = "#d1d5db";
+  let bg = "#f9fafb";
+  let title = "Labour intelligence";
+
+  if (status === "too_low") {
+    border = "#dc2626";
+    bg = "#fef2f2";
+    title = "Labour warning";
+  } else if (status === "ok") {
+    border = "#16a34a";
+    bg = "#f0fdf4";
+  } else if (status === "high") {
+    border = "#f59e0b";
+    bg = "#fffbeb";
+  }
+
+  const similarHtml = (data.similar_quotes || []).length ? `
+    <details style="margin-top:8px;">
+      <summary>Similar labour history</summary>
+      ${(data.similar_quotes || []).map(q => `
+        <div class="history-item" style="padding:8px;margin-top:6px;">
+          Quote #${q.id} · Labour ${pounds(q.labour || 0)} · Total ${pounds(q.total_price || 0)}<br>
+          <span class="small">${escapeHtml((q.job || "").slice(0, 130))}</span>
+        </div>
+      `).join("")}
+    </details>
+  ` : "";
+
+  box.style.display = "block";
+  box.style.borderColor = border;
+  box.style.background = bg;
+  box.innerHTML = `
+    <strong>${title}</strong><br>
+    Similar jobs found: <strong>${data.similar_count || 0}</strong><br>
+    Your average labour: <strong>${pounds(data.average_labour || 0)}</strong><br>
+    Usual range: <strong>${pounds(data.low_range || 0)} - ${pounds(data.high_range || 0)}</strong><br>
+    Current labour: <strong>${pounds(data.current_labour || 0)}</strong><br>
+    ${data.warning ? `<div style="margin-top:6px;"><strong>${escapeHtml(data.warning)}</strong></div>` : ""}
+    <div class="history-actions" style="grid-template-columns:1fr;margin-top:8px;">
+      <button type="button" class="btn-light" onclick="applyAverageLabour(${Number(data.average_labour || 0)})">Use average labour</button>
+    </div>
+    ${similarHtml}
+  `;
+}
+
+function applyAverageLabour(value) {
+  if (!value || Number(value) <= 0) return;
+  document.getElementById("labour").value = Number(value).toFixed(2);
+  scheduleLabourIntelligence();
+  showNotice("Average labour applied.");
+}
+
+
 let QUOTE_LEARNING_TIMER = null;
 let LAST_LEARNING_DATA = null;
 
@@ -5366,6 +5464,7 @@ async function loadQuoteLearning() {
     if (!res.ok) throw new Error();
     const data = await res.json();
     renderQuoteLearning(data);
+    scheduleLabourIntelligence();
   } catch (e) {
     if (box) {
       box.style.display = "block";
@@ -7603,6 +7702,66 @@ def api_material_alias(q: str = ""):
 @app.get("/api/trade-jobs")
 def api_trade_jobs():
     return JSONResponse(content=get_all_job_templates())
+
+
+def labour_intelligence_for_job(job_text: str = "", quote_type: str = "", current_labour: float = 0):
+    analysis = analyse_similar_quotes(job_text or "", quote_type or "")
+    averages = analysis.get("averages", {}) or {}
+    similar = analysis.get("similar_quotes", []) or []
+
+    labour_values = []
+    for item in similar:
+        labour = safe_float(item.get("labour", 0), 0)
+        if labour > 0:
+            labour_values.append(labour)
+
+    avg_labour = safe_float(averages.get("labour", 0), 0)
+    if not avg_labour and labour_values:
+        avg_labour = sum(labour_values) / len(labour_values)
+
+    if labour_values:
+        low = min(labour_values)
+        high = max(labour_values)
+    elif avg_labour:
+        low = avg_labour * 0.85
+        high = avg_labour * 1.20
+    else:
+        low = 0
+        high = 0
+
+    current = safe_float(current_labour, 0)
+    warning = ""
+    status = "unknown"
+
+    if avg_labour > 0 and current > 0:
+        if current < avg_labour * 0.85:
+            status = "too_low"
+            warning = f"Labour looks low. Similar jobs average £{avg_labour:.2f}."
+        elif current > avg_labour * 1.35:
+            status = "high"
+            warning = f"Labour is higher than your usual average of £{avg_labour:.2f}."
+        else:
+            status = "ok"
+            warning = "Labour is within your usual range."
+
+    return {
+        "job": job_text,
+        "quote_type": quote_type,
+        "current_labour": round(current, 2),
+        "average_labour": round(avg_labour, 2),
+        "low_range": round(low, 2),
+        "high_range": round(high, 2),
+        "similar_count": analysis.get("similar_count", 0),
+        "status": status,
+        "warning": warning,
+        "similar_quotes": similar[:6],
+    }
+
+
+
+@app.get("/api/labour-intelligence")
+def api_labour_intelligence(job: str = "", quote_type: str = "", labour: float = 0):
+    return JSONResponse(content=labour_intelligence_for_job(job, quote_type, labour))
 
 
 @app.get("/api/quote-learning")
