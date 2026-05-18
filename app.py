@@ -959,6 +959,51 @@ def material_quote_unit_price(name: str, full_price: float, override_price=None)
     return full_price
 
 
+
+SMART_QUANTITY_RULES = [
+    {"match": ["pipe clips 15mm", "15mm pipe clips"], "default_quantity": 6, "job_keywords": ["outside tap", "fridge", "pipe run"]},
+    {"match": ["32mm waste pipe clips", "waste pipe clips 32"], "default_quantity": 4, "job_keywords": ["basin", "waste"]},
+    {"match": ["40mm waste pipe clips", "waste pipe clips 40"], "default_quantity": 4, "job_keywords": ["sink", "shower", "waste"]},
+    {"match": ["15mm copper pipe"], "default_quantity": 1, "job_keywords": ["small", "tap", "fridge", "outside tap"]},
+    {"match": ["15mm endfeed elbow", "endfeed elbow"], "default_quantity": 4, "job_keywords": ["outside tap", "pipe run", "leak"]},
+    {"match": ["15mm endfeed tee", "endfeed tee"], "default_quantity": 1, "job_keywords": ["outside tap", "branch"]},
+    {"match": ["15mm compression coupler", "compression coupler"], "default_quantity": 2, "job_keywords": ["repair", "leak", "extension"]},
+    {"match": ["15mm isolating valve", "isolating valve"], "default_quantity": 1, "job_keywords": ["fridge", "appliance"]},
+    {"match": ["15mm isolating valve", "isolating valve"], "default_quantity": 2, "job_keywords": ["tap", "basin tap", "kitchen tap"]},
+    {"match": ["flexi hose 300mm", "flexi hose 500mm", "flexible tap connector"], "default_quantity": 2, "job_keywords": ["tap", "basin", "kitchen"]},
+    {"match": ["15mm copper olive", "olive"], "default_quantity": 2, "job_keywords": ["trv", "valve", "compression"]},
+    {"match": ["radiator valve tail", "radiator tail"], "default_quantity": 2, "job_keywords": ["radiator", "trv"]},
+    {"match": ["angled trv", "thermostatic radiator valve"], "default_quantity": 1, "job_keywords": ["trv", "radiator"]},
+    {"match": ["angled lockshield valve", "lockshield"], "default_quantity": 1, "job_keywords": ["trv", "radiator"]},
+    {"match": ["ptfe tape"], "default_quantity": 1, "job_keywords": ["any"]},
+    {"match": ["silicone"], "default_quantity": 1, "job_keywords": ["bath", "basin", "toilet", "sink"]},
+]
+
+
+def suggest_material_quantity(name: str, job_text: str = ""):
+    canonical = canonical_material_name(name)
+    hay = f"{canonical} {name}".lower()
+    job = (job_text or "").lower()
+
+    best = None
+    best_score = -1
+    for rule in SMART_QUANTITY_RULES:
+        if not any(term in hay for term in rule.get("match", [])):
+            continue
+
+        score = 1
+        kws = rule.get("job_keywords", [])
+        if "any" in kws:
+            score += 1
+        score += sum(3 for kw in kws if kw and kw != "any" and kw in job)
+
+        if score > best_score:
+            best = rule
+            best_score = score
+
+    return best.get("default_quantity", 1) if best else 1
+
+
 TRADE_JOB_LIBRARY = [
     {
         "name": "Outside tap",
@@ -4481,7 +4526,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
         </div>
       </div>
 
-      <h3>Smart material search</h3>
+      <h3>Smart material search</h3><p class="small">Smart quantity intelligence is active: common items like clips, olives, flexis and radiator tails can auto-suggest sensible quantities.</p>
       <input id="materialSearch" placeholder="Search materials e.g. 15mm speedfit elbow, basin waste, kitchen tap" oninput="searchMaterials()">
       <div id="searchResults" class="search-results hidden"></div>
 
@@ -4772,6 +4817,64 @@ const JOB_TEMPLATES = __JOB_TEMPLATES__;
 const MATERIAL_ALIAS_RULES = __MATERIAL_ALIAS_RULES__;
 
 
+
+const SMART_QUANTITY_RULES = [
+  {match: ["pipe clips 15mm", "15mm pipe clips"], default_quantity: 6, job_keywords: ["outside tap", "fridge", "pipe run"]},
+  {match: ["32mm waste pipe clips", "waste pipe clips 32"], default_quantity: 4, job_keywords: ["basin", "waste"]},
+  {match: ["40mm waste pipe clips", "waste pipe clips 40"], default_quantity: 4, job_keywords: ["sink", "shower", "waste"]},
+  {match: ["15mm copper pipe"], default_quantity: 1, job_keywords: ["small", "tap", "fridge", "outside tap"]},
+  {match: ["15mm endfeed elbow", "endfeed elbow"], default_quantity: 4, job_keywords: ["outside tap", "pipe run", "leak"]},
+  {match: ["15mm endfeed tee", "endfeed tee"], default_quantity: 1, job_keywords: ["outside tap", "branch"]},
+  {match: ["15mm compression coupler", "compression coupler"], default_quantity: 2, job_keywords: ["repair", "leak", "extension"]},
+  {match: ["15mm isolating valve", "isolating valve"], default_quantity: 1, job_keywords: ["fridge", "appliance"]},
+  {match: ["15mm isolating valve", "isolating valve"], default_quantity: 2, job_keywords: ["tap", "basin tap", "kitchen tap"]},
+  {match: ["flexi hose 300mm", "flexi hose 500mm", "flexible tap connector"], default_quantity: 2, job_keywords: ["tap", "basin", "kitchen"]},
+  {match: ["15mm copper olive", "olive"], default_quantity: 2, job_keywords: ["trv", "valve", "compression"]},
+  {match: ["radiator valve tail", "radiator tail"], default_quantity: 2, job_keywords: ["radiator", "trv"]},
+  {match: ["angled trv", "thermostatic radiator valve"], default_quantity: 1, job_keywords: ["trv", "radiator"]},
+  {match: ["angled lockshield valve", "lockshield"], default_quantity: 1, job_keywords: ["trv", "radiator"]},
+  {match: ["ptfe tape"], default_quantity: 1, job_keywords: ["any"]},
+  {match: ["silicone"], default_quantity: 1, job_keywords: ["bath", "basin", "toilet", "sink"]}
+];
+
+function suggestMaterialQuantity(name, jobText = "") {
+  const canonical = canonicalMaterialName(name || "");
+  const hay = `${canonical} ${name || ""}`.toLowerCase();
+  const job = (jobText || document.getElementById("job")?.value || "").toLowerCase();
+
+  let best = null;
+  let bestScore = -1;
+
+  SMART_QUANTITY_RULES.forEach(rule => {
+    if (!(rule.match || []).some(term => hay.includes(term))) return;
+
+    let score = 1;
+    const kws = rule.job_keywords || [];
+    if (kws.includes("any")) score += 1;
+    kws.forEach(kw => {
+      if (kw && kw !== "any" && job.includes(kw)) score += 3;
+    });
+
+    if (score > bestScore) {
+      best = rule;
+      bestScore = score;
+    }
+  });
+
+  return best ? Number(best.default_quantity || 1) : 1;
+}
+
+function applySmartQuantityToMaterial(material) {
+  const out = {...material};
+  const hasExplicitQty = out.quantity !== undefined && out.quantity !== null && String(out.quantity).trim() !== "";
+  if (!hasExplicitQty || Number(out.quantity) === 1) {
+    const suggested = suggestMaterialQuantity(out.name || "");
+    if (suggested && suggested > 1) out.quantity = suggested;
+  }
+  return out;
+}
+
+
 const MATERIAL_CHARGING_RULES = {
   "ptfe tape": {
     material_type: "consumable",
@@ -5042,7 +5145,6 @@ function addMasterMaterialByIndex(index) {
   if (!item) return;
   addMaterial({
     name: item.canonical,
-    quantity: 1,
     supplier: "City Plumbing",
     manual_price: 0
   });
@@ -5287,6 +5389,8 @@ function clearMaterials() {
 }
 
 function addMaterial(prefill = null) {
+  if (prefill) prefill = applySmartQuantityToMaterial(prefill);
+
   if (prefill) prefill = applyChargingRuleToMaterial(prefill);
 
   // Consumable/small-part duplicate guard
@@ -7386,6 +7490,15 @@ def api_master_materials(category: str = ""):
         return JSONResponse(content=get_materials_by_category(category))
     return JSONResponse(content=MASTER_MATERIAL_LIBRARY)
 
+
+
+
+@app.get("/api/material-quantity")
+def api_material_quantity(q: str = "", job: str = ""):
+    return JSONResponse(content={
+        "name": q,
+        "suggested_quantity": suggest_material_quantity(q, job)
+    })
 
 
 @app.get("/api/material-charging")
