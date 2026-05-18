@@ -1789,6 +1789,46 @@ def format_dt(dt: datetime):
     return dt.strftime("%d/%m/%Y %H:%M")
 
 
+
+def normalize_material_dict(item):
+    if not isinstance(item, dict):
+        item = {}
+
+    item.setdefault("quantity_source", "rule")
+    item.setdefault("learned_average_quantity", None)
+    item.setdefault("learned_used_count", None)
+    item.setdefault("charge_method", item.get("charge_method", "full"))
+
+    return item
+
+
+
+def clean_materials_for_storage(materials):
+    cleaned = []
+    for m in materials or []:
+        if hasattr(m, "dict"):
+            data = m.dict()
+        elif isinstance(m, dict):
+            data = dict(m)
+        else:
+            continue
+
+        cleaned.append({
+            "name": data.get("name", ""),
+            "quantity": data.get("quantity", 1),
+            "supplier": data.get("supplier", ""),
+            "url": data.get("url", ""),
+            "manual_price": data.get("manual_price", 0),
+            "price": data.get("price", 0),
+            "grouped_name": data.get("grouped_name", ""),
+            "charge_method": data.get("charge_method", "full"),
+            "quantity_source": data.get("quantity_source", "rule"),
+            "learned_average_quantity": data.get("learned_average_quantity"),
+            "learned_used_count": data.get("learned_used_count"),
+        })
+    return cleaned
+
+
 def safe_float(value, default=0.0):
     try:
         return float(value)
