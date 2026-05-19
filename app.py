@@ -3822,6 +3822,7 @@ LANDING_PAGE_HTML = r'''
 document.addEventListener('input', function(e) {
   if (e.target && e.target.classList && e.target.classList.contains('m-name')) {
     updateChargingNotes();
+    updateForgottenItemWarnings();
   if (typeof updateQuantityLearningNotes === 'function') if (typeof updateQuantityLearningNotes === 'function') updateQuantityLearningNotes();
   }
 });
@@ -4613,7 +4614,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <input id="customer_phone" placeholder="07123 456789">
 
       <label for="job">Job description</label>
-      <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence()"></textarea>
+      <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div id="bathroomFields" class="hidden">
         <h3>Bathroom / tiling</h3>
@@ -4655,6 +4656,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <div class="small" id="labourSuggestion" style="margin-top:8px;"></div>
       <div id="learningInsights" class="quote-box small" style="margin-top:10px; display:none;"></div>
       <div id="labourIntelligence" class="quote-box small" style="margin-top:10px; display:none;"></div>
+      <div id="forgottenItemWarnings" class="quote-box small" style="margin-top:10px; display:none; border-color:#f59e0b; background:#fffbeb;"></div>
 
       <div class="check-row">
         <input type="checkbox" id="include_materials_handling" checked>
@@ -4932,6 +4934,136 @@ const JOB_TEMPLATES = __JOB_TEMPLATES__;
 
 const MATERIAL_ALIAS_RULES = __MATERIAL_ALIAS_RULES__;
 
+
+
+
+const FORGOTTEN_ITEM_RULES = [
+  {
+    trigger: ["outside tap", "hose union bib tap", "wall plate elbow"],
+    missing: ["15mm isolating valve", "double check valve 15mm", "pipe clips 15mm", "drain off cock 15mm"],
+    job_keywords: ["outside tap", "garden tap", "external tap"],
+    reason: "Outside taps usually need isolation, backflow protection, pipe clips and a drain off where freezing is possible."
+  },
+  {
+    trigger: ["trv", "thermostatic radiator valve", "angled trv"],
+    missing: ["angled lockshield valve", "radiator valve tail", "ptfe tape", "15mm copper olive", "central heating inhibitor"],
+    job_keywords: ["trv", "radiator valve", "heating"],
+    reason: "TRV jobs often need a matching lockshield, tails, olives, PTFE and inhibitor if draining/refilling."
+  },
+  {
+    trigger: ["radiator", "radiator replacement"],
+    missing: ["angled trv", "angled lockshield valve", "radiator valve tail", "central heating inhibitor", "radiator bleed valve"],
+    job_keywords: ["radiator", "rad"],
+    reason: "Radiator replacements commonly need valves, tails, inhibitor and bleed parts."
+  },
+  {
+    trigger: ["filling loop", "braided filling loop"],
+    missing: ["15mm isolating valve", "double check valve 15mm", "central heating inhibitor"],
+    job_keywords: ["filling loop", "pressure", "low pressure", "repressurise"],
+    reason: "Filling loop jobs often need isolation/check valve parts and inhibitor if system is topped up/refilled."
+  },
+  {
+    trigger: ["basin waste", "bottle trap", "p trap"],
+    missing: ["32mm waste pipe", "32mm waste pipe clips", "32mm solvent weld bend", "silicone"],
+    job_keywords: ["basin", "waste", "trap"],
+    reason: "Basin waste jobs often need pipe, clips, bends and sealant."
+  },
+  {
+    trigger: ["kitchen sink waste", "sink waste"],
+    missing: ["40mm waste pipe", "40mm waste pipe clips", "40mm solvent weld bend", "appliance waste spigot"],
+    job_keywords: ["kitchen sink", "sink waste", "waste"],
+    reason: "Kitchen sink waste jobs often need 40mm pipe, clips, bends and sometimes appliance spigots."
+  },
+  {
+    trigger: ["tap", "kitchen tap", "basin tap"],
+    missing: ["15mm isolating valve", "flexi hose 300mm", "ptfe tape"],
+    job_keywords: ["tap", "kitchen tap", "basin tap"],
+    reason: "Tap replacements often need isolation valves, flexis and PTFE/sundries."
+  },
+  {
+    trigger: ["toilet", "replace toilet", "toilet replacement"],
+    missing: ["straight pan connector", "toilet fixing kit", "15mm isolating valve", "15mm x 1/2 flexi hose", "doughnut washer"],
+    job_keywords: ["toilet", "wc"],
+    reason: "Toilet jobs often need pan connector, fixings, isolation/flexi and close-coupling seals."
+  }
+];
+
+function currentMaterialsForForgottenCheck() {
+  return [...document.querySelectorAll("#materials .material-row")].map(row => ({
+    name: row.querySelector(".m-name")?.value || "",
+    quantity: Number(row.querySelector(".m-qty")?.value || 1),
+    supplier: row.querySelector(".m-supplier")?.value || "",
+    url: row.querySelector(".m-url")?.value || "",
+    manual_price: Number(row.querySelector(".m-manual")?.value || 0)
+  })).filter(m => m.name.trim());
+}
+
+function detectForgottenItemsFrontend() {
+  const job = (document.getElementById("job")?.value || "").toLowerCase();
+  const materials = currentMaterialsForForgottenCheck();
+  const canonicalNames = materials.map(m => canonicalMaterialName(m.name || ""));
+  const hay = `${job} ${materials.map(m => m.name).join(" ")} ${canonicalNames.join(" ")}`.toLowerCase();
+
+  const warnings = [];
+  const seen = new Set();
+
+  FORGOTTEN_ITEM_RULES.forEach(rule => {
+    const triggerHit = (rule.trigger || []).some(t => hay.includes(t)) || (rule.job_keywords || []).some(k => job.includes(k));
+    if (!triggerHit) return;
+
+    const missing = [];
+    (rule.missing || []).forEach(item => {
+      const itemCan = canonicalMaterialName(item);
+      const exists = canonicalNames.some(c => itemCan === c || itemCan.includes(c) || c.includes(itemCan));
+      if (!exists && !seen.has(itemCan)) {
+        seen.add(itemCan);
+        missing.push(item);
+      }
+    });
+
+    if (missing.length) {
+      warnings.push({reason: rule.reason, missing});
+    }
+  });
+
+  return warnings;
+}
+
+function addForgottenItem(name) {
+  addMaterial({name, quantity: suggestMaterialQuantity(name), supplier: "City Plumbing", manual_price: 0});
+  updateForgottenItemWarnings();
+  showNotice(`${name} added.`);
+}
+
+function updateForgottenItemWarnings() {
+  const box = document.getElementById("forgottenItemWarnings");
+  if (!box) return;
+
+  const warnings = detectForgottenItemsFrontend();
+
+  if (!warnings.length) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    return;
+  }
+
+  box.style.display = "block";
+  box.innerHTML = `
+    <strong>Possible forgotten materials</strong><br>
+    <span class="small">These are not compulsory, but check them before sending the quote.</span>
+    ${warnings.map(w => `
+      <div class="history-item" style="margin-top:8px;padding:8px;">
+        <strong>${escapeHtml(w.reason || "Check missing items")}</strong><br>
+        ${(w.missing || []).map(item => `
+          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-top:6px;">
+            <span>• ${escapeHtml(item)}</span>
+            <button type="button" class="btn-light" onclick='addForgottenItem(${JSON.stringify(item)})'>Add</button>
+          </div>
+        `).join("")}
+      </div>
+    `).join("")}
+  `;
+}
 
 
 const SMART_QUANTITY_RULES = [
@@ -5646,6 +5778,7 @@ function materialQuoteUnitPrice(material) {
 
 function clearMaterials() {
   document.getElementById("materials").innerHTML = "";
+  updateForgottenItemWarnings();
 }
 
 function addMaterial(prefill = null) {
@@ -5704,7 +5837,9 @@ function addMaterial(prefill = null) {
   if (prefill) {
     div.querySelector(".m-supplier").value = prefill.supplier || "City Plumbing";
   }
+  updateForgottenItemWarnings();
 }
+
 
 let MATERIAL_SEARCH_TIMER = null;
 
@@ -7920,6 +8055,123 @@ def labour_intelligence_for_job(job_text: str = "", quote_type: str = "", curren
         "similar_quotes": similar[:6],
     }
 
+
+
+FORGOTTEN_ITEM_RULES = [
+    {
+        "trigger": ["outside tap", "hose union bib tap", "wall plate elbow"],
+        "missing": ["15mm isolating valve", "double check valve 15mm", "pipe clips 15mm", "drain off cock 15mm"],
+        "job_keywords": ["outside tap", "garden tap", "external tap"],
+        "reason": "Outside taps usually need isolation, backflow protection, pipe clips and a drain off where freezing is possible."
+    },
+    {
+        "trigger": ["trv", "thermostatic radiator valve", "angled trv"],
+        "missing": ["angled lockshield valve", "radiator valve tail", "ptfe tape", "15mm copper olive", "central heating inhibitor"],
+        "job_keywords": ["trv", "radiator valve", "heating"],
+        "reason": "TRV jobs often need a matching lockshield, tails, olives, PTFE and inhibitor if draining/refilling."
+    },
+    {
+        "trigger": ["radiator", "radiator replacement"],
+        "missing": ["angled trv", "angled lockshield valve", "radiator valve tail", "central heating inhibitor", "radiator bleed valve"],
+        "job_keywords": ["radiator", "rad"],
+        "reason": "Radiator replacements commonly need valves, tails, inhibitor and bleed parts."
+    },
+    {
+        "trigger": ["filling loop", "braided filling loop"],
+        "missing": ["15mm isolating valve", "double check valve 15mm", "central heating inhibitor"],
+        "job_keywords": ["filling loop", "pressure", "low pressure", "repressurise"],
+        "reason": "Filling loop jobs often need isolation/check valve parts and inhibitor if system is topped up/refilled."
+    },
+    {
+        "trigger": ["basin waste", "bottle trap", "p trap"],
+        "missing": ["32mm waste pipe", "32mm waste pipe clips", "32mm solvent weld bend", "silicone"],
+        "job_keywords": ["basin", "waste", "trap"],
+        "reason": "Basin waste jobs often need pipe, clips, bends and sealant."
+    },
+    {
+        "trigger": ["kitchen sink waste", "sink waste"],
+        "missing": ["40mm waste pipe", "40mm waste pipe clips", "40mm solvent weld bend", "appliance waste spigot"],
+        "job_keywords": ["kitchen sink", "sink waste", "waste"],
+        "reason": "Kitchen sink waste jobs often need 40mm pipe, clips, bends and sometimes appliance spigots."
+    },
+    {
+        "trigger": ["tap", "kitchen tap", "basin tap"],
+        "missing": ["15mm isolating valve", "flexi hose 300mm", "ptfe tape"],
+        "job_keywords": ["tap", "kitchen tap", "basin tap"],
+        "reason": "Tap replacements often need isolation valves, flexis and PTFE/sundries."
+    },
+    {
+        "trigger": ["toilet", "replace toilet", "toilet replacement"],
+        "missing": ["straight pan connector", "toilet fixing kit", "15mm isolating valve", "15mm x 1/2 flexi hose", "doughnut washer"],
+        "job_keywords": ["toilet", "wc"],
+        "reason": "Toilet jobs often need pan connector, fixings, isolation/flexi and close-coupling seals."
+    },
+]
+
+
+def detect_forgotten_items(job_text: str, materials: list):
+    job = (job_text or "").lower()
+    material_names = []
+    canonical_names = []
+
+    for m in materials or []:
+        if hasattr(m, "dict"):
+            data = m.dict()
+        elif isinstance(m, dict):
+            data = m
+        else:
+            continue
+        name = data.get("name", "")
+        if not name:
+            continue
+        material_names.append(name.lower())
+        canonical_names.append(canonical_material_name(name))
+
+    hay = " ".join(material_names + canonical_names + [job])
+    results = []
+
+    for rule in FORGOTTEN_ITEM_RULES:
+        trigger_hit = any(t in hay for t in rule.get("trigger", [])) or any(k in job for k in rule.get("job_keywords", []))
+        if not trigger_hit:
+            continue
+
+        missing_now = []
+        for item in rule.get("missing", []):
+            item_can = canonical_material_name(item)
+            exists = any(item_can == c or item_can in c or c in item_can for c in canonical_names)
+            if not exists:
+                missing_now.append(item)
+
+        if missing_now:
+            results.append({
+                "reason": rule.get("reason", ""),
+                "missing": missing_now,
+                "trigger": rule.get("trigger", []),
+            })
+
+    # De-duplicate by missing item name
+    seen = set()
+    clean = []
+    for r in results:
+        unique_missing = []
+        for m in r.get("missing", []):
+            key = canonical_material_name(m)
+            if key not in seen:
+                seen.add(key)
+                unique_missing.append(m)
+        if unique_missing:
+            r["missing"] = unique_missing
+            clean.append(r)
+
+    return clean
+
+
+
+@app.post("/api/forgotten-items")
+def api_forgotten_items(data: QuoteRequest):
+    return JSONResponse(content={
+        "warnings": detect_forgotten_items(data.job_description, data.materials)
+    })
 
 
 @app.get("/api/labour-intelligence")
