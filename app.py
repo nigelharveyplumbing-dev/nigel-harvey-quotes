@@ -3823,6 +3823,7 @@ document.addEventListener('input', function(e) {
   if (e.target && e.target.classList && e.target.classList.contains('m-name')) {
     updateChargingNotes();
     updateForgottenItemWarnings();
+    updateSupplierPreferenceNotes();
   if (typeof updateQuantityLearningNotes === 'function') if (typeof updateQuantityLearningNotes === 'function') updateQuantityLearningNotes();
   }
 });
@@ -4587,6 +4588,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <div id="favouriteButtons" class="favourites"></div>
 
       <h3>Master material library</h3>
+      <div class="quote-box small" style="margin-top:10px;"><strong>Supplier Preference Engine</strong><br><span class="small">Learns your most-used supplier per material from quote history.</span><div class="history-actions" style="grid-template-columns:1fr;margin-top:8px;"><button type="button" class="btn-light" onclick="loadSupplierPreferencesPanel()">Load supplier preferences</button></div><div id="supplierPreferencesPanel" style="margin-top:8px;"></div></div>
       <div class="quote-box small">
         <p class="small">Core plumbing fittings grouped by proper material names. This is the clean material brain the quote learning uses.</p>
         <div id="masterMaterialSearchBox" style="margin-bottom:10px;">
@@ -4935,6 +4937,75 @@ const JOB_TEMPLATES = __JOB_TEMPLATES__;
 const MATERIAL_ALIAS_RULES = __MATERIAL_ALIAS_RULES__;
 
 
+
+
+
+async function getSupplierPreference(name) {
+  try {
+    const res = await fetch(`/api/supplier-preference?q=${encodeURIComponent(name || "")}`);
+    if (!res.ok) throw new Error();
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+async function applySupplierPreferenceToRow(row) {
+  const name = row.querySelector(".m-name")?.value || "";
+  const supplierSelect = row.querySelector(".m-supplier");
+  if (!name || !supplierSelect) return;
+
+  const pref = await getSupplierPreference(name);
+  if (pref && pref.preferred_supplier && pref.source === "history") {
+    supplierSelect.value = pref.preferred_supplier;
+    const note = row.querySelector(".supplier-preference-note");
+    if (note) {
+      const counts = pref.supplier_counts || {};
+      const count = counts[pref.preferred_supplier] || 0;
+      note.innerHTML = `Supplier learned from history: ${escapeHtml(pref.preferred_supplier)} used ${count} time(s).`;
+    }
+  }
+}
+
+function updateSupplierPreferenceNotes() {
+  document.querySelectorAll("#materials .material-row").forEach(row => {
+    applySupplierPreferenceToRow(row);
+  });
+}
+
+async function loadSupplierPreferencesPanel() {
+  const box = document.getElementById("supplierPreferencesPanel");
+  if (!box) return;
+
+  try {
+    const res = await fetch("/api/supplier-preferences");
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const items = data.items || [];
+
+    if (!items.length) {
+      box.innerHTML = "No supplier history yet.";
+      return;
+    }
+
+    box.innerHTML = items.slice(0, 30).map(item => {
+      const counts = item.supplier_counts || {};
+      const countText = Object.keys(counts).map(k => `${escapeHtml(k)}: ${counts[k]}`).join(" · ");
+      const prices = item.average_prices || {};
+      const priceText = Object.keys(prices).map(k => `${escapeHtml(k)} avg ${pounds(prices[k])}`).join(" · ");
+      return `
+        <div class="history-item" style="padding:8px;margin-top:6px;">
+          <strong>${escapeHtml(item.material || "Material")}</strong><br>
+          Preferred: <strong>${escapeHtml(item.preferred_supplier || "-")}</strong> · Uses: ${item.total_uses || 0}<br>
+          <span class="small">${countText}</span><br>
+          ${priceText ? `<span class="small">${priceText}</span>` : ""}
+        </div>
+      `;
+    }).join("");
+  } catch (e) {
+    box.innerHTML = "Could not load supplier preferences.";
+  }
+}
 
 
 const FORGOTTEN_ITEM_RULES = [
@@ -5838,7 +5909,9 @@ function addMaterial(prefill = null) {
     div.querySelector(".m-supplier").value = prefill.supplier || "City Plumbing";
   }
   updateForgottenItemWarnings();
+  updateSupplierPreferenceNotes();
 }
+
 
 
 let MATERIAL_SEARCH_TIMER = null;
@@ -8165,6 +8238,102 @@ def detect_forgotten_items(job_text: str, materials: list):
 
     return clean
 
+
+
+def supplier_preference_for_material(material_name: str):
+    canonical = canonical_material_name(material_name)
+    supplier_counts = {}
+    price_by_supplier = {}
+
+    for quote in load_quotes():
+        result = quote.get("result", {}) or {}
+        for line in result.get("material_lines", []) or []:
+            name = line.get("name", "")
+            if canonical_material_name(name) != canonical:
+                continue
+
+            supplier = (line.get("supplier") or "").strip() or "Unknown"
+            supplier_counts[supplier] = supplier_counts.get(supplier, 0) + 1
+
+            unit = safe_float(line.get("full_unit_price", line.get("unit_price_used", 0)), 0)
+            if unit > 0:
+                price_by_supplier.setdefault(supplier, []).append(unit)
+
+    if not supplier_counts:
+        return {
+            "material": canonical,
+            "preferred_supplier": "",
+            "supplier_counts": {},
+            "average_prices": {},
+            "source": "none",
+            "message": "No supplier history yet."
+        }
+
+    preferred = max(supplier_counts, key=supplier_counts.get)
+    average_prices = {
+        supplier: round(sum(values) / len(values), 2)
+        for supplier, values in price_by_supplier.items()
+        if values
+    }
+
+    return {
+        "material": canonical,
+        "preferred_supplier": preferred,
+        "supplier_counts": supplier_counts,
+        "average_prices": average_prices,
+        "source": "history",
+        "message": f"Preferred supplier from history: {preferred}"
+    }
+
+
+def supplier_preferences_summary():
+    summary = {}
+    for quote in load_quotes():
+        result = quote.get("result", {}) or {}
+        for line in result.get("material_lines", []) or []:
+            name = line.get("name", "")
+            if not name:
+                continue
+            canonical = canonical_material_name(name)
+            supplier = (line.get("supplier") or "").strip() or "Unknown"
+            entry = summary.setdefault(canonical, {
+                "material": canonical,
+                "supplier_counts": {},
+                "average_prices": {},
+                "total_uses": 0,
+            })
+            entry["supplier_counts"][supplier] = entry["supplier_counts"].get(supplier, 0) + 1
+            entry["total_uses"] += 1
+            unit = safe_float(line.get("full_unit_price", line.get("unit_price_used", 0)), 0)
+            if unit > 0:
+                entry.setdefault("_prices", {}).setdefault(supplier, []).append(unit)
+
+    rows = []
+    for item in summary.values():
+        counts = item.get("supplier_counts", {})
+        preferred = max(counts, key=counts.get) if counts else ""
+        prices = item.pop("_prices", {})
+        item["preferred_supplier"] = preferred
+        item["average_prices"] = {
+            s: round(sum(v) / len(v), 2)
+            for s, v in prices.items()
+            if v
+        }
+        rows.append(item)
+
+    rows.sort(key=lambda x: x.get("total_uses", 0), reverse=True)
+    return rows[:100]
+
+
+
+@app.get("/api/supplier-preference")
+def api_supplier_preference(q: str = ""):
+    return JSONResponse(content=supplier_preference_for_material(q))
+
+
+@app.get("/api/supplier-preferences")
+def api_supplier_preferences():
+    return JSONResponse(content={"items": supplier_preferences_summary()})
 
 
 @app.post("/api/forgotten-items")
