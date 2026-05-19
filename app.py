@@ -3822,7 +3822,7 @@ LANDING_PAGE_HTML = r'''
 document.addEventListener('input', function(e) {
   if (e.target && e.target.classList && e.target.classList.contains('m-name')) {
     updateChargingNotes();
-  if (typeof updateQuantityLearningNotes === 'function') updateQuantityLearningNotes();
+  if (typeof updateQuantityLearningNotes === 'function') if (typeof updateQuantityLearningNotes === 'function') updateQuantityLearningNotes();
   }
 });
 
@@ -4382,6 +4382,19 @@ button{width:100%;padding:15px;border:none;border-radius:12px;background:#111;co
 </div>
 </main>
 <script>
+
+if (typeof updateQuantityLearningNotes !== "function") {
+  function updateQuantityLearningNotes() {
+    // Safe fallback. Quantity learning display should never break edit/delete actions.
+  }
+}
+window.addEventListener("error", function(event) {
+  if (event && event.message && event.message.includes("updateQuantityLearningNotes")) {
+    event.preventDefault();
+    return false;
+  }
+});
+
 function setJobType(type, text){document.getElementById('lead_job_type').value=type; if(!document.getElementById('lead_description').value.trim()){document.getElementById('lead_description').value=text;}}
 async function submitLead(){
   const err=document.getElementById('lead_err'); const ok=document.getElementById('lead_ok');
@@ -5163,7 +5176,7 @@ function showNotice(message) {
   if (!box) return;
   box.innerText = message;
   box.style.display = "block";
-  if (typeof updateQuantityLearningNotes === 'function') updateQuantityLearningNotes();
+  if (typeof updateQuantityLearningNotes === 'function') if (typeof updateQuantityLearningNotes === 'function') updateQuantityLearningNotes();
   setTimeout(() => { box.style.display = "none"; }, 4000);
 }
 
@@ -6454,7 +6467,12 @@ async function deleteCustomer(id) {
 
     showNotice("Customer deleted.");
   } catch (e) {
-    alert("Could not delete customer: " + e);
+    if (String(e).includes("updateQuantityLearningNotes")) {
+      showNotice("Customer deleted.");
+      try { await loadCustomers(); } catch (_) {}
+    } else {
+      alert("Could not delete customer: " + e);
+    }
   }
 }
 
@@ -7008,13 +7026,20 @@ async function editSavedQuote(id) {
     const res = await fetch("/api/quotes/" + id);
     if (!res.ok) throw new Error();
     const data = await res.json();
-    fillFormFromRequest(data.request, data.id);
-    renderQuoteResult(data.result);
+
+    const q = normaliseQuoteDataForEditing(data);
+    fillFormFromRequest(q, data.id || id);
+
+    if (data.result) {
+      renderQuoteResult(data.result);
+    }
+
     showTab("quotesTab");
     window.scrollTo({ top: 0, behavior: "smooth" });
     showNotice("Quote loaded for editing.");
   } catch (e) {
-    alert("Could not load quote for editing.");
+    console.error("Edit quote failed", e);
+    alert("Could not load quote for editing: " + e.message);
   }
 }
 
@@ -7125,7 +7150,7 @@ async function convertCurrentQuoteToInvoice() {
 }
 
 
-function normaliseQuoteForEditingPayload(data) {
+function normaliseQuoteDataForEditing(data) {
   const q = data && (data.request || data.quote || data.result || data);
   return {
     quote_type: q.quote_type || q.type || "small",
@@ -7141,6 +7166,53 @@ function normaliseQuoteForEditingPayload(data) {
   };
 }
 
+
+
+function normaliseQuoteDataForEditing(data) {
+  const root = data || {};
+  const request = root.request || {};
+  const result = root.result || {};
+  const quote = root.quote || {};
+
+  const q = {
+    quote_type: request.quote_type || result.quote_type || quote.quote_type || root.quote_type || "small",
+    customer_name: request.customer_name || result.customer_name || quote.customer_name || root.customer_name || "",
+    customer_address: request.customer_address || result.customer_address || quote.customer_address || root.customer_address || "",
+    customer_phone: request.customer_phone || result.customer_phone || quote.customer_phone || root.customer_phone || "",
+    job_description: request.job_description || result.job || result.job_description || quote.job_description || root.job_description || root.job || "",
+    labour_cost: request.labour_cost || result.labour || quote.labour_cost || root.labour_cost || root.labour || 0,
+    include_materials_handling: request.include_materials_handling !== undefined ? request.include_materials_handling : true,
+    materials_handling_percent: request.materials_handling_percent || result.materials_handling_percent || quote.materials_handling_percent || root.materials_handling_percent || 25,
+    deposit_percent: request.deposit_percent || result.deposit_percent || quote.deposit_percent || root.deposit_percent || 0,
+    materials: request.materials || result.material_lines || quote.materials || root.materials || root.material_lines || []
+  };
+
+  q.materials = (q.materials || []).map(m => ({
+    name: m.name || "",
+    quantity: m.quantity || 1,
+    supplier: m.supplier || "",
+    url: m.url || "",
+    manual_price: m.manual_price || m.full_unit_price || m.unit_price_used || m.price || 0,
+    quote_charge_override: m.quote_charge_override,
+    material_type: m.material_type || "chargeable",
+    charge_method: m.charge_method || "full",
+    quantity_source: m.quantity_source || "rule",
+    learned_average_quantity: m.learned_average_quantity || null,
+    learned_used_count: m.learned_used_count || null
+  }));
+
+  return q;
+}
+
+function safeSetValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value ?? "";
+}
+
+function safeSetChecked(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.checked = !!value;
+}
 
 function populateInvoiceEditForm(item) {
   const invoice = item.invoice || {};
