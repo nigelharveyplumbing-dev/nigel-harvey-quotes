@@ -4630,8 +4630,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>AI Quote Builder V1</strong><br>
-        <span class="small">Uses the job description, trade library, similar quotes, labour history and missing-item checks. It fills the form for review—it does not save or send automatically.</span>
+        <strong>AI Estimator V2</strong><br>
+        <span class="small">Builds a practical provisional quote using your history, trade templates, controlled plumbing kits, labour intelligence, material library and missing-item checks. Review is always required.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Generate quote draft with AI</button>
         </div>
@@ -7388,7 +7388,7 @@ async function generateAIQuoteDraft() {
     renderAIQuoteDraft(data);
     if (status) {
       const context = data.context_summary || {};
-      status.innerHTML = `Draft generated · ${context.similar_quotes || 0} similar quote(s) used · human review required.`;
+      status.innerHTML = `Draft generated · ${context.similar_quotes || 0} similar quote(s) · ${context.trade_templates || 0} trade template(s) · ${context.fallback_matches || 0} controlled fallback match(es) · review required.`;
     }
   } catch (e) {
     if (status) status.innerHTML = `<strong>AI error:</strong> ${escapeHtml(e.message || String(e))}`;
@@ -7414,9 +7414,10 @@ function renderAIQuoteDraft(data) {
     <div class="history-item" style="padding:10px;border-color:#7c3aed;">
       <strong>AI draft — confidence: ${escapeHtml(draft.confidence || "unknown")}</strong><br>
       <div style="margin-top:6px;"><strong>Scope:</strong><br>${escapeHtml(draft.scope_of_work || "")}</div>
+      ${draft.customer_summary ? `<div style="margin-top:6px;"><strong>Customer summary:</strong><br>${escapeHtml(draft.customer_summary)}</div>` : ""}
       <div style="margin-top:6px;"><strong>Suggested labour:</strong> ${pounds(draft.labour_suggestion || 0)}</div>
       <div style="margin-top:6px;"><strong>Materials:</strong><br>
-        ${materials.length ? materials.map(m => `• ${escapeHtml(m.name)} × ${Number(m.quantity || 1)}${m.required ? " — required" : " — optional"}`).join("<br>") : "No materials suggested."}
+        ${materials.length ? materials.map(m => `• <strong>${escapeHtml(m.name)}</strong> × ${Number(m.quantity || 1)}${m.required ? " — required" : " — optional"}${m.reason ? `<br><span class="small">${escapeHtml(m.reason)}</span>` : ""}`).join("<br><br>") : "No materials suggested."}
       </div>
       ${risks.length ? `<div style="margin-top:6px;"><strong>Risk notes:</strong><br>${risks.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
       ${questions.length ? `<div style="margin-top:6px;"><strong>Confirm before quoting:</strong><br>${questions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
@@ -8506,6 +8507,209 @@ def supplier_preferences_summary():
 
 
 
+
+AI_ESTIMATOR_FALLBACK_LIBRARY = [
+    {
+        "category": "shower replacement",
+        "keywords": ["replace shower", "replacement shower", "remove old shower", "fit new shower", "install shower", "change shower"],
+        "scope_hint": "Remove the existing shower and fit a compatible replacement, reconnect services, seal as required and test operation.",
+        "labour_range": [180, 350],
+        "materials": [
+            {"name": "Replacement shower unit", "quantity": 1, "required": False, "reason": "Include only if Nigel is supplying the shower; exact type and model must be confirmed."},
+            {"name": "Sanitary silicone", "quantity": 1, "required": True, "reason": "For sealing around the replacement where required."},
+            {"name": "Suitable wall fixings", "quantity": 1, "required": True, "reason": "Fixings depend on the wall construction and the replacement shower."},
+            {"name": "PTFE tape", "quantity": 0.1, "required": False, "reason": "Small consumable allowance where threaded plumbing connections are used."},
+            {"name": "15mm copper olives", "quantity": 2, "required": False, "reason": "May be needed if compression connections are disturbed or renewed."},
+            {"name": "15mm compression nuts", "quantity": 2, "required": False, "reason": "May be needed if existing compression fittings cannot be reused."},
+            {"name": "Shower connection adaptors", "quantity": 2, "required": False, "reason": "Only required if the replacement inlet centres or connection type differ."}
+        ],
+        "questions": [
+            "Is the existing shower electric, exposed mixer, concealed mixer, digital or pumped?",
+            "Who is supplying the replacement shower?",
+            "Is the replacement the same model or compatible with the existing inlet positions?",
+            "Are the water isolation valves accessible and working?",
+            "Is any electrical work required?",
+            "Is the wall or tiling damaged and is making good required?"
+        ],
+        "risks": [
+            "Existing inlet centres, pipe positions and fixings may not match the replacement.",
+            "Concealed pipework and wall condition cannot be confirmed from the description.",
+            "Electrical shower work must be completed by a suitably qualified person where required."
+        ]
+    },
+    {
+        "category": "tap replacement",
+        "keywords": ["replace tap", "replace taps", "fit new tap", "change tap", "mixer tap", "basin tap", "kitchen tap"],
+        "scope_hint": "Isolate the water supply, remove the existing tap, fit the compatible replacement, reconnect supplies and test for leaks and operation.",
+        "labour_range": [120, 220],
+        "materials": [
+            {"name": "Replacement tap", "quantity": 1, "required": False, "reason": "Include only if Nigel is supplying the tap."},
+            {"name": "15mm isolating valve", "quantity": 2, "required": False, "reason": "Recommended if existing valves are missing, seized or unreliable."},
+            {"name": "Flexible tap connector", "quantity": 2, "required": False, "reason": "Required where not supplied with the replacement tap or existing tails are unsuitable."},
+            {"name": "PTFE tape", "quantity": 0.1, "required": False, "reason": "Small consumable allowance for suitable threaded connections."},
+            {"name": "Sanitary silicone", "quantity": 0.1, "required": False, "reason": "May be required around the tap base depending on the fitting."}
+        ],
+        "questions": [
+            "Who is supplying the tap?",
+            "Are working isolation valves present?",
+            "Is access beneath the basin or sink restricted?",
+            "Are the existing supply sizes and connections compatible?"
+        ],
+        "risks": [
+            "Old isolation valves or rigid pipework may require additional replacement work.",
+            "Restricted access can increase labour time."
+        ]
+    },
+    {
+        "category": "toilet replacement",
+        "keywords": ["replace toilet", "toilet replacement", "fit new toilet", "change toilet", "replace wc"],
+        "scope_hint": "Isolate and disconnect the existing toilet, remove it, fit a compatible replacement, reconnect the inlet and soil connection, secure, seal and test.",
+        "labour_range": [180, 320],
+        "materials": [
+            {"name": "Replacement toilet", "quantity": 1, "required": False, "reason": "Include only if Nigel is supplying the toilet."},
+            {"name": "Pan connector", "quantity": 1, "required": True, "reason": "A compatible connector is normally needed for the soil connection."},
+            {"name": "Toilet fixing kit", "quantity": 1, "required": True, "reason": "For securely fixing the pan or cistern as appropriate."},
+            {"name": "15mm isolating valve", "quantity": 1, "required": False, "reason": "Recommended if the existing valve is absent or unreliable."},
+            {"name": "Flexible tap connector", "quantity": 1, "required": False, "reason": "May be required for the cistern inlet connection."},
+            {"name": "Sanitary silicone", "quantity": 0.25, "required": True, "reason": "For sealing around the installation where appropriate."}
+        ],
+        "questions": [
+            "Who is supplying the toilet?",
+            "Is it close-coupled, back-to-wall or wall-hung?",
+            "Does the replacement match the existing soil outlet position?",
+            "Is flooring or wall making-good likely?"
+        ],
+        "risks": [
+            "The replacement footprint may expose damaged flooring or previous fixing holes.",
+            "Soil outlet alignment may require a different pan connector or additional work."
+        ]
+    },
+    {
+        "category": "radiator or TRV work",
+        "keywords": ["replace radiator", "fit radiator", "install radiator", "replace trv", "change trv", "radiator valve", "trv"],
+        "scope_hint": "Isolate and drain the relevant heating section, complete the radiator or valve work, refill, vent, dose as required and test.",
+        "labour_range": [150, 350],
+        "materials": [
+            {"name": "TRV valve", "quantity": 1, "required": False, "reason": "Required for a TRV replacement or where specified with a radiator."},
+            {"name": "Lockshield valve", "quantity": 1, "required": False, "reason": "Often replaced as a matching pair where condition is poor."},
+            {"name": "Radiator valve tail", "quantity": 2, "required": False, "reason": "May be required for replacement valves or a new radiator."},
+            {"name": "Central heating inhibitor", "quantity": 1, "required": True, "reason": "System protection should be considered after draining and refilling."},
+            {"name": "PTFE tape", "quantity": 0.1, "required": False, "reason": "Small consumable allowance for appropriate threaded joints."},
+            {"name": "15mm copper olives", "quantity": 2, "required": False, "reason": "May be needed where compression joints are renewed."}
+        ],
+        "questions": [
+            "Is the system sealed or open vented?",
+            "Does the whole system need draining?",
+            "Are the existing pipe centres compatible?",
+            "Is the radiator being supplied by the customer?"
+        ],
+        "risks": [
+            "Old valves or pipework may not reseal once disturbed.",
+            "Airlocks, seized valves or poor system water condition can increase labour."
+        ]
+    },
+    {
+        "category": "outside tap",
+        "keywords": ["outside tap", "garden tap", "external tap", "hose union bib tap"],
+        "scope_hint": "Connect a new cold-water supply to an outside tap, including internal isolation and backflow protection where required, secure pipework and test.",
+        "labour_range": [150, 280],
+        "materials": [
+            {"name": "Outside tap kit", "quantity": 1, "required": True, "reason": "Main outlet and wall plate components."},
+            {"name": "15mm isolating valve", "quantity": 1, "required": True, "reason": "Allows internal isolation for maintenance and winter protection."},
+            {"name": "Double check valve 15mm", "quantity": 1, "required": True, "reason": "Backflow protection where required."},
+            {"name": "15mm copper pipe", "quantity": 3, "required": False, "reason": "Provisional pipe allowance until the route is measured."},
+            {"name": "15mm pipe clips", "quantity": 6, "required": False, "reason": "Provisional allowance for supporting the pipe route."},
+            {"name": "Drain off cock 15mm", "quantity": 1, "required": False, "reason": "Useful for draining exposed external pipework where freezing is possible."}
+        ],
+        "questions": [
+            "How far is the proposed tap from a suitable cold-water supply?",
+            "Can the pipe pass directly through the wall?",
+            "Is exposed external pipework required?",
+            "Is frost protection or lagging required?"
+        ],
+        "risks": [
+            "The final pipe quantity depends on the route and access.",
+            "External pipework must be protected against freezing."
+        ]
+    }
+]
+
+
+def normalise_ai_job_text(value: str):
+    value = (value or "").lower().strip()
+    corrections = {
+        "rmove": "remove",
+        "remve": "remove",
+        "shower and fix": "shower and fit",
+        "showe ": "shower ",
+        "fitt ": "fit ",
+        "replce": "replace",
+        "toilte": "toilet",
+        "raditor": "radiator",
+        "outisde": "outside",
+    }
+    for old, new in corrections.items():
+        value = value.replace(old, new)
+    value = re.sub(r"\s+", " ", value)
+    return value
+
+
+def ai_fallback_matches(job_text: str):
+    job = normalise_ai_job_text(job_text)
+    matches = []
+    for item in AI_ESTIMATOR_FALLBACK_LIBRARY:
+        score = 0
+        for phrase in item.get("keywords", []):
+            if phrase in job:
+                score += max(2, len(phrase.split()))
+            else:
+                phrase_tokens = set(phrase.split())
+                job_tokens = set(job.split())
+                score += len(phrase_tokens.intersection(job_tokens))
+        if score > 0:
+            matches.append((score, item))
+    matches.sort(key=lambda x: x[0], reverse=True)
+    return [item for score, item in matches[:3] if score >= 2]
+
+
+def ai_master_material_candidates(job_text: str, fallback_matches: list):
+    wanted = set()
+    for match in fallback_matches or []:
+        for item in match.get("materials", []):
+            wanted.add(canonical_material_name(item.get("name", "")))
+
+    candidates = []
+    library = globals().get("MASTER_MATERIAL_LIBRARY", [])
+    if isinstance(library, dict):
+        iterable = []
+        for category, values in library.items():
+            if isinstance(values, list):
+                iterable.extend(values)
+    else:
+        iterable = library if isinstance(library, list) else []
+
+    for item in iterable:
+        if isinstance(item, str):
+            name = item
+            data = {"name": item}
+        elif isinstance(item, dict):
+            data = item
+            name = item.get("name", "")
+        else:
+            continue
+
+        canonical = canonical_material_name(name)
+        if canonical in wanted or any(w and (w in canonical or canonical in w) for w in wanted):
+            candidates.append({
+                "name": name,
+                "canonical_name": canonical,
+                "category": data.get("category", ""),
+                "aliases": data.get("aliases", []),
+            })
+
+    return candidates[:30]
+
+
 AI_QUOTE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -8580,7 +8784,8 @@ def extract_openai_output_text(response_json: dict):
 
 
 def build_ai_quote_context(data: AIQuoteDraftRequest):
-    job = (data.job_description or "").strip()
+    original_job = (data.job_description or "").strip()
+    job = normalise_ai_job_text(original_job)
     quote_type = data.quote_type or "small"
 
     history = analyse_similar_quotes(job, quote_type) if job else {
@@ -8610,9 +8815,8 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
         [m.model_dump() if hasattr(m, "model_dump") else m.dict() for m in data.current_materials]
     ) if "detect_forgotten_items" in globals() else []
 
-    # Keep prompt context compact and relevant.
     common_materials = []
-    for m in (history.get("common_materials", []) or [])[:15]:
+    for m in (history.get("common_materials", []) or [])[:20]:
         common_materials.append({
             "name": m.get("name"),
             "average_quantity": m.get("average_quantity"),
@@ -8621,32 +8825,57 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
             "supplier": m.get("supplier"),
         })
 
+    # Match saved/trade templates more generously than V1.
     trade_matches = []
     job_tokens = set(learning_tokens(job))
     for template in get_all_job_templates():
-        hay = " ".join([
+        template_text = " ".join([
             template.get("name", ""),
             template.get("job", ""),
+            template.get("description", ""),
             " ".join(template.get("search_terms", []) or []),
             " ".join(x.get("name", "") for x in template.get("materials", []) or []),
         ]).lower()
-        score = sum(1 for token in job_tokens if token in hay)
-        if score:
+        template_tokens = set(learning_tokens(template_text))
+        overlap = len(job_tokens.intersection(template_tokens))
+        phrase_bonus = 0
+        for phrase in [template.get("name", ""), template.get("job", "")]:
+            phrase = normalise_ai_job_text(phrase)
+            if phrase and (phrase in job or job in phrase):
+                phrase_bonus += 5
+        score = overlap + phrase_bonus
+        if score > 0:
             trade_matches.append((score, template))
 
     trade_matches.sort(key=lambda x: x[0], reverse=True)
     compact_templates = []
-    for _, template in trade_matches[:5]:
+    for score, template in trade_matches[:8]:
         compact_templates.append({
+            "match_score": score,
             "name": template.get("name"),
             "job": template.get("job"),
             "labour": template.get("labour", template.get("typical_labour", 0)),
             "labour_range": template.get("labour_range", ""),
-            "materials": template.get("materials", [])[:15],
-            "risk_notes": template.get("risk_notes", [])[:8],
+            "materials": template.get("materials", [])[:20],
+            "risk_notes": template.get("risk_notes", [])[:10],
         })
 
+    fallback_matches = ai_fallback_matches(job)
+    fallback_context = []
+    for match in fallback_matches:
+        fallback_context.append({
+            "category": match.get("category"),
+            "scope_hint": match.get("scope_hint"),
+            "labour_range": match.get("labour_range"),
+            "materials": match.get("materials", []),
+            "questions": match.get("questions", []),
+            "risks": match.get("risks", []),
+        })
+
+    master_candidates = ai_master_material_candidates(job, fallback_matches)
+
     return {
+        "estimator_version": "ai-estimator-v2",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -8654,7 +8883,8 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
             "currency": "GBP"
         },
         "request": {
-            "job_description": job,
+            "original_job_description": original_job,
+            "normalised_job_description": job,
             "quote_type": quote_type,
             "customer_name": data.customer_name,
             "customer_address": data.customer_address,
@@ -8665,11 +8895,20 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
             "similar_count": history.get("similar_count", 0),
             "averages": history.get("averages", {}),
             "common_materials": common_materials,
-            "similar_quotes": (history.get("similar_quotes", []) or [])[:5],
+            "similar_quotes": (history.get("similar_quotes", []) or [])[:6],
         },
         "labour_intelligence": labour_info,
         "forgotten_item_checks": forgotten,
         "matching_trade_templates": compact_templates,
+        "controlled_fallback_trade_knowledge": fallback_context,
+        "master_material_candidates": master_candidates,
+        "decision_rules": {
+            "do_not_assume_customer_or_contractor_supply": True,
+            "include_provisional_materials_when_category_is_clear": True,
+            "mark_uncertain_materials_as_optional": True,
+            "prefer_master_library_names": True,
+            "do_not_invent_live_prices_or_product_urls": True,
+        }
     }
 
 
@@ -8686,19 +8925,32 @@ def call_openai_quote_builder(context: dict):
     instructions = """
 You are an experienced UK domestic plumbing estimator assisting Nigel Harvey Ltd in Guildford, Surrey.
 
-Create a cautious quote draft from the supplied job information and internal business data.
+Create a practical but cautious quote draft from the supplied job description and internal business data.
+
+Priority order:
+1. Use matching historical quotes where available.
+2. Use matching saved/trade templates.
+3. Use the controlled fallback trade knowledge.
+4. Use master material candidates and general plumbing knowledge only to bridge obvious gaps.
 
 Rules:
 - Return only the requested structured JSON.
-- Do not invent product URLs or live prices.
-- Prefer materials and quantities supported by trade templates or quote history.
+- Do not invent product URLs, exact product models or live prices.
+- Do not assume whether the customer or Nigel supplies the main appliance/sanitaryware. Include it as optional and ask who supplies it.
+- When the job category is identifiable, always produce a useful provisional material kit rather than returning no materials.
+- Mark items as required only when they are normally essential for the described work; mark compatibility-dependent items as optional.
+- Prefer material names found in the master library or controlled fallback library.
+- Quantities may be provisional and should be realistic for one job.
+- Consumables such as PTFE or silicone may use fractional quantities where the app charges only a proportion.
 - Use UK plumbing terminology.
-- Labour is a suggestion only and must be in GBP.
-- Keep customer-facing wording clear and professional.
-- Highlight access, isolation, hidden pipework, compatibility, compliance, and diagnostic uncertainty.
+- Labour is a suggestion in GBP and should be informed by history, templates or the controlled range.
+- Keep customer-facing scope clear, professional and concise.
+- Put uncertainty in risk notes and confirmation questions rather than making the whole draft unusably vague.
+- Highlight access, isolation, hidden pipework, compatibility, making good and compliance.
 - Never claim hidden conditions are confirmed from a short description.
 - Do not include gas appliance installation or repair work.
-- The draft must require human review before it is saved or sent.
+- Electrical shower work must be flagged for a suitably qualified electrician where applicable.
+- The draft requires human review before it is saved or sent.
 """.strip()
 
     payload = {
@@ -8776,8 +9028,11 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
+        "version": context.get("estimator_version", "ai-estimator-v2"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
+        "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
+        "master_material_candidates": len(context.get("master_material_candidates", [])),
     }
     return JSONResponse(content=result)
 
