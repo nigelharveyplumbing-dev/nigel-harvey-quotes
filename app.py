@@ -63,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "12.8-merchant-results-intelligence"
+APP_VERSION = "12.9-complete-material-merge"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4608,7 +4608,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Merchant Results & Live Price Intelligence V12.8</strong><br>
+        <strong>Complete Material Merge Intelligence V12.9</strong><br>
         <span class="small">Capture the site, merge the findings and search merchant result and category pages using strict product type, dimensions and radiator-type matching. Concealed pipe routes receive a provisional fittings allowance instead of invented fitting quantities.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
@@ -4651,7 +4651,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Strict Live‑Priced Quote Intelligence V12.8</strong><br>
+        <strong>Strict Live‑Priced Quote Intelligence V12.9</strong><br>
         <span class="small">Uses strict dimensions and product-type matching, removes unrelated merchant results, searches missing valve links and adds provisional fittings allowances for concealed pipe routes.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
@@ -8158,8 +8158,187 @@ function addV11JobBundle(jobType, essentialOnly = false) {
 let LIVE_PRODUCT_SEARCHES = {};
 let LIVE_PRODUCT_RESULTS = {};
 
+
+function numberFromWordsOrDigits(text, itemPattern) {
+  const source = String(text || "").toLowerCase();
+  const words = {
+    one: 1, two: 2, three: 3, four: 4, five: 5,
+    six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+    eleven: 11, twelve: 12
+  };
+  const pattern = new RegExp(
+    `\\b(\\d+(?:\\.\\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\\b[^.\\n]{0,35}${itemPattern}`,
+    "i"
+  );
+  const match = source.match(pattern);
+  if (!match) return 0;
+  return words[match[1]] || Number(match[1] || 0);
+}
+
+function metresFromText(text) {
+  const source = String(text || "").toLowerCase();
+  const match = source.match(/\b(?:approximately|approx\.?|about|around)?\s*(\d+(?:\.\d+)?)\s*(?:m|metre|metres|meter|meters)\b/i);
+  return match ? Number(match[1] || 0) : 0;
+}
+
+function upsertDraftMaterial(draft, material) {
+  draft.materials = draft.materials || [];
+  const incoming = canonicalMaterialName(material.name || "");
+  const existing = draft.materials.find(item => {
+    const current = canonicalMaterialName(item.name || "");
+    return current === incoming ||
+      (incoming && current && (current.includes(incoming) || incoming.includes(current)));
+  });
+
+  if (existing) {
+    existing.quantity = Math.max(Number(existing.quantity || 0), Number(material.quantity || 0));
+    existing.required = Boolean(existing.required || material.required);
+    existing.display_status = existing.required ? "required" : (material.display_status || existing.display_status);
+    existing.status = existing.required ? "required" : (material.status || existing.status);
+    existing.reason = material.reason || existing.reason || "";
+    existing.material_confidence = Math.max(
+      Number(existing.material_confidence || 0),
+      Number(material.material_confidence || 0)
+    );
+    return existing;
+  }
+
+  draft.materials.push(material);
+  return material;
+}
+
+function mergeExplicitSurveyMaterialsIntoDraft(draft) {
+  draft.materials = draft.materials || [];
+
+  const jobText = [
+    document.getElementById("job")?.value || "",
+    draft.scope_of_work || "",
+    CURRENT_SITE_SURVEY?.summary || "",
+    CURRENT_SITE_SURVEY?.proposed_job_description || "",
+    CURRENT_SITE_SURVEY?.site_visit_addition || "",
+    CURRENT_SITE_SURVEY?.transcript || ""
+  ].join("\n");
+
+  const actions = CURRENT_SITE_SURVEY?.material_actions || [];
+  const explicitRequiredText = actions
+    .filter(action => action.action === "include_required")
+    .map(action => `${action.material_name || ""}. ${action.reason || ""}`)
+    .join("\n");
+
+  const combined = `${jobText}\n${explicitRequiredText}`;
+  const lower = combined.toLowerCase();
+
+  // Copper pipe: convert stated total metres into purchasable 3m lengths.
+  if (/\bcopper\b[^.\n]{0,50}\bpipe(work)?\b|\bpipe(work)?\b[^.\n]{0,50}\bcopper\b/i.test(combined)) {
+    const metres = metresFromText(combined);
+    if (metres > 0) {
+      const lengths = Math.max(1, Math.ceil(metres / 3));
+      upsertDraftMaterial(draft, {
+        name: "15mm Copper Pipe 3m",
+        quantity: lengths,
+        supplier: "City Plumbing",
+        url: "",
+        manual_price: 0,
+        required: true,
+        display_status: "required",
+        status: "required",
+        source: "explicit_site_survey",
+        data_source: "explicit_site_survey",
+        material_confidence: 98,
+        reason: `${metres} metres of 15mm copper pipe was explicitly stated; ${lengths} × 3m lengths required before wastage review.`
+      });
+    }
+  }
+
+  // Explicit elbows.
+  const elbowQty = numberFromWordsOrDigits(combined, "(?:15\\s*mm\\s*)?(?:end[- ]?feed\\s*)?elbows?");
+  if (elbowQty > 0) {
+    upsertDraftMaterial(draft, {
+      name: "15mm Endfeed Elbow",
+      quantity: elbowQty,
+      supplier: "City Plumbing",
+      url: "",
+      manual_price: 0,
+      required: true,
+      display_status: "required",
+      status: "required",
+      source: "explicit_site_survey",
+      data_source: "explicit_site_survey",
+      material_confidence: 99,
+      reason: `${elbowQty} elbow fitting(s) were explicitly stated in the job description or site survey.`
+    });
+  }
+
+  // Explicit tees. If a count is not stated, retain as a site-check item rather than omitting it.
+  const teeMentioned = /\b(?:22\s*mm\s*)?(?:end[- ]?feed\s*)?tees?\b/i.test(combined);
+  const teeQty = numberFromWordsOrDigits(combined, "(?:22\\s*mm\\s*)?(?:end[- ]?feed\\s*)?tees?");
+  if (teeMentioned) {
+    upsertDraftMaterial(draft, {
+      name: /22\s*mm/i.test(combined) && /15\s*mm\s*(?:branch|reduc)/i.test(combined)
+        ? "22mm x 15mm Endfeed Reducing Tee"
+        : "Endfeed Tee",
+      quantity: teeQty > 0 ? teeQty : 1,
+      supplier: "City Plumbing",
+      url: "",
+      manual_price: 0,
+      required: teeQty > 0,
+      display_status: teeQty > 0 ? "required" : "site_check",
+      status: teeQty > 0 ? "required" : "site_check",
+      source: "explicit_site_survey",
+      data_source: "explicit_site_survey",
+      material_confidence: teeQty > 0 ? 99 : 70,
+      reason: teeQty > 0
+        ? `${teeQty} tee fitting(s) were explicitly stated.`
+        : "Tee fittings were explicitly mentioned, but the quantity was not stated. Confirm before ordering."
+    });
+  }
+
+  // Explicit radiator valve arrangement.
+  const asksTrv = /\btrv\b|thermostatic radiator valve/i.test(combined);
+  const asksLockshield = /\blockshield\b/i.test(combined);
+  const asksValveSet = /\bradiator valve set\b/i.test(combined) || (asksTrv && asksLockshield);
+
+  if (asksValveSet) {
+    upsertDraftMaterial(draft, {
+      name: "Radiator Valve Set",
+      quantity: 1,
+      supplier: "Screwfix",
+      url: "",
+      manual_price: 0,
+      required: true,
+      display_status: "required",
+      status: "required",
+      source: "explicit_site_survey",
+      data_source: "explicit_site_survey",
+      material_confidence: 99,
+      reason: "A TRV and lockshield arrangement was explicitly specified."
+    });
+  }
+
+  // Inhibitor is required where the description explicitly says refill with inhibitor.
+  if (/\binhibitor\b/i.test(combined)) {
+    upsertDraftMaterial(draft, {
+      name: "Inhibitor 1L",
+      quantity: 1,
+      supplier: "Toolstation",
+      url: "",
+      manual_price: 0,
+      required: true,
+      display_status: "required",
+      status: "required",
+      source: "explicit_site_survey",
+      data_source: "explicit_site_survey",
+      material_confidence: 95,
+      reason: "Inhibitor was explicitly included in the works."
+    });
+  }
+
+  return draft;
+}
+
 function prepareDraftForV125(draft) {
   draft.materials = draft.materials || [];
+  draft = mergeExplicitSurveyMaterialsIntoDraft(draft);
   const scope = String(draft.scope_of_work || document.getElementById("job")?.value || "").toLowerCase();
   const names = draft.materials.map(item => String(item.name || "").toLowerCase());
 
@@ -8274,7 +8453,7 @@ function liveProductFinderHtml(draft) {
   return `
     <div style="margin-top:10px;padding:10px;border:2px solid #0284c7;border-radius:10px;background:#f0f9ff;">
       <strong>Live merchant product finder</strong><br>
-      <span class="small">Missing main products and unlinked required items are shown here. For radiators, you must choose the type before searching. A confirmed product is added directly to the Materials list with its supplier, current price and product URL.</span>
+      <span class="small">Missing main products and unlinked required items are shown here. Explicit pipe lengths and fitting quantities from the description or survey are retained when the main product is selected. For radiators, you must choose the type before searching. A confirmed product is added directly to the Materials list with its supplier, current price and product URL.</span>
       ${searches.map((item, index) => `
         <div style="margin-top:9px;padding:9px;border:1px solid #bae6fd;border-radius:9px;background:white;">
           <strong>${escapeHtml(item.label)}</strong><br>
@@ -8446,6 +8625,11 @@ function addLiveMerchantProduct(searchId, resultIndex) {
   } else {
     LAST_AI_QUOTE_DRAFT.materials.unshift(product);
   }
+
+  // Re-merge explicitly stated ancillary materials after selecting the main
+  // merchant product. This prevents the radiator choice from becoming the
+  // only material in the applied quote.
+  LAST_AI_QUOTE_DRAFT = prepareDraftForV125(LAST_AI_QUOTE_DRAFT);
 
   const existingRow = findExistingMaterialRowByUrlOrName(product.url, product.name);
   if (existingRow) {
@@ -8675,8 +8859,10 @@ function renderAIQuoteDraft(data) {
 }
 
 function applyAIQuoteDraft() {
-  const draft = LAST_AI_QUOTE_DRAFT;
+  let draft = LAST_AI_QUOTE_DRAFT;
   if (!draft) return;
+  draft = prepareDraftForV125(draft);
+  LAST_AI_QUOTE_DRAFT = draft;
 
   if (draft.scope_of_work) {
     document.getElementById("job").value = draft.scope_of_work;
@@ -13145,7 +13331,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "merchant-results-intelligence-v12.8",
+        "estimator_version": "complete-material-merge-v12.9",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -13722,7 +13908,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "merchant-results-intelligence-v12.8"),
+        "version": context.get("estimator_version", "complete-material-merge-v12.9"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
