@@ -4602,7 +4602,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>AI‑First Quote Builder V9.1</strong><br>
+        <strong>AI‑First Quote Builder V9.2</strong><br>
         <span class="small">Describe the work once. AI builds the professional scope, labour and material list using your saved products, prices, suppliers and quote history.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
@@ -4647,7 +4647,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
         <button type="button" class="btn-light" onclick="addMaterial()">+ Blank Material Row</button>
       </div>
 
-      <div id="manualMaterialSearchPanel" class="quote-box small hidden no-print" style="margin-top:8px;">
+      <div id="manualMaterialSearchPanel" class="quote-box small no-print" style="margin-top:8px;display:none;">
         <strong>Find a material</strong><br>
         <span class="small">Search your saved material database. Smart quantity suggestions remain active.</span>
         <input id="materialSearch" placeholder="e.g. 15mm elbow, basin waste, kitchen tap" oninput="searchMaterials()" style="margin-top:8px;">
@@ -5894,11 +5894,19 @@ function materialQuoteUnitPrice(material) {
 }
 
 function clearMaterials() {
-  document.getElementById("materials").innerHTML = "";
+  const materialsBox = document.getElementById("materials");
+  materialsBox.innerHTML = `
+    <div id="emptyMaterialsMessage" class="quote-box small" style="background:#f8fafc;">
+      No materials added yet. Build the quote with AI or press <strong>+ Add Material</strong>.
+    </div>
+  `;
   updateForgottenItemWarnings();
 }
 
 function addMaterial(prefill = null) {
+  const emptyMessage = document.getElementById("emptyMaterialsMessage");
+  if (emptyMessage) emptyMessage.remove();
+
   if (prefill) prefill = applySmartQuantityToMaterial(prefill);
 
   if (prefill) prefill = applyChargingRuleToMaterial(prefill);
@@ -5998,8 +6006,11 @@ function localMaterialSearch(query) {
 function toggleManualMaterialSearch() {
   const panel = document.getElementById("manualMaterialSearchPanel");
   if (!panel) return;
-  panel.classList.toggle("hidden");
-  if (!panel.classList.contains("hidden")) {
+
+  const isClosed = panel.style.display === "none" || !panel.style.display;
+  panel.style.display = isClosed ? "block" : "none";
+
+  if (isClosed) {
     const input = document.getElementById("materialSearch");
     if (input) {
       setTimeout(() => input.focus(), 50);
@@ -6617,7 +6628,6 @@ function fillFormFromRequest(requestData, quoteId = null) {
   clearMaterials();
   const materials = requestData.materials || [];
   if (materials.length) materials.forEach(item => addMaterial(item));
-  else addMaterial();
 
   CURRENT_QUOTE_ID = quoteId;
   if (quoteId) {
@@ -7266,7 +7276,15 @@ function startNewQuote() {
   document.getElementById("customer_supplies_tiles").checked = false;
   document.getElementById("deposit_percent").value = "0";
   clearMaterials();
-  addMaterial();
+  const materialSearchPanel = document.getElementById("manualMaterialSearchPanel");
+  if (materialSearchPanel) materialSearchPanel.style.display = "none";
+  const materialSearchInput = document.getElementById("materialSearch");
+  if (materialSearchInput) materialSearchInput.value = "";
+  const materialSearchResults = document.getElementById("searchResults");
+  if (materialSearchResults) {
+    materialSearchResults.innerHTML = "";
+    materialSearchResults.classList.add("hidden");
+  }
   toggleBathroomFields();
   updateLabourSuggestion();
   showTab("quotesTab");
@@ -7963,7 +7981,9 @@ async function deleteInvoice(id) {
 toggleBathroomFields();
 renderTemplates();
 renderFavourites();
-addMaterial();
+clearMaterials();
+const initialMaterialSearchPanel = document.getElementById("manualMaterialSearchPanel");
+if (initialMaterialSearchPanel) initialMaterialSearchPanel.style.display = "none";
 setQuoteButtonMode(false);
 updateLabourSuggestion();
 renderTemplateButtons();
@@ -10861,7 +10881,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "ai-first-quote-builder-v9.1",
+        "estimator_version": "ai-first-quote-builder-v9.2",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -11047,7 +11067,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "ai-first-quote-builder-v9.1"),
+        "version": context.get("estimator_version", "ai-first-quote-builder-v9.2"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
