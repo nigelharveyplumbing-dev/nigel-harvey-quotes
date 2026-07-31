@@ -4630,8 +4630,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Database‑First Estimator V4</strong><br>
-        <span class="small">Builds the material kit from your database, saved quotes, learned quantities and trade templates first. AI then reviews it, writes the scope and flags genuine gaps. Review is always required.</span>
+        <strong>Smart Material Selection V5</strong><br>
+        <span class="small">Identifies the plumbing job first, loads only that job’s approved material checklist, then matches those items to your saved products, prices, suppliers and learned quantities. Review is always required.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Generate quote draft with AI</button>
         </div>
@@ -7388,7 +7388,9 @@ async function generateAIQuoteDraft() {
     renderAIQuoteDraft(data);
     if (status) {
       const context = data.context_summary || {};
-      status.innerHTML = `Database kit built first · ${context.database_kit_items || 0} kit item(s) · ${context.historical_kit_items || 0} from quote history · ${context.template_kit_items || 0} from templates · ${context.matched_draft_materials || 0} saved material match(es) · review required.`;
+      status.innerHTML = context.smart_job_type
+        ? `Job identified: ${escapeHtml(context.smart_job_type)} · ${context.smart_kit_items || 0} approved kit item(s) · ${context.smart_priced_items || 0} priced item(s) · review required.`
+        : `No exact smart job kit found · database-first fallback used · review required.`;
     }
   } catch (e) {
     if (status) status.innerHTML = `<strong>AI error:</strong> ${escapeHtml(e.message || String(e))}`;
@@ -7428,12 +7430,16 @@ function renderAIQuoteDraft(data) {
       ${risks.length ? `<div style="margin-top:6px;"><strong>Risk notes:</strong><br>${risks.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
       ${questions.length ? `<div style="margin-top:6px;"><strong>Confirm before quoting:</strong><br>${questions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
       ${warnings.length ? `<div style="margin-top:6px;"><strong>Warnings:</strong><br>${warnings.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
-      ${draft.database_first_summary ? `<div style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:8px;"><strong>Database‑First Kit:</strong><br>
-        ${Number(draft.database_first_summary.kit_items || 0)} kit item(s) ·
-        ${Number(draft.database_first_summary.historical_items || 0)} from quote history ·
-        ${Number(draft.database_first_summary.template_items || 0)} from templates ·
+      ${draft.smart_job_summary ? `<div style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:8px;"><strong>Smart Job Kit:</strong><br>
+        ${escapeHtml(draft.smart_job_summary.display_name || "")} ·
+        ${Number(draft.smart_job_summary.kit_items || 0)} approved item(s) ·
+        ${Number(draft.smart_job_summary.priced_items || 0)} priced item(s) ·
+        ${Number(draft.smart_job_summary.saved_material_matches || 0)} saved/library match(es) ·
+        ${Number(draft.smart_job_summary.learned_quantities || 0)} learned quantity/quantities ·
+        materials ${pounds(draft.smart_job_summary.materials_total_before_handling || 0)} before handling
+      </div>` : draft.database_first_summary ? `<div style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:8px;"><strong>Database‑First Fallback:</strong><br>
+        ${Number(draft.database_first_summary.kit_items || 0)} item(s) ·
         ${Number(draft.database_first_summary.priced_items || 0)} priced item(s) ·
-        ${Number(draft.database_first_summary.learned_quantities || 0)} learned quantity/quantities ·
         materials ${pounds(draft.database_first_summary.materials_total_before_handling || 0)} before handling
       </div>` : ""}
       <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
@@ -9370,6 +9376,353 @@ def enforce_database_first_kit(draft: dict, context: dict):
     return draft
 
 
+
+SMART_JOB_MATERIAL_KITS = [
+    {
+        "job_type": "outside_tap",
+        "display_name": "Outside tap installation/replacement",
+        "keywords": [
+            "outside tap", "garden tap", "external tap", "hose union bib tap",
+            "replace outside tap", "fit outside tap"
+        ],
+        "exclude_keywords": ["toilet", "wc", "basin waste", "sink waste", "shower waste"],
+        "labour_range": [150, 280],
+        "materials": [
+            {"name": "Outside tap kit", "quantity": 1, "required": True, "reason": "Main tap and wall-plate assembly."},
+            {"name": "15mm isolating valve", "quantity": 1, "required": True, "reason": "Internal isolation for maintenance and winter shut-off."},
+            {"name": "Double check valve 15mm", "quantity": 1, "required": True, "reason": "Backflow protection where required."},
+            {"name": "15mm copper pipe", "quantity": 3, "required": False, "reason": "Provisional allowance until the route is measured."},
+            {"name": "15mm wall plate elbow", "quantity": 1, "required": True, "reason": "Provides a secure wall termination for the tap."},
+            {"name": "15mm pipe clips", "quantity": 6, "required": False, "reason": "Supports the internal or external pipe route."},
+            {"name": "PTFE tape", "quantity": 0.1, "required": False, "reason": "Small consumable allowance for threaded connections."},
+            {"name": "Sanitary silicone", "quantity": 0.1, "required": False, "reason": "Seal around the wall penetration or tap plate if needed."},
+            {"name": "Drain off cock 15mm", "quantity": 1, "required": False, "reason": "Optional where exposed pipework needs winter draining."},
+        ],
+        "questions": [
+            "How long is the approximate pipe run?",
+            "Can the pipe pass directly through the wall?",
+            "Will any pipework remain exposed externally?",
+            "Is there a suitable internal cold-water supply and working isolation point?"
+        ]
+    },
+    {
+        "job_type": "tap_replacement",
+        "display_name": "Tap replacement",
+        "keywords": ["replace tap", "replace taps", "kitchen tap", "basin tap", "mixer tap", "fit new tap"],
+        "exclude_keywords": ["outside tap", "garden tap"],
+        "labour_range": [120, 220],
+        "materials": [
+            {"name": "Replacement tap", "quantity": 1, "required": False, "reason": "Include only if Nigel is supplying the tap."},
+            {"name": "15mm isolating valve", "quantity": 2, "required": False, "reason": "Use where existing valves are absent, seized or unreliable."},
+            {"name": "Flexible tap connector", "quantity": 2, "required": False, "reason": "Use if existing tails are unsuitable or not supplied."},
+            {"name": "PTFE tape", "quantity": 0.1, "required": False, "reason": "Small consumable allowance."},
+            {"name": "Sanitary silicone", "quantity": 0.1, "required": False, "reason": "May be needed around the tap base."},
+        ],
+        "questions": [
+            "Who is supplying the replacement tap?",
+            "Are working isolation valves present?",
+            "Is access underneath restricted?"
+        ]
+    },
+    {
+        "job_type": "toilet_replacement",
+        "display_name": "Toilet replacement",
+        "keywords": ["replace toilet", "toilet replacement", "replace wc", "fit new toilet"],
+        "exclude_keywords": [],
+        "labour_range": [180, 320],
+        "materials": [
+            {"name": "Replacement toilet", "quantity": 1, "required": False, "reason": "Include only if Nigel is supplying it."},
+            {"name": "Pan connector", "quantity": 1, "required": True, "reason": "Connects the pan to the soil outlet."},
+            {"name": "Toilet fixing kit", "quantity": 1, "required": True, "reason": "Secures the toilet."},
+            {"name": "15mm isolating valve", "quantity": 1, "required": False, "reason": "Use if existing isolation is missing or unreliable."},
+            {"name": "Flexible tap connector", "quantity": 1, "required": False, "reason": "May be required for the cistern inlet."},
+            {"name": "Sanitary silicone", "quantity": 0.25, "required": True, "reason": "Seal around the installation where appropriate."},
+        ],
+        "questions": [
+            "Is the replacement close-coupled, back-to-wall or wall-hung?",
+            "Does it match the existing soil outlet position?",
+            "Who is supplying the toilet?"
+        ]
+    },
+    {
+        "job_type": "shower_replacement",
+        "display_name": "Shower replacement",
+        "keywords": ["replace shower", "remove old shower", "fit new shower", "replacement shower"],
+        "exclude_keywords": ["shower tray", "shower waste"],
+        "labour_range": [180, 350],
+        "materials": [
+            {"name": "Replacement shower unit", "quantity": 1, "required": False, "reason": "Include only if Nigel is supplying the shower."},
+            {"name": "Sanitary silicone", "quantity": 1, "required": True, "reason": "Seal disturbed areas around the replacement."},
+            {"name": "Suitable wall fixings", "quantity": 1, "required": True, "reason": "Fixings depend on wall construction."},
+            {"name": "PTFE tape", "quantity": 0.1, "required": False, "reason": "Small consumable allowance."},
+            {"name": "15mm copper olives", "quantity": 2, "required": False, "reason": "May be needed if compression joints are disturbed."},
+            {"name": "Shower connection adaptors", "quantity": 2, "required": False, "reason": "Only if inlet centres or connections differ."},
+        ],
+        "questions": [
+            "Is it electric, exposed mixer, concealed mixer, digital or pumped?",
+            "Who is supplying the shower?",
+            "Does the replacement match the existing inlet positions?"
+        ]
+    },
+    {
+        "job_type": "radiator_replacement",
+        "display_name": "Radiator replacement",
+        "keywords": ["replace radiator", "fit radiator", "new radiator", "radiator replacement"],
+        "exclude_keywords": ["trv only", "replace trv"],
+        "labour_range": [180, 350],
+        "materials": [
+            {"name": "Radiator", "quantity": 1, "required": False, "reason": "Include only if Nigel is supplying it."},
+            {"name": "TRV valve", "quantity": 1, "required": False, "reason": "Use if new valves are required."},
+            {"name": "Lockshield valve", "quantity": 1, "required": False, "reason": "Matching return valve."},
+            {"name": "Radiator valve tail", "quantity": 2, "required": False, "reason": "Required with new valves or radiator connections."},
+            {"name": "Central heating inhibitor", "quantity": 1, "required": True, "reason": "System protection after draining and refilling."},
+            {"name": "PTFE tape", "quantity": 0.1, "required": False, "reason": "Small consumable allowance."},
+        ],
+        "questions": [
+            "Are the new radiator dimensions the same?",
+            "Does the whole system need draining?",
+            "Who is supplying the radiator?"
+        ]
+    },
+    {
+        "job_type": "trv_replacement",
+        "display_name": "TRV replacement",
+        "keywords": ["replace trv", "change trv", "thermostatic radiator valve", "trv valve"],
+        "exclude_keywords": [],
+        "labour_range": [120, 250],
+        "materials": [
+            {"name": "TRV valve", "quantity": 1, "required": True, "reason": "Replacement thermostatic valve."},
+            {"name": "Radiator valve tail", "quantity": 1, "required": False, "reason": "May be required if the existing tail is incompatible."},
+            {"name": "15mm copper olives", "quantity": 1, "required": False, "reason": "May be required for a renewed compression joint."},
+            {"name": "PTFE tape", "quantity": 0.1, "required": False, "reason": "Small consumable allowance."},
+            {"name": "Central heating inhibitor", "quantity": 1, "required": False, "reason": "Use if the system is drained/refilled."},
+        ],
+        "questions": [
+            "Does the system need fully draining?",
+            "Is the valve angled or straight?",
+            "Is the existing tail compatible?"
+        ]
+    },
+    {
+        "job_type": "basin_waste",
+        "display_name": "Basin waste replacement",
+        "keywords": ["basin waste", "replace basin waste", "bottle trap", "basin trap"],
+        "exclude_keywords": ["kitchen sink", "bath waste"],
+        "labour_range": [100, 180],
+        "materials": [
+            {"name": "Basin waste", "quantity": 1, "required": True, "reason": "Replacement waste fitting."},
+            {"name": "Bottle trap", "quantity": 1, "required": False, "reason": "Use if replacing or if existing trap is unsuitable."},
+            {"name": "32mm waste pipe", "quantity": 1, "required": False, "reason": "Only if pipework alteration is needed."},
+            {"name": "32mm waste bend", "quantity": 1, "required": False, "reason": "Only if alignment requires it."},
+            {"name": "Sanitary silicone", "quantity": 0.1, "required": False, "reason": "Seal where required."},
+        ],
+        "questions": [
+            "Is the basin slotted or unslotted?",
+            "Is the existing trap being retained?",
+            "Is pipework alteration required?"
+        ]
+    },
+    {
+        "job_type": "kitchen_sink_waste",
+        "display_name": "Kitchen sink waste",
+        "keywords": ["kitchen sink waste", "sink waste", "replace sink waste"],
+        "exclude_keywords": ["basin"],
+        "labour_range": [120, 220],
+        "materials": [
+            {"name": "Kitchen sink waste kit", "quantity": 1, "required": True, "reason": "Main sink waste assembly."},
+            {"name": "40mm waste pipe", "quantity": 1, "required": False, "reason": "Only if pipework alteration is required."},
+            {"name": "40mm waste bend", "quantity": 1, "required": False, "reason": "Only if alignment requires it."},
+            {"name": "Appliance waste spigot", "quantity": 1, "required": False, "reason": "Only where dishwasher or washing machine connects."},
+        ],
+        "questions": [
+            "Is it a single or double bowl sink?",
+            "Are appliances connected to the waste?",
+            "Is existing pipework being retained?"
+        ]
+    },
+]
+
+
+def classify_smart_job(job_text: str):
+    job = normalise_ai_job_text(job_text)
+    best = None
+    best_score = 0
+
+    for kit in SMART_JOB_MATERIAL_KITS:
+        if any(ex in job for ex in kit.get("exclude_keywords", [])):
+            continue
+
+        score = 0
+        for phrase in kit.get("keywords", []):
+            phrase = normalise_ai_job_text(phrase)
+            if phrase in job:
+                score += 20 + len(phrase.split()) * 3
+            else:
+                score += len(ai_text_tokens(phrase).intersection(ai_text_tokens(job))) * 3
+
+        if score > best_score:
+            best = kit
+            best_score = score
+
+    if best_score < 8:
+        return None
+
+    return {**best, "classification_score": best_score}
+
+
+def smart_kit_allowed_names(kit: dict):
+    return {
+        canonical_material_name(item.get("name", ""))
+        for item in (kit or {}).get("materials", [])
+        if item.get("name")
+    }
+
+
+def build_smart_job_kit(job: str, quote_type: str, history: dict):
+    classification = classify_smart_job(job)
+    if not classification:
+        return {
+            "classification": None,
+            "materials": [],
+            "questions": [],
+            "labour_range": [],
+        }
+
+    materials = []
+    seen = set()
+
+    # Start only with the approved checklist for this job.
+    for rule_item in classification.get("materials", []):
+        resolved = resolve_database_first_material(rule_item, job, quote_type)
+        key = canonical_material_name(resolved.get("name", ""))
+        if key and key not in seen:
+            materials.append(resolved)
+            seen.add(key)
+
+    # Historical evidence may adjust matching checklist quantities/prices,
+    # but may not introduce unrelated categories.
+    allowed = smart_kit_allowed_names(classification)
+    for historical in (history.get("common_materials", []) or []):
+        hist_name = historical.get("name", "")
+        hist_can = canonical_material_name(hist_name)
+
+        matched_rule = None
+        for rule_item in classification.get("materials", []):
+            rule_can = canonical_material_name(rule_item.get("name", ""))
+            if (
+                hist_can == rule_can
+                or hist_can in rule_can
+                or rule_can in hist_can
+            ):
+                matched_rule = rule_item
+                break
+
+        if not matched_rule:
+            continue
+
+        for item in materials:
+            item_can = canonical_material_name(item.get("name", ""))
+            rule_can = canonical_material_name(matched_rule.get("name", ""))
+            if item_can == hist_can or item_can == rule_can or hist_can in item_can or item_can in hist_can:
+                avg_qty = safe_float(historical.get("average_quantity", 0), 0)
+                if avg_qty > 0:
+                    item["quantity"] = round(avg_qty, 2)
+                    item["quantity_source"] = "historical_job_type"
+                    item["learned_used_count"] = historical.get("used_count", 0)
+                avg_price = safe_float(historical.get("average_unit_price", 0), 0)
+                if avg_price > 0 and safe_float(item.get("manual_price", 0), 0) <= 0:
+                    item["manual_price"] = round(avg_price, 2)
+                if historical.get("supplier") and not item.get("supplier"):
+                    item["supplier"] = historical.get("supplier")
+                break
+
+    return {
+        "classification": {
+            "job_type": classification.get("job_type"),
+            "display_name": classification.get("display_name"),
+            "score": classification.get("classification_score"),
+        },
+        "materials": materials,
+        "questions": classification.get("questions", []),
+        "labour_range": classification.get("labour_range", []),
+    }
+
+
+def enforce_smart_job_kit(draft: dict, context: dict):
+    if not isinstance(draft, dict):
+        draft = {}
+
+    smart = context.get("smart_job_kit", {}) or {}
+    classification = smart.get("classification")
+    kit = smart.get("materials", []) or []
+
+    if not classification:
+        return enforce_database_first_kit(draft, context)
+
+    allowed_keys = {
+        canonical_material_name(item.get("name", ""))
+        for item in kit
+    }
+
+    # AI can improve wording and required/optional status only.
+    ai_materials = draft.get("materials", []) or []
+    ai_map = {
+        canonical_material_name(item.get("name", "")): item
+        for item in ai_materials
+        if isinstance(item, dict) and item.get("name")
+    }
+
+    final = []
+    for item in kit:
+        row = dict(item)
+        key = canonical_material_name(row.get("name", ""))
+        ai_item = ai_map.get(key)
+        if ai_item:
+            if ai_item.get("reason"):
+                row["reason"] = ai_item.get("reason")
+            row["required"] = bool(row.get("required") or ai_item.get("required"))
+        final.append(row)
+
+    # Do not allow AI to append materials outside the approved kit.
+    draft["materials"] = final
+    draft["smart_job_summary"] = {
+        "job_type": classification.get("job_type"),
+        "display_name": classification.get("display_name"),
+        "classification_score": classification.get("score"),
+        "kit_items": len(final),
+        "priced_items": sum(1 for item in final if safe_float(item.get("manual_price", 0), 0) > 0),
+        "saved_material_matches": sum(
+            1 for item in final
+            if item.get("data_source") in {
+                "database_first_saved_material",
+                "database_first_library"
+            }
+        ),
+        "learned_quantities": sum(
+            1 for item in final
+            if item.get("quantity_source") in {"learned", "historical_job_type"}
+        ),
+        "materials_total_before_handling": round(sum(
+            safe_float(item.get("manual_price", 0), 0) *
+            safe_float(item.get("quantity", 1), 1)
+            for item in final
+        ), 2),
+    }
+
+    if smart.get("questions"):
+        existing_questions = draft.get("questions_to_confirm", []) or []
+        merged_questions = []
+        seen_q = set()
+        for q in smart.get("questions", []) + existing_questions:
+            key = normalise_ai_job_text(q)
+            if key and key not in seen_q:
+                seen_q.add(key)
+                merged_questions.append(q)
+        draft["questions_to_confirm"] = merged_questions[:12]
+
+    return draft
+
+
 def build_ai_quote_context(data: AIQuoteDraftRequest):
     original_job = (data.job_description or "").strip()
     job = normalise_ai_job_text(original_job)
@@ -9474,9 +9827,10 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
         fallback_matches,
         forgotten
     )
+    smart_job_kit = build_smart_job_kit(job, quote_type, history)
 
     return {
-        "estimator_version": "database-first-estimator-v4",
+        "estimator_version": "smart-material-selection-v5",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -9505,6 +9859,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
         "master_material_candidates": master_candidates,
         "business_material_matches": business_material_matches,
         "database_first_kit": database_first_kit,
+        "smart_job_kit": smart_job_kit,
         "decision_rules": {
             "do_not_assume_customer_or_contractor_supply": True,
             "include_provisional_materials_when_category_is_clear": True,
@@ -9531,13 +9886,18 @@ You are an experienced UK domestic plumbing estimator assisting Nigel Harvey Ltd
 Create a practical but cautious quote draft from the supplied job description and internal business data.
 
 Priority order:
-1. Treat database_first_kit as the starting material list and source of truth.
-2. Review that kit for relevance, duplicates, missing companion items and customer-supply uncertainty.
-3. Use matching historical quotes for labour and wording.
+1. Use smart_job_kit as the approved material checklist when a job classification is present.
+2. Do not introduce materials outside that checklist.
+3. Review the checklist for wording, required/optional status, risks and confirmation questions.
+4. Use historical quotes and labour intelligence for pricing guidance.
+5. If there is no smart classification, fall back to database_first_kit.
 
 
 Rules:
 - Return only the requested structured JSON.
+- Never add toilet, waste, sink, basin, shower, heating or unrelated materials to another classified job type.
+- A classified job kit is intentionally narrow. Do not broaden it based on loose keyword overlap.
+- AI may not add extra materials when smart_job_kit has a classification.
 - Do not remove a database_first_kit item merely because the job description is brief; mark uncertain items optional instead.
 - Do not rename, reprice or replace database_first_kit records with invented products.
 - Use AI primarily to write the scope, assess risks, identify confirmation questions and add only genuine missing items.
@@ -9611,7 +9971,7 @@ Rules:
     except json.JSONDecodeError:
         raise HTTPException(status_code=502, detail="OpenAI returned an invalid structured quote draft.")
 
-    draft = enforce_database_first_kit(draft, context)
+    draft = enforce_smart_job_kit(draft, context)
 
     return {
         "draft": draft,
@@ -9641,7 +10001,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "database-first-estimator-v4"),
+        "version": context.get("estimator_version", "smart-material-selection-v5"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
@@ -9652,6 +10012,9 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
         "database_kit_items": len(context.get("database_first_kit", [])),
         "historical_kit_items": result.get("draft", {}).get("database_first_summary", {}).get("historical_items", 0),
         "template_kit_items": result.get("draft", {}).get("database_first_summary", {}).get("template_items", 0),
+        "smart_job_type": result.get("draft", {}).get("smart_job_summary", {}).get("display_name", ""),
+        "smart_kit_items": result.get("draft", {}).get("smart_job_summary", {}).get("kit_items", 0),
+        "smart_priced_items": result.get("draft", {}).get("smart_job_summary", {}).get("priced_items", 0),
     }
     return JSONResponse(content=result)
 
