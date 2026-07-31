@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from fastapi import FastAPI, HTTPException, Response, Request
+from fastapi import FastAPI, HTTPException, Response, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
@@ -15,6 +15,9 @@ import io
 import base64
 import ssl
 import smtplib
+import mimetypes
+import subprocess
+import tempfile
 from html import escape
 from pathlib import Path
 from email.mime.multipart import MIMEMultipart
@@ -1750,6 +1753,7 @@ class AIQuoteDraftRequest(BaseModel):
     customer_address: str = ""
     current_labour: float = 0
     current_materials: list[MaterialItem] = Field(default_factory=list)
+    site_survey: dict = Field(default_factory=dict)
 
 
 class InvoiceStatusRequest(BaseModel):
@@ -4601,9 +4605,27 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <label for="job">Job description</label>
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
+      <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
+        <strong>Photo & Video Site Survey V12</strong><br>
+        <span class="small">Upload photos or a short video with your spoken explanation. The survey can mark existing parts as reusable, optional, required or needing a site check.</span>
+
+        <label for="siteSurveyPhotos" style="margin-top:8px;">Site photos</label>
+        <input id="siteSurveyPhotos" type="file" accept="image/*" multiple>
+
+        <label for="siteSurveyVideo" style="margin-top:8px;">Site video with explanation</label>
+        <input id="siteSurveyVideo" type="file" accept="video/*">
+
+        <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+          <button type="button" class="btn-light" onclick="analyseSiteSurvey()">Analyse site media</button>
+          <button type="button" class="btn-light" onclick="clearSiteSurvey()">Clear survey</button>
+        </div>
+        <div id="siteSurveyStatus" class="small" style="margin-top:8px;"></div>
+        <div id="siteSurveyResult" style="margin-top:8px;"></div>
+      </div>
+
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Context‑Aware Learning V11</strong><br>
-        <span class="small">Groups duplicate warnings, creates job-specific material bundles, shows material confidence and offers one-click quantity fixes while keeping every change under your control.</span>
+        <strong>Photo & Video Quote Intelligence V12</strong><br>
+        <span class="small">Combines your description, quote history and site-survey evidence. Visible or tested existing parts can be moved from required to optional before the quote is built.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
         </div>
@@ -7390,6 +7412,88 @@ async function checkAIQuoteStatus() {
   }
 }
 
+
+let CURRENT_SITE_SURVEY = null;
+
+function surveyStatusLabel(value) {
+  return ({
+    confirmed_visible: "Confirmed visible",
+    not_visible: "Not visible",
+    present_condition_unconfirmed: "Present — condition unconfirmed",
+    confirmed_by_nigel: "Confirmed by Nigel",
+    ai_inferred: "AI inferred"
+  })[value] || value || "Unknown";
+}
+
+function surveyActionLabel(value) {
+  return ({
+    reuse_existing: "Reuse existing",
+    keep_optional: "Keep optional",
+    include_required: "Include required",
+    site_check: "Site check",
+    no_quote_change: "No quote change"
+  })[value] || value || "";
+}
+
+async function analyseSiteSurvey() {
+  const photos = [...(document.getElementById("siteSurveyPhotos")?.files || [])];
+  const video = document.getElementById("siteSurveyVideo")?.files?.[0];
+  const status = document.getElementById("siteSurveyStatus");
+
+  if (!photos.length && !video) {
+    alert("Add at least one photo or a video.");
+    return;
+  }
+
+  const form = new FormData();
+  form.append("job_description", document.getElementById("job")?.value || "");
+  photos.slice(0, 10).forEach(file => form.append("photos", file));
+  if (video) form.append("video", video);
+
+  status.innerHTML = "Analysing images, extracting video frames and transcribing your explanation…";
+  document.getElementById("siteSurveyResult").innerHTML = "";
+
+  try {
+    const response = await fetch("/api/site-survey", {method: "POST", body: form});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Site survey failed.");
+    CURRENT_SITE_SURVEY = data;
+    renderSiteSurvey(data);
+    status.innerHTML = `Survey ready · ${Number(data.evidence_count || 0)} visual evidence item(s) reviewed.`;
+  } catch (error) {
+    status.innerHTML = `<span style="color:#b91c1c;">${escapeHtml(error.message || "Site survey failed.")}</span>`;
+  }
+}
+
+function renderSiteSurvey(data) {
+  const box = document.getElementById("siteSurveyResult");
+  const components = data.components || [];
+  const actions = data.material_actions || [];
+  box.innerHTML = `<div class="history-item" style="padding:10px;border-color:#2563eb;">
+    <strong>Site survey summary</strong><br>${escapeHtml(data.summary || "")}
+    ${data.transcript ? `<details style="margin-top:7px;"><summary><strong>Video transcript</strong></summary><div style="margin-top:5px;">${escapeHtml(data.transcript)}</div></details>` : ""}
+    ${components.length ? `<div style="margin-top:9px;"><strong>Components reviewed</strong>${components.map(item => `<div style="margin-top:6px;padding:8px;border:1px solid #ddd;border-radius:8px;background:white;"><strong>${escapeHtml(item.component || "")}</strong><br><span class="small">${escapeHtml(surveyStatusLabel(item.status))} · ${Number(item.confidence || 0)}%</span><br>${escapeHtml(item.condition || "")}<br><strong>Quote action:</strong> ${escapeHtml(surveyActionLabel(item.quote_action))}</div>`).join("")}</div>` : ""}
+    ${actions.length ? `<div style="margin-top:9px;"><strong>Material decisions</strong><br>${actions.map(item => `• ${escapeHtml(item.material_name)}: ${escapeHtml(surveyActionLabel(item.action))} — ${escapeHtml(item.reason)} (${Number(item.confidence || 0)}%)`).join("<br>")}</div>` : ""}
+    <div class="history-actions" style="grid-template-columns:1fr;margin-top:9px;"><button type="button" class="btn-light" onclick="useSiteSurveyInQuote()">Use survey in quote</button></div>
+  </div>`;
+}
+
+function useSiteSurveyInQuote() {
+  if (!CURRENT_SITE_SURVEY) return alert("Analyse the site media first.");
+  document.getElementById("siteSurveyStatus").innerHTML = "Survey attached. Press Build Quote with AI.";
+  showNotice("Site survey attached to the next AI quote draft.");
+}
+
+function clearSiteSurvey() {
+  CURRENT_SITE_SURVEY = null;
+  const photos = document.getElementById("siteSurveyPhotos");
+  const video = document.getElementById("siteSurveyVideo");
+  if (photos) photos.value = "";
+  if (video) video.value = "";
+  document.getElementById("siteSurveyResult").innerHTML = "";
+  document.getElementById("siteSurveyStatus").innerHTML = "";
+}
+
 function currentMaterialsForAI() {
   return [...document.querySelectorAll("#materials .material-row")].map(row => ({
     name: row.querySelector(".m-name")?.value || "",
@@ -7424,7 +7528,8 @@ async function generateAIQuoteDraft() {
     customer_name: document.getElementById("customer_name")?.value || "",
     customer_address: document.getElementById("customer_address")?.value || "",
     current_labour: Number(document.getElementById("labour")?.value || 0),
-    current_materials: currentMaterialsForAI()
+    current_materials: currentMaterialsForAI(),
+    site_survey: CURRENT_SITE_SURVEY || {}
   };
 
   try {
@@ -7612,6 +7717,7 @@ function renderAIQuoteDraft(data) {
   const healthLabour = health.labour_warnings || [];
   const healthPassed = health.checks_passed || [];
   const jobBundles = health.job_specific_bundles || [];
+  const surveySummary = draft.site_survey_summary || {};
 
   const statusBadge = (status) => {
     if (status === "required") return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#dcfce7;font-size:12px;">Required</span>`;
@@ -7693,6 +7799,8 @@ function renderAIQuoteDraft(data) {
           ${(confidence.positive_reasons || []).map(x => `✓ ${escapeHtml(x)}`).join("<br>")}
           ${(confidence.gaps || []).map(x => `<br>△ ${escapeHtml(x)}`).join("")}
         </div>` : ""}
+
+      ${surveySummary.used ? `<div style="margin-top:10px;padding:9px;border:1px solid #2563eb;border-radius:8px;background:#eff6ff;"><strong>Site survey used</strong><br>${escapeHtml(surveySummary.summary || "")}${(surveySummary.material_actions_applied || []).length ? `<div style="margin-top:6px;">${(surveySummary.material_actions_applied || []).map(item => `• ${escapeHtml(item.material_name)} — ${escapeHtml(surveyActionLabel(item.action))} (${Number(item.confidence || 0)}%)`).join("<br>")}</div>` : ""}</div>` : ""}
 
       <div style="margin-top:12px;"><strong>Scope of works</strong></div>
       ${(draft.job_breakdown || []).length ? `
@@ -11358,9 +11466,52 @@ def build_quote_health(draft: dict, context: dict):
     }
 
 
+
+def apply_site_survey_to_draft(draft: dict, context: dict):
+    survey = ((context.get("request", {}) or {}).get("site_survey", {}) or {})
+    actions = survey.get("material_actions", []) or []
+    applied = []
+
+    for action in actions:
+        name = action.get("material_name", "")
+        if not name:
+            continue
+        for item in draft.get("materials", []) or []:
+            if not material_name_matches(item.get("name", ""), [name]):
+                continue
+            quote_action = action.get("action", "site_check")
+            item["site_survey_action"] = quote_action
+            item["site_survey_reason"] = action.get("reason", "")
+            item["site_survey_confidence"] = int(action.get("confidence", 0) or 0)
+
+            if quote_action == "include_required":
+                item["required"] = True
+                item["display_status"] = "required"
+            else:
+                item["required"] = False
+                item["display_status"] = "optional"
+
+            applied.append({
+                "material_name": item.get("name", name),
+                "action": quote_action,
+                "reason": action.get("reason", ""),
+                "confidence": int(action.get("confidence", 0) or 0)
+            })
+
+    draft["site_survey_summary"] = {
+        "used": bool(survey),
+        "summary": survey.get("summary", ""),
+        "components_reviewed": len(survey.get("components", []) or []),
+        "material_actions_applied": applied,
+        "warnings": survey.get("warnings", []) or []
+    }
+    return draft
+
+
 def enhance_v10_quote(draft: dict, context: dict):
     if not isinstance(draft, dict):
         return draft
+    draft = apply_site_survey_to_draft(draft, context)
     for item in draft.get("materials", []) or []:
         item["material_confidence"] = material_confidence_score(item)
     draft["quote_health"] = build_quote_health(draft, context)
@@ -11475,7 +11626,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "context-aware-learning-v11",
+        "estimator_version": "photo-video-site-survey-v12",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -11490,6 +11641,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
             "customer_address": data.customer_address,
             "current_labour": data.current_labour,
             "current_materials": existing_materials,
+            "site_survey": data.site_survey or {},
         },
         "historical_learning": {
             "similar_count": history.get("similar_count", 0),
@@ -11577,6 +11729,11 @@ Rules:
 - Put uncertainty in risk notes and confirmation questions rather than making the whole draft unusably vague.
 - Highlight access, isolation, hidden pipework, compatibility, making good and compliance.
 - Never claim hidden conditions are confirmed from a short description.
+- Treat site_survey findings as evidence, not absolute proof.
+- Evidence priority: Nigel's explicit tested statement, then clear visual evidence, then AI inference.
+- A visible component does not prove that it operates, is internally sound, correctly sized or reusable after disturbance.
+- If Nigel says a component was tested and working, normally make replacement optional rather than required.
+- Use site_survey material actions to avoid unnecessary replacement items, while preserving cautious site checks.
 - Do not include gas appliance installation or repair work.
 - Electrical shower work must be flagged for a suitably qualified electrician where applicable.
 - The draft requires human review before it is saved or sent.
@@ -11645,6 +11802,213 @@ Rules:
 
 
 
+
+SITE_SURVEY_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "summary": {"type": "string"},
+        "transcript": {"type": "string"},
+        "components": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "properties": {
+                "component": {"type": "string"},
+                "status": {"type": "string", "enum": [
+                    "confirmed_visible", "not_visible",
+                    "present_condition_unconfirmed", "confirmed_by_nigel", "ai_inferred"
+                ]},
+                "condition": {"type": "string"},
+                "evidence": {"type": "string"},
+                "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+                "quote_action": {"type": "string", "enum": [
+                    "reuse_existing", "keep_optional", "include_required",
+                    "site_check", "no_quote_change"
+                ]},
+                "material_name": {"type": "string"}
+            },
+            "required": ["component", "status", "condition", "evidence",
+                         "confidence", "quote_action", "material_name"]
+        }},
+        "site_conditions": {"type": "array", "items": {"type": "string"}},
+        "material_actions": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "properties": {
+                "material_name": {"type": "string"},
+                "action": {"type": "string", "enum": [
+                    "reuse_existing", "keep_optional", "include_required", "site_check"
+                ]},
+                "reason": {"type": "string"},
+                "confidence": {"type": "integer", "minimum": 0, "maximum": 100}
+            },
+            "required": ["material_name", "action", "reason", "confidence"]
+        }},
+        "warnings": {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["summary", "transcript", "components",
+                 "site_conditions", "material_actions", "warnings"]
+}
+
+
+def _survey_data_url(content: bytes, mime_type: str):
+    return f"data:{mime_type};base64,{base64.b64encode(content).decode('ascii')}"
+
+
+def _run_ffmpeg(arguments):
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", *arguments],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=90, check=False
+        )
+    except FileNotFoundError:
+        return False, "Video processing needs ffmpeg installed on Render."
+    except subprocess.TimeoutExpired:
+        return False, "Video processing took too long."
+    if result.returncode:
+        return False, result.stderr.decode("utf-8", errors="ignore")[:300]
+    return True, ""
+
+
+def _extract_video_evidence(video_bytes: bytes, suffix: str):
+    frames, transcript, warnings = [], "", []
+    with tempfile.TemporaryDirectory() as folder:
+        folder = Path(folder)
+        video_path = folder / f"survey{suffix or '.mp4'}"
+        audio_path = folder / "survey.mp3"
+        video_path.write_bytes(video_bytes)
+
+        ok, message = _run_ffmpeg([
+            "-i", str(video_path), "-vf", "fps=1/8,scale='min(1280,iw)':-2",
+            "-frames:v", "8", str(folder / "frame-%02d.jpg")
+        ])
+        if ok:
+            frames = [p.read_bytes() for p in sorted(folder.glob("frame-*.jpg"))[:8]]
+        elif message:
+            warnings.append(message)
+
+        ok, message = _run_ffmpeg([
+            "-i", str(video_path), "-vn", "-ac", "1", "-ar", "16000",
+            "-b:a", "64k", str(audio_path)
+        ])
+        if ok and audio_path.exists():
+            try:
+                with audio_path.open("rb") as audio:
+                    response = requests.post(
+                        "https://api.openai.com/v1/audio/transcriptions",
+                        headers={"Authorization": f"Bearer {(os.getenv('OPENAI_API_KEY') or '').strip()}"},
+                        files={"file": ("survey.mp3", audio, "audio/mpeg")},
+                        data={"model": (os.getenv("OPENAI_TRANSCRIBE_MODEL") or "gpt-4o-mini-transcribe").strip()},
+                        timeout=90
+                    )
+                if response.status_code < 400:
+                    transcript = response.json().get("text", "")
+                else:
+                    warnings.append("Video frames were analysed, but speech transcription failed.")
+            except requests.RequestException:
+                warnings.append("Video frames were analysed, but speech transcription failed.")
+        elif message:
+            warnings.append(message)
+    return frames, transcript, [w for w in warnings if w]
+
+
+def _analyse_site_survey(job_description, transcript, images, warnings):
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured.")
+
+    model = (os.getenv("OPENAI_VISION_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-5.6-luna").strip()
+    content = [{
+        "type": "input_text",
+        "text": f"""Review this UK domestic plumbing site survey for Nigel Harvey Ltd.
+
+Job description:
+{job_description or 'Not supplied'}
+
+Nigel's spoken transcript:
+{transcript or 'No transcript available'}
+
+Use only supported evidence. Nigel explicitly saying he tested an item and it works is stronger than visual evidence. Seeing an item does not prove it works or will reseal after disturbance. Hidden pipework cannot be confirmed. Do not call something absent merely because the angle does not show it. Use reuse_existing only when Nigel explicitly confirms it works; keep_optional when visible but condition is uncertain; include_required when clearly absent/damaged or Nigel says it needs replacement; otherwise site_check. Use concise UK plumbing terminology."""
+    }]
+    for image_bytes, mime_type in images[:12]:
+        content.append({
+            "type": "input_image",
+            "image_url": _survey_data_url(image_bytes, mime_type),
+            "detail": "high"
+        })
+
+    payload = {
+        "model": model,
+        "input": [{"role": "user", "content": content}],
+        "text": {"format": {
+            "type": "json_schema", "name": "plumbing_site_survey",
+            "strict": True, "schema": SITE_SURVEY_SCHEMA
+        }}
+    }
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload, timeout=120
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Site-survey connection failed: {exc}")
+
+    if response.status_code >= 400:
+        try:
+            detail = response.json().get("error", {}).get("message", response.text)
+        except Exception:
+            detail = response.text
+        raise HTTPException(status_code=502, detail=f"OpenAI site-survey error: {detail[:500]}")
+
+    output = extract_openai_output_text(response.json())
+    try:
+        result = json.loads(output)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Invalid structured site-survey response.")
+
+    result["transcript"] = transcript or result.get("transcript", "")
+    result["warnings"] = unique_short_items((result.get("warnings", []) or []) + warnings, 12)
+    result["model"] = model
+    result["review_required"] = True
+    return result
+
+
+@app.post("/api/site-survey")
+async def api_site_survey(
+    job_description: str = Form(""),
+    photos: list[UploadFile] = File(default=[]),
+    video: UploadFile | None = File(default=None),
+):
+    images, warnings, transcript = [], [], ""
+
+    for photo in photos[:10]:
+        content = await photo.read()
+        mime_type = photo.content_type or mimetypes.guess_type(photo.filename or "")[0] or "image/jpeg"
+        if content and mime_type.startswith("image/") and len(content) <= 12 * 1024 * 1024:
+            images.append((content, mime_type))
+
+    if video and video.filename:
+        content = await video.read()
+        if len(content) > 120 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Keep the video below 120 MB.")
+        frames, transcript, video_warnings = _extract_video_evidence(
+            content, Path(video.filename).suffix.lower() or ".mp4"
+        )
+        images.extend((frame, "image/jpeg") for frame in frames)
+        warnings.extend(video_warnings)
+
+    if not images and not transcript:
+        raise HTTPException(status_code=400, detail="Add at least one photo or video.")
+
+    result = _analyse_site_survey(job_description, transcript, images, warnings)
+    result.update({
+        "evidence_count": len(images),
+        "photo_count": min(len(photos), 10),
+        "video_used": bool(video and video.filename)
+    })
+    return JSONResponse(content=result)
+
+
 @app.get("/api/ai-quote-status")
 def api_ai_quote_status():
     configured = bool((os.getenv("OPENAI_API_KEY") or "").strip())
@@ -11662,7 +12026,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "context-aware-learning-v11"),
+        "version": context.get("estimator_version", "photo-video-site-survey-v12"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
