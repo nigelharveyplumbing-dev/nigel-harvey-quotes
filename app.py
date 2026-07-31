@@ -18,6 +18,7 @@ import smtplib
 import mimetypes
 import subprocess
 import tempfile
+import gc
 from html import escape
 from pathlib import Path
 from email.mime.multipart import MIMEMultipart
@@ -4606,8 +4607,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Photo & Video Site Survey V12</strong><br>
-        <span class="small">Upload photos or a short video with your spoken explanation. The survey can mark existing parts as reusable, optional, required or needing a site check.</span>
+        <strong>Photo & Video Site Survey V12.1</strong><br>
+        <span class="small">Upload up to 6 photos or one short video. Media is resized and processed from temporary files to keep the service safely below Render’s memory limit.</span>
 
         <label for="siteSurveyPhotos" style="margin-top:8px;">Site photos</label>
         <input id="siteSurveyPhotos" type="file" accept="image/*" multiple>
@@ -4624,8 +4625,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Photo & Video Quote Intelligence V12</strong><br>
-        <span class="small">Combines your description, quote history and site-survey evidence. Visible or tested existing parts can be moved from required to optional before the quote is built.</span>
+        <strong>Low‑Memory Photo & Video Intelligence V12.1</strong><br>
+        <span class="small">Uses the same site-survey intelligence with a low-memory pipeline: streamed uploads, six compact video frames, resized photos and immediate temporary-file cleanup.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
         </div>
@@ -7444,13 +7445,26 @@ async function analyseSiteSurvey() {
     alert("Add at least one photo or a video.");
     return;
   }
+  if (photos.length > 6) {
+    alert("V12.1 analyses up to 6 photos at a time.");
+    return;
+  }
+  const oversizedPhoto = photos.find(file => file.size > 10 * 1024 * 1024);
+  if (oversizedPhoto) {
+    alert(`${oversizedPhoto.name} is over the 10 MB photo limit.`);
+    return;
+  }
+  if (video && video.size > 80 * 1024 * 1024) {
+    alert("Keep the video below 80 MB. On iPhone, choose a shorter clip or lower video quality.");
+    return;
+  }
 
   const form = new FormData();
   form.append("job_description", document.getElementById("job")?.value || "");
   photos.slice(0, 10).forEach(file => form.append("photos", file));
   if (video) form.append("video", video);
 
-  status.innerHTML = "Analysing images, extracting video frames and transcribing your explanation…";
+  status.innerHTML = "Uploading in small chunks, extracting six compact frames and transcribing your explanation…";
   document.getElementById("siteSurveyResult").innerHTML = "";
 
   try {
@@ -11626,7 +11640,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "photo-video-site-survey-v12",
+        "estimator_version": "low-memory-site-survey-v12.1",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -11869,54 +11883,126 @@ def _run_ffmpeg(arguments):
     return True, ""
 
 
-def _extract_video_evidence(video_bytes: bytes, suffix: str):
-    frames, transcript, warnings = [], "", []
-    with tempfile.TemporaryDirectory() as folder:
-        folder = Path(folder)
-        video_path = folder / f"survey{suffix or '.mp4'}"
-        audio_path = folder / "survey.mp3"
-        video_path.write_bytes(video_bytes)
-
-        ok, message = _run_ffmpeg([
-            "-i", str(video_path), "-vf", "fps=1/8,scale='min(1280,iw)':-2",
-            "-frames:v", "8", str(folder / "frame-%02d.jpg")
-        ])
-        if ok:
-            frames = [p.read_bytes() for p in sorted(folder.glob("frame-*.jpg"))[:8]]
-        elif message:
-            warnings.append(message)
-
-        ok, message = _run_ffmpeg([
-            "-i", str(video_path), "-vn", "-ac", "1", "-ar", "16000",
-            "-b:a", "64k", str(audio_path)
-        ])
-        if ok and audio_path.exists():
-            try:
-                with audio_path.open("rb") as audio:
-                    response = requests.post(
-                        "https://api.openai.com/v1/audio/transcriptions",
-                        headers={"Authorization": f"Bearer {(os.getenv('OPENAI_API_KEY') or '').strip()}"},
-                        files={"file": ("survey.mp3", audio, "audio/mpeg")},
-                        data={"model": (os.getenv("OPENAI_TRANSCRIBE_MODEL") or "gpt-4o-mini-transcribe").strip()},
-                        timeout=90
+async def _stream_upload_to_disk(upload: UploadFile, destination: Path, max_bytes: int):
+    """Copy an upload to disk in small chunks without loading it into RAM."""
+    total = 0
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with destination.open("wb") as output:
+            while True:
+                chunk = await upload.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{upload.filename or 'Upload'} is too large."
                     )
-                if response.status_code < 400:
-                    transcript = response.json().get("text", "")
-                else:
-                    warnings.append("Video frames were analysed, but speech transcription failed.")
-            except requests.RequestException:
-                warnings.append("Video frames were analysed, but speech transcription failed.")
-        elif message:
-            warnings.append(message)
-    return frames, transcript, [w for w in warnings if w]
+                output.write(chunk)
+    finally:
+        await upload.close()
+    return total
 
 
-def _analyse_site_survey(job_description, transcript, images, warnings):
+def _normalise_survey_image(source: Path, destination: Path):
+    """Create a compact 1024px JPEG suitable for vision analysis."""
+    ok, message = _run_ffmpeg([
+        "-y",
+        "-i", str(source),
+        "-frames:v", "1",
+        "-vf", "scale='min(1024,iw)':-2",
+        "-q:v", "6",
+        str(destination),
+    ])
+    if not ok:
+        return False, message
+    return destination.exists() and destination.stat().st_size > 0, message
+
+
+def _extract_video_evidence(video_path: Path, work_dir: Path):
+    """Extract only a small number of resized frames and a compressed audio track."""
+    transcript, warnings = "", []
+    frames_dir = work_dir / "frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = work_dir / "survey-audio.mp3"
+
+    # Maximum six already-resized JPEGs. ffmpeg reads the video from disk.
+    ok, message = _run_ffmpeg([
+        "-y",
+        "-i", str(video_path),
+        "-vf", "fps=1/10,scale='min(1024,iw)':-2",
+        "-frames:v", "6",
+        "-q:v", "6",
+        str(frames_dir / "frame-%02d.jpg"),
+    ])
+    if not ok and message:
+        warnings.append(message)
+
+    frame_paths = [
+        path for path in sorted(frames_dir.glob("frame-*.jpg"))
+        if path.exists() and path.stat().st_size > 0
+    ][:6]
+
+    # Create a small mono audio file on disk and stream that file to transcription.
+    ok, message = _run_ffmpeg([
+        "-y",
+        "-i", str(video_path),
+        "-vn",
+        "-ac", "1",
+        "-ar", "16000",
+        "-b:a", "48k",
+        str(audio_path),
+    ])
+    if ok and audio_path.exists():
+        try:
+            with audio_path.open("rb") as audio:
+                response = requests.post(
+                    "https://api.openai.com/v1/audio/transcriptions",
+                    headers={
+                        "Authorization": f"Bearer {(os.getenv('OPENAI_API_KEY') or '').strip()}"
+                    },
+                    files={"file": ("survey-audio.mp3", audio, "audio/mpeg")},
+                    data={
+                        "model": (
+                            os.getenv("OPENAI_TRANSCRIBE_MODEL")
+                            or "gpt-4o-mini-transcribe"
+                        ).strip()
+                    },
+                    timeout=90,
+                )
+            if response.status_code < 400:
+                transcript = response.json().get("text", "")
+            else:
+                warnings.append(
+                    "Video frames were analysed, but speech transcription failed."
+                )
+        except requests.RequestException:
+            warnings.append(
+                "Video frames were analysed, but speech transcription failed."
+            )
+        finally:
+            try:
+                audio_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+    elif message:
+        warnings.append(message)
+
+    return frame_paths, transcript, [item for item in warnings if item]
+
+
+def _analyse_site_survey(job_description, transcript, image_paths, warnings):
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
     if not api_key:
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured.")
 
-    model = (os.getenv("OPENAI_VISION_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-5.6-luna").strip()
+    model = (
+        os.getenv("OPENAI_VISION_MODEL")
+        or os.getenv("OPENAI_MODEL")
+        or "gpt-5.6-luna"
+    ).strip()
+
     content = [{
         "type": "input_text",
         "text": f"""Review this UK domestic plumbing site survey for Nigel Harvey Ltd.
@@ -11929,47 +12015,83 @@ Nigel's spoken transcript:
 
 Use only supported evidence. Nigel explicitly saying he tested an item and it works is stronger than visual evidence. Seeing an item does not prove it works or will reseal after disturbance. Hidden pipework cannot be confirmed. Do not call something absent merely because the angle does not show it. Use reuse_existing only when Nigel explicitly confirms it works; keep_optional when visible but condition is uncertain; include_required when clearly absent/damaged or Nigel says it needs replacement; otherwise site_check. Use concise UK plumbing terminology."""
     }]
-    for image_bytes, mime_type in images[:12]:
-        content.append({
-            "type": "input_image",
-            "image_url": _survey_data_url(image_bytes, mime_type),
-            "detail": "high"
-        })
+
+    # Compact files are read one at a time. At most eight small JPEG data URLs
+    # are retained in the outgoing request.
+    for image_path in image_paths[:8]:
+        try:
+            image_bytes = image_path.read_bytes()
+            if not image_bytes:
+                continue
+            content.append({
+                "type": "input_image",
+                "image_url": _survey_data_url(image_bytes, "image/jpeg"),
+                "detail": "low",
+            })
+        finally:
+            try:
+                image_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     payload = {
         "model": model,
         "input": [{"role": "user", "content": content}],
-        "text": {"format": {
-            "type": "json_schema", "name": "plumbing_site_survey",
-            "strict": True, "schema": SITE_SURVEY_SCHEMA
-        }}
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "plumbing_site_survey",
+                "strict": True,
+                "schema": SITE_SURVEY_SCHEMA,
+            }
+        },
     }
+
     try:
         response = requests.post(
             "https://api.openai.com/v1/responses",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=payload, timeout=120
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=120,
         )
     except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"Site-survey connection failed: {exc}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Site-survey connection failed: {exc}",
+        )
+    finally:
+        gc.collect()
 
     if response.status_code >= 400:
         try:
             detail = response.json().get("error", {}).get("message", response.text)
         except Exception:
             detail = response.text
-        raise HTTPException(status_code=502, detail=f"OpenAI site-survey error: {detail[:500]}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"OpenAI site-survey error: {detail[:500]}",
+        )
 
     output = extract_openai_output_text(response.json())
     try:
         result = json.loads(output)
     except Exception:
-        raise HTTPException(status_code=502, detail="Invalid structured site-survey response.")
+        raise HTTPException(
+            status_code=502,
+            detail="Invalid structured site-survey response.",
+        )
 
     result["transcript"] = transcript or result.get("transcript", "")
-    result["warnings"] = unique_short_items((result.get("warnings", []) or []) + warnings, 12)
+    result["warnings"] = unique_short_items(
+        (result.get("warnings", []) or []) + warnings,
+        12,
+    )
     result["model"] = model
     result["review_required"] = True
+    result["low_memory_pipeline"] = True
     return result
 
 
@@ -11979,33 +12101,94 @@ async def api_site_survey(
     photos: list[UploadFile] = File(default=[]),
     video: UploadFile | None = File(default=None),
 ):
-    images, warnings, transcript = [], [], ""
+    warnings = []
+    transcript = ""
+    compact_images = []
+    photo_count = 0
+    video_used = bool(video and video.filename)
 
-    for photo in photos[:10]:
-        content = await photo.read()
-        mime_type = photo.content_type or mimetypes.guess_type(photo.filename or "")[0] or "image/jpeg"
-        if content and mime_type.startswith("image/") and len(content) <= 12 * 1024 * 1024:
-            images.append((content, mime_type))
+    # All uploaded media is streamed to disk. Nothing large is retained in RAM.
+    with tempfile.TemporaryDirectory(prefix="site-survey-") as temp_folder:
+        work_dir = Path(temp_folder)
 
-    if video and video.filename:
-        content = await video.read()
-        if len(content) > 120 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="Keep the video below 120 MB.")
-        frames, transcript, video_warnings = _extract_video_evidence(
-            content, Path(video.filename).suffix.lower() or ".mp4"
+        for index, photo in enumerate(photos[:6], start=1):
+            mime_type = (
+                photo.content_type
+                or mimetypes.guess_type(photo.filename or "")[0]
+                or ""
+            )
+            if not mime_type.startswith("image/"):
+                await photo.close()
+                continue
+
+            source_suffix = Path(photo.filename or "").suffix.lower() or ".jpg"
+            source_path = work_dir / f"photo-source-{index}{source_suffix}"
+            compact_path = work_dir / f"photo-{index}.jpg"
+
+            await _stream_upload_to_disk(
+                photo,
+                source_path,
+                max_bytes=10 * 1024 * 1024,
+            )
+            ok, message = _normalise_survey_image(source_path, compact_path)
+            source_path.unlink(missing_ok=True)
+
+            if ok:
+                compact_images.append(compact_path)
+                photo_count += 1
+            elif message:
+                warnings.append(
+                    f"{photo.filename or 'A photo'} could not be prepared for analysis."
+                )
+
+        if video_used:
+            suffix = Path(video.filename or "").suffix.lower() or ".mp4"
+            video_path = work_dir / f"survey-video{suffix}"
+
+            await _stream_upload_to_disk(
+                video,
+                video_path,
+                max_bytes=80 * 1024 * 1024,
+            )
+
+            frame_paths, transcript, video_warnings = _extract_video_evidence(
+                video_path,
+                work_dir,
+            )
+            compact_images.extend(frame_paths)
+            warnings.extend(video_warnings)
+            video_path.unlink(missing_ok=True)
+        elif video:
+            await video.close()
+
+        # Keep the total vision request intentionally small.
+        compact_images = compact_images[:8]
+
+        if not compact_images and not transcript:
+            raise HTTPException(
+                status_code=400,
+                detail="Add at least one usable photo or video.",
+            )
+
+        result = _analyse_site_survey(
+            job_description,
+            transcript,
+            compact_images,
+            warnings,
         )
-        images.extend((frame, "image/jpeg") for frame in frames)
-        warnings.extend(video_warnings)
+        result.update({
+            "evidence_count": len(compact_images),
+            "photo_count": photo_count,
+            "video_used": video_used,
+            "media_limits": {
+                "photos": 6,
+                "video_mb": 80,
+                "video_frames": 6,
+                "image_width_px": 1024,
+            },
+        })
 
-    if not images and not transcript:
-        raise HTTPException(status_code=400, detail="Add at least one photo or video.")
-
-    result = _analyse_site_survey(job_description, transcript, images, warnings)
-    result.update({
-        "evidence_count": len(images),
-        "photo_count": min(len(photos), 10),
-        "video_used": bool(video and video.filename)
-    })
+    gc.collect()
     return JSONResponse(content=result)
 
 
@@ -12026,7 +12209,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "photo-video-site-survey-v12"),
+        "version": context.get("estimator_version", "low-memory-site-survey-v12.1"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
