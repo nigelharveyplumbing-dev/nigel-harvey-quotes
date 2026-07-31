@@ -4630,8 +4630,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Multi‑Job Estimator V6</strong><br>
-        <span class="small">Splits descriptions containing several plumbing jobs, builds the approved kit and labour for each job, removes duplicate materials and combines everything into one quotation. Review is always required.</span>
+        <strong>Multi‑Job Estimator V6.1</strong><br>
+        <span class="small">Splits several jobs, detects customer-supplied main items, builds labour and materials for each job, merges duplicates and combines everything into one quotation. Review is always required.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Generate quote draft with AI</button>
         </div>
@@ -7389,7 +7389,7 @@ async function generateAIQuoteDraft() {
     if (status) {
       const context = data.context_summary || {};
       status.innerHTML = context.is_multi_job
-        ? `Multi-job quote identified · ${context.multi_job_count || 0} jobs · ${(context.multi_job_names || []).map(x => escapeHtml(x)).join(" + ")} · ${context.combined_material_count || 0} combined material item(s) · review required.`
+        ? `Multi-job quote identified · ${context.multi_job_count || 0} jobs · ${(context.multi_job_names || []).map(x => escapeHtml(x)).join(" + ")} · ${context.combined_material_count || 0} combined material item(s) · customer-supply rules applied · review required.`
         : context.smart_job_type
           ? `Job identified: ${escapeHtml(context.smart_job_type)} · ${context.smart_kit_items || 0} approved kit item(s) · ${context.smart_priced_items || 0} priced item(s) · review required.`
           : `No exact smart job kit found · database-first fallback used · review required.`;
@@ -7424,7 +7424,9 @@ function renderAIQuoteDraft(data) {
           <div style="margin-top:6px;padding:7px;border:1px solid #ddd;border-radius:7px;">
             <strong>Job ${Number(job.job_number || 0)} — ${escapeHtml(job.display_name || job.job_type || "")}</strong><br>
             ${escapeHtml(job.scope || job.original_text || "")}<br>
-            <span class="small">Labour: ${pounds(job.labour_suggestion || 0)} · ${Number(job.material_count || 0)} material item(s) · ${Number(job.similar_quotes || 0)} similar quote(s)</span>
+            <span class="small">Labour: ${pounds(job.labour_suggestion || 0)} · ${Number(job.material_count || 0)} material item(s) · ${Number(job.similar_quotes || 0)} similar quote(s)</span><br>
+            <span class="small">Labour confidence: ${escapeHtml((job.labour_confidence || {}).level || "low")} — ${escapeHtml((job.labour_confidence || {}).message || "manual review required")}</span>
+            ${job.supply_responsibility === "customer" ? `<br><span class="small"><strong>Customer supplying:</strong> ${(job.customer_supplied_items_removed || []).map(x => escapeHtml(x)).join(", ") || "main item"}</span>` : ""}
           </div>
         `).join("")}
       </div>` : ""}
@@ -7444,9 +7446,11 @@ function renderAIQuoteDraft(data) {
       ${draft.multi_job_summary ? `<div style="margin-top:8px;padding:8px;background:#eef6ff;border-radius:8px;"><strong>Multi‑Job Quote:</strong><br>
         ${Number(draft.multi_job_summary.job_count || 0)} jobs ·
         ${(draft.multi_job_summary.job_names || []).map(x => escapeHtml(x)).join(" + ")} ·
-        ${Number(draft.multi_job_summary.combined_material_count || 0)} combined material item(s) ·
+        ${Number(draft.multi_job_summary.combined_material_count || 0)} unique material item(s) ·
+        ${Number(draft.multi_job_summary.duplicates_merged || 0)} duplicate item(s) merged ·
         labour ${pounds(draft.multi_job_summary.combined_labour || 0)} ·
         materials ${pounds(draft.multi_job_summary.materials_total_before_handling || 0)} before handling
+        ${(draft.multi_job_summary.customer_supplied_items_removed || []).length ? `<br><strong>Customer-supplied items removed:</strong> ${(draft.multi_job_summary.customer_supplied_items_removed || []).map(x => escapeHtml(x)).join(", ")}` : ""}
       </div>` : ""}
       ${draft.smart_job_summary ? `<div style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:8px;"><strong>Smart Job Kit:</strong><br>
         ${escapeHtml(draft.smart_job_summary.display_name || "")} ·
@@ -7455,6 +7459,7 @@ function renderAIQuoteDraft(data) {
         ${Number(draft.smart_job_summary.saved_material_matches || 0)} saved/library match(es) ·
         ${Number(draft.smart_job_summary.learned_quantities || 0)} learned quantity/quantities ·
         materials ${pounds(draft.smart_job_summary.materials_total_before_handling || 0)} before handling
+        ${(draft.smart_job_summary.customer_supplied_items_removed || []).length ? `<br><strong>Customer-supplied item removed:</strong> ${(draft.smart_job_summary.customer_supplied_items_removed || []).map(x => escapeHtml(x)).join(", ")}` : ""}
       </div>` : draft.database_first_summary ? `<div style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:8px;"><strong>Database‑First Fallback:</strong><br>
         ${Number(draft.database_first_summary.kit_items || 0)} item(s) ·
         ${Number(draft.database_first_summary.priced_items || 0)} priced item(s) ·
@@ -9669,6 +9674,16 @@ def build_smart_job_kit(job: str, quote_type: str, history: dict):
                     item["supplier"] = historical.get("supplier")
                 break
 
+    responsibility = detect_supply_responsibility(
+        job,
+        classification.get("job_type")
+    )
+    materials, removed_customer_items = apply_supply_responsibility_to_materials(
+        materials,
+        classification.get("job_type"),
+        responsibility
+    )
+
     return {
         "classification": {
             "job_type": classification.get("job_type"),
@@ -9678,6 +9693,10 @@ def build_smart_job_kit(job: str, quote_type: str, history: dict):
         "materials": materials,
         "questions": classification.get("questions", []),
         "labour_range": classification.get("labour_range", []),
+        "supply_responsibility": responsibility,
+        "customer_supplied_items_removed": [
+            item.get("name", "") for item in removed_customer_items
+        ],
     }
 
 
@@ -9740,6 +9759,8 @@ def enforce_smart_job_kit(draft: dict, context: dict):
             safe_float(item.get("quantity", 1), 1)
             for item in final
         ), 2),
+        "supply_responsibility": smart.get("supply_responsibility", "unknown"),
+        "customer_supplied_items_removed": smart.get("customer_supplied_items_removed", []),
     }
 
     if smart.get("questions"):
@@ -9923,6 +9944,128 @@ def merge_multi_job_materials(job_records: list):
     return rows
 
 
+
+CUSTOMER_SUPPLY_PATTERNS = [
+    r"\bcustomer (?:is )?supplying\b",
+    r"\bcustomer supplied\b",
+    r"\bcustomer to supply\b",
+    r"\bclient (?:is )?supplying\b",
+    r"\bclient supplied\b",
+    r"\bclient to supply\b",
+    r"\bowner (?:is )?supplying\b",
+    r"\bowner supplied\b",
+    r"\bsupplied by customer\b",
+    r"\bsupplied by client\b",
+]
+
+BUSINESS_SUPPLY_PATTERNS = [
+    r"\bnigel (?:is )?supplying\b",
+    r"\bnigel harvey ltd (?:is )?supplying\b",
+    r"\bwe (?:are )?supplying\b",
+    r"\bsupply and fit\b",
+    r"\bcontractor supplying\b",
+]
+
+MAIN_ITEM_BY_JOB_TYPE = {
+    "outside_tap": ["outside tap kit", "outside tap", "hose union bib tap"],
+    "tap_replacement": ["replacement tap", "kitchen tap", "basin tap", "mixer tap"],
+    "toilet_replacement": ["replacement toilet", "toilet", "wc"],
+    "shower_replacement": ["replacement shower unit", "replacement shower", "shower"],
+    "radiator_replacement": ["radiator"],
+    "trv_replacement": ["trv valve", "thermostatic radiator valve"],
+    "basin_waste": ["basin waste"],
+    "kitchen_sink_waste": ["kitchen sink waste kit", "sink waste kit"],
+}
+
+
+def detect_supply_responsibility(job_text: str, job_type: str):
+    text = normalise_ai_job_text(job_text)
+
+    customer_supplied = any(re.search(pattern, text, flags=re.I) for pattern in CUSTOMER_SUPPLY_PATTERNS)
+    business_supplied = any(re.search(pattern, text, flags=re.I) for pattern in BUSINESS_SUPPLY_PATTERNS)
+
+    if customer_supplied and not business_supplied:
+        return "customer"
+    if business_supplied and not customer_supplied:
+        return "business"
+    if customer_supplied and business_supplied:
+        return "mixed"
+    return "unknown"
+
+
+def is_main_supply_item(material_name: str, job_type: str):
+    canonical = canonical_material_name(material_name)
+    for candidate in MAIN_ITEM_BY_JOB_TYPE.get(job_type, []):
+        candidate_can = canonical_material_name(candidate)
+        if canonical == candidate_can or candidate_can in canonical or canonical in candidate_can:
+            return True
+    return False
+
+
+def apply_supply_responsibility_to_materials(materials: list, job_type: str, responsibility: str):
+    rows = []
+    removed = []
+
+    for material in materials or []:
+        row = dict(material)
+        main_item = is_main_supply_item(row.get("name", ""), job_type)
+
+        if responsibility == "customer" and main_item:
+            removed.append(row)
+            continue
+
+        if responsibility == "business" and main_item:
+            row["required"] = True
+            row["reason"] = (
+                row.get("reason", "") +
+                " Nigel Harvey Ltd is supplying this main item."
+            ).strip()
+
+        if responsibility == "unknown" and main_item:
+            row["required"] = False
+
+        rows.append(row)
+
+    return rows, removed
+
+
+def labour_confidence_for_job(record: dict):
+    similar = int(record.get("similar_quotes", 0) or 0)
+    source = record.get("labour_source", "")
+
+    if source == "labour_history" and similar >= 3:
+        return {
+            "level": "high",
+            "message": f"Based on {similar} similar saved quotes."
+        }
+    if source == "labour_history" and similar >= 1:
+        return {
+            "level": "medium",
+            "message": f"Based on {similar} similar saved quote(s)."
+        }
+    if source == "smart_job_range":
+        return {
+            "level": "medium",
+            "message": "Based on the approved labour range for this job type."
+        }
+    return {
+        "level": "low",
+        "message": "Requires manual labour review."
+    }
+
+
+def merge_multi_job_materials_with_summary(job_records: list):
+    before_count = sum(len(record.get("materials", []) or []) for record in job_records)
+    merged = merge_multi_job_materials(job_records)
+    after_count = len(merged)
+
+    return merged, {
+        "materials_before_merge": before_count,
+        "unique_materials_after_merge": after_count,
+        "duplicates_merged": max(0, before_count - after_count),
+    }
+
+
 def build_multi_job_estimate(job_text: str, quote_type: str):
     segments = split_multi_job_description(job_text)
     records = []
@@ -9942,7 +10085,17 @@ def build_multi_job_estimate(job_text: str, quote_type: str):
             quote_type
         )
 
-        records.append({
+        responsibility = detect_supply_responsibility(
+            segment,
+            classification.get("job_type")
+        )
+        filtered_materials, removed_customer_items = apply_supply_responsibility_to_materials(
+            smart.get("materials", []),
+            classification.get("job_type"),
+            responsibility
+        )
+
+        record = {
             "job_number": len(records) + 1,
             "original_text": segment,
             "job_type": classification.get("job_type"),
@@ -9950,14 +10103,24 @@ def build_multi_job_estimate(job_text: str, quote_type: str):
             "classification_score": classification.get("classification_score"),
             "labour_suggestion": labour,
             "labour_source": labour_source,
-            "materials": smart.get("materials", []),
+            "materials": filtered_materials,
             "questions": smart.get("questions", []),
             "similar_quotes": history.get("similar_count", 0),
-        })
+            "supply_responsibility": responsibility,
+            "customer_supplied_items_removed": [
+                item.get("name", "") for item in removed_customer_items
+            ],
+        }
+        record["labour_confidence"] = labour_confidence_for_job(record)
+        records.append(record)
 
-    # Preserve a normal single-job path when the description is not truly multi-job.
     is_multi_job = len(records) >= 2
-    combined_materials = merge_multi_job_materials(records) if records else []
+    combined_materials, merge_summary = merge_multi_job_materials_with_summary(records) if records else ([], {
+        "materials_before_merge": 0,
+        "unique_materials_after_merge": 0,
+        "duplicates_merged": 0,
+    })
+
     total_labour = round(sum(
         safe_float(record.get("labour_suggestion", 0), 0)
         for record in records
@@ -9970,6 +10133,7 @@ def build_multi_job_estimate(job_text: str, quote_type: str):
         "unclassified_segments": unclassified,
         "combined_materials": combined_materials,
         "combined_labour_suggestion": total_labour,
+        "merge_summary": merge_summary,
     }
 
 
@@ -10008,6 +10172,9 @@ def enforce_multi_job_estimate(draft: dict, context: dict):
             "material_count": len(record.get("materials", [])),
             "similar_quotes": record.get("similar_quotes", 0),
             "questions": record.get("questions", []),
+            "supply_responsibility": record.get("supply_responsibility", "unknown"),
+            "customer_supplied_items_removed": record.get("customer_supplied_items_removed", []),
+            "labour_confidence": record.get("labour_confidence", {}),
         })
 
     draft["job_breakdown"] = final_breakdown
@@ -10044,6 +10211,13 @@ def enforce_multi_job_estimate(draft: dict, context: dict):
             for item in combined_materials
         ), 2),
         "unclassified_segments": multi.get("unclassified_segments", []),
+        "materials_before_merge": multi.get("merge_summary", {}).get("materials_before_merge", 0),
+        "duplicates_merged": multi.get("merge_summary", {}).get("duplicates_merged", 0),
+        "customer_supplied_items_removed": [
+            item
+            for record in jobs
+            for item in record.get("customer_supplied_items_removed", [])
+        ],
     }
 
     return draft
@@ -10157,7 +10331,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "multi-job-estimator-v6",
+        "estimator_version": "multi-job-estimator-v6.1",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -10333,7 +10507,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "multi-job-estimator-v6"),
+        "version": context.get("estimator_version", "multi-job-estimator-v6.1"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
