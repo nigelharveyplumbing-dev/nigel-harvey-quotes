@@ -21,7 +21,7 @@ import tempfile
 import gc
 from html import escape
 from pathlib import Path
-from urllib.parse import quote_plus, urljoin, urlparse
+from urllib.parse import quote_plus, urljoin, urlparse, urlencode
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -63,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "12.7-radiator-choice-intelligence"
+APP_VERSION = "12.8-merchant-results-intelligence"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4608,8 +4608,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Radiator Choice Intelligence V12.7</strong><br>
-        <span class="small">Capture the site, merge the findings and search merchants using strict product type and dimension matching. Concealed pipe routes receive a provisional fittings allowance instead of invented fitting quantities.</span>
+        <strong>Merchant Results & Live Price Intelligence V12.8</strong><br>
+        <span class="small">Capture the site, merge the findings and search merchant result and category pages using strict product type, dimensions and radiator-type matching. Concealed pipe routes receive a provisional fittings allowance instead of invented fitting quantities.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
           <button type="button" class="btn-light" onclick="takeSitePhoto()">📷 Take photo</button>
@@ -4651,7 +4651,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Strict Live‑Priced Quote Intelligence V12.7</strong><br>
+        <strong>Strict Live‑Priced Quote Intelligence V12.8</strong><br>
         <span class="small">Uses strict dimensions and product-type matching, removes unrelated merchant results, searches missing valve links and adds provisional fittings allowances for concealed pipe routes.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
@@ -9304,7 +9304,250 @@ def _looks_like_product_url(url: str, merchant_name: str):
     return True
 
 
+
+def _toolstation_radiator_category_url(query: str):
+    """
+    Toolstation's free-text search page can be client-rendered, while filtered
+    radiator category pages normally contain server-readable product cards.
+    Build a filtered category URL when dimensions and panel type are known.
+    """
+    intent = _product_search_intent(query)
+    if intent.get("product_type") != "radiator":
+        return ""
+
+    dims = list(intent.get("dimensions") or [])
+    if len(dims) != 2:
+        return ""
+
+    # Radiator descriptions may be written W x H or H x W.
+    # Toolstation filters use explicit height and width fields.
+    numbers = sorted((int(value) for value in dims))
+    height = numbers[0]
+    width = numbers[1]
+
+    params = [
+        ("ts_height", f"{height}mm"),
+        ("ts_width", f"{width}mm"),
+    ]
+    radiator_type = intent.get("radiator_type")
+    if radiator_type:
+        params.append(("type", f"Type {radiator_type}"))
+
+    return (
+        "https://www.toolstation.com/central-heating-supplies/"
+        "central-heating-radiators/c318?"
+        + urlencode(params)
+    )
+
+
+def _extract_toolstation_products(html: str, page_url: str):
+    """
+    Extract Toolstation product cards from category/search HTML, embedded JSON,
+    and product links. This parser accepts both 1200 x 600 and 600 x 1200.
+    """
+    soup = BeautifulSoup(html or "", "html.parser")
+    candidates = []
+
+    def add_candidate(name="", url="", price=0, sku="", image_url=""):
+        clean_url = normalize_material_url(urljoin(page_url, str(url or "")))
+        if not clean_url or not _merchant_host_allowed(clean_url, ["toolstation.com"]):
+            return
+        if not _looks_like_product_url(clean_url, "Toolstation"):
+            return
+        clean_name = _clean_product_title(name)
+        if len(clean_name) < 5:
+            return
+        candidates.append({
+            "name": clean_name,
+            "url": clean_url,
+            "price": round(safe_float(price, 0), 2),
+            "sku": str(sku or ""),
+            "image_url": str(image_url or ""),
+        })
+
+    # 1. JSON-LD and other embedded JSON objects.
+    for script in soup.select("script"):
+        raw = script.string or script.get_text(" ", strip=True)
+        if not raw or len(raw) < 20:
+            continue
+
+        payloads = []
+        if script.get("type") == "application/ld+json":
+            try:
+                payloads.append(json.loads(raw))
+            except Exception:
+                pass
+        elif any(token in raw for token in ['"productCode"', '"productId"', '"sku"', '"price"', '/p']):
+            # Some pages contain JSON in application state scripts.
+            try:
+                payloads.append(json.loads(raw))
+            except Exception:
+                # Pull individual product-looking JSON objects without failing
+                # the whole page when the script contains JavaScript wrappers.
+                for match in re.finditer(
+                    r'\{[^{}]{0,2500}"(?:productCode|productId|sku)"[^{}]{0,2500}\}',
+                    raw,
+                    re.I | re.S,
+                ):
+                    try:
+                        payloads.append(json.loads(match.group(0)))
+                    except Exception:
+                        continue
+
+        stack = list(payloads)
+        while stack:
+            item = stack.pop()
+            if isinstance(item, list):
+                stack.extend(item)
+                continue
+            if not isinstance(item, dict):
+                continue
+            stack.extend(value for value in item.values() if isinstance(value, (dict, list)))
+
+            name = (
+                item.get("name")
+                or item.get("productName")
+                or item.get("title")
+                or item.get("displayName")
+                or ""
+            )
+            url = (
+                item.get("url")
+                or item.get("productUrl")
+                or item.get("pdpUrl")
+                or item.get("canonicalUrl")
+                or ""
+            )
+            sku = (
+                item.get("sku")
+                or item.get("productCode")
+                or item.get("productId")
+                or item.get("code")
+                or ""
+            )
+            price_value = (
+                item.get("price")
+                or item.get("sellingPrice")
+                or item.get("currentPrice")
+                or item.get("formattedPrice")
+                or 0
+            )
+            if isinstance(price_value, dict):
+                price_value = (
+                    price_value.get("value")
+                    or price_value.get("amount")
+                    or price_value.get("incVat")
+                    or price_value.get("gross")
+                    or 0
+                )
+            if isinstance(price_value, str):
+                price_match = re.search(r"£?\s*(\d+(?:\.\d{1,2})?)", price_value)
+                price_value = price_match.group(1) if price_match else 0
+
+            image = item.get("image") or item.get("imageUrl") or item.get("primaryImage") or ""
+            if isinstance(image, list):
+                image = image[0] if image else ""
+            if isinstance(image, dict):
+                image = image.get("url") or image.get("src") or ""
+
+            if name and url:
+                add_candidate(name, url, price_value, sku, image)
+
+    # 2. Product-card anchors. Read the surrounding card text for title, code and price.
+    for anchor in soup.select('a[href*="/p"]'):
+        href = anchor.get("href") or ""
+        target = urljoin(page_url, href)
+        if not _looks_like_product_url(target, "Toolstation"):
+            continue
+
+        card = anchor
+        for _ in range(6):
+            parent = getattr(card, "parent", None)
+            if not parent:
+                break
+            card = parent
+            card_text = re.sub(r"\s+", " ", card.get_text(" ", strip=True))
+            if "product code" in card_text.lower() or "£" in card_text:
+                break
+
+        card_text = re.sub(r"\s+", " ", card.get_text(" ", strip=True))
+        title = (
+            anchor.get("aria-label")
+            or anchor.get("title")
+            or anchor.get_text(" ", strip=True)
+        )
+        if len(_clean_product_title(title)) < 8:
+            heading = card.select_one("h1, h2, h3, h4, [class*='title'], [class*='name']")
+            if heading:
+                title = heading.get_text(" ", strip=True)
+
+        price = 0
+        price_match = re.search(r"£\s*(\d+(?:\.\d{1,2})?)", card_text)
+        if price_match:
+            price = safe_float(price_match.group(1), 0)
+
+        sku = ""
+        sku_match = re.search(r"product\s*code\s*:?\s*(\d{4,8})", card_text, re.I)
+        if sku_match:
+            sku = sku_match.group(1)
+        else:
+            url_sku = re.search(r"/p(\d{4,8})(?:[/?#]|$)", target, re.I)
+            if url_sku:
+                sku = url_sku.group(1)
+
+        image_url = ""
+        image = card.select_one("img[src], img[data-src]")
+        if image:
+            image_url = urljoin(page_url, image.get("src") or image.get("data-src") or "")
+
+        add_candidate(title, target, price, sku, image_url)
+
+    # 3. Last-resort regex for product paths embedded in page source.
+    for match in re.finditer(
+        r'(?P<url>/[a-z0-9][a-z0-9\-_/]*?/p(?P<sku>\d{4,8}))',
+        html or "",
+        re.I,
+    ):
+        target = urljoin(page_url, match.group("url"))
+        start = max(0, match.start() - 1200)
+        end = min(len(html), match.end() + 1200)
+        nearby = BeautifulSoup((html or "")[start:end], "html.parser").get_text(" ", strip=True)
+        nearby = re.sub(r"\s+", " ", nearby)
+
+        title_match = re.search(
+            r"([A-Z][A-Za-z0-9&+\-()' ]{15,180}(?:Radiator|Convector)[A-Za-z0-9&+\-()' ]{0,100})",
+            nearby,
+            re.I,
+        )
+        if not title_match:
+            continue
+
+        price_match = re.search(r"£\s*(\d+(?:\.\d{1,2})?)", nearby)
+        add_candidate(
+            title_match.group(1),
+            target,
+            price_match.group(1) if price_match else 0,
+            match.group("sku"),
+            "",
+        )
+
+    output, seen = [], set()
+    for item in candidates:
+        key = normalize_material_url(item.get("url", "")).split("?")[0].rstrip("/")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        output.append(item)
+
+    return output[:20]
+
+
 def _extract_search_page_products(html: str, search_url: str, merchant_name: str, allowed_hosts):
+    if merchant_name == "Toolstation":
+        toolstation_items = _extract_toolstation_products(html, search_url)
+        if toolstation_items:
+            return toolstation_items
+
     soup = BeautifulSoup(html or "", "html.parser")
     candidates = []
 
@@ -9369,8 +9612,8 @@ def _read_product_page_details(product, merchant_name):
     name = product.get("name", "")
     price = safe_float(product.get("price", 0), 0)
     availability = ""
-    image_url = ""
-    sku = ""
+    image_url = str(product.get("image_url") or "")
+    sku = str(product.get("sku") or "")
     checked_at = datetime.now().isoformat(timespec="seconds")
     try:
         response = requests.get(
@@ -9416,11 +9659,32 @@ def _read_product_page_details(product, merchant_name):
                                 image_url = str(image[0])
                             elif isinstance(image, str):
                                 image_url = image
+            body_text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
             if not sku:
-                body_text = soup.get_text(" ", strip=True)
                 m = re.search(r"(?:product\s*code|item\s*code|sku|part\s*number)\s*[:#]?\s*([A-Z0-9\-]{4,30})", body_text, re.I)
                 if m:
                     sku = m.group(1)
+                elif merchant_name == "Toolstation":
+                    m = re.search(r"/p(\d{4,8})(?:[/?#]|$)", url, re.I)
+                    if m:
+                        sku = m.group(1)
+
+            if not price and merchant_name == "Toolstation":
+                # Toolstation commonly exposes the VAT-inclusive selling price
+                # as visible text even when generic metadata is incomplete.
+                price_patterns = [
+                    r"£\s*(\d+(?:\.\d{1,2})?)\s*ex\.\s*VAT",
+                    r"(?:price|sellingPrice|currentPrice)[^0-9£]{0,30}£?\s*(\d+(?:\.\d{1,2})?)",
+                    r"£\s*(\d+(?:\.\d{1,2})?)",
+                ]
+                for pattern in price_patterns:
+                    m = re.search(pattern, body_text, re.I)
+                    if m:
+                        candidate_price = safe_float(m.group(1), 0)
+                        if candidate_price > 0:
+                            price = candidate_price
+                            break
+
             if not price:
                 price = safe_float(scrape_live_price(url), 0)
             page_text = soup.get_text(" ", strip=True).lower()
@@ -9597,8 +9861,19 @@ def search_live_merchant_products(query: str, suppliers=None, per_supplier: int 
             continue
 
         merchant_candidates = []
-        for url_template in merchant["search_urls"]:
-            search_url = url_template.format(query=quote_plus(query))
+        search_urls = list(merchant["search_urls"])
+
+        if merchant_name == "Toolstation":
+            category_url = _toolstation_radiator_category_url(query)
+            if category_url:
+                search_urls.insert(0, category_url)
+
+        for url_template in search_urls:
+            search_url = (
+                url_template.format(query=quote_plus(query))
+                if "{query}" in url_template
+                else url_template
+            )
             try:
                 response = requests.get(
                     search_url,
@@ -9613,6 +9888,20 @@ def search_live_merchant_products(query: str, suppliers=None, per_supplier: int 
                     merchant_candidates = _extract_search_page_products(
                         response.text, response.url, merchant_name, merchant["allowed_hosts"]
                     )
+
+                    # Toolstation sometimes supplies a category/search response
+                    # whose product cards are only partly rendered. Product URLs
+                    # found in the raw response are still valid candidates and
+                    # are opened individually for title and live-price checking.
+                    if merchant_name == "Toolstation" and not merchant_candidates:
+                        for match in re.finditer(r'href=["\']([^"\']*/p\d{4,8}[^"\']*)', response.text, re.I):
+                            product_url = urljoin(response.url, match.group(1))
+                            merchant_candidates.append({
+                                "name": "Toolstation product",
+                                "url": product_url,
+                                "price": 0,
+                            })
+
                     if merchant_candidates:
                         break
             except Exception:
@@ -12856,7 +13145,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "radiator-choice-intelligence-v12.7",
+        "estimator_version": "merchant-results-intelligence-v12.8",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -13433,7 +13722,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "radiator-choice-intelligence-v12.7"),
+        "version": context.get("estimator_version", "merchant-results-intelligence-v12.8"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
