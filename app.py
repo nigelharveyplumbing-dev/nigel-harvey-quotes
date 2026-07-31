@@ -4572,43 +4572,15 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
     </div>
 
     <div id="quotesTab" class="tab-panel">
-      <h2>Quote Builder</h2>
+      <h2>AI Quote Builder</h2>
+      <p class="small">Enter the customer and describe the work. AI will build the scope, labour and materials for you. Review and adjust before generating the final quote.</p>
       <div id="editingStatus" class="status-bar hidden"></div>
       <button type="button" class="btn-light no-print" style="margin-bottom:12px;" onclick="startNewQuote()">Start Fresh Quote</button>
 
-      <div class="check-row no-print">
-        <input type="checkbox" id="internal_mode">
-        <span>Internal mode</span>
+      <div class="quote-box small no-print" style="margin-bottom:12px;background:#f8fafc;">
+        <strong>Simple workflow</strong><br>
+        <span class="small">1. Add customer details &nbsp; 2. Describe the work &nbsp; 3. Build with AI &nbsp; 4. Review materials and labour &nbsp; 5. Generate quote</span>
       </div>
-
-      <h3>Quote Accelerator</h3>
-      <div class="quote-box small">
-        <label for="templateSearch">Search job template</label>
-        <input id="templateSearch" placeholder="e.g. outside tap, leak, bath taps, fridge feed" oninput="renderTemplateSearch()">
-        <div id="templateSearchResults" class="search-results hidden"></div>
-        <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
-          <button type="button" class="btn-light" onclick="clearQuoteMaterials()">Clear Materials</button>
-          <button type="button" class="btn-light" onclick="duplicateLastMaterial()">Duplicate Last Material</button>
-        </div>
-      </div>
-
-      <h3>Job templates</h3>
-      <div id="templateButtons" class="templates"></div>
-
-      <h3>Favourite materials</h3>
-      <div id="favouriteButtons" class="favourites"></div>
-
-      <h3>Master material library</h3>
-      <div class="quote-box small" style="margin-top:10px;"><strong>Supplier Preference Engine</strong><br><span class="small">Learns your most-used supplier per material from quote history.</span><div class="history-actions" style="grid-template-columns:1fr;margin-top:8px;"><button type="button" class="btn-light" onclick="loadSupplierPreferencesPanel()">Load supplier preferences</button></div><div id="supplierPreferencesPanel" style="margin-top:8px;"></div></div>
-      <div class="quote-box small">
-        <p class="small">Core plumbing fittings grouped by proper material names. This is the clean material brain the quote learning uses.</p>
-        <div id="masterMaterialSearchBox" style="margin-bottom:10px;">
-          <label for="masterMaterialSearch">Search master materials</label>
-          <input id="masterMaterialSearch" placeholder="e.g. copper, elbow, valve, waste, pan connector" oninput="renderMasterMaterialSuggestions()">
-        </div>
-        <div id="master-material-library" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;"></div>
-      </div>
-
 
       <label for="quote_type">Quote type</label>
       <select id="quote_type" onchange="toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence();">
@@ -4630,10 +4602,10 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Estimator Dashboard V9</strong><br>
-        <span class="small">Adds an estimator dashboard, quote-quality scoring, job-by-job labour, clearer material statuses and a separate customer-facing preview while keeping technical detail collapsed.</span>
+        <strong>AI‑First Quote Builder V9.1</strong><br>
+        <span class="small">Describe the work once. AI builds the professional scope, labour and material list using your saved products, prices, suppliers and quote history.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
-          <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Generate quote draft with AI</button>
+          <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
         </div>
         <div id="aiQuoteStatus" class="small" style="margin-top:8px;"></div>
         <div id="aiQuoteResult" style="margin-top:8px;"></div>
@@ -4666,13 +4638,21 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
         </div>
       </div>
 
-      <h3>Smart material search</h3><p class="small">Smart quantity intelligence is active: common items like clips, olives, flexis and radiator tails can auto-suggest sensible quantities.</p>
-      <input id="materialSearch" placeholder="Search materials e.g. 15mm speedfit elbow, basin waste, kitchen tap" oninput="searchMaterials()">
-      <div id="searchResults" class="search-results hidden"></div>
-
       <h3>Materials</h3>
+      <p class="small">AI-added materials appear here. You can edit quantities, suppliers and prices before producing the quote.</p>
       <div id="materials"></div>
-      <button type="button" class="btn-light no-print" onclick="addMaterial()">+ Add Manual Material Row</button>
+
+      <div class="history-actions no-print" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <button type="button" class="btn-light" onclick="toggleManualMaterialSearch()">+ Add Material</button>
+        <button type="button" class="btn-light" onclick="addMaterial()">+ Blank Material Row</button>
+      </div>
+
+      <div id="manualMaterialSearchPanel" class="quote-box small hidden no-print" style="margin-top:8px;">
+        <strong>Find a material</strong><br>
+        <span class="small">Search your saved material database. Smart quantity suggestions remain active.</span>
+        <input id="materialSearch" placeholder="e.g. 15mm elbow, basin waste, kitchen tap" oninput="searchMaterials()" style="margin-top:8px;">
+        <div id="searchResults" class="search-results hidden"></div>
+      </div>
 
       <h3>Pricing</h3>
       <label for="labour">Labour cost (£)</label>
@@ -4701,6 +4681,50 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
         <option value="25">25%</option>
         <option value="50">50%</option>
       </select>
+
+      <details class="quote-box small no-print" style="margin-top:14px;">
+        <summary style="cursor:pointer;font-weight:700;">Advanced quote tools</summary>
+        <p class="small" style="margin-top:8px;">Templates, favourites and the master material library are still available when you need to manually override or maintain the AI-generated quote.</p>
+
+        <div class="check-row">
+          <input type="checkbox" id="internal_mode">
+          <span>Internal mode</span>
+        </div>
+
+        <h3>Saved templates</h3>
+        <div class="quote-box small">
+          <label for="templateSearch">Search job template</label>
+          <input id="templateSearch" placeholder="e.g. outside tap, leak, bath taps, fridge feed" oninput="renderTemplateSearch()">
+          <div id="templateSearchResults" class="search-results hidden"></div>
+          <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+            <button type="button" class="btn-light" onclick="clearQuoteMaterials()">Clear Materials</button>
+            <button type="button" class="btn-light" onclick="duplicateLastMaterial()">Duplicate Last Material</button>
+          </div>
+        </div>
+
+        <div id="templateButtons" class="templates"></div>
+
+        <h3>Favourite materials</h3>
+        <div id="favouriteButtons" class="favourites"></div>
+
+        <h3>Master material library</h3>
+        <div class="quote-box small" style="margin-top:10px;">
+          <strong>Supplier Preference Engine</strong><br>
+          <span class="small">Learns your most-used supplier per material from quote history.</span>
+          <div class="history-actions" style="grid-template-columns:1fr;margin-top:8px;">
+            <button type="button" class="btn-light" onclick="loadSupplierPreferencesPanel()">Load supplier preferences</button>
+          </div>
+          <div id="supplierPreferencesPanel" style="margin-top:8px;"></div>
+        </div>
+        <div class="quote-box small">
+          <p class="small">Core plumbing fittings grouped by proper material names. This remains the material brain used by quote learning and AI matching.</p>
+          <div id="masterMaterialSearchBox" style="margin-bottom:10px;">
+            <label for="masterMaterialSearch">Search master materials</label>
+            <input id="masterMaterialSearch" placeholder="e.g. copper, elbow, valve, waste, pan connector" oninput="renderMasterMaterialSuggestions()">
+          </div>
+          <div id="master-material-library" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;"></div>
+        </div>
+      </details>
 
       <button type="button" class="no-print" onclick="generateQuote()">Generate Quote</button>
       <div id="error" class="error"></div>
@@ -5968,6 +5992,19 @@ function localMaterialSearch(query) {
     const hay = ((item.name || "") + " " + (item.supplier || "") + " " + (item.url || "")).toLowerCase();
     return terms.every(term => hay.includes(term));
   }).slice(0, 15);
+}
+
+
+function toggleManualMaterialSearch() {
+  const panel = document.getElementById("manualMaterialSearchPanel");
+  if (!panel) return;
+  panel.classList.toggle("hidden");
+  if (!panel.classList.contains("hidden")) {
+    const input = document.getElementById("materialSearch");
+    if (input) {
+      setTimeout(() => input.focus(), 50);
+    }
+  }
 }
 
 function searchMaterials() {
@@ -7389,9 +7426,9 @@ async function generateAIQuoteDraft() {
     if (status) {
       const context = data.context_summary || {};
       status.innerHTML = context.is_multi_job
-        ? `Estimator dashboard ready · ${context.multi_job_count || 0} physical job(s) · quote quality scoring active.`
+        ? `AI quote builder ready · ${context.multi_job_count || 0} physical job(s) · review the draft before applying it.`
         : context.smart_job_type
-          ? `Estimator dashboard ready · ${escapeHtml(context.smart_job_type)} · quote quality scoring active.`
+          ? `AI quote builder ready · ${escapeHtml(context.smart_job_type)} · review the draft before applying it.`
           : `Estimator dashboard ready using database-first fallback.`;
     }
   } catch (e) {
@@ -10824,7 +10861,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "estimator-dashboard-v9",
+        "estimator_version": "ai-first-quote-builder-v9.1",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -11010,7 +11047,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "estimator-dashboard-v9"),
+        "version": context.get("estimator_version", "ai-first-quote-builder-v9.1"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
