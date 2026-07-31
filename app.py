@@ -4630,8 +4630,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Professional Quote Mode V8</strong><br>
-        <span class="small">Shows a concise professional quote, assumptions, exclusions, key questions and a scored confidence check. Full estimator detail remains available in an expandable internal section.</span>
+        <strong>Estimator Dashboard V9</strong><br>
+        <span class="small">Adds an estimator dashboard, quote-quality scoring, job-by-job labour, clearer material statuses and a separate customer-facing preview while keeping technical detail collapsed.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Generate quote draft with AI</button>
         </div>
@@ -7389,10 +7389,10 @@ async function generateAIQuoteDraft() {
     if (status) {
       const context = data.context_summary || {};
       status.innerHTML = context.is_multi_job
-        ? `Professional quote prepared · ${context.multi_job_count || 0} physical job(s) · concise review mode active.`
+        ? `Estimator dashboard ready · ${context.multi_job_count || 0} physical job(s) · quote quality scoring active.`
         : context.smart_job_type
-          ? `Professional quote prepared · ${escapeHtml(context.smart_job_type)} · concise review mode active.`
-          : `Professional quote prepared using database-first fallback · review required.`;
+          ? `Estimator dashboard ready · ${escapeHtml(context.smart_job_type)} · quote quality scoring active.`
+          : `Estimator dashboard ready using database-first fallback.`;
     }
   } catch (e) {
     if (status) status.innerHTML = `<strong>AI error:</strong> ${escapeHtml(e.message || String(e))}`;
@@ -7412,77 +7412,115 @@ function renderAIQuoteDraft(data) {
   const materials = draft.materials || [];
   const professional = draft.professional_quote || {};
   const confidence = professional.confidence || {};
+  const quality = draft.quote_quality || {};
   const assumptions = professional.assumptions || [];
   const exclusions = professional.exclusions || [];
   const questions = professional.questions || [];
   const risks = professional.risk_notes || [];
   const technical = draft.technical_detail || {};
   const evidence = professional.material_evidence || [];
+  const preview = draft.customer_preview || {};
+
+  const statusBadge = (status) => {
+    if (status === "required") return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#dcfce7;font-size:12px;">Required</span>`;
+    if (status === "customer_supplied") return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#dbeafe;font-size:12px;">Customer supplied</span>`;
+    return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#f3f4f6;font-size:12px;">Optional</span>`;
+  };
+
+  const stars = "★".repeat(Number(quality.stars || 0)) + "☆".repeat(Math.max(0, 5 - Number(quality.stars || 0)));
 
   box.innerHTML = `
     <div class="history-item" style="padding:10px;border-color:#7c3aed;">
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px;background:#f3f4f6;border-radius:9px;">
-        <div><strong>Professional quote draft</strong><br><span class="small">Review before saving or sending</span></div>
-        <div style="text-align:center;min-width:82px;">
-          <div style="font-size:26px;font-weight:800;">${Number(confidence.score || 0)}%</div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px;background:#f3f4f6;border-radius:10px;">
+        <div>
+          <strong style="font-size:18px;">Estimator dashboard</strong><br>
+          <span style="font-size:22px;letter-spacing:2px;">${stars}</span><br>
+          <span class="small">Overall estimate quality ${Number(quality.overall || 0)}%</span>
+        </div>
+        <div style="text-align:center;min-width:90px;">
+          <div style="font-size:30px;font-weight:800;">${Number(confidence.score || 0)}%</div>
           <div class="small">${escapeHtml(confidence.level || "unknown")} confidence</div>
         </div>
       </div>
 
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:8px;">
+        <div style="padding:8px;border:1px solid #ddd;border-radius:8px;"><strong>${Number(quality.materials || 0)}%</strong><br><span class="small">Materials</span></div>
+        <div style="padding:8px;border:1px solid #ddd;border-radius:8px;"><strong>${Number(quality.labour || 0)}%</strong><br><span class="small">Labour</span></div>
+        <div style="padding:8px;border:1px solid #ddd;border-radius:8px;"><strong>${Number(quality.understanding || 0)}%</strong><br><span class="small">AI understanding</span></div>
+        <div style="padding:8px;border:1px solid #ddd;border-radius:8px;"><strong>${Number(quality.site_confirmation || 0)}%</strong><br><span class="small">Needs site confirmation</span></div>
+      </div>
+
       ${(confidence.positive_reasons || []).length || (confidence.gaps || []).length ? `
-        <div style="margin-top:8px;padding:8px;border:1px solid #ddd;border-radius:8px;">
+        <div style="margin-top:8px;padding:9px;border:1px solid #ddd;border-radius:8px;">
+          <strong>Why this estimate is reliable</strong><br>
           ${(confidence.positive_reasons || []).map(x => `✓ ${escapeHtml(x)}`).join("<br>")}
           ${(confidence.gaps || []).map(x => `<br>△ ${escapeHtml(x)}`).join("")}
         </div>` : ""}
 
-      <div style="margin-top:10px;"><strong>Scope of works</strong><br>${escapeHtml(draft.scope_of_work || "")}</div>
-
-      ${(draft.job_breakdown || []).length > 1 ? `<div style="margin-top:10px;"><strong>Jobs included</strong>
+      <div style="margin-top:12px;"><strong>Scope of works</strong></div>
+      ${(draft.job_breakdown || []).length ? `
         ${(draft.job_breakdown || []).map(job => `
-          <div style="margin-top:6px;padding:8px;border:1px solid #ddd;border-radius:8px;">
+          <div style="margin-top:7px;padding:9px;border:1px solid #ddd;border-radius:8px;">
             <strong>${escapeHtml(job.display_name || job.job_type || "")}</strong><br>
-            ${escapeHtml(job.scope || job.original_text || "")}<br>
-            <span class="small">Labour ${pounds(job.labour_suggestion || 0)} · ${escapeHtml((job.labour_confidence || {}).message || "review required")}</span>
-            ${job.supply_responsibility === "customer" ? `<br><span class="small">Customer supplies: ${(job.customer_supplied_items_removed || []).map(x => escapeHtml(x)).join(", ") || "main item"}</span>` : ""}
+            ${escapeHtml(job.scope || job.original_text || "")}
           </div>`).join("")}
-      </div>` : ""}
+      ` : `<div style="margin-top:5px;">${escapeHtml(draft.scope_of_work || "")}</div>`}
 
-      <div style="margin-top:10px;"><strong>Suggested labour</strong><br>${pounds(draft.labour_suggestion || 0)}</div>
+      <div style="margin-top:12px;"><strong>Labour breakdown</strong>
+        <div style="overflow-x:auto;margin-top:5px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr>
+              <th style="text-align:left;padding:5px;border-bottom:1px solid #ddd;">Job</th>
+              <th style="text-align:right;padding:5px;border-bottom:1px solid #ddd;">Labour</th>
+            </tr></thead>
+            <tbody>
+              ${(draft.job_breakdown || []).length ? (draft.job_breakdown || []).map(job => `<tr>
+                <td style="padding:5px;border-bottom:1px solid #eee;">${escapeHtml(job.display_name || job.job_type || "")}</td>
+                <td style="padding:5px;text-align:right;border-bottom:1px solid #eee;">${pounds(job.labour_suggestion || 0)}</td>
+              </tr>`).join("") : `<tr><td style="padding:5px;border-bottom:1px solid #eee;">Estimated labour</td><td style="padding:5px;text-align:right;border-bottom:1px solid #eee;">${pounds(draft.labour_suggestion || 0)}</td></tr>`}
+              <tr><td style="padding:6px;font-weight:800;">Total</td><td style="padding:6px;text-align:right;font-weight:800;">${pounds(draft.labour_suggestion || 0)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-      <div style="margin-top:10px;"><strong>Materials</strong>
+      <div style="margin-top:12px;"><strong>Materials</strong>
         <div style="overflow-x:auto;margin-top:5px;">
           <table style="width:100%;border-collapse:collapse;">
             <thead><tr>
               <th style="text-align:left;padding:5px;border-bottom:1px solid #ddd;">Item</th>
+              <th style="text-align:left;padding:5px;border-bottom:1px solid #ddd;">Status</th>
               <th style="text-align:right;padding:5px;border-bottom:1px solid #ddd;">Qty</th>
               <th style="text-align:right;padding:5px;border-bottom:1px solid #ddd;">Price</th>
               <th style="text-align:left;padding:5px;border-bottom:1px solid #ddd;">Supplier</th>
             </tr></thead>
             <tbody>${materials.length ? materials.map(m => `<tr>
-              <td style="padding:5px;border-bottom:1px solid #eee;">${escapeHtml(m.name || "")}${m.required ? "" : ` <span class="small">(optional)</span>`}</td>
+              <td style="padding:5px;border-bottom:1px solid #eee;">${escapeHtml(m.name || "")}</td>
+              <td style="padding:5px;border-bottom:1px solid #eee;">${statusBadge(m.display_status || (m.required ? "required" : "optional"))}</td>
               <td style="padding:5px;text-align:right;border-bottom:1px solid #eee;">${Number(m.quantity || 1)}</td>
               <td style="padding:5px;text-align:right;border-bottom:1px solid #eee;">${Number(m.manual_price || 0) > 0 ? pounds(m.manual_price) : "TBC"}</td>
               <td style="padding:5px;border-bottom:1px solid #eee;">${escapeHtml(m.supplier || "")}</td>
-            </tr>`).join("") : `<tr><td colspan="4" style="padding:7px;">No materials suggested.</td></tr>`}</tbody>
+            </tr>`).join("") : `<tr><td colspan="5" style="padding:7px;">No materials suggested.</td></tr>`}</tbody>
           </table>
         </div>
       </div>
 
-      ${assumptions.length ? `<div style="margin-top:10px;"><strong>Assumptions</strong><br>${assumptions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
-      ${exclusions.length ? `<div style="margin-top:10px;"><strong>Exclusions</strong><br>${exclusions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
-      ${questions.length ? `<div style="margin-top:10px;"><strong>Questions before finalising</strong><br>${questions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
-      ${risks.length ? `<div style="margin-top:10px;"><strong>Key risks</strong><br>${risks.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+      ${assumptions.length ? `<div style="margin-top:12px;"><strong>Assumptions</strong>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:7px;margin-top:6px;">
+          ${assumptions.map(x => `<div style="padding:8px;border:1px solid #ddd;border-radius:8px;">✓ ${escapeHtml(x)}</div>`).join("")}
+        </div>
+      </div>` : ""}
 
-      ${draft.multi_job_summary ? `<div style="margin-top:10px;padding:8px;background:#eef6ff;border-radius:8px;"><strong>Quote summary</strong><br>
+      ${exclusions.length ? `<div style="margin-top:12px;"><strong>Exclusions</strong><br>${exclusions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+      ${questions.length ? `<div style="margin-top:12px;"><strong>Site checks required</strong><br>${questions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+      ${risks.length ? `<div style="margin-top:12px;"><strong>Possible additional work</strong><br>${risks.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+
+      ${draft.multi_job_summary ? `<div style="margin-top:12px;padding:9px;background:#eef6ff;border-radius:8px;"><strong>Quote summary</strong><br>
         ${Number(draft.multi_job_summary.job_count || 0)} job(s) ·
         ${Number(draft.multi_job_summary.combined_material_count || 0)} unique material item(s) ·
         ${Number(draft.multi_job_summary.duplicates_merged || 0)} duplicate item(s) merged ·
         labour ${pounds(draft.multi_job_summary.combined_labour || 0)} ·
         materials ${pounds(draft.multi_job_summary.materials_total_before_handling || 0)} before handling
-      </div>` : draft.smart_job_summary ? `<div style="margin-top:10px;padding:8px;background:#eef6ff;border-radius:8px;"><strong>Quote summary</strong><br>
-        ${escapeHtml(draft.smart_job_summary.display_name || "")} ·
-        ${Number(draft.smart_job_summary.kit_items || 0)} material item(s) ·
-        materials ${pounds(draft.smart_job_summary.materials_total_before_handling || 0)} before handling
       </div>` : ""}
 
       <details style="margin-top:10px;">
@@ -7492,6 +7530,17 @@ function renderAIQuoteDraft(data) {
           ${(technical.all_risk_notes || []).length ? `<strong>All risk notes</strong><br>${(technical.all_risk_notes || []).map(x => `• ${escapeHtml(x)}`).join("<br>")}<br><br>` : ""}
           ${(technical.all_questions || []).length ? `<strong>All questions</strong><br>${(technical.all_questions || []).map(x => `• ${escapeHtml(x)}`).join("<br>")}<br><br>` : ""}
           ${(technical.all_warnings || []).length ? `<strong>All warnings</strong><br>${(technical.all_warnings || []).map(x => `• ${escapeHtml(x)}`).join("<br>")}` : ""}
+        </div>
+      </details>
+
+      <details style="margin-top:10px;">
+        <summary><strong>Customer preview</strong></summary>
+        <div style="margin-top:8px;padding:12px;background:white;border:1px solid #ddd;border-radius:8px;">
+          <h3 style="margin:0 0 8px 0;">Nigel Harvey Ltd</h3>
+          <strong>Works included</strong><br>
+          ${escapeHtml(preview.scope_of_work || draft.scope_of_work || "")}
+          <div style="margin-top:10px;"><strong>Labour</strong><br>${pounds(preview.labour_total || draft.labour_suggestion || 0)}</div>
+          ${(preview.exclusions || exclusions).length ? `<div style="margin-top:10px;"><strong>Exclusions</strong><br>${(preview.exclusions || exclusions).map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
         </div>
       </details>
 
@@ -10566,6 +10615,107 @@ def build_professional_quote_mode(draft: dict, context: dict):
     return draft
 
 
+
+def calculate_quote_quality_breakdown(draft: dict, context: dict):
+    professional = draft.get("professional_quote", {}) or {}
+    base_confidence = int((professional.get("confidence", {}) or {}).get("score", 0) or 0)
+
+    materials = draft.get("materials", []) or []
+    jobs = draft.get("job_breakdown", []) or []
+
+    if materials:
+        priced = sum(1 for item in materials if safe_float(item.get("manual_price", 0), 0) > 0)
+        matched = sum(
+            1 for item in materials
+            if item.get("data_source") not in {"", "ai_general", "ai_gap_fill"}
+        )
+        material_score = round(((priced / len(materials)) * 45) + ((matched / len(materials)) * 55))
+    else:
+        material_score = 50
+
+    if jobs:
+        labour_confidences = []
+        for job in jobs:
+            level = (job.get("labour_confidence", {}) or {}).get("level", "low")
+            labour_confidences.append({"high": 95, "medium": 78, "low": 55}.get(level, 55))
+        labour_score = round(sum(labour_confidences) / len(labour_confidences))
+    else:
+        labour_score = max(50, min(98, base_confidence))
+
+    understanding_score = max(45, min(98, base_confidence + 3))
+    questions = len((professional.get("questions", []) or []))
+    site_confirmation = min(100, max(5, questions * 12 + (100 - base_confidence) // 3))
+
+    overall = round(
+        material_score * 0.32 +
+        labour_score * 0.28 +
+        understanding_score * 0.30 +
+        (100 - site_confirmation) * 0.10
+    )
+
+    stars = max(1, min(5, round(overall / 20)))
+
+    return {
+        "overall": overall,
+        "materials": material_score,
+        "labour": labour_score,
+        "understanding": understanding_score,
+        "site_confirmation": site_confirmation,
+        "stars": stars,
+    }
+
+
+def classify_material_status(item: dict):
+    used_for = item.get("used_for_job_names", []) or []
+    if item.get("customer_supplied"):
+        return "customer_supplied"
+    if item.get("required"):
+        return "required"
+    return "optional"
+
+
+def build_customer_preview_payload(draft: dict):
+    professional = draft.get("professional_quote", {}) or {}
+    return {
+        "scope_of_work": draft.get("scope_of_work", ""),
+        "job_breakdown": [
+            {
+                "display_name": job.get("display_name", ""),
+                "scope": job.get("scope", ""),
+                "labour_suggestion": safe_float(job.get("labour_suggestion", 0), 0),
+                "customer_supplied_items_removed": job.get("customer_supplied_items_removed", []),
+            }
+            for job in (draft.get("job_breakdown", []) or [])
+        ],
+        "materials": [
+            {
+                "name": item.get("name", ""),
+                "quantity": safe_float(item.get("quantity", 1), 1),
+                "supplier": item.get("supplier", ""),
+                "manual_price": safe_float(item.get("manual_price", 0), 0),
+                "status": classify_material_status(item),
+            }
+            for item in (draft.get("materials", []) or [])
+        ],
+        "assumptions": professional.get("assumptions", []),
+        "exclusions": professional.get("exclusions", []),
+        "labour_total": safe_float(draft.get("labour_suggestion", 0), 0),
+    }
+
+
+def enhance_v9_quote(draft: dict, context: dict):
+    if not isinstance(draft, dict):
+        return draft
+
+    draft["quote_quality"] = calculate_quote_quality_breakdown(draft, context)
+    draft["customer_preview"] = build_customer_preview_payload(draft)
+
+    for material in draft.get("materials", []) or []:
+        material["display_status"] = classify_material_status(material)
+
+    return draft
+
+
 def build_ai_quote_context(data: AIQuoteDraftRequest):
     original_job = (data.job_description or "").strip()
     job = normalise_ai_job_text(original_job)
@@ -10674,7 +10824,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "professional-quote-mode-v8",
+        "estimator_version": "estimator-dashboard-v9",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -10830,6 +10980,7 @@ Rules:
 
     draft = enforce_multi_job_estimate(draft, context)
     draft = build_professional_quote_mode(draft, context)
+    draft = enhance_v9_quote(draft, context)
 
     return {
         "draft": draft,
@@ -10859,7 +11010,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "professional-quote-mode-v8"),
+        "version": context.get("estimator_version", "estimator-dashboard-v9"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
