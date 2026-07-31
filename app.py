@@ -63,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "12.6-auto-material-population"
+APP_VERSION = "12.7-radiator-choice-intelligence"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4608,7 +4608,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Auto Material Population V12.6</strong><br>
+        <strong>Radiator Choice Intelligence V12.7</strong><br>
         <span class="small">Capture the site, merge the findings and search merchants using strict product type and dimension matching. Concealed pipe routes receive a provisional fittings allowance instead of invented fitting quantities.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
@@ -4651,7 +4651,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Strict Live‑Priced Quote Intelligence V12.6</strong><br>
+        <strong>Strict Live‑Priced Quote Intelligence V12.7</strong><br>
         <span class="small">Uses strict dimensions and product-type matching, removes unrelated merchant results, searches missing valve links and adds provisional fittings allowances for concealed pipe routes.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
@@ -8163,19 +8163,41 @@ function prepareDraftForV125(draft) {
   const scope = String(draft.scope_of_work || document.getElementById("job")?.value || "").toLowerCase();
   const names = draft.materials.map(item => String(item.name || "").toLowerCase());
 
-  // Remove obvious duplicate radiator valve entries. Keep a complete valve set over separate generic duplicates.
+  // Remove duplicate radiator valve entries. A complete valve set already contains
+  // one operating valve/TRV and one lockshield, so separate generic duplicates are removed.
   const hasValveSet = names.some(name => name.includes("radiator valve set"));
+  const radiatorMentions = [...scope.matchAll(/\b(?:install|replace|fit|supply)\b[^.\n]{0,80}\bradiator\b/g)].length;
+  const likelyRadiatorCount = Math.max(1, radiatorMentions || 1);
+
   if (hasValveSet) {
     let keptSet = false;
     draft.materials = draft.materials.filter(item => {
-      const name = String(item.name || "").toLowerCase();
+      const name = String(item.name || "").toLowerCase().trim();
       if (name.includes("radiator valve set")) {
         if (keptSet) return false;
         keptSet = true;
+        item.quantity = Math.min(Number(item.quantity || 1), likelyRadiatorCount);
         return true;
       }
-      if (name === "trv valve" || name === "lockshield valve") return false;
+      if (
+        name === "trv valve" ||
+        name === "thermostatic radiator valve" ||
+        name === "lockshield valve" ||
+        name === "radiator valve"
+      ) return false;
       return true;
+    });
+  } else {
+    // If separate TRV and lockshield are used, allow one of each per radiator only.
+    draft.materials.forEach(item => {
+      const name = String(item.name || "").toLowerCase().trim();
+      if (
+        name === "trv valve" ||
+        name === "thermostatic radiator valve" ||
+        name === "lockshield valve"
+      ) {
+        item.quantity = Math.min(Number(item.quantity || 1), likelyRadiatorCount);
+      }
     });
   }
 
@@ -8208,7 +8230,7 @@ function liveProductQueriesFromDraft(draft) {
 
   const addSearch = (query, label, reason, productType = "general") => {
     if (!query || searches.some(item => item.query.toLowerCase() === query.toLowerCase())) return;
-    searches.push({query, label, reason, productType});
+    searches.push({query, label, reason, productType, requiresChoice: productType === "radiator"});
   };
 
   surveyActions.forEach(action => {
@@ -8252,20 +8274,64 @@ function liveProductFinderHtml(draft) {
   return `
     <div style="margin-top:10px;padding:10px;border:2px solid #0284c7;border-radius:10px;background:#f0f9ff;">
       <strong>Live merchant product finder</strong><br>
-      <span class="small">Missing main products and unlinked required items are shown here. A confirmed product is added directly to the Materials list with its supplier, current price and product URL.</span>
+      <span class="small">Missing main products and unlinked required items are shown here. For radiators, you must choose the type before searching. A confirmed product is added directly to the Materials list with its supplier, current price and product URL.</span>
       ${searches.map((item, index) => `
         <div style="margin-top:9px;padding:9px;border:1px solid #bae6fd;border-radius:9px;background:white;">
           <strong>${escapeHtml(item.label)}</strong><br>
           <span class="small">${escapeHtml(item.reason)}</span>
-          ${item.productType === "radiator" ? `<label class="small" style="display:block;margin-top:7px;">Radiator type</label><select id="radiatorType-${index}"><option value="">Any panel type</option><option value="type 11">Type 11</option><option value="type 21">Type 21</option><option value="type 22">Type 22</option></select>` : ""}
+          ${item.productType === "radiator" ? `
+            <label class="small" style="display:block;margin-top:9px;font-weight:700;">Choose radiator type before searching</label>
+            <select id="radiatorType-${index}" onchange="updateRadiatorSearchButton('${index}')">
+              <option value="">— Select radiator type —</option>
+              <optgroup label="Standard panel radiators">
+                <option value="type 11 panel radiator">Type 11 — single panel, single convector</option>
+                <option value="type 21 panel radiator">Type 21 — double panel, single convector</option>
+                <option value="type 22 panel radiator">Type 22 — double panel, double convector</option>
+              </optgroup>
+              <optgroup label="Other radiator styles">
+                <option value="towel radiator">Towel radiator</option>
+                <option value="vertical radiator">Vertical radiator</option>
+                <option value="designer radiator">Designer radiator</option>
+                <option value="column radiator">Column radiator</option>
+              </optgroup>
+              <optgroup label="Existing or customer choice">
+                <option value="like for like radiator">Like for like / match existing</option>
+                <option value="customer selected radiator">Customer-selected product</option>
+              </optgroup>
+            </select>
+            <div id="radiatorChoiceNote-${index}" class="small" style="margin-top:5px;color:#92400e;">
+              The app will not choose Type 11, 21 or 22 automatically.
+            </div>` : ""}
           <div class="history-actions" style="grid-template-columns:1fr;margin-top:7px;">
-            <button type="button" class="btn-green" onclick="searchLiveMerchantProduct('${index}')">Find matching products</button>
+            <button type="button" id="liveSearchButton-${index}" class="btn-green" ${item.productType === "radiator" ? "disabled" : ""} onclick="searchLiveMerchantProduct('${index}')">Find matching products</button>
           </div>
           <div id="liveProductResults-${index}" style="margin-top:7px;"></div>
         </div>
       `).join("")}
       <div class="small" style="margin-top:8px;">Prices and availability can change. Open the merchant page and confirm before ordering.</div>
     </div>`;
+}
+
+
+function updateRadiatorSearchButton(searchId) {
+  const select = document.getElementById(`radiatorType-${searchId}`);
+  const button = document.getElementById(`liveSearchButton-${searchId}`);
+  const note = document.getElementById(`radiatorChoiceNote-${searchId}`);
+  if (!select || !button) return;
+
+  const value = String(select.value || "").trim();
+  button.disabled = !value;
+
+  if (!note) return;
+  if (!value) {
+    note.textContent = "The app will not choose Type 11, 21 or 22 automatically.";
+  } else if (value === "like for like radiator") {
+    note.textContent = "The search will look for a matching radiator, but the existing type and depth still need confirming.";
+  } else if (value === "customer selected radiator") {
+    note.textContent = "No merchant product will be assumed. Choose the customer’s exact product or paste its URL.";
+  } else {
+    note.textContent = `Search locked to: ${select.options[select.selectedIndex].text}.`;
+  }
 }
 
 async function searchLiveMerchantProduct(searchId) {
@@ -8276,7 +8342,23 @@ async function searchLiveMerchantProduct(searchId) {
 
   try {
     const typeSelect = document.getElementById(`radiatorType-${searchId}`);
-    const refinedQuery = [search.query, typeSelect?.value || ""].filter(Boolean).join(" ");
+    const selectedType = String(typeSelect?.value || "").trim();
+
+    if (search.productType === "radiator" && !selectedType) {
+      box.innerHTML = `<div class="notice" style="border-color:#d97706;">Choose the radiator type first. No type has been assumed.</div>`;
+      return;
+    }
+
+    if (selectedType === "customer selected radiator") {
+      box.innerHTML = `
+        <div class="notice">
+          Customer-selected radiator: open the customer’s product, then add its exact product URL, supplier and price to the Materials list.
+          The app will not substitute a different radiator automatically.
+        </div>`;
+      return;
+    }
+
+    const refinedQuery = [search.query, selectedType].filter(Boolean).join(" ");
     const response = await fetch("/api/live-product-search?q=" + encodeURIComponent(refinedQuery));
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Merchant search failed.");
@@ -9368,9 +9450,23 @@ def _product_search_intent(query: str):
     dims = re.search(r"(\d{3,4})\s*[x×]\s*(\d{3,4})", q)
     dimensions = set(dims.groups()) if dims else set()
     radiator_type = ""
+    radiator_style = ""
     type_match = re.search(r"\btype\s*(11|21|22)\b", q)
     if type_match:
         radiator_type = type_match.group(1)
+
+    if any(term in q for term in ["towel radiator", "towelrad", "heated towel"]):
+        radiator_style = "towel"
+    elif "vertical radiator" in q:
+        radiator_style = "vertical"
+    elif "designer radiator" in q:
+        radiator_style = "designer"
+    elif "column radiator" in q:
+        radiator_style = "column"
+    elif "like for like radiator" in q:
+        radiator_style = "like_for_like"
+    elif "panel radiator" in q or radiator_type:
+        radiator_style = "panel"
 
     if "radiator" in q or "convector" in q:
         product_type = "radiator"
@@ -9386,7 +9482,7 @@ def _product_search_intent(query: str):
         product_type = "tap"
     else:
         product_type = "general"
-    return {"query": q, "dimensions": dimensions, "radiator_type": radiator_type, "product_type": product_type}
+    return {"query": q, "dimensions": dimensions, "radiator_type": radiator_type, "radiator_style": radiator_style, "product_type": product_type}
 
 
 def _strict_product_match(name: str, query: str):
@@ -9410,9 +9506,43 @@ def _strict_product_match(name: str, query: str):
 
     if ptype == "radiator":
         required_terms = ["radiator"]
-        forbidden_terms = ["electric", "panel heater", "towel radiator", "towelrad", "heated towel"]
-        if "convector" in title or "panel radiator" in title:
+        forbidden_terms = ["electric", "panel heater"]
+        style = intent.get("radiator_style", "")
+
+        is_towel = any(term in title for term in ["towel radiator", "towelrad", "heated towel"])
+        is_vertical = "vertical" in title
+        is_designer = "designer" in title
+        is_column = "column radiator" in title or "column" in title
+        is_panel = any(term in title for term in ["convector", "panel radiator", "type 11", "type 21", "type 22"])
+
+        if style == "towel":
+            if not is_towel:
+                return 0, False, "Not a towel radiator"
+            score += 25
+        elif style == "vertical":
+            if not is_vertical:
+                return 0, False, "Not a vertical radiator"
+            score += 25
+        elif style == "designer":
+            if not is_designer:
+                return 0, False, "Not a designer radiator"
+            score += 25
+        elif style == "column":
+            if not is_column:
+                return 0, False, "Not a column radiator"
+            score += 25
+        elif style == "panel":
+            if not is_panel or is_towel:
+                return 0, False, "Not the selected panel radiator type"
             score += 22
+        elif style == "like_for_like":
+            if is_towel and "towel" not in intent["query"]:
+                return 0, False, "Existing radiator style still needs confirmation"
+            score += 8
+        else:
+            # No style must never silently promote a Type 11/21/22 result.
+            return 0, False, "Radiator type has not been selected"
+
         if "white" in intent["query"] and "white" in title:
             score += 5
     elif ptype == "trv":
@@ -12726,7 +12856,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "auto-material-population-v12.6",
+        "estimator_version": "radiator-choice-intelligence-v12.7",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -13303,7 +13433,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "auto-material-population-v12.6"),
+        "version": context.get("estimator_version", "radiator-choice-intelligence-v12.7"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
