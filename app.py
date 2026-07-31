@@ -4630,8 +4630,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Smart Material Selection V5</strong><br>
-        <span class="small">Identifies the plumbing job first, loads only that job’s approved material checklist, then matches those items to your saved products, prices, suppliers and learned quantities. Review is always required.</span>
+        <strong>Multi‑Job Estimator V6</strong><br>
+        <span class="small">Splits descriptions containing several plumbing jobs, builds the approved kit and labour for each job, removes duplicate materials and combines everything into one quotation. Review is always required.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Generate quote draft with AI</button>
         </div>
@@ -7388,9 +7388,11 @@ async function generateAIQuoteDraft() {
     renderAIQuoteDraft(data);
     if (status) {
       const context = data.context_summary || {};
-      status.innerHTML = context.smart_job_type
-        ? `Job identified: ${escapeHtml(context.smart_job_type)} · ${context.smart_kit_items || 0} approved kit item(s) · ${context.smart_priced_items || 0} priced item(s) · review required.`
-        : `No exact smart job kit found · database-first fallback used · review required.`;
+      status.innerHTML = context.is_multi_job
+        ? `Multi-job quote identified · ${context.multi_job_count || 0} jobs · ${(context.multi_job_names || []).map(x => escapeHtml(x)).join(" + ")} · ${context.combined_material_count || 0} combined material item(s) · review required.`
+        : context.smart_job_type
+          ? `Job identified: ${escapeHtml(context.smart_job_type)} · ${context.smart_kit_items || 0} approved kit item(s) · ${context.smart_priced_items || 0} priced item(s) · review required.`
+          : `No exact smart job kit found · database-first fallback used · review required.`;
     }
   } catch (e) {
     if (status) status.innerHTML = `<strong>AI error:</strong> ${escapeHtml(e.message || String(e))}`;
@@ -7417,6 +7419,15 @@ function renderAIQuoteDraft(data) {
       <strong>AI draft — confidence: ${escapeHtml(draft.confidence || "unknown")}</strong><br>
       <div style="margin-top:6px;"><strong>Scope:</strong><br>${escapeHtml(draft.scope_of_work || "")}</div>
       ${draft.customer_summary ? `<div style="margin-top:6px;"><strong>Customer summary:</strong><br>${escapeHtml(draft.customer_summary)}</div>` : ""}
+      ${(draft.job_breakdown || []).length > 1 ? `<div style="margin-top:8px;"><strong>Jobs included:</strong><br>
+        ${(draft.job_breakdown || []).map(job => `
+          <div style="margin-top:6px;padding:7px;border:1px solid #ddd;border-radius:7px;">
+            <strong>Job ${Number(job.job_number || 0)} — ${escapeHtml(job.display_name || job.job_type || "")}</strong><br>
+            ${escapeHtml(job.scope || job.original_text || "")}<br>
+            <span class="small">Labour: ${pounds(job.labour_suggestion || 0)} · ${Number(job.material_count || 0)} material item(s) · ${Number(job.similar_quotes || 0)} similar quote(s)</span>
+          </div>
+        `).join("")}
+      </div>` : ""}
       <div style="margin-top:6px;"><strong>Suggested labour:</strong> ${pounds(draft.labour_suggestion || 0)}</div>
       <div style="margin-top:6px;"><strong>Materials:</strong><br>
         ${materials.length ? materials.map(m => `
@@ -7424,12 +7435,19 @@ function renderAIQuoteDraft(data) {
           ${Number(m.manual_price || 0) > 0 ? ` · ${pounds(m.manual_price)} each` : ""}
           ${m.supplier ? ` · ${escapeHtml(m.supplier)}` : ""}
           <br><span class="small">${escapeHtml(m.reason || "")}</span>
-          <br><span class="small">Source: ${escapeHtml((m.data_source || "database_first").replaceAll("_", " "))}${m.quantity_source === "learned" ? ` · quantity learned from ${Number(m.learned_used_count || 0)} prior use(s)` : ""}</span>
+          <br><span class="small">Source: ${escapeHtml((m.data_source || "database_first").replaceAll("_", " "))}${m.quantity_source === "learned" ? ` · quantity learned from ${Number(m.learned_used_count || 0)} prior use(s)` : ""}${(m.used_for_job_names || []).length ? ` · used for: ${(m.used_for_job_names || []).map(x => escapeHtml(x)).join(", ")}` : ""}</span>
         `).join("<br>") : "No materials suggested."}
       </div>
       ${risks.length ? `<div style="margin-top:6px;"><strong>Risk notes:</strong><br>${risks.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
       ${questions.length ? `<div style="margin-top:6px;"><strong>Confirm before quoting:</strong><br>${questions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
       ${warnings.length ? `<div style="margin-top:6px;"><strong>Warnings:</strong><br>${warnings.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+      ${draft.multi_job_summary ? `<div style="margin-top:8px;padding:8px;background:#eef6ff;border-radius:8px;"><strong>Multi‑Job Quote:</strong><br>
+        ${Number(draft.multi_job_summary.job_count || 0)} jobs ·
+        ${(draft.multi_job_summary.job_names || []).map(x => escapeHtml(x)).join(" + ")} ·
+        ${Number(draft.multi_job_summary.combined_material_count || 0)} combined material item(s) ·
+        labour ${pounds(draft.multi_job_summary.combined_labour || 0)} ·
+        materials ${pounds(draft.multi_job_summary.materials_total_before_handling || 0)} before handling
+      </div>` : ""}
       ${draft.smart_job_summary ? `<div style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:8px;"><strong>Smart Job Kit:</strong><br>
         ${escapeHtml(draft.smart_job_summary.display_name || "")} ·
         ${Number(draft.smart_job_summary.kit_items || 0)} approved item(s) ·
@@ -8770,6 +8788,20 @@ AI_QUOTE_SCHEMA = {
             "type": "array",
             "items": {"type": "string"}
         },
+        "job_breakdown": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "job_type": {"type": "string"},
+                    "display_name": {"type": "string"},
+                    "scope": {"type": "string"},
+                    "labour_suggestion": {"type": "number"}
+                },
+                "required": ["job_type", "display_name", "scope", "labour_suggestion"]
+            }
+        },
         "confidence": {
             "type": "string",
             "enum": ["low", "medium", "high"]
@@ -8783,6 +8815,7 @@ AI_QUOTE_SCHEMA = {
         "risk_notes",
         "questions_to_confirm",
         "warnings",
+        "job_breakdown",
         "confidence"
     ]
 }
@@ -9723,6 +9756,299 @@ def enforce_smart_job_kit(draft: dict, context: dict):
     return draft
 
 
+
+MULTI_JOB_CONNECTORS = [
+    " and also ", " plus ", " as well as ", " then ", " additionally ",
+    " also fit ", " also replace ", " also install ", " also repair "
+]
+
+
+def split_multi_job_description(job_text: str):
+    original = (job_text or "").strip()
+    if not original:
+        return []
+
+    # First split clear lines and sentence boundaries.
+    parts = re.split(r"[\n\r]+|(?<=[.;])\s+", original)
+    expanded = []
+
+    for part in parts:
+        part = part.strip(" .;,-")
+        if not part:
+            continue
+
+        candidates = [part]
+        # Split connector phrases only where both sides appear classifiable.
+        for connector in MULTI_JOB_CONNECTORS:
+            next_candidates = []
+            for candidate in candidates:
+                lower = candidate.lower()
+                if connector not in lower:
+                    next_candidates.append(candidate)
+                    continue
+
+                chunks = re.split(re.escape(connector), candidate, flags=re.I)
+                chunks = [chunk.strip(" .;,-") for chunk in chunks if chunk.strip(" .;,-")]
+
+                classifiable = sum(1 for chunk in chunks if classify_smart_job(chunk))
+                if len(chunks) > 1 and classifiable >= 2:
+                    next_candidates.extend(chunks)
+                else:
+                    next_candidates.append(candidate)
+            candidates = next_candidates
+
+        expanded.extend(candidates)
+
+    # If one line contains several explicit action clauses, try a cautious split
+    # before verbs such as replace/fit/install/repair.
+    final_parts = []
+    for part in expanded:
+        matches = list(re.finditer(
+            r"\b(?:replace|fit|install|repair|change|remove and fit|supply and fit)\b",
+            part,
+            flags=re.I
+        ))
+        if len(matches) <= 1:
+            final_parts.append(part)
+            continue
+
+        chunks = []
+        for index, match in enumerate(matches):
+            start = match.start()
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(part)
+            chunk = part[start:end].strip(" ,.;-")
+            if chunk:
+                chunks.append(chunk)
+
+        if len(chunks) > 1 and sum(1 for chunk in chunks if classify_smart_job(chunk)) >= 2:
+            final_parts.extend(chunks)
+        else:
+            final_parts.append(part)
+
+    # Dedupe near-identical segments.
+    clean = []
+    seen = set()
+    for part in final_parts:
+        key = normalise_ai_job_text(part)
+        if key and key not in seen:
+            seen.add(key)
+            clean.append(part)
+
+    return clean[:10]
+
+
+def smart_job_labour_suggestion(job_segment: str, classification: dict, quote_type: str):
+    labour_range = classification.get("labour_range", []) if classification else []
+    minimum = safe_float(labour_range[0], 0) if len(labour_range) >= 1 else 0
+    maximum = safe_float(labour_range[1], 0) if len(labour_range) >= 2 else minimum
+
+    intelligence = labour_intelligence_for_job(
+        job_segment,
+        quote_type,
+        0
+    ) if "labour_intelligence_for_job" in globals() else {}
+
+    learned = safe_float(
+        intelligence.get("average_labour", intelligence.get("average", 0)),
+        0
+    )
+
+    if learned > 0:
+        if minimum > 0 and maximum > 0:
+            learned = min(max(learned, minimum), maximum)
+        return round(learned, 2), "labour_history"
+
+    if minimum > 0 and maximum > 0:
+        return round((minimum + maximum) / 2, 2), "smart_job_range"
+    if minimum > 0:
+        return round(minimum, 2), "smart_job_range"
+
+    return 0, "unpriced"
+
+
+def merge_multi_job_materials(job_records: list):
+    merged = {}
+
+    fractional_consumables = {
+        canonical_material_name("PTFE tape"),
+        canonical_material_name("Sanitary silicone"),
+        canonical_material_name("Central heating inhibitor"),
+    }
+
+    for job_record in job_records:
+        job_number = job_record.get("job_number")
+        job_name = job_record.get("display_name", "")
+        for material in job_record.get("materials", []) or []:
+            row = dict(material)
+            key = canonical_material_name(row.get("name", ""))
+            if not key:
+                continue
+
+            quantity = safe_float(row.get("quantity", 1), 1)
+            if key not in merged:
+                row["used_for_jobs"] = [job_number]
+                row["used_for_job_names"] = [job_name]
+                merged[key] = row
+                continue
+
+            existing = merged[key]
+            existing_qty = safe_float(existing.get("quantity", 1), 1)
+
+            # Consumable fractions accumulate; identical reusable fittings also
+            # accumulate because each separate job may need its own item.
+            existing["quantity"] = round(existing_qty + quantity, 2)
+            existing["required"] = bool(existing.get("required") or row.get("required"))
+
+            if job_number not in existing.get("used_for_jobs", []):
+                existing.setdefault("used_for_jobs", []).append(job_number)
+            if job_name and job_name not in existing.get("used_for_job_names", []):
+                existing.setdefault("used_for_job_names", []).append(job_name)
+
+            if not existing.get("url") and row.get("url"):
+                existing["url"] = row.get("url")
+            if not existing.get("supplier") and row.get("supplier"):
+                existing["supplier"] = row.get("supplier")
+            if safe_float(existing.get("manual_price", 0), 0) <= 0:
+                existing["manual_price"] = safe_float(row.get("manual_price", 0), 0)
+
+    rows = list(merged.values())
+    rows.sort(
+        key=lambda item: (
+            1 if item.get("required") else 0,
+            len(item.get("used_for_jobs", [])),
+            item.get("name", "")
+        ),
+        reverse=True
+    )
+    return rows
+
+
+def build_multi_job_estimate(job_text: str, quote_type: str):
+    segments = split_multi_job_description(job_text)
+    records = []
+    unclassified = []
+
+    for segment in segments:
+        classification = classify_smart_job(segment)
+        if not classification:
+            unclassified.append(segment)
+            continue
+
+        history = analyse_similar_quotes(segment, quote_type)
+        smart = build_smart_job_kit(segment, quote_type, history)
+        labour, labour_source = smart_job_labour_suggestion(
+            segment,
+            classification,
+            quote_type
+        )
+
+        records.append({
+            "job_number": len(records) + 1,
+            "original_text": segment,
+            "job_type": classification.get("job_type"),
+            "display_name": classification.get("display_name"),
+            "classification_score": classification.get("classification_score"),
+            "labour_suggestion": labour,
+            "labour_source": labour_source,
+            "materials": smart.get("materials", []),
+            "questions": smart.get("questions", []),
+            "similar_quotes": history.get("similar_count", 0),
+        })
+
+    # Preserve a normal single-job path when the description is not truly multi-job.
+    is_multi_job = len(records) >= 2
+    combined_materials = merge_multi_job_materials(records) if records else []
+    total_labour = round(sum(
+        safe_float(record.get("labour_suggestion", 0), 0)
+        for record in records
+    ), 2)
+
+    return {
+        "is_multi_job": is_multi_job,
+        "segments_found": len(segments),
+        "classified_jobs": records,
+        "unclassified_segments": unclassified,
+        "combined_materials": combined_materials,
+        "combined_labour_suggestion": total_labour,
+    }
+
+
+def enforce_multi_job_estimate(draft: dict, context: dict):
+    multi = context.get("multi_job_estimate", {}) or {}
+    if not multi.get("is_multi_job"):
+        return enforce_smart_job_kit(draft, context)
+
+    if not isinstance(draft, dict):
+        draft = {}
+
+    jobs = multi.get("classified_jobs", []) or []
+    combined_materials = multi.get("combined_materials", []) or []
+
+    # Database-generated materials and labour remain authoritative.
+    draft["materials"] = combined_materials
+    draft["labour_suggestion"] = multi.get("combined_labour_suggestion", 0)
+
+    ai_breakdown = {
+        item.get("job_type"): item
+        for item in draft.get("job_breakdown", []) or []
+        if isinstance(item, dict)
+    }
+
+    final_breakdown = []
+    for record in jobs:
+        ai_job = ai_breakdown.get(record.get("job_type"), {})
+        final_breakdown.append({
+            "job_number": record.get("job_number"),
+            "job_type": record.get("job_type"),
+            "display_name": record.get("display_name"),
+            "original_text": record.get("original_text"),
+            "scope": ai_job.get("scope", ""),
+            "labour_suggestion": record.get("labour_suggestion", 0),
+            "labour_source": record.get("labour_source", ""),
+            "material_count": len(record.get("materials", [])),
+            "similar_quotes": record.get("similar_quotes", 0),
+            "questions": record.get("questions", []),
+        })
+
+    draft["job_breakdown"] = final_breakdown
+
+    questions = []
+    seen_questions = set()
+    for record in jobs:
+        for question in record.get("questions", []) or []:
+            key = normalise_ai_job_text(question)
+            if key and key not in seen_questions:
+                seen_questions.add(key)
+                questions.append(
+                    f"{record.get('display_name')}: {question}"
+                )
+    for question in draft.get("questions_to_confirm", []) or []:
+        key = normalise_ai_job_text(question)
+        if key and key not in seen_questions:
+            seen_questions.add(key)
+            questions.append(question)
+    draft["questions_to_confirm"] = questions[:25]
+
+    draft["multi_job_summary"] = {
+        "job_count": len(jobs),
+        "job_names": [record.get("display_name") for record in jobs],
+        "combined_material_count": len(combined_materials),
+        "priced_items": sum(
+            1 for item in combined_materials
+            if safe_float(item.get("manual_price", 0), 0) > 0
+        ),
+        "combined_labour": multi.get("combined_labour_suggestion", 0),
+        "materials_total_before_handling": round(sum(
+            safe_float(item.get("manual_price", 0), 0) *
+            safe_float(item.get("quantity", 1), 1)
+            for item in combined_materials
+        ), 2),
+        "unclassified_segments": multi.get("unclassified_segments", []),
+    }
+
+    return draft
+
+
 def build_ai_quote_context(data: AIQuoteDraftRequest):
     original_job = (data.job_description or "").strip()
     job = normalise_ai_job_text(original_job)
@@ -9828,9 +10154,10 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
         forgotten
     )
     smart_job_kit = build_smart_job_kit(job, quote_type, history)
+    multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "smart-material-selection-v5",
+        "estimator_version": "multi-job-estimator-v6",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -9860,6 +10187,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
         "business_material_matches": business_material_matches,
         "database_first_kit": database_first_kit,
         "smart_job_kit": smart_job_kit,
+        "multi_job_estimate": multi_job_estimate,
         "decision_rules": {
             "do_not_assume_customer_or_contractor_supply": True,
             "include_provisional_materials_when_category_is_clear": True,
@@ -9886,15 +10214,19 @@ You are an experienced UK domestic plumbing estimator assisting Nigel Harvey Ltd
 Create a practical but cautious quote draft from the supplied job description and internal business data.
 
 Priority order:
-1. Use smart_job_kit as the approved material checklist when a job classification is present.
-2. Do not introduce materials outside that checklist.
-3. Review the checklist for wording, required/optional status, risks and confirmation questions.
-4. Use historical quotes and labour intelligence for pricing guidance.
-5. If there is no smart classification, fall back to database_first_kit.
+1. If multi_job_estimate.is_multi_job is true, write a separate concise scope for every classified job in job_breakdown.
+2. Use the supplied combined material list and combined labour as authoritative.
+3. Do not add or remove materials from the deterministic job kits.
+4. For a single job, use smart_job_kit as before.
+5. Use AI to improve wording, risks, customer summary and confirmation questions.
 
 
 Rules:
 - Return only the requested structured JSON.
+- For multi-job requests, job_breakdown must contain one entry per classified job and preserve its job_type.
+- The overall scope_of_work should combine the separate job scopes into one professional quotation.
+- Never merge two different jobs into one vague scope.
+- Do not double-count labour or materials beyond the values supplied by multi_job_estimate.
 - Never add toilet, waste, sink, basin, shower, heating or unrelated materials to another classified job type.
 - A classified job kit is intentionally narrow. Do not broaden it based on loose keyword overlap.
 - AI may not add extra materials when smart_job_kit has a classification.
@@ -9971,7 +10303,7 @@ Rules:
     except json.JSONDecodeError:
         raise HTTPException(status_code=502, detail="OpenAI returned an invalid structured quote draft.")
 
-    draft = enforce_smart_job_kit(draft, context)
+    draft = enforce_multi_job_estimate(draft, context)
 
     return {
         "draft": draft,
@@ -10001,7 +10333,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "smart-material-selection-v5"),
+        "version": context.get("estimator_version", "multi-job-estimator-v6"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
@@ -10015,6 +10347,10 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
         "smart_job_type": result.get("draft", {}).get("smart_job_summary", {}).get("display_name", ""),
         "smart_kit_items": result.get("draft", {}).get("smart_job_summary", {}).get("kit_items", 0),
         "smart_priced_items": result.get("draft", {}).get("smart_job_summary", {}).get("priced_items", 0),
+        "is_multi_job": context.get("multi_job_estimate", {}).get("is_multi_job", False),
+        "multi_job_count": result.get("draft", {}).get("multi_job_summary", {}).get("job_count", 0),
+        "multi_job_names": result.get("draft", {}).get("multi_job_summary", {}).get("job_names", []),
+        "combined_material_count": result.get("draft", {}).get("multi_job_summary", {}).get("combined_material_count", 0),
     }
     return JSONResponse(content=result)
 
