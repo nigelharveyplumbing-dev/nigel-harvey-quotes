@@ -4630,8 +4630,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>AI Estimator V3 — Nigel’s Business Brain</strong><br>
-        <span class="small">Searches your saved materials, prices, suppliers, previous quotes, learned quantities, labour history and trade templates before AI fills any gaps. Review is always required.</span>
+        <strong>Database‑First Estimator V4</strong><br>
+        <span class="small">Builds the material kit from your database, saved quotes, learned quantities and trade templates first. AI then reviews it, writes the scope and flags genuine gaps. Review is always required.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Generate quote draft with AI</button>
         </div>
@@ -7388,7 +7388,7 @@ async function generateAIQuoteDraft() {
     renderAIQuoteDraft(data);
     if (status) {
       const context = data.context_summary || {};
-      status.innerHTML = `Draft generated · ${context.similar_quotes || 0} similar quote(s) · ${context.trade_templates || 0} template(s) · ${context.business_material_matches || 0} business material candidate(s) · ${context.matched_draft_materials || 0} exact/close material match(es) · review required.`;
+      status.innerHTML = `Database kit built first · ${context.database_kit_items || 0} kit item(s) · ${context.historical_kit_items || 0} from quote history · ${context.template_kit_items || 0} from templates · ${context.matched_draft_materials || 0} saved material match(es) · review required.`;
     }
   } catch (e) {
     if (status) status.innerHTML = `<strong>AI error:</strong> ${escapeHtml(e.message || String(e))}`;
@@ -7422,17 +7422,19 @@ function renderAIQuoteDraft(data) {
           ${Number(m.manual_price || 0) > 0 ? ` · ${pounds(m.manual_price)} each` : ""}
           ${m.supplier ? ` · ${escapeHtml(m.supplier)}` : ""}
           <br><span class="small">${escapeHtml(m.reason || "")}</span>
-          <br><span class="small">Source: ${escapeHtml((m.data_source || "ai_general").replaceAll("_", " "))}${m.quantity_source === "learned" ? ` · quantity learned from ${Number(m.learned_used_count || 0)} prior use(s)` : ""}</span>
+          <br><span class="small">Source: ${escapeHtml((m.data_source || "database_first").replaceAll("_", " "))}${m.quantity_source === "learned" ? ` · quantity learned from ${Number(m.learned_used_count || 0)} prior use(s)` : ""}</span>
         `).join("<br>") : "No materials suggested."}
       </div>
       ${risks.length ? `<div style="margin-top:6px;"><strong>Risk notes:</strong><br>${risks.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
       ${questions.length ? `<div style="margin-top:6px;"><strong>Confirm before quoting:</strong><br>${questions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
       ${warnings.length ? `<div style="margin-top:6px;"><strong>Warnings:</strong><br>${warnings.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
-      ${draft.business_brain ? `<div style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:8px;"><strong>Nigel’s Business Brain:</strong><br>
-        ${Number(draft.business_brain.matched_materials || 0)} material match(es) ·
-        ${Number(draft.business_brain.priced_materials || 0)} priced item(s) ·
-        ${Number(draft.business_brain.learned_quantities || 0)} learned quantity/quantities ·
-        materials ${pounds(draft.business_brain.materials_total_before_handling || 0)} before handling
+      ${draft.database_first_summary ? `<div style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:8px;"><strong>Database‑First Kit:</strong><br>
+        ${Number(draft.database_first_summary.kit_items || 0)} kit item(s) ·
+        ${Number(draft.database_first_summary.historical_items || 0)} from quote history ·
+        ${Number(draft.database_first_summary.template_items || 0)} from templates ·
+        ${Number(draft.database_first_summary.priced_items || 0)} priced item(s) ·
+        ${Number(draft.database_first_summary.learned_quantities || 0)} learned quantity/quantities ·
+        materials ${pounds(draft.database_first_summary.materials_total_before_handling || 0)} before handling
       </div>` : ""}
       <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
         <button type="button" class="btn-green" onclick="applyAIQuoteDraft()">Apply draft to form</button>
@@ -9083,6 +9085,291 @@ def reconcile_ai_draft_with_business_data(draft: dict, context: dict):
     return draft
 
 
+
+def ai_material_required_from_template(material: dict):
+    if not isinstance(material, dict):
+        return False
+    if "required" in material:
+        return bool(material.get("required"))
+    name = normalise_ai_job_text(material.get("name", ""))
+    optional_markers = [
+        "replacement shower", "replacement tap", "replacement toilet",
+        "replacement radiator", "customer supplied", "optional"
+    ]
+    return not any(marker in name for marker in optional_markers)
+
+
+def merge_database_first_material(materials_by_key: dict, candidate: dict, source_priority: int):
+    name = (candidate.get("name") or "").strip()
+    if not name:
+        return
+
+    canonical = canonical_material_name(name)
+    key = canonical or normalise_ai_job_text(name)
+    if not key:
+        return
+
+    quantity = safe_float(candidate.get("quantity", 1), 1)
+    if quantity <= 0:
+        quantity = 1
+
+    existing = materials_by_key.get(key)
+    if existing is None:
+        row = dict(candidate)
+        row["_priority"] = source_priority
+        row["quantity"] = quantity
+        row.setdefault("required", False)
+        row.setdefault("reason", "")
+        row.setdefault("supplier", "")
+        row.setdefault("url", "")
+        row.setdefault("manual_price", 0)
+        row.setdefault("data_source", "database_first")
+        materials_by_key[key] = row
+        return
+
+    # Higher-priority sources control the core name/reason, while quantities
+    # and required flags accumulate safely.
+    if source_priority > existing.get("_priority", 0):
+        old_quantity = existing.get("quantity", 1)
+        old_required = existing.get("required", False)
+        old_supplier = existing.get("supplier", "")
+        old_url = existing.get("url", "")
+        old_price = existing.get("manual_price", 0)
+
+        replacement = dict(candidate)
+        replacement["_priority"] = source_priority
+        replacement["quantity"] = max(quantity, safe_float(old_quantity, 1))
+        replacement["required"] = bool(candidate.get("required", False) or old_required)
+        replacement["supplier"] = candidate.get("supplier") or old_supplier
+        replacement["url"] = candidate.get("url") or old_url
+        replacement["manual_price"] = safe_float(candidate.get("manual_price", old_price), old_price)
+        replacement.setdefault("data_source", "database_first")
+        materials_by_key[key] = replacement
+    else:
+        existing["quantity"] = max(safe_float(existing.get("quantity", 1), 1), quantity)
+        existing["required"] = bool(existing.get("required", False) or candidate.get("required", False))
+        if not existing.get("reason") and candidate.get("reason"):
+            existing["reason"] = candidate.get("reason")
+        if not existing.get("supplier") and candidate.get("supplier"):
+            existing["supplier"] = candidate.get("supplier")
+        if not existing.get("url") and candidate.get("url"):
+            existing["url"] = candidate.get("url")
+        if safe_float(existing.get("manual_price", 0), 0) <= 0:
+            existing["manual_price"] = safe_float(candidate.get("manual_price", 0), 0)
+
+
+def resolve_database_first_material(candidate: dict, job: str, quote_type: str):
+    original_name = (candidate.get("name") or "").strip()
+    matches = find_ai_material_matches(original_name, limit=8)
+
+    best = matches[0] if matches and matches[0].get("match_score", 0) >= 35 else None
+    resolved_name = best.get("name") if best else original_name
+
+    quantity_info = learned_material_quantity_from_quotes(
+        resolved_name,
+        job,
+        quote_type
+    )
+    requested_qty = safe_float(candidate.get("quantity", 1), 1)
+    learned_qty = safe_float(quantity_info.get("quantity", 0), 0)
+    quantity = learned_qty if quantity_info.get("source") == "learned" and learned_qty > 0 else requested_qty
+
+    supplier_pref = supplier_preference_for_material(resolved_name)
+    preferred_supplier = supplier_pref.get("preferred_supplier", "")
+
+    chosen = best
+    if preferred_supplier and matches:
+        preferred_rows = [
+            item for item in matches
+            if (item.get("supplier") or "").lower() == preferred_supplier.lower()
+            and item.get("match_score", 0) >= 30
+        ]
+        if preferred_rows:
+            chosen = preferred_rows[0]
+            resolved_name = chosen.get("name") or resolved_name
+
+    supplier = (chosen.get("supplier") if chosen else "") or preferred_supplier or candidate.get("supplier") or "City Plumbing"
+    url = (chosen.get("url") if chosen else "") or candidate.get("url") or ""
+    manual_price = safe_float(
+        (chosen.get("manual_price") if chosen else 0) or candidate.get("manual_price", 0),
+        0
+    )
+
+    return {
+        "name": resolved_name,
+        "quantity": round(quantity, 2),
+        "supplier": supplier,
+        "url": url,
+        "manual_price": round(manual_price, 2),
+        "reason": candidate.get("reason", ""),
+        "required": bool(candidate.get("required", False)),
+        "data_source": (
+            "database_first_saved_material"
+            if chosen and chosen.get("source") == "saved"
+            else "database_first_library"
+            if chosen
+            else candidate.get("data_source", "database_first_rule")
+        ),
+        "quantity_source": quantity_info.get("source", "rule"),
+        "learned_used_count": quantity_info.get("used_count", 0),
+        "original_rule_name": original_name,
+        "match_score": chosen.get("match_score", 0) if chosen else 0,
+    }
+
+
+def build_database_first_kit(
+    job: str,
+    quote_type: str,
+    history: dict,
+    compact_templates: list,
+    fallback_matches: list,
+    forgotten: list
+):
+    materials_by_key = {}
+
+    # 1. Historical common materials are the strongest business evidence.
+    for item in (history.get("common_materials", []) or [])[:20]:
+        used_percent = safe_float(item.get("used_percent", 0), 0)
+        avg_qty = safe_float(item.get("average_quantity", 1), 1)
+        merge_database_first_material(materials_by_key, {
+            "name": item.get("name", ""),
+            "quantity": avg_qty,
+            "supplier": item.get("supplier", ""),
+            "manual_price": safe_float(item.get("average_unit_price", 0), 0),
+            "required": used_percent >= 75,
+            "reason": f"Used in {round(used_percent)}% of similar saved quotes.",
+            "data_source": "historical_quote_pattern",
+        }, 100)
+
+    # 2. Saved/trade templates provide the standard kit structure.
+    for template in compact_templates[:5]:
+        template_name = template.get("name") or template.get("job") or "matching trade template"
+        for item in template.get("materials", []) or []:
+            if isinstance(item, str):
+                item = {"name": item, "quantity": 1}
+            if not isinstance(item, dict):
+                continue
+            merge_database_first_material(materials_by_key, {
+                "name": item.get("name", ""),
+                "quantity": item.get("quantity", item.get("qty", 1)),
+                "supplier": item.get("supplier", ""),
+                "url": item.get("url", ""),
+                "manual_price": item.get("manual_price", item.get("price", 0)),
+                "required": ai_material_required_from_template(item),
+                "reason": f"Included by trade template: {template_name}.",
+                "data_source": "trade_template",
+            }, 80)
+
+    # 3. Controlled kits fill gaps where the database has limited history.
+    for fallback in fallback_matches[:2]:
+        for item in fallback.get("materials", []) or []:
+            merge_database_first_material(materials_by_key, {
+                **item,
+                "data_source": "controlled_trade_kit",
+            }, 60)
+
+    # 4. Forgotten-item rules act as a final checklist.
+    for warning in forgotten or []:
+        for name in warning.get("missing", []) or []:
+            merge_database_first_material(materials_by_key, {
+                "name": name,
+                "quantity": suggest_material_quantity(name, job),
+                "required": False,
+                "reason": warning.get("reason", "Common companion material to check."),
+                "data_source": "forgotten_item_check",
+            }, 40)
+
+    resolved = [
+        resolve_database_first_material(item, job, quote_type)
+        for item in materials_by_key.values()
+    ]
+
+    resolved.sort(
+        key=lambda item: (
+            1 if item.get("required") else 0,
+            1 if item.get("data_source") == "historical_quote_pattern" else 0,
+            1 if safe_float(item.get("manual_price", 0), 0) > 0 else 0,
+            item.get("name", "")
+        ),
+        reverse=True
+    )
+
+    return resolved[:30]
+
+
+def enforce_database_first_kit(draft: dict, context: dict):
+    if not isinstance(draft, dict):
+        draft = {}
+
+    kit = context.get("database_first_kit", []) or []
+    ai_materials = draft.get("materials", []) or []
+
+    ai_by_canonical = {}
+    for item in ai_materials:
+        if not isinstance(item, dict):
+            continue
+        key = canonical_material_name(item.get("name", ""))
+        if key:
+            ai_by_canonical[key] = item
+
+    final_materials = []
+    for database_item in kit:
+        item = dict(database_item)
+        key = canonical_material_name(item.get("name", ""))
+        ai_item = ai_by_canonical.get(key)
+
+        # AI may improve wording/reason or required status, but cannot overwrite
+        # the database name, URL, supplier or saved price.
+        if ai_item:
+            if ai_item.get("reason"):
+                item["reason"] = ai_item.get("reason")
+            item["required"] = bool(item.get("required") or ai_item.get("required"))
+
+        final_materials.append(item)
+
+    # Allow genuinely new AI gap-fill items only when they are not duplicates.
+    existing_keys = {
+        canonical_material_name(item.get("name", ""))
+        for item in final_materials
+    }
+    for ai_item in ai_materials:
+        if not isinstance(ai_item, dict):
+            continue
+        key = canonical_material_name(ai_item.get("name", ""))
+        if not key or key in existing_keys:
+            continue
+        gap_item = resolve_database_first_material({
+            **ai_item,
+            "data_source": "ai_gap_fill",
+        }, context.get("request", {}).get("normalised_job_description", ""),
+           context.get("request", {}).get("quote_type", ""))
+        final_materials.append(gap_item)
+        existing_keys.add(key)
+
+    draft["materials"] = final_materials[:30]
+    draft["database_first_summary"] = {
+        "kit_items": len(kit),
+        "historical_items": sum(1 for x in kit if x.get("data_source") == "historical_quote_pattern"),
+        "template_items": sum(1 for x in kit if x.get("data_source") == "trade_template"),
+        "saved_material_matches": sum(
+            1 for x in final_materials
+            if x.get("data_source") in {
+                "database_first_saved_material",
+                "preferred_supplier_history"
+            }
+        ),
+        "priced_items": sum(1 for x in final_materials if safe_float(x.get("manual_price", 0), 0) > 0),
+        "learned_quantities": sum(1 for x in final_materials if x.get("quantity_source") == "learned"),
+        "materials_total_before_handling": round(sum(
+            safe_float(x.get("manual_price", 0), 0) *
+            safe_float(x.get("quantity", 1), 1)
+            for x in final_materials
+        ), 2),
+    }
+
+    return draft
+
+
 def build_ai_quote_context(data: AIQuoteDraftRequest):
     original_job = (data.job_description or "").strip()
     job = normalise_ai_job_text(original_job)
@@ -9179,9 +9466,17 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
         fallback_matches,
         limit=40
     )
+    database_first_kit = build_database_first_kit(
+        job,
+        quote_type,
+        history,
+        compact_templates,
+        fallback_matches,
+        forgotten
+    )
 
     return {
-        "estimator_version": "ai-estimator-v3",
+        "estimator_version": "database-first-estimator-v4",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -9209,6 +9504,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
         "controlled_fallback_trade_knowledge": fallback_context,
         "master_material_candidates": master_candidates,
         "business_material_matches": business_material_matches,
+        "database_first_kit": database_first_kit,
         "decision_rules": {
             "do_not_assume_customer_or_contractor_supply": True,
             "include_provisional_materials_when_category_is_clear": True,
@@ -9235,13 +9531,16 @@ You are an experienced UK domestic plumbing estimator assisting Nigel Harvey Ltd
 Create a practical but cautious quote draft from the supplied job description and internal business data.
 
 Priority order:
-1. Use matching historical quotes where available.
-2. Use matching saved/trade templates.
-3. Use the controlled fallback trade knowledge.
-4. Use master material candidates and general plumbing knowledge only to bridge obvious gaps.
+1. Treat database_first_kit as the starting material list and source of truth.
+2. Review that kit for relevance, duplicates, missing companion items and customer-supply uncertainty.
+3. Use matching historical quotes for labour and wording.
+
 
 Rules:
 - Return only the requested structured JSON.
+- Do not remove a database_first_kit item merely because the job description is brief; mark uncertain items optional instead.
+- Do not rename, reprice or replace database_first_kit records with invented products.
+- Use AI primarily to write the scope, assess risks, identify confirmation questions and add only genuine missing items.
 - Do not invent product URLs, exact product models or live prices.
 - The supplied business_material_matches are Nigel's real material records. Prefer these exact names, suppliers, URLs and prices whenever they genuinely match.
 - A real saved material match is more authoritative than a generic material name.
@@ -9312,7 +9611,7 @@ Rules:
     except json.JSONDecodeError:
         raise HTTPException(status_code=502, detail="OpenAI returned an invalid structured quote draft.")
 
-    draft = reconcile_ai_draft_with_business_data(draft, context)
+    draft = enforce_database_first_kit(draft, context)
 
     return {
         "draft": draft,
@@ -9342,14 +9641,17 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "ai-estimator-v3"),
+        "version": context.get("estimator_version", "database-first-estimator-v4"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
         "master_material_candidates": len(context.get("master_material_candidates", [])),
         "business_material_matches": len(context.get("business_material_matches", [])),
         "matched_draft_materials": result.get("draft", {}).get("business_brain", {}).get("matched_materials", 0),
-        "priced_draft_materials": result.get("draft", {}).get("business_brain", {}).get("priced_materials", 0),
+        "priced_draft_materials": result.get("draft", {}).get("database_first_summary", {}).get("priced_items", 0),
+        "database_kit_items": len(context.get("database_first_kit", [])),
+        "historical_kit_items": result.get("draft", {}).get("database_first_summary", {}).get("historical_items", 0),
+        "template_kit_items": result.get("draft", {}).get("database_first_summary", {}).get("template_items", 0),
     }
     return JSONResponse(content=result)
 
