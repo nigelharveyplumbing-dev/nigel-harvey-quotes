@@ -4630,8 +4630,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Multi‑Job Estimator V6.1</strong><br>
-        <span class="small">Splits several jobs, detects customer-supplied main items, builds labour and materials for each job, merges duplicates and combines everything into one quotation. Review is always required.</span>
+        <strong>Context‑Aware Estimator V7</strong><br>
+        <span class="small">Understands which sentences are real jobs and which are supply, access, condition or additional-work notes. Notes stay attached to the correct job before labour and materials are combined. Review is always required.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Generate quote draft with AI</button>
         </div>
@@ -7389,7 +7389,7 @@ async function generateAIQuoteDraft() {
     if (status) {
       const context = data.context_summary || {};
       status.innerHTML = context.is_multi_job
-        ? `Multi-job quote identified · ${context.multi_job_count || 0} jobs · ${(context.multi_job_names || []).map(x => escapeHtml(x)).join(" + ")} · ${context.combined_material_count || 0} combined material item(s) · customer-supply rules applied · review required.`
+        ? `Context-aware quote identified · ${context.multi_job_count || 0} physical job(s) · ${(context.multi_job_names || []).map(x => escapeHtml(x)).join(" + ")} · notes attached to the correct jobs · ${context.combined_material_count || 0} combined material item(s) · review required.`
         : context.smart_job_type
           ? `Job identified: ${escapeHtml(context.smart_job_type)} · ${context.smart_kit_items || 0} approved kit item(s) · ${context.smart_priced_items || 0} priced item(s) · review required.`
           : `No exact smart job kit found · database-first fallback used · review required.`;
@@ -7427,6 +7427,7 @@ function renderAIQuoteDraft(data) {
             <span class="small">Labour: ${pounds(job.labour_suggestion || 0)} · ${Number(job.material_count || 0)} material item(s) · ${Number(job.similar_quotes || 0)} similar quote(s)</span><br>
             <span class="small">Labour confidence: ${escapeHtml((job.labour_confidence || {}).level || "low")} — ${escapeHtml((job.labour_confidence || {}).message || "manual review required")}</span>
             ${job.supply_responsibility === "customer" ? `<br><span class="small"><strong>Customer supplying:</strong> ${(job.customer_supplied_items_removed || []).map(x => escapeHtml(x)).join(", ") || "main item"}</span>` : ""}
+            ${(job.context_notes || []).length ? `<br><span class="small"><strong>Attached notes:</strong> ${(job.context_notes || []).map(n => escapeHtml(n.text || "")).join(" · ")}</span>` : ""}
           </div>
         `).join("")}
       </div>` : ""}
@@ -7451,6 +7452,7 @@ function renderAIQuoteDraft(data) {
         labour ${pounds(draft.multi_job_summary.combined_labour || 0)} ·
         materials ${pounds(draft.multi_job_summary.materials_total_before_handling || 0)} before handling
         ${(draft.multi_job_summary.customer_supplied_items_removed || []).length ? `<br><strong>Customer-supplied items removed:</strong> ${(draft.multi_job_summary.customer_supplied_items_removed || []).map(x => escapeHtml(x)).join(", ")}` : ""}
+        <br>${Number(draft.multi_job_summary.context_notes_attached || 0)} context note(s) attached to the correct job(s)
       </div>` : ""}
       ${draft.smart_job_summary ? `<div style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:8px;"><strong>Smart Job Kit:</strong><br>
         ${escapeHtml(draft.smart_job_summary.display_name || "")} ·
@@ -9784,78 +9786,203 @@ MULTI_JOB_CONNECTORS = [
 ]
 
 
-def split_multi_job_description(job_text: str):
+
+CONTEXT_NOTE_PATTERNS = {
+    "customer_supply": [
+        r"\bcustomer (?:is )?supplying\b",
+        r"\bcustomer supplied\b",
+        r"\bcustomer to supply\b",
+        r"\bclient (?:is )?supplying\b",
+        r"\bclient supplied\b",
+        r"\bsupplied by customer\b",
+        r"\bsupplied by client\b",
+    ],
+    "business_supply": [
+        r"\bnigel (?:is )?supplying\b",
+        r"\bnigel harvey ltd (?:is )?supplying\b",
+        r"\bwe (?:are )?supplying\b",
+        r"\bsupply and fit\b",
+        r"\bcontractor supplying\b",
+    ],
+    "access": [
+        r"\baccess\b",
+        r"\bawkward\b",
+        r"\brestricted\b",
+        r"\btight space\b",
+        r"\bunder (?:the )?(?:sink|basin|bath)\b",
+        r"\bbehind (?:the )?(?:toilet|basin|unit)\b",
+    ],
+    "existing_condition": [
+        r"\bexisting\b",
+        r"\bleaking\b",
+        r"\bseized\b",
+        r"\bold\b",
+        r"\bdamaged\b",
+        r"\bcorroded\b",
+        r"\bnot working\b",
+        r"\bfailed\b",
+    ],
+    "additional_work": [
+        r"\bmake good\b",
+        r"\btil(?:e|ing)\b",
+        r"\bplaster\b",
+        r"\bdecorate\b",
+        r"\bpaint\b",
+        r"\bboxing\b",
+        r"\brun new pipework\b",
+        r"\bmove pipework\b",
+        r"\balter pipework\b",
+        r"\bremove and refit\b",
+        r"\bdispose\b",
+    ],
+    "measurement": [
+        r"\b\d+(?:\.\d+)?\s*(?:mm|cm|m|metre|metres)\b",
+        r"\bpipe run\b",
+        r"\bcentres?\b",
+        r"\bheight\b",
+        r"\bwidth\b",
+        r"\bdepth\b",
+    ],
+}
+
+
+def classify_context_note(sentence: str):
+    text = normalise_ai_job_text(sentence)
+    matched = []
+    for note_type, patterns in CONTEXT_NOTE_PATTERNS.items():
+        if any(re.search(pattern, text, flags=re.I) for pattern in patterns):
+            matched.append(note_type)
+    return matched
+
+
+def sentence_starts_new_job(sentence: str):
+    text = normalise_ai_job_text(sentence)
+    classification = classify_smart_job(sentence)
+    if not classification:
+        return False
+
+    # A supply-only or condition-only statement is contextual, not a new job.
+    action_words = re.findall(
+        r"\b(?:replace|fit|install|repair|change|remove|supply and fit|move|relocate|renew)\b",
+        text,
+        flags=re.I
+    )
+    supply_note = any(
+        re.search(pattern, text, flags=re.I)
+        for pattern in CUSTOMER_SUPPLY_PATTERNS + BUSINESS_SUPPLY_PATTERNS
+    )
+    if supply_note and not action_words:
+        return False
+
+    return bool(action_words)
+
+
+def attach_context_to_job(job_record: dict, sentence: str):
+    note_types = classify_context_note(sentence)
+    job_record.setdefault("context_notes", []).append({
+        "text": sentence.strip(),
+        "types": note_types,
+    })
+
+    if "customer_supply" in note_types:
+        job_record["supply_responsibility"] = "customer"
+    elif "business_supply" in note_types:
+        job_record["supply_responsibility"] = "business"
+
+    return job_record
+
+
+def parse_context_aware_jobs(job_text: str):
     original = (job_text or "").strip()
     if not original:
-        return []
+        return {
+            "jobs": [],
+            "unattached_notes": [],
+        }
 
-    # First split clear lines and sentence boundaries.
-    parts = re.split(r"[\n\r]+|(?<=[.;])\s+", original)
-    expanded = []
+    # Preserve line order, then split obvious sentence boundaries.
+    raw_lines = re.split(r"[\n\r]+", original)
+    sentences = []
+    for line in raw_lines:
+        line = line.strip()
+        if not line:
+            continue
+        parts = re.split(r"(?<=[.;!?])\s+", line)
+        for part in parts:
+            part = part.strip(" .;,-")
+            if part:
+                sentences.append(part)
 
-    for part in parts:
-        part = part.strip(" .;,-")
-        if not part:
+    jobs = []
+    unattached = []
+    current = None
+
+    for sentence in sentences:
+        if sentence_starts_new_job(sentence):
+            classification = classify_smart_job(sentence)
+            current = {
+                "job_text": sentence,
+                "job_type": classification.get("job_type"),
+                "display_name": classification.get("display_name"),
+                "classification_score": classification.get("classification_score"),
+                "context_notes": [],
+                "supply_responsibility": detect_supply_responsibility(
+                    sentence,
+                    classification.get("job_type")
+                ),
+            }
+            jobs.append(current)
             continue
 
-        candidates = [part]
-        # Split connector phrases only where both sides appear classifiable.
-        for connector in MULTI_JOB_CONNECTORS:
-            next_candidates = []
-            for candidate in candidates:
-                lower = candidate.lower()
-                if connector not in lower:
-                    next_candidates.append(candidate)
-                    continue
-
-                chunks = re.split(re.escape(connector), candidate, flags=re.I)
-                chunks = [chunk.strip(" .;,-") for chunk in chunks if chunk.strip(" .;,-")]
-
-                classifiable = sum(1 for chunk in chunks if classify_smart_job(chunk))
-                if len(chunks) > 1 and classifiable >= 2:
-                    next_candidates.extend(chunks)
-                else:
-                    next_candidates.append(candidate)
-            candidates = next_candidates
-
-        expanded.extend(candidates)
-
-    # If one line contains several explicit action clauses, try a cautious split
-    # before verbs such as replace/fit/install/repair.
-    final_parts = []
-    for part in expanded:
-        matches = list(re.finditer(
-            r"\b(?:replace|fit|install|repair|change|remove and fit|supply and fit)\b",
-            part,
-            flags=re.I
-        ))
-        if len(matches) <= 1:
-            final_parts.append(part)
-            continue
-
-        chunks = []
-        for index, match in enumerate(matches):
-            start = match.start()
-            end = matches[index + 1].start() if index + 1 < len(matches) else len(part)
-            chunk = part[start:end].strip(" ,.;-")
-            if chunk:
-                chunks.append(chunk)
-
-        if len(chunks) > 1 and sum(1 for chunk in chunks if classify_smart_job(chunk)) >= 2:
-            final_parts.extend(chunks)
+        # Context note belongs to the most recent job where possible.
+        if current is not None:
+            attach_context_to_job(current, sentence)
         else:
-            final_parts.append(part)
+            unattached.append(sentence)
 
-    # Dedupe near-identical segments.
-    clean = []
-    seen = set()
-    for part in final_parts:
-        key = normalise_ai_job_text(part)
-        if key and key not in seen:
-            seen.add(key)
-            clean.append(part)
+    # Merge accidental consecutive duplicates of the same physical job.
+    merged = []
+    for job in jobs:
+        if (
+            merged
+            and merged[-1].get("job_type") == job.get("job_type")
+            and normalise_ai_job_text(merged[-1].get("job_text", "")) == normalise_ai_job_text(job.get("job_text", ""))
+        ):
+            merged[-1]["context_notes"].extend(job.get("context_notes", []))
+            if job.get("supply_responsibility") != "unknown":
+                merged[-1]["supply_responsibility"] = job.get("supply_responsibility")
+            continue
+        merged.append(job)
 
-    return clean[:10]
+    return {
+        "jobs": merged[:10],
+        "unattached_notes": unattached,
+    }
+
+
+def context_notes_as_text(job_record: dict):
+    return " ".join(
+        note.get("text", "")
+        for note in job_record.get("context_notes", [])
+        if note.get("text")
+    ).strip()
+
+
+def context_note_summary(job_record: dict):
+    groups = {}
+    for note in job_record.get("context_notes", []):
+        for note_type in note.get("types", []):
+            groups.setdefault(note_type, []).append(note.get("text", ""))
+    return groups
+
+
+def split_multi_job_description(job_text: str):
+    parsed = parse_context_aware_jobs(job_text)
+    return [
+        job.get("job_text", "")
+        for job in parsed.get("jobs", [])
+        if job.get("job_text")
+    ]
 
 
 def smart_job_labour_suggestion(job_segment: str, classification: dict, quote_type: str):
@@ -10067,11 +10194,13 @@ def merge_multi_job_materials_with_summary(job_records: list):
 
 
 def build_multi_job_estimate(job_text: str, quote_type: str):
-    segments = split_multi_job_description(job_text)
+    parsed = parse_context_aware_jobs(job_text)
+    parsed_jobs = parsed.get("jobs", [])
     records = []
-    unclassified = []
+    unclassified = list(parsed.get("unattached_notes", []))
 
-    for segment in segments:
+    for parsed_job in parsed_jobs:
+        segment = parsed_job.get("job_text", "")
         classification = classify_smart_job(segment)
         if not classification:
             unclassified.append(segment)
@@ -10085,19 +10214,18 @@ def build_multi_job_estimate(job_text: str, quote_type: str):
             quote_type
         )
 
-        responsibility = detect_supply_responsibility(
-            segment,
-            classification.get("job_type")
-        )
+        responsibility = parsed_job.get("supply_responsibility", "unknown")
         filtered_materials, removed_customer_items = apply_supply_responsibility_to_materials(
             smart.get("materials", []),
             classification.get("job_type"),
             responsibility
         )
 
+        context_text = context_notes_as_text(parsed_job)
         record = {
             "job_number": len(records) + 1,
             "original_text": segment,
+            "full_context_text": " ".join(x for x in [segment, context_text] if x).strip(),
             "job_type": classification.get("job_type"),
             "display_name": classification.get("display_name"),
             "classification_score": classification.get("classification_score"),
@@ -10110,6 +10238,8 @@ def build_multi_job_estimate(job_text: str, quote_type: str):
             "customer_supplied_items_removed": [
                 item.get("name", "") for item in removed_customer_items
             ],
+            "context_notes": parsed_job.get("context_notes", []),
+            "context_note_summary": context_note_summary(parsed_job),
         }
         record["labour_confidence"] = labour_confidence_for_job(record)
         records.append(record)
@@ -10128,12 +10258,13 @@ def build_multi_job_estimate(job_text: str, quote_type: str):
 
     return {
         "is_multi_job": is_multi_job,
-        "segments_found": len(segments),
+        "segments_found": len(parsed_jobs),
         "classified_jobs": records,
         "unclassified_segments": unclassified,
         "combined_materials": combined_materials,
         "combined_labour_suggestion": total_labour,
         "merge_summary": merge_summary,
+        "context_parser_version": "v7",
     }
 
 
@@ -10175,6 +10306,8 @@ def enforce_multi_job_estimate(draft: dict, context: dict):
             "supply_responsibility": record.get("supply_responsibility", "unknown"),
             "customer_supplied_items_removed": record.get("customer_supplied_items_removed", []),
             "labour_confidence": record.get("labour_confidence", {}),
+            "context_notes": record.get("context_notes", []),
+            "context_note_summary": record.get("context_note_summary", {}),
         })
 
     draft["job_breakdown"] = final_breakdown
@@ -10218,6 +10351,11 @@ def enforce_multi_job_estimate(draft: dict, context: dict):
             for record in jobs
             for item in record.get("customer_supplied_items_removed", [])
         ],
+        "context_notes_attached": sum(
+            len(record.get("context_notes", []))
+            for record in jobs
+        ),
+        "context_parser_version": multi.get("context_parser_version", "v7"),
     }
 
     return draft
@@ -10331,7 +10469,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "multi-job-estimator-v6.1",
+        "estimator_version": "context-aware-estimator-v7",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -10388,15 +10526,20 @@ You are an experienced UK domestic plumbing estimator assisting Nigel Harvey Ltd
 Create a practical but cautious quote draft from the supplied job description and internal business data.
 
 Priority order:
-1. If multi_job_estimate.is_multi_job is true, write a separate concise scope for every classified job in job_breakdown.
-2. Use the supplied combined material list and combined labour as authoritative.
-3. Do not add or remove materials from the deterministic job kits.
-4. For a single job, use smart_job_kit as before.
-5. Use AI to improve wording, risks, customer summary and confirmation questions.
+1. Treat multi_job_estimate.classified_jobs as the authoritative list of physical plumbing jobs.
+2. Treat each job's context_notes as instructions belonging to that job, not separate jobs.
+3. Preserve supply responsibility, access notes, existing-condition notes and additional-work notes in the correct job scope.
+4. Use the supplied labour and material kits without duplicating jobs.
+5. For a single job, use smart_job_kit as before.
+6. Use AI only to improve wording, risks, customer summary and confirmation questions.
 
 
 Rules:
 - Return only the requested structured JSON.
+- Never create a separate job from a sentence that only says who is supplying an item.
+- Never create a separate job from a sentence that only describes access, condition, dimensions, disposal or making good.
+- One physical installation must remain one job even when followed by several context notes.
+- job_breakdown must match the deterministic classified_jobs count exactly.
 - For multi-job requests, job_breakdown must contain one entry per classified job and preserve its job_type.
 - The overall scope_of_work should combine the separate job scopes into one professional quotation.
 - Never merge two different jobs into one vague scope.
@@ -10507,7 +10650,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "multi-job-estimator-v6.1"),
+        "version": context.get("estimator_version", "context-aware-estimator-v7"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
