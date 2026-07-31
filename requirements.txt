@@ -5,3 +5,4 @@ beautifulsoup4
 pydantic>=2
 reportlab
 python-multipart
+openai>=1.100.0
