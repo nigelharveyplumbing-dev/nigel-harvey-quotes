@@ -4630,8 +4630,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Context‑Aware Estimator V7</strong><br>
-        <span class="small">Understands which sentences are real jobs and which are supply, access, condition or additional-work notes. Notes stay attached to the correct job before labour and materials are combined. Review is always required.</span>
+        <strong>Professional Quote Mode V8</strong><br>
+        <span class="small">Shows a concise professional quote, assumptions, exclusions, key questions and a scored confidence check. Full estimator detail remains available in an expandable internal section.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Generate quote draft with AI</button>
         </div>
@@ -7389,10 +7389,10 @@ async function generateAIQuoteDraft() {
     if (status) {
       const context = data.context_summary || {};
       status.innerHTML = context.is_multi_job
-        ? `Context-aware quote identified · ${context.multi_job_count || 0} physical job(s) · ${(context.multi_job_names || []).map(x => escapeHtml(x)).join(" + ")} · notes attached to the correct jobs · ${context.combined_material_count || 0} combined material item(s) · review required.`
+        ? `Professional quote prepared · ${context.multi_job_count || 0} physical job(s) · concise review mode active.`
         : context.smart_job_type
-          ? `Job identified: ${escapeHtml(context.smart_job_type)} · ${context.smart_kit_items || 0} approved kit item(s) · ${context.smart_priced_items || 0} priced item(s) · review required.`
-          : `No exact smart job kit found · database-first fallback used · review required.`;
+          ? `Professional quote prepared · ${escapeHtml(context.smart_job_type)} · concise review mode active.`
+          : `Professional quote prepared using database-first fallback · review required.`;
     }
   } catch (e) {
     if (status) status.innerHTML = `<strong>AI error:</strong> ${escapeHtml(e.message || String(e))}`;
@@ -7410,69 +7410,96 @@ function renderAIQuoteDraft(data) {
 
   const draft = data.draft || {};
   const materials = draft.materials || [];
-  const risks = draft.risk_notes || [];
-  const questions = draft.questions_to_confirm || [];
-  const warnings = draft.warnings || [];
+  const professional = draft.professional_quote || {};
+  const confidence = professional.confidence || {};
+  const assumptions = professional.assumptions || [];
+  const exclusions = professional.exclusions || [];
+  const questions = professional.questions || [];
+  const risks = professional.risk_notes || [];
+  const technical = draft.technical_detail || {};
+  const evidence = professional.material_evidence || [];
 
   box.innerHTML = `
     <div class="history-item" style="padding:10px;border-color:#7c3aed;">
-      <strong>AI draft — confidence: ${escapeHtml(draft.confidence || "unknown")}</strong><br>
-      <div style="margin-top:6px;"><strong>Scope:</strong><br>${escapeHtml(draft.scope_of_work || "")}</div>
-      ${draft.customer_summary ? `<div style="margin-top:6px;"><strong>Customer summary:</strong><br>${escapeHtml(draft.customer_summary)}</div>` : ""}
-      ${(draft.job_breakdown || []).length > 1 ? `<div style="margin-top:8px;"><strong>Jobs included:</strong><br>
-        ${(draft.job_breakdown || []).map(job => `
-          <div style="margin-top:6px;padding:7px;border:1px solid #ddd;border-radius:7px;">
-            <strong>Job ${Number(job.job_number || 0)} — ${escapeHtml(job.display_name || job.job_type || "")}</strong><br>
-            ${escapeHtml(job.scope || job.original_text || "")}<br>
-            <span class="small">Labour: ${pounds(job.labour_suggestion || 0)} · ${Number(job.material_count || 0)} material item(s) · ${Number(job.similar_quotes || 0)} similar quote(s)</span><br>
-            <span class="small">Labour confidence: ${escapeHtml((job.labour_confidence || {}).level || "low")} — ${escapeHtml((job.labour_confidence || {}).message || "manual review required")}</span>
-            ${job.supply_responsibility === "customer" ? `<br><span class="small"><strong>Customer supplying:</strong> ${(job.customer_supplied_items_removed || []).map(x => escapeHtml(x)).join(", ") || "main item"}</span>` : ""}
-            ${(job.context_notes || []).length ? `<br><span class="small"><strong>Attached notes:</strong> ${(job.context_notes || []).map(n => escapeHtml(n.text || "")).join(" · ")}</span>` : ""}
-          </div>
-        `).join("")}
-      </div>` : ""}
-      <div style="margin-top:6px;"><strong>Suggested labour:</strong> ${pounds(draft.labour_suggestion || 0)}</div>
-      <div style="margin-top:6px;"><strong>Materials:</strong><br>
-        ${materials.length ? materials.map(m => `
-          • <strong>${escapeHtml(m.name)}</strong> × ${Number(m.quantity || 1)}${m.required ? " — required" : " — optional"}
-          ${Number(m.manual_price || 0) > 0 ? ` · ${pounds(m.manual_price)} each` : ""}
-          ${m.supplier ? ` · ${escapeHtml(m.supplier)}` : ""}
-          <br><span class="small">${escapeHtml(m.reason || "")}</span>
-          <br><span class="small">Source: ${escapeHtml((m.data_source || "database_first").replaceAll("_", " "))}${m.quantity_source === "learned" ? ` · quantity learned from ${Number(m.learned_used_count || 0)} prior use(s)` : ""}${(m.used_for_job_names || []).length ? ` · used for: ${(m.used_for_job_names || []).map(x => escapeHtml(x)).join(", ")}` : ""}</span>
-        `).join("<br>") : "No materials suggested."}
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px;background:#f3f4f6;border-radius:9px;">
+        <div><strong>Professional quote draft</strong><br><span class="small">Review before saving or sending</span></div>
+        <div style="text-align:center;min-width:82px;">
+          <div style="font-size:26px;font-weight:800;">${Number(confidence.score || 0)}%</div>
+          <div class="small">${escapeHtml(confidence.level || "unknown")} confidence</div>
+        </div>
       </div>
-      ${risks.length ? `<div style="margin-top:6px;"><strong>Risk notes:</strong><br>${risks.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
-      ${questions.length ? `<div style="margin-top:6px;"><strong>Confirm before quoting:</strong><br>${questions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
-      ${warnings.length ? `<div style="margin-top:6px;"><strong>Warnings:</strong><br>${warnings.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
-      ${draft.multi_job_summary ? `<div style="margin-top:8px;padding:8px;background:#eef6ff;border-radius:8px;"><strong>Multi‑Job Quote:</strong><br>
-        ${Number(draft.multi_job_summary.job_count || 0)} jobs ·
-        ${(draft.multi_job_summary.job_names || []).map(x => escapeHtml(x)).join(" + ")} ·
+
+      ${(confidence.positive_reasons || []).length || (confidence.gaps || []).length ? `
+        <div style="margin-top:8px;padding:8px;border:1px solid #ddd;border-radius:8px;">
+          ${(confidence.positive_reasons || []).map(x => `✓ ${escapeHtml(x)}`).join("<br>")}
+          ${(confidence.gaps || []).map(x => `<br>△ ${escapeHtml(x)}`).join("")}
+        </div>` : ""}
+
+      <div style="margin-top:10px;"><strong>Scope of works</strong><br>${escapeHtml(draft.scope_of_work || "")}</div>
+
+      ${(draft.job_breakdown || []).length > 1 ? `<div style="margin-top:10px;"><strong>Jobs included</strong>
+        ${(draft.job_breakdown || []).map(job => `
+          <div style="margin-top:6px;padding:8px;border:1px solid #ddd;border-radius:8px;">
+            <strong>${escapeHtml(job.display_name || job.job_type || "")}</strong><br>
+            ${escapeHtml(job.scope || job.original_text || "")}<br>
+            <span class="small">Labour ${pounds(job.labour_suggestion || 0)} · ${escapeHtml((job.labour_confidence || {}).message || "review required")}</span>
+            ${job.supply_responsibility === "customer" ? `<br><span class="small">Customer supplies: ${(job.customer_supplied_items_removed || []).map(x => escapeHtml(x)).join(", ") || "main item"}</span>` : ""}
+          </div>`).join("")}
+      </div>` : ""}
+
+      <div style="margin-top:10px;"><strong>Suggested labour</strong><br>${pounds(draft.labour_suggestion || 0)}</div>
+
+      <div style="margin-top:10px;"><strong>Materials</strong>
+        <div style="overflow-x:auto;margin-top:5px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr>
+              <th style="text-align:left;padding:5px;border-bottom:1px solid #ddd;">Item</th>
+              <th style="text-align:right;padding:5px;border-bottom:1px solid #ddd;">Qty</th>
+              <th style="text-align:right;padding:5px;border-bottom:1px solid #ddd;">Price</th>
+              <th style="text-align:left;padding:5px;border-bottom:1px solid #ddd;">Supplier</th>
+            </tr></thead>
+            <tbody>${materials.length ? materials.map(m => `<tr>
+              <td style="padding:5px;border-bottom:1px solid #eee;">${escapeHtml(m.name || "")}${m.required ? "" : ` <span class="small">(optional)</span>`}</td>
+              <td style="padding:5px;text-align:right;border-bottom:1px solid #eee;">${Number(m.quantity || 1)}</td>
+              <td style="padding:5px;text-align:right;border-bottom:1px solid #eee;">${Number(m.manual_price || 0) > 0 ? pounds(m.manual_price) : "TBC"}</td>
+              <td style="padding:5px;border-bottom:1px solid #eee;">${escapeHtml(m.supplier || "")}</td>
+            </tr>`).join("") : `<tr><td colspan="4" style="padding:7px;">No materials suggested.</td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>
+
+      ${assumptions.length ? `<div style="margin-top:10px;"><strong>Assumptions</strong><br>${assumptions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+      ${exclusions.length ? `<div style="margin-top:10px;"><strong>Exclusions</strong><br>${exclusions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+      ${questions.length ? `<div style="margin-top:10px;"><strong>Questions before finalising</strong><br>${questions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+      ${risks.length ? `<div style="margin-top:10px;"><strong>Key risks</strong><br>${risks.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+
+      ${draft.multi_job_summary ? `<div style="margin-top:10px;padding:8px;background:#eef6ff;border-radius:8px;"><strong>Quote summary</strong><br>
+        ${Number(draft.multi_job_summary.job_count || 0)} job(s) ·
         ${Number(draft.multi_job_summary.combined_material_count || 0)} unique material item(s) ·
         ${Number(draft.multi_job_summary.duplicates_merged || 0)} duplicate item(s) merged ·
         labour ${pounds(draft.multi_job_summary.combined_labour || 0)} ·
         materials ${pounds(draft.multi_job_summary.materials_total_before_handling || 0)} before handling
-        ${(draft.multi_job_summary.customer_supplied_items_removed || []).length ? `<br><strong>Customer-supplied items removed:</strong> ${(draft.multi_job_summary.customer_supplied_items_removed || []).map(x => escapeHtml(x)).join(", ")}` : ""}
-        <br>${Number(draft.multi_job_summary.context_notes_attached || 0)} context note(s) attached to the correct job(s)
-      </div>` : ""}
-      ${draft.smart_job_summary ? `<div style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:8px;"><strong>Smart Job Kit:</strong><br>
+      </div>` : draft.smart_job_summary ? `<div style="margin-top:10px;padding:8px;background:#eef6ff;border-radius:8px;"><strong>Quote summary</strong><br>
         ${escapeHtml(draft.smart_job_summary.display_name || "")} ·
-        ${Number(draft.smart_job_summary.kit_items || 0)} approved item(s) ·
-        ${Number(draft.smart_job_summary.priced_items || 0)} priced item(s) ·
-        ${Number(draft.smart_job_summary.saved_material_matches || 0)} saved/library match(es) ·
-        ${Number(draft.smart_job_summary.learned_quantities || 0)} learned quantity/quantities ·
+        ${Number(draft.smart_job_summary.kit_items || 0)} material item(s) ·
         materials ${pounds(draft.smart_job_summary.materials_total_before_handling || 0)} before handling
-        ${(draft.smart_job_summary.customer_supplied_items_removed || []).length ? `<br><strong>Customer-supplied item removed:</strong> ${(draft.smart_job_summary.customer_supplied_items_removed || []).map(x => escapeHtml(x)).join(", ")}` : ""}
-      </div>` : draft.database_first_summary ? `<div style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:8px;"><strong>Database‑First Fallback:</strong><br>
-        ${Number(draft.database_first_summary.kit_items || 0)} item(s) ·
-        ${Number(draft.database_first_summary.priced_items || 0)} priced item(s) ·
-        materials ${pounds(draft.database_first_summary.materials_total_before_handling || 0)} before handling
       </div>` : ""}
+
+      <details style="margin-top:10px;">
+        <summary><strong>Internal estimator detail</strong></summary>
+        <div style="margin-top:8px;padding:8px;background:#fafafa;border-radius:8px;">
+          ${evidence.length ? `<strong>Material evidence</strong><br>${evidence.map(x => `• ${escapeHtml(x.name)} — ${escapeHtml(x.source)} · ${Number(x.confidence || 0)}%${Number(x.used_count || 0) ? ` · ${Number(x.used_count)} prior use(s)` : ""}`).join("<br>")}<br><br>` : ""}
+          ${(technical.all_risk_notes || []).length ? `<strong>All risk notes</strong><br>${(technical.all_risk_notes || []).map(x => `• ${escapeHtml(x)}`).join("<br>")}<br><br>` : ""}
+          ${(technical.all_questions || []).length ? `<strong>All questions</strong><br>${(technical.all_questions || []).map(x => `• ${escapeHtml(x)}`).join("<br>")}<br><br>` : ""}
+          ${(technical.all_warnings || []).length ? `<strong>All warnings</strong><br>${(technical.all_warnings || []).map(x => `• ${escapeHtml(x)}`).join("<br>")}` : ""}
+        </div>
+      </details>
+
       <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
         <button type="button" class="btn-green" onclick="applyAIQuoteDraft()">Apply draft to form</button>
         <button type="button" class="btn-light" onclick="discardAIQuoteDraft()">Discard</button>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function applyAIQuoteDraft() {
@@ -10361,6 +10388,184 @@ def enforce_multi_job_estimate(draft: dict, context: dict):
     return draft
 
 
+
+STANDARD_QUOTE_EXCLUSIONS = [
+    "Substantial making good, plastering, tiling, flooring and decoration unless specifically included.",
+    "Repairs to concealed or defective existing pipework discovered after work starts.",
+    "Electrical or gas work unless specifically stated and completed by a suitably qualified person.",
+]
+
+
+def unique_short_items(items, limit=5):
+    output, seen = [], set()
+    for item in items or []:
+        value = re.sub(r"\s+", " ", str(item or "")).strip(" •-\n\t")
+        key = normalise_ai_job_text(value)
+        if value and key not in seen:
+            seen.add(key)
+            output.append(value)
+        if len(output) >= limit:
+            break
+    return output
+
+
+def professional_assumptions_from_context(context: dict):
+    assumptions = []
+    jobs = (context.get("multi_job_estimate", {}) or {}).get("classified_jobs", []) or []
+    for job in jobs:
+        display = job.get("display_name", "Job")
+        responsibility = job.get("supply_responsibility", "unknown")
+        if responsibility == "customer":
+            removed = job.get("customer_supplied_items_removed", []) or []
+            assumptions.append(f"{display}: customer supplies {', '.join(removed) if removed else 'the main item'}.")
+        elif responsibility == "business":
+            assumptions.append(f"{display}: Nigel Harvey Ltd supplies the main item.")
+        summary = job.get("context_note_summary", {}) or {}
+        if summary.get("access"):
+            assumptions.append(f"{display}: access remains reasonably workable as described.")
+        if summary.get("measurement"):
+            assumptions.append(f"{display}: measurements and pipe routes remain provisional until checked on site.")
+
+    if not jobs:
+        smart = context.get("smart_job_kit", {}) or {}
+        responsibility = smart.get("supply_responsibility", "unknown")
+        removed = smart.get("customer_supplied_items_removed", []) or []
+        if responsibility == "customer":
+            assumptions.append(f"Customer supplies {', '.join(removed) if removed else 'the main item'}.")
+        elif responsibility == "business":
+            assumptions.append("Nigel Harvey Ltd supplies the main item.")
+
+    assumptions.extend([
+        "Existing isolation points and reusable connections are serviceable unless stated otherwise.",
+        "Final compatibility is subject to checking the existing installation and supplied products.",
+    ])
+    return unique_short_items(assumptions, 6)
+
+
+def professional_exclusions_from_context(context: dict):
+    exclusions = list(STANDARD_QUOTE_EXCLUSIONS)
+    note_types = set()
+    for job in (context.get("multi_job_estimate", {}) or {}).get("classified_jobs", []) or []:
+        for note in job.get("context_notes", []) or []:
+            note_types.update(note.get("types", []) or [])
+    if "additional_work" in note_types:
+        exclusions[0] = (
+            "Only making-good or additional work expressly described in the scope is included; "
+            "other plastering, tiling, flooring and decoration are excluded."
+        )
+    return unique_short_items(exclusions, 5)
+
+
+def calculate_estimator_confidence(draft: dict, context: dict):
+    score = 45
+    positives, gaps = [], []
+    multi = context.get("multi_job_estimate", {}) or {}
+    jobs = multi.get("classified_jobs", []) or []
+    smart = context.get("smart_job_kit", {}) or {}
+
+    if multi.get("is_multi_job") and jobs:
+        score += 12
+        positives.append(f"{len(jobs)} physical jobs identified and separated.")
+        if not multi.get("unclassified_segments"):
+            score += 5
+            positives.append("All description notes were attached or classified.")
+        else:
+            score -= 8
+            gaps.append("Some description text could not be confidently attached.")
+    elif smart.get("classification"):
+        score += 14
+        positives.append("A recognised smart job kit was selected.")
+    else:
+        score -= 12
+        gaps.append("No exact smart job kit was identified.")
+
+    materials = draft.get("materials", []) or []
+    if materials:
+        priced = sum(1 for x in materials if safe_float(x.get("manual_price", 0), 0) > 0)
+        matched = sum(1 for x in materials if x.get("data_source") not in {"ai_general", "ai_gap_fill", ""})
+        if matched == len(materials):
+            score += 10
+            positives.append("All materials came from approved or saved business data.")
+        elif matched:
+            score += 5
+            positives.append(f"{matched} of {len(materials)} materials matched business data.")
+        else:
+            score -= 8
+            gaps.append("Materials were not matched to saved business data.")
+        if priced == len(materials):
+            score += 8
+            positives.append("All material prices are available.")
+        elif priced:
+            score += 3
+            positives.append(f"{priced} of {len(materials)} material prices are available.")
+        else:
+            score -= 6
+            gaps.append("Material prices are not yet available.")
+
+    similar = sum(int(x.get("similar_quotes", 0) or 0) for x in jobs)
+    if similar >= 3:
+        score += 8
+        positives.append(f"{similar} similar saved quote references were found.")
+    elif similar:
+        score += 4
+        positives.append(f"{similar} similar saved quote reference(s) were found.")
+    else:
+        gaps.append("Little or no directly comparable quote history was found.")
+
+    unknown_supply = sum(1 for x in jobs if x.get("supply_responsibility", "unknown") == "unknown")
+    if jobs and unknown_supply == 0:
+        score += 5
+        positives.append("Supply responsibility was understood for each job.")
+    elif unknown_supply:
+        score -= min(unknown_supply * 3, 9)
+        gaps.append("Supply responsibility still needs confirming for one or more jobs.")
+
+    if len(draft.get("questions_to_confirm", []) or []) > 8:
+        score -= 5
+        gaps.append("Several details still need confirming.")
+
+    score = max(20, min(98, int(round(score))))
+    return {
+        "score": score,
+        "level": "high" if score >= 85 else "medium" if score >= 65 else "low",
+        "positive_reasons": unique_short_items(positives, 5),
+        "gaps": unique_short_items(gaps, 4),
+    }
+
+
+def build_professional_quote_mode(draft: dict, context: dict):
+    if not isinstance(draft, dict):
+        return draft
+
+    full_risks = unique_short_items(draft.get("risk_notes", []), 20)
+    full_questions = unique_short_items(draft.get("questions_to_confirm", []), 25)
+    full_warnings = unique_short_items(draft.get("warnings", []), 20)
+
+    evidence = []
+    for item in (draft.get("materials", []) or [])[:25]:
+        evidence.append({
+            "name": item.get("name", ""),
+            "source": (item.get("data_source") or "business data").replace("_", " "),
+            "confidence": 92 if item.get("data_source") not in {"ai_general", "ai_gap_fill", ""} else 65,
+            "used_count": int(item.get("learned_used_count", 0) or 0),
+        })
+
+    draft["professional_quote"] = {
+        "confidence": calculate_estimator_confidence(draft, context),
+        "assumptions": professional_assumptions_from_context(context),
+        "exclusions": professional_exclusions_from_context(context),
+        "questions": unique_short_items(full_questions, 5),
+        "risk_notes": unique_short_items(full_risks, 4),
+        "material_evidence": evidence,
+    }
+    draft["technical_detail"] = {
+        "all_risk_notes": full_risks,
+        "all_questions": full_questions,
+        "all_warnings": full_warnings,
+    }
+    return draft
+
+
 def build_ai_quote_context(data: AIQuoteDraftRequest):
     original_job = (data.job_description or "").strip()
     job = normalise_ai_job_text(original_job)
@@ -10469,7 +10674,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "context-aware-estimator-v7",
+        "estimator_version": "professional-quote-mode-v8",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -10526,16 +10731,19 @@ You are an experienced UK domestic plumbing estimator assisting Nigel Harvey Ltd
 Create a practical but cautious quote draft from the supplied job description and internal business data.
 
 Priority order:
-1. Treat multi_job_estimate.classified_jobs as the authoritative list of physical plumbing jobs.
-2. Treat each job's context_notes as instructions belonging to that job, not separate jobs.
-3. Preserve supply responsibility, access notes, existing-condition notes and additional-work notes in the correct job scope.
-4. Use the supplied labour and material kits without duplicating jobs.
-5. For a single job, use smart_job_kit as before.
-6. Use AI only to improve wording, risks, customer summary and confirmation questions.
+1. Preserve deterministic jobs, material kits, supply responsibility and attached context notes.
+2. Write concise professional scopes suitable for a customer quotation.
+3. Avoid repeating the same caveat across scope, risks, questions and warnings.
+4. Return no more than five genuinely important confirmation questions.
+5. Deterministic labour and materials remain authoritative.
 
 
 Rules:
 - Return only the requested structured JSON.
+- Customer-facing wording should be clear, calm and concise.
+- Do not produce long legalistic paragraphs or repeat generic hidden-defect warnings.
+- Keep each individual job scope to a few sentences.
+- Detailed technical reasoning will be shown only in an expandable internal section.
 - Never create a separate job from a sentence that only says who is supplying an item.
 - Never create a separate job from a sentence that only describes access, condition, dimensions, disposal or making good.
 - One physical installation must remain one job even when followed by several context notes.
@@ -10621,6 +10829,7 @@ Rules:
         raise HTTPException(status_code=502, detail="OpenAI returned an invalid structured quote draft.")
 
     draft = enforce_multi_job_estimate(draft, context)
+    draft = build_professional_quote_mode(draft, context)
 
     return {
         "draft": draft,
@@ -10650,7 +10859,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "context-aware-estimator-v7"),
+        "version": context.get("estimator_version", "professional-quote-mode-v8"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
