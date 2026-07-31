@@ -4607,8 +4607,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Mobile Site Capture V12.2</strong><br>
-        <span class="small">Take photos or record a guided site video directly in the app. The recorder uses reduced quality and stops after 90 seconds to keep uploads small.</span>
+        <strong>Survey Description Merge V12.3</strong><br>
+        <span class="small">Capture the site on your phone. After analysis, the app can create a new job description or add only the new site findings to an existing website enquiry.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
           <button type="button" class="btn-light" onclick="takeSitePhoto()">📷 Take photo</button>
@@ -4650,8 +4650,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Mobile Site Survey Intelligence V12.2</strong><br>
-        <span class="small">Uses captured photos, your spoken video explanation, quote history and saved products. A completed survey is attached automatically to the next AI quote.</span>
+        <strong>Survey‑Enriched Quote Intelligence V12.3</strong><br>
+        <span class="small">Uses the enquiry, site photos and spoken video together. Existing enquiry wording is preserved, while confirmed site findings can be appended before the quote is built.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
         </div>
@@ -7639,7 +7639,7 @@ async function analyseSiteSurvey() {
     return;
   }
   if (photos.length > 6) {
-    alert("V12.2 analyses up to 6 photos at a time.");
+    alert("V12.3 analyses up to 6 photos at a time.");
     return;
   }
   const oversizedPhoto = photos.find(file => file.size > 10 * 1024 * 1024);
@@ -7668,6 +7668,15 @@ async function analyseSiteSurvey() {
 
     CURRENT_SITE_SURVEY = data;
     SITE_SURVEY_ATTACHED = true;
+
+    const jobField = document.getElementById("job");
+    if (jobField && !String(jobField.value || "").trim()) {
+      jobField.value = data.proposed_job_description || data.summary || "";
+      jobField.dispatchEvent(new Event("input", {bubbles: true}));
+      CURRENT_SITE_SURVEY.merged_job_description = jobField.value;
+      CURRENT_SITE_SURVEY.description_merge_mode = "created";
+    }
+
     renderSiteSurvey(data);
     status.innerHTML =
       `✓ Survey complete and automatically attached · ${Number(data.evidence_count || 0)} visual evidence item(s) reviewed.`;
@@ -7680,6 +7689,122 @@ async function analyseSiteSurvey() {
   }
 }
 
+
+function normaliseDescriptionText(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/\s+([.,;:])/g, "$1")
+    .trim();
+}
+
+function descriptionSentenceKeys(value) {
+  return normaliseDescriptionText(value)
+    .split(/(?<=[.!?])\s+/)
+    .map(sentence => sentence.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim())
+    .filter(Boolean);
+}
+
+function mergeSurveyDescription(existingText, additionText) {
+  const existing = String(existingText || "").trim();
+  const addition = String(additionText || "").trim();
+  if (!existing) return addition;
+  if (!addition) return existing;
+
+  const existingKeys = descriptionSentenceKeys(existing);
+  const newSentences = addition
+    .split(/(?<=[.!?])\s+/)
+    .map(sentence => sentence.trim())
+    .filter(Boolean)
+    .filter(sentence => {
+      const key = sentence.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+      if (!key) return false;
+      return !existingKeys.some(existingKey =>
+        existingKey === key ||
+        existingKey.includes(key) ||
+        key.includes(existingKey)
+      );
+    });
+
+  if (!newSentences.length) return existing;
+  return `${existing}\n\nSite visit findings:\n${newSentences.join(" ")}`.trim();
+}
+
+function applySurveyDescription(mode = "append") {
+  if (!CURRENT_SITE_SURVEY) {
+    alert("Analyse the site media first.");
+    return;
+  }
+
+  const jobField = document.getElementById("job");
+  if (!jobField) return;
+
+  const existing = jobField.value || "";
+  const completeDescription =
+    CURRENT_SITE_SURVEY.proposed_job_description ||
+    CURRENT_SITE_SURVEY.summary ||
+    "";
+  const addition =
+    CURRENT_SITE_SURVEY.site_visit_addition ||
+    CURRENT_SITE_SURVEY.summary ||
+    "";
+
+  if (mode === "replace" || !existing.trim()) {
+    jobField.value = completeDescription;
+  } else {
+    jobField.value = mergeSurveyDescription(existing, addition);
+  }
+
+  jobField.dispatchEvent(new Event("input", {bubbles: true}));
+  CURRENT_SITE_SURVEY.merged_job_description = jobField.value;
+  CURRENT_SITE_SURVEY.description_merge_mode =
+    existing.trim() && mode !== "replace" ? "appended" : "created";
+
+  const mergeStatus = document.getElementById("surveyDescriptionStatus");
+  if (mergeStatus) {
+    mergeStatus.innerHTML =
+      existing.trim() && mode !== "replace"
+        ? "✓ New site findings added. Original enquiry preserved."
+        : "✓ Job description created from the site survey.";
+  }
+
+  showNotice(
+    existing.trim() && mode !== "replace"
+      ? "Site findings added to the existing job description."
+      : "Job description created from the site survey."
+  );
+}
+
+function surveyDescriptionPreview(data) {
+  const jobField = document.getElementById("job");
+  const existing = String(jobField?.value || "").trim();
+  const completeDescription =
+    data.proposed_job_description || data.summary || "";
+  const addition = data.site_visit_addition || data.summary || "";
+  const preview = existing
+    ? mergeSurveyDescription(existing, addition)
+    : completeDescription;
+
+  return `
+    <div style="margin-top:10px;padding:10px;border:1px solid #7c3aed;border-radius:9px;background:#faf5ff;">
+      <strong>${existing ? "Add site findings to existing enquiry" : "Create job description from survey"}</strong>
+      <div class="small" style="margin-top:4px;">
+        ${existing
+          ? "The website enquiry will stay unchanged at the top. Only new site-visit information will be appended."
+          : "The survey has enough information to fill the job description box."}
+      </div>
+      <div style="margin-top:8px;padding:8px;border:1px solid #ddd;border-radius:8px;background:white;white-space:pre-wrap;">${escapeHtml(preview)}</div>
+      <div id="surveyDescriptionStatus" class="small" style="margin-top:6px;"></div>
+      <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <button type="button" class="btn-green" onclick="applySurveyDescription('append')">
+          ${existing ? "Add new findings" : "Use this description"}
+        </button>
+        <button type="button" class="btn-light" onclick="applySurveyDescription('replace')">
+          Replace description
+        </button>
+      </div>
+    </div>`;
+}
+
 function renderSiteSurvey(data) {
   const box = document.getElementById("siteSurveyResult");
   const components = data.components || [];
@@ -7689,6 +7814,7 @@ function renderSiteSurvey(data) {
   box.innerHTML = `<div class="history-item" style="padding:10px;border-color:#2563eb;">
     <strong>Site survey summary</strong><br>${escapeHtml(data.summary || "")}
     <div style="margin-top:6px;color:#166534;"><strong>✓ Attached to the next AI quote</strong></div>
+    ${surveyDescriptionPreview(data)}
     ${data.transcript ? `<details style="margin-top:7px;"><summary><strong>Video transcript</strong></summary><div style="margin-top:5px;">${escapeHtml(data.transcript)}</div></details>` : ""}
     ${components.length ? `<div style="margin-top:9px;"><strong>Components reviewed</strong>${components.map(item => `<div style="margin-top:6px;padding:8px;border:1px solid #ddd;border-radius:8px;background:white;"><strong>${escapeHtml(item.component || "")}</strong><br><span class="small">${escapeHtml(surveyStatusLabel(item.status))} · ${Number(item.confidence || 0)}%</span><br>${escapeHtml(item.condition || "")}<br><strong>Quote action:</strong> ${escapeHtml(surveyActionLabel(item.quote_action))}${item.evidence ? `<br><span class="small">${escapeHtml(item.evidence)}</span>` : ""}</div>`).join("")}</div>` : ""}
     ${actions.length ? `<div style="margin-top:9px;"><strong>Material decisions</strong><br>${actions.map(item => `• ${escapeHtml(item.material_name)}: ${escapeHtml(surveyActionLabel(item.action))} — ${escapeHtml(item.reason)} (${Number(item.confidence || 0)}%)`).join("<br>")}</div>` : ""}
@@ -7735,7 +7861,12 @@ async function generateAIQuoteDraft() {
   const button = document.getElementById("aiQuoteButton");
   const status = document.getElementById("aiQuoteStatus");
   const resultBox = document.getElementById("aiQuoteResult");
-  const job = document.getElementById("job")?.value || "";
+  let job = document.getElementById("job")?.value || "";
+
+  if (!job.trim() && CURRENT_SITE_SURVEY) {
+    applySurveyDescription("replace");
+    job = document.getElementById("job")?.value || "";
+  }
 
   if (!job.trim()) {
     alert("Enter the job description first.");
@@ -7779,7 +7910,12 @@ async function generateAIQuoteDraft() {
     customer_address: document.getElementById("customer_address")?.value || "",
     current_labour: Number(document.getElementById("labour")?.value || 0),
     current_materials: currentMaterialsForAI(),
-    site_survey: CURRENT_SITE_SURVEY || {}
+    site_survey: CURRENT_SITE_SURVEY
+      ? {
+          ...CURRENT_SITE_SURVEY,
+          merged_job_description: document.getElementById("job")?.value || ""
+        }
+      : {}
   };
 
   try {
@@ -11876,7 +12012,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "mobile-site-capture-v12.2",
+        "estimator_version": "survey-description-merge-v12.3",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -12058,6 +12194,8 @@ SITE_SURVEY_SCHEMA = {
     "additionalProperties": False,
     "properties": {
         "summary": {"type": "string"},
+        "proposed_job_description": {"type": "string"},
+        "site_visit_addition": {"type": "string"},
         "transcript": {"type": "string"},
         "components": {"type": "array", "items": {
             "type": "object", "additionalProperties": False,
@@ -12094,8 +12232,9 @@ SITE_SURVEY_SCHEMA = {
         }},
         "warnings": {"type": "array", "items": {"type": "string"}}
     },
-    "required": ["summary", "transcript", "components",
-                 "site_conditions", "material_actions", "warnings"]
+    "required": ["summary", "proposed_job_description", "site_visit_addition",
+                 "transcript", "components", "site_conditions",
+                 "material_actions", "warnings"]
 }
 
 
@@ -12249,7 +12388,12 @@ Job description:
 Nigel's spoken transcript:
 {transcript or 'No transcript available'}
 
-Use only supported evidence. Nigel explicitly saying he tested an item and it works is stronger than visual evidence. Seeing an item does not prove it works or will reseal after disturbance. Hidden pipework cannot be confirmed. Do not call something absent merely because the angle does not show it. Use reuse_existing only when Nigel explicitly confirms it works; keep_optional when visible but condition is uncertain; include_required when clearly absent/damaged or Nigel says it needs replacement; otherwise site_check. Use concise UK plumbing terminology."""
+Use only supported evidence. Nigel explicitly saying he tested an item and it works is stronger than visual evidence. Seeing an item does not prove it works or will reseal after disturbance. Hidden pipework cannot be confirmed. Do not call something absent merely because the angle does not show it. Use reuse_existing only when Nigel explicitly confirms it works; keep_optional when visible but condition is uncertain; include_required when clearly absent/damaged or Nigel says it needs replacement; otherwise site_check. Use concise UK plumbing terminology.
+
+Also write:
+- proposed_job_description: a concise complete works description suitable for Nigel's quote form.
+- site_visit_addition: only the useful new facts learned from the site survey that may be appended to an existing website enquiry.
+Do not repeat vague enquiry wording. Do not include prices. Do not describe AI analysis. Keep uncertainty phrased as checks or provisional conditions."""
     }]
 
     # Compact files are read one at a time. At most eight small JPEG data URLs
@@ -12445,7 +12589,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "mobile-site-capture-v12.2"),
+        "version": context.get("estimator_version", "survey-description-merge-v12.3"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
