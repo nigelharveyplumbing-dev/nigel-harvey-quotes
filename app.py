@@ -4602,8 +4602,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>AI‑First Quote Builder V9.2</strong><br>
-        <span class="small">Describe the work once. AI builds the professional scope, labour and material list using your saved products, prices, suppliers and quote history.</span>
+        <strong>Quote Health Intelligence V10</strong><br>
+        <span class="small">Builds the quote, then checks missing items, unusual quantities, labour consistency and whether it is ready to send. Health checks are advisory and never change prices automatically.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
         </div>
@@ -7444,9 +7444,9 @@ async function generateAIQuoteDraft() {
     if (status) {
       const context = data.context_summary || {};
       status.innerHTML = context.is_multi_job
-        ? `AI quote builder ready · ${context.multi_job_count || 0} physical job(s) · review the draft before applying it.`
+        ? `Quote health check complete · ${context.multi_job_count || 0} physical job(s) · review any health warnings before applying it.`
         : context.smart_job_type
-          ? `AI quote builder ready · ${escapeHtml(context.smart_job_type)} · review the draft before applying it.`
+          ? `Quote health check complete · ${escapeHtml(context.smart_job_type)} · review any health warnings before applying it.`
           : `Estimator dashboard ready using database-first fallback.`;
     }
   } catch (e) {
@@ -7457,6 +7457,61 @@ async function generateAIQuoteDraft() {
       button.innerText = "Generate quote draft with AI";
     }
   }
+}
+
+
+function addQuoteHealthSuggestion(suggestionId) {
+  const draft = LAST_AI_QUOTE_DRAFT;
+  if (!draft || !draft.quote_health) return;
+
+  const suggestion = (draft.quote_health.missing_items || []).find(item => item.id === suggestionId);
+  if (!suggestion) return;
+
+  draft.materials = draft.materials || [];
+  const alreadyExists = draft.materials.some(item =>
+    canonicalMaterialName(item.name || "") === canonicalMaterialName(suggestion.name || "")
+  );
+
+  if (!alreadyExists) {
+    draft.materials.push({
+      name: suggestion.name || "",
+      quantity: Number(suggestion.quantity || 1),
+      supplier: suggestion.supplier || "City Plumbing",
+      url: suggestion.url || "",
+      manual_price: Number(suggestion.manual_price || 0),
+      required: !suggestion.optional,
+      display_status: suggestion.optional ? "optional" : "required",
+      data_source: "quote_health_suggestion",
+      reason: suggestion.reason || ""
+    });
+  }
+
+  draft.quote_health.missing_items = (draft.quote_health.missing_items || [])
+    .filter(item => item.id !== suggestionId);
+  draft.quote_health.score = Math.min(100, Number(draft.quote_health.score || 0) + (suggestion.optional ? 4 : 9));
+  draft.quote_health.checks_passed = draft.quote_health.checks_passed || [];
+  draft.quote_health.checks_passed.push(`${suggestion.name} was added for review.`);
+  draft.quote_health.readiness = "review_recommended";
+  draft.quote_health.readiness_label = "Review recommended";
+
+  renderAIQuoteDraft({draft});
+  showNotice(`${suggestion.name} added to the AI draft. Check its supplier and price.`);
+}
+
+function ignoreQuoteHealthSuggestion(suggestionId) {
+  const draft = LAST_AI_QUOTE_DRAFT;
+  if (!draft || !draft.quote_health) return;
+
+  const suggestion = (draft.quote_health.missing_items || []).find(item => item.id === suggestionId);
+  draft.quote_health.missing_items = (draft.quote_health.missing_items || [])
+    .filter(item => item.id !== suggestionId);
+  draft.quote_health.checks_passed = draft.quote_health.checks_passed || [];
+  if (suggestion) {
+    draft.quote_health.checks_passed.push(`${suggestion.name} was reviewed and ignored.`);
+  }
+
+  renderAIQuoteDraft({draft});
+  showNotice("Suggestion ignored for this draft.");
 }
 
 function renderAIQuoteDraft(data) {
@@ -7475,6 +7530,11 @@ function renderAIQuoteDraft(data) {
   const technical = draft.technical_detail || {};
   const evidence = professional.material_evidence || [];
   const preview = draft.customer_preview || {};
+  const health = draft.quote_health || {};
+  const healthMissing = health.missing_items || [];
+  const healthQuantities = health.quantity_warnings || [];
+  const healthLabour = health.labour_warnings || [];
+  const healthPassed = health.checks_passed || [];
 
   const statusBadge = (status) => {
     if (status === "required") return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#dcfce7;font-size:12px;">Required</span>`;
@@ -7488,7 +7548,7 @@ function renderAIQuoteDraft(data) {
     <div class="history-item" style="padding:10px;border-color:#7c3aed;">
       <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px;background:#f3f4f6;border-radius:10px;">
         <div>
-          <strong style="font-size:18px;">Estimator dashboard</strong><br>
+          <strong style="font-size:18px;">Estimator dashboard & quote health</strong><br>
           <span style="font-size:22px;letter-spacing:2px;">${stars}</span><br>
           <span class="small">Overall estimate quality ${Number(quality.overall || 0)}%</span>
         </div>
@@ -7503,6 +7563,30 @@ function renderAIQuoteDraft(data) {
         <div style="padding:8px;border:1px solid #ddd;border-radius:8px;"><strong>${Number(quality.labour || 0)}%</strong><br><span class="small">Labour</span></div>
         <div style="padding:8px;border:1px solid #ddd;border-radius:8px;"><strong>${Number(quality.understanding || 0)}%</strong><br><span class="small">AI understanding</span></div>
         <div style="padding:8px;border:1px solid #ddd;border-radius:8px;"><strong>${Number(quality.site_confirmation || 0)}%</strong><br><span class="small">Needs site confirmation</span></div>
+      </div>
+
+      <div style="margin-top:9px;padding:10px;border:2px solid ${health.readiness === "ready_to_send" ? "#16a34a" : health.readiness === "do_not_send" ? "#dc2626" : "#d97706"};border-radius:9px;background:${health.readiness === "ready_to_send" ? "#f0fdf4" : health.readiness === "do_not_send" ? "#fef2f2" : "#fffbeb"};">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+          <div><strong>Quote health</strong><br><span class="small">${escapeHtml(health.readiness_label || "Review recommended")}</span></div>
+          <div style="font-size:25px;font-weight:800;">${Number(health.score || 0)}%</div>
+        </div>
+
+        ${healthPassed.length ? `<div style="margin-top:7px;">${healthPassed.map(x => `✓ ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+
+        ${healthMissing.length ? `<div style="margin-top:9px;"><strong>Possible missing items</strong>
+          ${healthMissing.map(item => `<div style="margin-top:6px;padding:8px;background:white;border:1px solid #ddd;border-radius:8px;">
+            <strong>${escapeHtml(item.name || "")}</strong> × ${Number(item.quantity || 1)} ${item.optional ? `<span class="small">(optional)</span>` : ""}<br>
+            <span class="small">${escapeHtml(item.reason || "")}</span>
+            <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:7px;">
+              <button type="button" class="btn-light" onclick='addQuoteHealthSuggestion(${JSON.stringify(item.id)})'>Add item</button>
+              <button type="button" class="btn-light" onclick='ignoreQuoteHealthSuggestion(${JSON.stringify(item.id)})'>Ignore</button>
+            </div>
+          </div>`).join("")}
+        </div>` : ""}
+
+        ${healthQuantities.length ? `<div style="margin-top:9px;"><strong>Quantities to check</strong><br>${healthQuantities.map(x => `△ ${escapeHtml(x.message || "")}`).join("<br>")}</div>` : ""}
+        ${healthLabour.length ? `<div style="margin-top:9px;"><strong>Labour checks</strong><br>${healthLabour.map(x => `△ ${escapeHtml(x.message || "")}`).join("<br>")}</div>` : ""}
+        <div class="small" style="margin-top:7px;">Advisory only — nothing is added or repriced unless you approve it.</div>
       </div>
 
       ${(confidence.positive_reasons || []).length || (confidence.gaps || []).length ? `
@@ -10773,6 +10857,356 @@ def enhance_v9_quote(draft: dict, context: dict):
     return draft
 
 
+
+QUOTE_HEALTH_JOB_RULES = {
+    "outside_tap": {
+        "recommended": [
+            {
+                "key": "isolation_valve",
+                "name": "15mm isolation valve",
+                "aliases": ["isolation valve", "isolating valve"],
+                "quantity": 1,
+                "reason": "An accessible internal isolation point is normally required for maintenance and winter shut-off.",
+            },
+            {
+                "key": "backflow_protection",
+                "name": "Hose union bib tap with double check valve",
+                "aliases": ["double check", "dbl check", "backflow", "hose union bib"],
+                "quantity": 1,
+                "reason": "Backflow protection is normally required for an outside tap arrangement.",
+            },
+        ],
+        "quantity_limits": {
+            "isolation valve": {"max_per_job": 2},
+            "isolating valve": {"max_per_job": 2},
+            "double check": {"max_per_job": 1},
+            "hose union bib": {"max_per_job": 1},
+            "drain off": {"max_per_job": 1},
+            "copper pipe 3m": {"max_per_job": 2},
+        },
+    },
+    "toilet_replacement": {
+        "recommended": [
+            {
+                "key": "pan_connector",
+                "name": "Pan connector",
+                "aliases": ["pan connector"],
+                "quantity": 1,
+                "reason": "A suitable pan connector is commonly required when reconnecting the replacement toilet.",
+            },
+            {
+                "key": "sanitary_sealant",
+                "name": "Sanitary silicone",
+                "aliases": ["silicone", "sanitary sealant"],
+                "quantity": 0.2,
+                "reason": "A small sanitary sealant allowance is normally required around the finished installation.",
+            },
+        ],
+        "quantity_limits": {
+            "pan connector": {"max_per_job": 1},
+            "flexible tap connector": {"max_per_job": 1},
+            "isolation valve": {"max_per_job": 1},
+            "isolating valve": {"max_per_job": 1},
+            "toilet fixing": {"max_per_job": 1},
+        },
+    },
+    "tap_replacement": {
+        "recommended": [
+            {
+                "key": "tap_connectors",
+                "name": "Flexible tap connector",
+                "aliases": ["flexible tap connector", "flexi tap connector", "tap connector"],
+                "quantity": 2,
+                "reason": "Two suitable hot and cold tap connections are commonly required unless the existing connections are reused.",
+                "optional": True,
+            },
+        ],
+        "quantity_limits": {
+            "flexible tap connector": {"max_per_job": 2},
+            "isolation valve": {"max_per_job": 2},
+            "isolating valve": {"max_per_job": 2},
+        },
+    },
+    "radiator_replacement": {
+        "recommended": [
+            {
+                "key": "radiator_valves",
+                "name": "Radiator valve pair",
+                "aliases": ["radiator valve", "trv valve", "lockshield"],
+                "quantity": 2,
+                "reason": "A compatible valve pair may be required if the existing valves cannot be reused.",
+                "optional": True,
+            },
+            {
+                "key": "inhibitor",
+                "name": "Central heating inhibitor",
+                "aliases": ["inhibitor"],
+                "quantity": 0.1,
+                "reason": "Inhibitor should be considered where the heating system is drained or significantly topped up.",
+                "optional": True,
+            },
+        ],
+        "quantity_limits": {
+            "radiator valve": {"max_per_job": 2},
+            "trv valve": {"max_per_job": 1},
+            "lockshield": {"max_per_job": 1},
+            "radiator tail": {"max_per_job": 2},
+        },
+    },
+    "trv_replacement": {
+        "recommended": [
+            {
+                "key": "trv",
+                "name": "TRV valve",
+                "aliases": ["trv valve", "thermostatic radiator valve"],
+                "quantity": 1,
+                "reason": "One thermostatic radiator valve is required for each TRV replacement.",
+            },
+        ],
+        "quantity_limits": {
+            "trv valve": {"max_per_job": 1},
+            "thermostatic radiator valve": {"max_per_job": 1},
+        },
+    },
+    "basin_waste": {
+        "recommended": [
+            {
+                "key": "basin_waste",
+                "name": "Basin waste",
+                "aliases": ["basin waste"],
+                "quantity": 1,
+                "reason": "A compatible basin waste is the main fitting for this job.",
+            },
+        ],
+        "quantity_limits": {
+            "basin waste": {"max_per_job": 1},
+            "basin trap": {"max_per_job": 1},
+        },
+    },
+    "kitchen_sink_waste": {
+        "recommended": [
+            {
+                "key": "sink_waste",
+                "name": "Kitchen sink waste kit",
+                "aliases": ["kitchen sink waste", "sink waste kit", "sink waste"],
+                "quantity": 1,
+                "reason": "A compatible sink waste assembly is the main fitting for this job.",
+            },
+        ],
+        "quantity_limits": {
+            "sink waste": {"max_per_job": 1},
+            "kitchen sink waste": {"max_per_job": 1},
+            "sink trap": {"max_per_job": 1},
+        },
+    },
+}
+
+
+def material_name_matches(name: str, aliases: list):
+    canonical = canonical_material_name(name)
+    return any(
+        canonical_material_name(alias) in canonical
+        or canonical in canonical_material_name(alias)
+        for alias in aliases
+        if alias
+    )
+
+
+def count_jobs_by_type(context: dict):
+    counts = {}
+    jobs = (context.get("multi_job_estimate", {}) or {}).get("classified_jobs", []) or []
+    if jobs:
+        for job in jobs:
+            job_type = job.get("job_type")
+            if job_type:
+                counts[job_type] = counts.get(job_type, 0) + 1
+        return counts
+
+    smart = context.get("smart_job_kit", {}) or {}
+    job_type = (smart.get("classification", {}) or {}).get("job_type")
+    if job_type:
+        counts[job_type] = 1
+    return counts
+
+
+def build_quote_health(draft: dict, context: dict):
+    materials = draft.get("materials", []) or []
+    job_counts = count_jobs_by_type(context)
+    missing_items = []
+    quantity_warnings = []
+    labour_warnings = []
+    checks_passed = []
+    seen_missing = set()
+    seen_quantity = set()
+
+    for job_type, job_count in job_counts.items():
+        rule = QUOTE_HEALTH_JOB_RULES.get(job_type, {})
+        for recommended in rule.get("recommended", []):
+            found = any(
+                material_name_matches(item.get("name", ""), recommended.get("aliases", []))
+                for item in materials
+            )
+            if not found:
+                key = f"{job_type}:{recommended.get('key')}"
+                if key not in seen_missing:
+                    seen_missing.add(key)
+                    missing_items.append({
+                        "id": key,
+                        "job_type": job_type,
+                        "name": recommended.get("name", ""),
+                        "quantity": round(
+                            safe_float(recommended.get("quantity", 1), 1) * job_count,
+                            2
+                        ),
+                        "reason": recommended.get("reason", ""),
+                        "optional": bool(recommended.get("optional", False)),
+                        "supplier": "",
+                        "url": "",
+                        "manual_price": 0,
+                    })
+
+        for alias, limit in (rule.get("quantity_limits", {}) or {}).items():
+            matching = [
+                item for item in materials
+                if material_name_matches(item.get("name", ""), [alias])
+            ]
+            if not matching:
+                continue
+            actual = sum(safe_float(item.get("quantity", 0), 0) for item in matching)
+            expected_max = safe_float(limit.get("max_per_job", 0), 0) * job_count
+            if expected_max > 0 and actual > expected_max + 0.001:
+                warning_key = f"{job_type}:{alias}"
+                if warning_key not in seen_quantity:
+                    seen_quantity.add(warning_key)
+                    quantity_warnings.append({
+                        "id": warning_key,
+                        "job_type": job_type,
+                        "material": matching[0].get("name", alias),
+                        "actual_quantity": round(actual, 2),
+                        "expected_max": round(expected_max, 2),
+                        "message": (
+                            f"{matching[0].get('name', alias)} quantity is {actual:g}; "
+                            f"normally no more than {expected_max:g} for {job_count} job(s)."
+                        ),
+                    })
+
+    # General consumable quantity checks.
+    for item in materials:
+        name = canonical_material_name(item.get("name", ""))
+        quantity = safe_float(item.get("quantity", 0), 0)
+        if "ptfe" in name and quantity > 0.5:
+            quantity_warnings.append({
+                "id": "general:ptfe",
+                "job_type": "general",
+                "material": item.get("name", "PTFE tape"),
+                "actual_quantity": quantity,
+                "expected_max": 0.5,
+                "message": "PTFE allowance looks high for consumable use; check that a partial roll rather than a full roll is being charged.",
+            })
+        if "silicone" in name and quantity > max(1.0, sum(job_counts.values()) * 0.5):
+            quantity_warnings.append({
+                "id": "general:silicone",
+                "job_type": "general",
+                "material": item.get("name", "Silicone"),
+                "actual_quantity": quantity,
+                "expected_max": max(1.0, sum(job_counts.values()) * 0.5),
+                "message": "Silicone quantity looks high compared with the number of jobs; confirm whether full tubes are genuinely required.",
+            })
+
+    # Labour checks.
+    breakdown = draft.get("job_breakdown", []) or []
+    total_labour = safe_float(draft.get("labour_suggestion", 0), 0)
+    breakdown_total = round(sum(
+        safe_float(job.get("labour_suggestion", 0), 0)
+        for job in breakdown
+    ), 2)
+
+    if breakdown and abs(total_labour - breakdown_total) > 0.01:
+        labour_warnings.append({
+            "id": "labour:total_mismatch",
+            "message": (
+                f"Combined labour is £{total_labour:.2f}, but the job breakdown totals "
+                f"£{breakdown_total:.2f}. Check for duplicated or missing labour."
+            ),
+        })
+    else:
+        checks_passed.append("Labour total matches the individual job breakdown.")
+
+    for job in breakdown:
+        confidence = (job.get("labour_confidence", {}) or {}).get("level", "low")
+        if confidence == "low":
+            labour_warnings.append({
+                "id": f"labour:low_confidence:{job.get('job_number', 0)}",
+                "message": (
+                    f"{job.get('display_name', 'Job')} labour has low historical confidence "
+                    "and should be reviewed manually."
+                ),
+            })
+
+    if materials and all(safe_float(item.get("manual_price", 0), 0) > 0 for item in materials):
+        checks_passed.append("All current material prices are available.")
+    elif materials:
+        unpriced = sum(1 for item in materials if safe_float(item.get("manual_price", 0), 0) <= 0)
+        quantity_warnings.append({
+            "id": "materials:unpriced",
+            "job_type": "general",
+            "material": "Unpriced materials",
+            "actual_quantity": unpriced,
+            "expected_max": 0,
+            "message": f"{unpriced} material item(s) still need a price before the quote is sent.",
+        })
+
+    if not missing_items:
+        checks_passed.append("No common required materials appear to be missing.")
+    if not quantity_warnings:
+        checks_passed.append("Material quantities are within the normal advisory ranges.")
+    if not labour_warnings:
+        checks_passed.append("No labour inconsistencies were found.")
+    if job_counts:
+        checks_passed.append("Physical jobs were identified clearly.")
+
+    score = 100
+    score -= sum(4 if item.get("optional") else 9 for item in missing_items)
+    score -= min(25, len(quantity_warnings) * 6)
+    score -= min(25, len(labour_warnings) * 10)
+
+    professional = draft.get("professional_quote", {}) or {}
+    open_questions = len(professional.get("questions", []) or [])
+    score -= min(15, open_questions * 2)
+    score = max(20, min(100, int(round(score))))
+
+    if score >= 90 and not labour_warnings and not any(
+        not item.get("optional") for item in missing_items
+    ):
+        readiness = "ready_to_send"
+        readiness_label = "Ready to send"
+    elif score >= 65:
+        readiness = "review_recommended"
+        readiness_label = "Review recommended"
+    else:
+        readiness = "do_not_send"
+        readiness_label = "Do not send yet"
+
+    return {
+        "score": score,
+        "readiness": readiness,
+        "readiness_label": readiness_label,
+        "missing_items": missing_items,
+        "quantity_warnings": quantity_warnings,
+        "labour_warnings": labour_warnings,
+        "checks_passed": unique_short_items(checks_passed, 8),
+        "open_site_checks": open_questions,
+        "advisory_only": True,
+    }
+
+
+def enhance_v10_quote(draft: dict, context: dict):
+    if not isinstance(draft, dict):
+        return draft
+    draft["quote_health"] = build_quote_health(draft, context)
+    return draft
+
+
 def build_ai_quote_context(data: AIQuoteDraftRequest):
     original_job = (data.job_description or "").strip()
     job = normalise_ai_job_text(original_job)
@@ -10881,7 +11315,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "ai-first-quote-builder-v9.2",
+        "estimator_version": "quote-health-intelligence-v10",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -11038,6 +11472,7 @@ Rules:
     draft = enforce_multi_job_estimate(draft, context)
     draft = build_professional_quote_mode(draft, context)
     draft = enhance_v9_quote(draft, context)
+    draft = enhance_v10_quote(draft, context)
 
     return {
         "draft": draft,
@@ -11067,7 +11502,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "ai-first-quote-builder-v9.2"),
+        "version": context.get("estimator_version", "quote-health-intelligence-v10"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
