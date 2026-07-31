@@ -4607,17 +4607,42 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Photo & Video Site Survey V12.1</strong><br>
-        <span class="small">Upload up to 6 photos or one short video. Media is resized and processed from temporary files to keep the service safely below Render’s memory limit.</span>
-
-        <label for="siteSurveyPhotos" style="margin-top:8px;">Site photos</label>
-        <input id="siteSurveyPhotos" type="file" accept="image/*" multiple>
-
-        <label for="siteSurveyVideo" style="margin-top:8px;">Site video with explanation</label>
-        <input id="siteSurveyVideo" type="file" accept="video/*">
+        <strong>Mobile Site Capture V12.2</strong><br>
+        <span class="small">Take photos or record a guided site video directly in the app. The recorder uses reduced quality and stops after 90 seconds to keep uploads small.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
-          <button type="button" class="btn-light" onclick="analyseSiteSurvey()">Analyse site media</button>
+          <button type="button" class="btn-light" onclick="takeSitePhoto()">📷 Take photo</button>
+          <button type="button" id="recordSiteVideoButton" class="btn-light" onclick="startSiteVideoRecording()">🎥 Record video</button>
+        </div>
+
+        <input id="siteCameraPhoto" type="file" accept="image/*" capture="environment" hidden>
+        <input id="siteCameraVideoFallback" type="file" accept="video/*" capture="environment" hidden>
+
+        <div id="siteCaptureSummary" class="small" style="margin-top:8px;">No site media captured yet.</div>
+
+        <div id="siteVideoRecorder" class="hidden" style="margin-top:10px;padding:10px;border:1px solid #93c5fd;border-radius:10px;background:white;">
+          <video id="siteVideoPreview" autoplay muted playsinline style="width:100%;max-height:360px;border-radius:8px;background:#111;"></video>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+            <strong id="siteVideoTimer">00:00</strong>
+            <span id="siteVideoSize" class="small">Preparing camera…</span>
+          </div>
+          <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+            <button type="button" class="btn-red" onclick="stopSiteVideoRecording()">Stop & use video</button>
+            <button type="button" class="btn-light" onclick="cancelSiteVideoRecording()">Cancel</button>
+          </div>
+        </div>
+
+        <details style="margin-top:10px;">
+          <summary><strong>Choose existing photos or video</strong></summary>
+          <label for="siteSurveyPhotos" style="margin-top:8px;">Existing photos</label>
+          <input id="siteSurveyPhotos" type="file" accept="image/*" multiple>
+
+          <label for="siteSurveyVideo" style="margin-top:8px;">Existing video</label>
+          <input id="siteSurveyVideo" type="file" accept="video/*">
+        </details>
+
+        <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+          <button type="button" class="btn-green" onclick="analyseSiteSurvey()">Analyse captured media</button>
           <button type="button" class="btn-light" onclick="clearSiteSurvey()">Clear survey</button>
         </div>
         <div id="siteSurveyStatus" class="small" style="margin-top:8px;"></div>
@@ -4625,8 +4650,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Low‑Memory Photo & Video Intelligence V12.1</strong><br>
-        <span class="small">Uses the same site-survey intelligence with a low-memory pipeline: streamed uploads, six compact video frames, resized photos and immediate temporary-file cleanup.</span>
+        <strong>Mobile Site Survey Intelligence V12.2</strong><br>
+        <span class="small">Uses captured photos, your spoken video explanation, quote history and saved products. A completed survey is attached automatically to the next AI quote.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
         </div>
@@ -7415,6 +7440,172 @@ async function checkAIQuoteStatus() {
 
 
 let CURRENT_SITE_SURVEY = null;
+let CAPTURED_SITE_PHOTOS = [];
+let RECORDED_SITE_VIDEO = null;
+let SITE_MEDIA_RECORDER = null;
+let SITE_CAMERA_STREAM = null;
+let SITE_VIDEO_CHUNKS = [];
+let SITE_RECORDING_TIMER = null;
+let SITE_RECORDING_STARTED_AT = 0;
+let SITE_SURVEY_ATTACHED = false;
+
+function formatMediaBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function updateSiteCaptureSummary() {
+  const existingPhotos = [...(document.getElementById("siteSurveyPhotos")?.files || [])];
+  const existingVideo = document.getElementById("siteSurveyVideo")?.files?.[0];
+  const photoCount = CAPTURED_SITE_PHOTOS.length + existingPhotos.length;
+  const video = RECORDED_SITE_VIDEO || existingVideo;
+  const parts = [];
+  if (photoCount) parts.push(`${photoCount} photo${photoCount === 1 ? "" : "s"}`);
+  if (video) parts.push(`video ${formatMediaBytes(video.size)}`);
+  document.getElementById("siteCaptureSummary").innerHTML =
+    parts.length ? `Ready: ${parts.join(" · ")}` : "No site media captured yet.";
+}
+
+function takeSitePhoto() {
+  document.getElementById("siteCameraPhoto")?.click();
+}
+
+function preferredRecorderMimeType() {
+  if (!window.MediaRecorder) return "";
+  const options = [
+    "video/mp4;codecs=h264,aac",
+    "video/mp4",
+    "video/webm;codecs=vp8,opus",
+    "video/webm"
+  ];
+  return options.find(type => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+async function startSiteVideoRecording() {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    document.getElementById("siteCameraVideoFallback")?.click();
+    return;
+  }
+
+  try {
+    SITE_CAMERA_STREAM = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: {ideal: "environment"},
+        width: {ideal: 1280, max: 1280},
+        height: {ideal: 720, max: 720},
+        frameRate: {ideal: 24, max: 30}
+      },
+      audio: true
+    });
+
+    const preview = document.getElementById("siteVideoPreview");
+    preview.srcObject = SITE_CAMERA_STREAM;
+    document.getElementById("siteVideoRecorder").classList.remove("hidden");
+
+    SITE_VIDEO_CHUNKS = [];
+    const mimeType = preferredRecorderMimeType();
+    const options = {
+      videoBitsPerSecond: 900000,
+      audioBitsPerSecond: 48000
+    };
+    if (mimeType) options.mimeType = mimeType;
+
+    SITE_MEDIA_RECORDER = new MediaRecorder(SITE_CAMERA_STREAM, options);
+    SITE_MEDIA_RECORDER.ondataavailable = event => {
+      if (event.data && event.data.size) SITE_VIDEO_CHUNKS.push(event.data);
+      const bytes = SITE_VIDEO_CHUNKS.reduce((sum, item) => sum + item.size, 0);
+      document.getElementById("siteVideoSize").innerText = `Recorded ${formatMediaBytes(bytes)}`;
+    };
+    SITE_MEDIA_RECORDER.onstop = finishSiteVideoRecording;
+    SITE_MEDIA_RECORDER.start(1000);
+
+    SITE_RECORDING_STARTED_AT = Date.now();
+    document.getElementById("recordSiteVideoButton").disabled = true;
+    SITE_RECORDING_TIMER = setInterval(() => {
+      const seconds = Math.floor((Date.now() - SITE_RECORDING_STARTED_AT) / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const remainder = seconds % 60;
+      document.getElementById("siteVideoTimer").innerText =
+        `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+      if (seconds >= 90) stopSiteVideoRecording();
+    }, 250);
+  } catch (error) {
+    document.getElementById("siteCameraVideoFallback")?.click();
+  }
+}
+
+function stopSiteVideoRecording() {
+  if (SITE_MEDIA_RECORDER && SITE_MEDIA_RECORDER.state !== "inactive") {
+    SITE_MEDIA_RECORDER.stop();
+  }
+}
+
+function cancelSiteVideoRecording() {
+  SITE_VIDEO_CHUNKS = [];
+  RECORDED_SITE_VIDEO = null;
+  cleanupSiteRecorder();
+  updateSiteCaptureSummary();
+}
+
+function finishSiteVideoRecording() {
+  const mimeType = SITE_MEDIA_RECORDER?.mimeType || "video/webm";
+  const extension = mimeType.includes("mp4") ? "mp4" : "webm";
+  const blob = new Blob(SITE_VIDEO_CHUNKS, {type: mimeType});
+  RECORDED_SITE_VIDEO = new File(
+    [blob],
+    `site-survey-${Date.now()}.${extension}`,
+    {type: mimeType, lastModified: Date.now()}
+  );
+  cleanupSiteRecorder();
+  updateSiteCaptureSummary();
+  document.getElementById("siteSurveyStatus").innerHTML =
+    `Video recorded (${formatMediaBytes(RECORDED_SITE_VIDEO.size)}). Press Analyse captured media.`;
+}
+
+function cleanupSiteRecorder() {
+  if (SITE_RECORDING_TIMER) clearInterval(SITE_RECORDING_TIMER);
+  SITE_RECORDING_TIMER = null;
+  if (SITE_CAMERA_STREAM) {
+    SITE_CAMERA_STREAM.getTracks().forEach(track => track.stop());
+  }
+  SITE_CAMERA_STREAM = null;
+  const preview = document.getElementById("siteVideoPreview");
+  if (preview) preview.srcObject = null;
+  document.getElementById("siteVideoRecorder")?.classList.add("hidden");
+  const button = document.getElementById("recordSiteVideoButton");
+  if (button) button.disabled = false;
+  document.getElementById("siteVideoTimer").innerText = "00:00";
+}
+
+document.getElementById("siteCameraPhoto")?.addEventListener("change", event => {
+  const file = event.target.files?.[0];
+  if (file) {
+    if (CAPTURED_SITE_PHOTOS.length >= 6) {
+      alert("You can use up to 6 site photos.");
+    } else {
+      CAPTURED_SITE_PHOTOS.push(file);
+      CURRENT_SITE_SURVEY = null;
+      SITE_SURVEY_ATTACHED = false;
+    }
+  }
+  event.target.value = "";
+  updateSiteCaptureSummary();
+});
+
+document.getElementById("siteCameraVideoFallback")?.addEventListener("change", event => {
+  const file = event.target.files?.[0];
+  if (file) {
+    RECORDED_SITE_VIDEO = file;
+    CURRENT_SITE_SURVEY = null;
+    SITE_SURVEY_ATTACHED = false;
+  }
+  event.target.value = "";
+  updateSiteCaptureSummary();
+});
+
+document.getElementById("siteSurveyPhotos")?.addEventListener("change", updateSiteCaptureSummary);
+document.getElementById("siteSurveyVideo")?.addEventListener("change", updateSiteCaptureSummary);
 
 function surveyStatusLabel(value) {
   return ({
@@ -7437,16 +7628,18 @@ function surveyActionLabel(value) {
 }
 
 async function analyseSiteSurvey() {
-  const photos = [...(document.getElementById("siteSurveyPhotos")?.files || [])];
-  const video = document.getElementById("siteSurveyVideo")?.files?.[0];
+  const chosenPhotos = [...(document.getElementById("siteSurveyPhotos")?.files || [])];
+  const photos = [...CAPTURED_SITE_PHOTOS, ...chosenPhotos];
+  const chosenVideo = document.getElementById("siteSurveyVideo")?.files?.[0];
+  const video = RECORDED_SITE_VIDEO || chosenVideo;
   const status = document.getElementById("siteSurveyStatus");
 
   if (!photos.length && !video) {
-    alert("Add at least one photo or a video.");
+    alert("Take a photo, record a video or choose existing media first.");
     return;
   }
   if (photos.length > 6) {
-    alert("V12.1 analyses up to 6 photos at a time.");
+    alert("V12.2 analyses up to 6 photos at a time.");
     return;
   }
   const oversizedPhoto = photos.find(file => file.size > 10 * 1024 * 1024);
@@ -7455,27 +7648,35 @@ async function analyseSiteSurvey() {
     return;
   }
   if (video && video.size > 80 * 1024 * 1024) {
-    alert("Keep the video below 80 MB. On iPhone, choose a shorter clip or lower video quality.");
+    alert("This video is over 80 MB. Use Record video in the app, which records a smaller 720p clip, or record a shorter video.");
     return;
   }
 
   const form = new FormData();
   form.append("job_description", document.getElementById("job")?.value || "");
-  photos.slice(0, 10).forEach(file => form.append("photos", file));
+  photos.forEach(file => form.append("photos", file));
   if (video) form.append("video", video);
 
-  status.innerHTML = "Uploading in small chunks, extracting six compact frames and transcribing your explanation…";
+  status.innerHTML = "Uploading safely, extracting six compact frames and transcribing your explanation…";
   document.getElementById("siteSurveyResult").innerHTML = "";
+  SITE_SURVEY_ATTACHED = false;
 
   try {
     const response = await fetch("/api/site-survey", {method: "POST", body: form});
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Site survey failed.");
+
     CURRENT_SITE_SURVEY = data;
+    SITE_SURVEY_ATTACHED = true;
     renderSiteSurvey(data);
-    status.innerHTML = `Survey ready · ${Number(data.evidence_count || 0)} visual evidence item(s) reviewed.`;
+    status.innerHTML =
+      `✓ Survey complete and automatically attached · ${Number(data.evidence_count || 0)} visual evidence item(s) reviewed.`;
+    showNotice("Site survey complete and attached to the next AI quote.");
   } catch (error) {
-    status.innerHTML = `<span style="color:#b91c1c;">${escapeHtml(error.message || "Site survey failed.")}</span>`;
+    CURRENT_SITE_SURVEY = null;
+    SITE_SURVEY_ATTACHED = false;
+    status.innerHTML =
+      `<span style="color:#b91c1c;">${escapeHtml(error.message || "Site survey failed.")}</span>`;
   }
 }
 
@@ -7483,29 +7684,41 @@ function renderSiteSurvey(data) {
   const box = document.getElementById("siteSurveyResult");
   const components = data.components || [];
   const actions = data.material_actions || [];
+  const warnings = data.warnings || [];
+
   box.innerHTML = `<div class="history-item" style="padding:10px;border-color:#2563eb;">
     <strong>Site survey summary</strong><br>${escapeHtml(data.summary || "")}
+    <div style="margin-top:6px;color:#166534;"><strong>✓ Attached to the next AI quote</strong></div>
     ${data.transcript ? `<details style="margin-top:7px;"><summary><strong>Video transcript</strong></summary><div style="margin-top:5px;">${escapeHtml(data.transcript)}</div></details>` : ""}
-    ${components.length ? `<div style="margin-top:9px;"><strong>Components reviewed</strong>${components.map(item => `<div style="margin-top:6px;padding:8px;border:1px solid #ddd;border-radius:8px;background:white;"><strong>${escapeHtml(item.component || "")}</strong><br><span class="small">${escapeHtml(surveyStatusLabel(item.status))} · ${Number(item.confidence || 0)}%</span><br>${escapeHtml(item.condition || "")}<br><strong>Quote action:</strong> ${escapeHtml(surveyActionLabel(item.quote_action))}</div>`).join("")}</div>` : ""}
+    ${components.length ? `<div style="margin-top:9px;"><strong>Components reviewed</strong>${components.map(item => `<div style="margin-top:6px;padding:8px;border:1px solid #ddd;border-radius:8px;background:white;"><strong>${escapeHtml(item.component || "")}</strong><br><span class="small">${escapeHtml(surveyStatusLabel(item.status))} · ${Number(item.confidence || 0)}%</span><br>${escapeHtml(item.condition || "")}<br><strong>Quote action:</strong> ${escapeHtml(surveyActionLabel(item.quote_action))}${item.evidence ? `<br><span class="small">${escapeHtml(item.evidence)}</span>` : ""}</div>`).join("")}</div>` : ""}
     ${actions.length ? `<div style="margin-top:9px;"><strong>Material decisions</strong><br>${actions.map(item => `• ${escapeHtml(item.material_name)}: ${escapeHtml(surveyActionLabel(item.action))} — ${escapeHtml(item.reason)} (${Number(item.confidence || 0)}%)`).join("<br>")}</div>` : ""}
-    <div class="history-actions" style="grid-template-columns:1fr;margin-top:9px;"><button type="button" class="btn-light" onclick="useSiteSurveyInQuote()">Use survey in quote</button></div>
+    ${warnings.length ? `<div style="margin-top:9px;"><strong>Limitations</strong><br>${warnings.map(item => `△ ${escapeHtml(item)}`).join("<br>")}</div>` : ""}
   </div>`;
 }
 
 function useSiteSurveyInQuote() {
   if (!CURRENT_SITE_SURVEY) return alert("Analyse the site media first.");
-  document.getElementById("siteSurveyStatus").innerHTML = "Survey attached. Press Build Quote with AI.";
+  SITE_SURVEY_ATTACHED = true;
+  document.getElementById("siteSurveyStatus").innerHTML =
+    "✓ Survey attached. Press Build Quote with AI.";
   showNotice("Site survey attached to the next AI quote draft.");
 }
 
 function clearSiteSurvey() {
+  cancelSiteVideoRecording();
   CURRENT_SITE_SURVEY = null;
+  SITE_SURVEY_ATTACHED = false;
+  CAPTURED_SITE_PHOTOS = [];
+  RECORDED_SITE_VIDEO = null;
+
   const photos = document.getElementById("siteSurveyPhotos");
   const video = document.getElementById("siteSurveyVideo");
   if (photos) photos.value = "";
   if (video) video.value = "";
+
   document.getElementById("siteSurveyResult").innerHTML = "";
   document.getElementById("siteSurveyStatus").innerHTML = "";
+  updateSiteCaptureSummary();
 }
 
 function currentMaterialsForAI() {
@@ -7533,8 +7746,31 @@ async function generateAIQuoteDraft() {
     button.disabled = true;
     button.innerText = "Generating AI draft…";
   }
-  if (status) status.innerHTML = "Reviewing job history, materials and labour…";
+  if (status) {
+    status.innerHTML = CURRENT_SITE_SURVEY
+      ? "Using the attached site survey, transcript, visual evidence, job history, materials and labour…"
+      : "No site survey attached — using the written job description, history, materials and labour only…";
+  }
   if (resultBox) resultBox.innerHTML = "";
+
+  const hasUnanalysedMedia =
+    CAPTURED_SITE_PHOTOS.length ||
+    RECORDED_SITE_VIDEO ||
+    document.getElementById("siteSurveyPhotos")?.files?.length ||
+    document.getElementById("siteSurveyVideo")?.files?.length;
+
+  if (hasUnanalysedMedia && !CURRENT_SITE_SURVEY) {
+    const continueWithoutSurvey = confirm(
+      "You have site media selected, but it has not been analysed. Continue without using the photos/video?"
+    );
+    if (!continueWithoutSurvey) {
+      if (button) {
+        button.disabled = false;
+        button.innerText = "Build Quote with AI";
+      }
+      return;
+    }
+  }
 
   const payload = {
     job_description: job,
@@ -11640,7 +11876,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "low-memory-site-survey-v12.1",
+        "estimator_version": "mobile-site-capture-v12.2",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -12209,7 +12445,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "low-memory-site-survey-v12.1"),
+        "version": context.get("estimator_version", "mobile-site-capture-v12.2"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
