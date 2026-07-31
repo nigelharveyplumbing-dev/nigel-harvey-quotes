@@ -1741,6 +1741,17 @@ class QuoteRequest(BaseModel):
     deposit_percent: float = 0
 
 
+
+
+class AIQuoteDraftRequest(BaseModel):
+    job_description: str = ""
+    quote_type: str = "small"
+    customer_name: str = ""
+    customer_address: str = ""
+    current_labour: float = 0
+    current_materials: list[MaterialItem] = Field(default_factory=list)
+
+
 class InvoiceStatusRequest(BaseModel):
     status: str
     amount_paid: float = 0
@@ -4618,6 +4629,17 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <label for="job">Job description</label>
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
+      <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
+        <strong>AI Quote Builder V1</strong><br>
+        <span class="small">Uses the job description, trade library, similar quotes, labour history and missing-item checks. It fills the form for review—it does not save or send automatically.</span>
+        <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
+          <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Generate quote draft with AI</button>
+        </div>
+        <div id="aiQuoteStatus" class="small" style="margin-top:8px;"></div>
+        <div id="aiQuoteResult" style="margin-top:8px;"></div>
+      </div>
+
+
       <div id="bathroomFields" class="hidden">
         <h3>Bathroom / tiling</h3>
 
@@ -7293,6 +7315,162 @@ async function deleteSavedQuote(id) {
   }
 }
 
+
+let LAST_AI_QUOTE_DRAFT = null;
+
+async function checkAIQuoteStatus() {
+  const status = document.getElementById("aiQuoteStatus");
+  if (!status) return;
+
+  try {
+    const res = await fetch("/api/ai-quote-status");
+    const data = await res.json();
+    if (data.configured) {
+      status.innerHTML = `AI connected · model: ${escapeHtml(data.model || "")}`;
+    } else {
+      status.innerHTML = `<strong>Setup needed:</strong> add OPENAI_API_KEY in Render environment settings.`;
+    }
+  } catch (e) {
+    status.innerHTML = "Could not check AI connection.";
+  }
+}
+
+function currentMaterialsForAI() {
+  return [...document.querySelectorAll("#materials .material-row")].map(row => ({
+    name: row.querySelector(".m-name")?.value || "",
+    quantity: Number(row.querySelector(".m-qty")?.value || 1),
+    supplier: row.querySelector(".m-supplier")?.value || "",
+    url: row.querySelector(".m-url")?.value || "",
+    manual_price: Number(row.querySelector(".m-manual")?.value || 0)
+  })).filter(m => m.name.trim());
+}
+
+async function generateAIQuoteDraft() {
+  const button = document.getElementById("aiQuoteButton");
+  const status = document.getElementById("aiQuoteStatus");
+  const resultBox = document.getElementById("aiQuoteResult");
+  const job = document.getElementById("job")?.value || "";
+
+  if (!job.trim()) {
+    alert("Enter the job description first.");
+    return;
+  }
+
+  if (button) {
+    button.disabled = true;
+    button.innerText = "Generating AI draft…";
+  }
+  if (status) status.innerHTML = "Reviewing job history, materials and labour…";
+  if (resultBox) resultBox.innerHTML = "";
+
+  const payload = {
+    job_description: job,
+    quote_type: document.getElementById("quote_type")?.value || "small",
+    customer_name: document.getElementById("customer_name")?.value || "",
+    customer_address: document.getElementById("customer_address")?.value || "",
+    current_labour: Number(document.getElementById("labour")?.value || 0),
+    current_materials: currentMaterialsForAI()
+  };
+
+  try {
+    const res = await fetch("/api/ai-quote-draft", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || "Could not generate AI quote draft.");
+    }
+
+    LAST_AI_QUOTE_DRAFT = data.draft;
+    renderAIQuoteDraft(data);
+    if (status) {
+      const context = data.context_summary || {};
+      status.innerHTML = `Draft generated · ${context.similar_quotes || 0} similar quote(s) used · human review required.`;
+    }
+  } catch (e) {
+    if (status) status.innerHTML = `<strong>AI error:</strong> ${escapeHtml(e.message || String(e))}`;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerText = "Generate quote draft with AI";
+    }
+  }
+}
+
+function renderAIQuoteDraft(data) {
+  const box = document.getElementById("aiQuoteResult");
+  if (!box) return;
+
+  const draft = data.draft || {};
+  const materials = draft.materials || [];
+  const risks = draft.risk_notes || [];
+  const questions = draft.questions_to_confirm || [];
+  const warnings = draft.warnings || [];
+
+  box.innerHTML = `
+    <div class="history-item" style="padding:10px;border-color:#7c3aed;">
+      <strong>AI draft — confidence: ${escapeHtml(draft.confidence || "unknown")}</strong><br>
+      <div style="margin-top:6px;"><strong>Scope:</strong><br>${escapeHtml(draft.scope_of_work || "")}</div>
+      <div style="margin-top:6px;"><strong>Suggested labour:</strong> ${pounds(draft.labour_suggestion || 0)}</div>
+      <div style="margin-top:6px;"><strong>Materials:</strong><br>
+        ${materials.length ? materials.map(m => `• ${escapeHtml(m.name)} × ${Number(m.quantity || 1)}${m.required ? " — required" : " — optional"}`).join("<br>") : "No materials suggested."}
+      </div>
+      ${risks.length ? `<div style="margin-top:6px;"><strong>Risk notes:</strong><br>${risks.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+      ${questions.length ? `<div style="margin-top:6px;"><strong>Confirm before quoting:</strong><br>${questions.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+      ${warnings.length ? `<div style="margin-top:6px;"><strong>Warnings:</strong><br>${warnings.map(x => `• ${escapeHtml(x)}`).join("<br>")}</div>` : ""}
+      <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+        <button type="button" class="btn-green" onclick="applyAIQuoteDraft()">Apply draft to form</button>
+        <button type="button" class="btn-light" onclick="discardAIQuoteDraft()">Discard</button>
+      </div>
+    </div>
+  `;
+}
+
+function applyAIQuoteDraft() {
+  const draft = LAST_AI_QUOTE_DRAFT;
+  if (!draft) return;
+
+  if (draft.scope_of_work) {
+    document.getElementById("job").value = draft.scope_of_work;
+  }
+
+  if (Number(draft.labour_suggestion || 0) > 0) {
+    document.getElementById("labour").value = Number(draft.labour_suggestion).toFixed(2);
+  }
+
+  clearMaterials();
+  (draft.materials || []).forEach(m => {
+    addMaterial({
+      name: m.name || "",
+      quantity: Number(m.quantity || 1),
+      supplier: m.supplier || "City Plumbing",
+      manual_price: 0
+    });
+  });
+
+  scheduleQuoteLearning();
+  scheduleLabourIntelligence();
+  updateForgottenItemWarnings();
+  updateSupplierPreferenceNotes();
+
+  const box = document.getElementById("aiQuoteResult");
+  if (box) {
+    box.innerHTML = `<div class="notice">AI draft applied. Check quantities, product links, prices, labour and scope before saving.</div>`;
+  }
+  showNotice("AI quote draft applied for review.");
+}
+
+function discardAIQuoteDraft() {
+  LAST_AI_QUOTE_DRAFT = null;
+  const box = document.getElementById("aiQuoteResult");
+  if (box) box.innerHTML = "";
+  showNotice("AI draft discarded.");
+}
+
+
 async function generateQuote() {
   const errorBox = document.getElementById("error");
   errorBox.style.display = "none";
@@ -7627,6 +7805,7 @@ addMaterial();
 setQuoteButtonMode(false);
 updateLabourSuggestion();
 renderTemplateButtons();
+checkAIQuoteStatus();
 renderMasterMaterialSuggestions();
 loadDashboard();
 loadHistory();
@@ -8324,6 +8503,283 @@ def supplier_preferences_summary():
     rows.sort(key=lambda x: x.get("total_uses", 0), reverse=True)
     return rows[:100]
 
+
+
+
+AI_QUOTE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "scope_of_work": {"type": "string"},
+        "customer_summary": {"type": "string"},
+        "labour_suggestion": {"type": "number"},
+        "materials": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "name": {"type": "string"},
+                    "quantity": {"type": "number"},
+                    "supplier": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "required": {"type": "boolean"}
+                },
+                "required": ["name", "quantity", "supplier", "reason", "required"]
+            }
+        },
+        "risk_notes": {
+            "type": "array",
+            "items": {"type": "string"}
+        },
+        "questions_to_confirm": {
+            "type": "array",
+            "items": {"type": "string"}
+        },
+        "warnings": {
+            "type": "array",
+            "items": {"type": "string"}
+        },
+        "confidence": {
+            "type": "string",
+            "enum": ["low", "medium", "high"]
+        }
+    },
+    "required": [
+        "scope_of_work",
+        "customer_summary",
+        "labour_suggestion",
+        "materials",
+        "risk_notes",
+        "questions_to_confirm",
+        "warnings",
+        "confidence"
+    ]
+}
+
+
+def extract_openai_output_text(response_json: dict):
+    if not isinstance(response_json, dict):
+        return ""
+
+    direct = response_json.get("output_text")
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+
+    chunks = []
+    for item in response_json.get("output", []) or []:
+        for content in item.get("content", []) or []:
+            if content.get("type") in ("output_text", "text"):
+                value = content.get("text", "")
+                if isinstance(value, str):
+                    chunks.append(value)
+                elif isinstance(value, dict):
+                    chunks.append(value.get("value", ""))
+
+    return "\n".join(x for x in chunks if x).strip()
+
+
+def build_ai_quote_context(data: AIQuoteDraftRequest):
+    job = (data.job_description or "").strip()
+    quote_type = data.quote_type or "small"
+
+    history = analyse_similar_quotes(job, quote_type) if job else {
+        "similar_count": 0,
+        "common_materials": [],
+        "averages": {},
+        "similar_quotes": []
+    }
+
+    labour_info = labour_intelligence_for_job(
+        job,
+        quote_type,
+        data.current_labour
+    ) if "labour_intelligence_for_job" in globals() else {}
+
+    existing_materials = []
+    for item in data.current_materials or []:
+        existing_materials.append({
+            "name": item.name,
+            "quantity": item.quantity,
+            "supplier": item.supplier,
+            "manual_price": item.manual_price,
+        })
+
+    forgotten = detect_forgotten_items(
+        job,
+        [m.model_dump() if hasattr(m, "model_dump") else m.dict() for m in data.current_materials]
+    ) if "detect_forgotten_items" in globals() else []
+
+    # Keep prompt context compact and relevant.
+    common_materials = []
+    for m in (history.get("common_materials", []) or [])[:15]:
+        common_materials.append({
+            "name": m.get("name"),
+            "average_quantity": m.get("average_quantity"),
+            "used_percent": m.get("used_percent"),
+            "average_unit_price": m.get("average_unit_price"),
+            "supplier": m.get("supplier"),
+        })
+
+    trade_matches = []
+    job_tokens = set(learning_tokens(job))
+    for template in get_all_job_templates():
+        hay = " ".join([
+            template.get("name", ""),
+            template.get("job", ""),
+            " ".join(template.get("search_terms", []) or []),
+            " ".join(x.get("name", "") for x in template.get("materials", []) or []),
+        ]).lower()
+        score = sum(1 for token in job_tokens if token in hay)
+        if score:
+            trade_matches.append((score, template))
+
+    trade_matches.sort(key=lambda x: x[0], reverse=True)
+    compact_templates = []
+    for _, template in trade_matches[:5]:
+        compact_templates.append({
+            "name": template.get("name"),
+            "job": template.get("job"),
+            "labour": template.get("labour", template.get("typical_labour", 0)),
+            "labour_range": template.get("labour_range", ""),
+            "materials": template.get("materials", [])[:15],
+            "risk_notes": template.get("risk_notes", [])[:8],
+        })
+
+    return {
+        "business": {
+            "name": "Nigel Harvey Ltd",
+            "location": "Guildford, Surrey, UK",
+            "trade": "Domestic plumbing and heating",
+            "currency": "GBP"
+        },
+        "request": {
+            "job_description": job,
+            "quote_type": quote_type,
+            "customer_name": data.customer_name,
+            "customer_address": data.customer_address,
+            "current_labour": data.current_labour,
+            "current_materials": existing_materials,
+        },
+        "historical_learning": {
+            "similar_count": history.get("similar_count", 0),
+            "averages": history.get("averages", {}),
+            "common_materials": common_materials,
+            "similar_quotes": (history.get("similar_quotes", []) or [])[:5],
+        },
+        "labour_intelligence": labour_info,
+        "forgotten_item_checks": forgotten,
+        "matching_trade_templates": compact_templates,
+    }
+
+
+def call_openai_quote_builder(context: dict):
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY is not configured in Render."
+        )
+
+    model = (os.getenv("OPENAI_MODEL") or "gpt-5.6-luna").strip()
+
+    instructions = """
+You are an experienced UK domestic plumbing estimator assisting Nigel Harvey Ltd in Guildford, Surrey.
+
+Create a cautious quote draft from the supplied job information and internal business data.
+
+Rules:
+- Return only the requested structured JSON.
+- Do not invent product URLs or live prices.
+- Prefer materials and quantities supported by trade templates or quote history.
+- Use UK plumbing terminology.
+- Labour is a suggestion only and must be in GBP.
+- Keep customer-facing wording clear and professional.
+- Highlight access, isolation, hidden pipework, compatibility, compliance, and diagnostic uncertainty.
+- Never claim hidden conditions are confirmed from a short description.
+- Do not include gas appliance installation or repair work.
+- The draft must require human review before it is saved or sent.
+""".strip()
+
+    payload = {
+        "model": model,
+        "instructions": instructions,
+        "input": json.dumps(context, ensure_ascii=False),
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "plumbing_quote_draft",
+                "strict": True,
+                "schema": AI_QUOTE_SCHEMA
+            }
+        }
+    }
+
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"OpenAI connection failed: {exc}")
+
+    if response.status_code >= 400:
+        try:
+            error_detail = response.json().get("error", {}).get("message", response.text)
+        except Exception:
+            error_detail = response.text
+        raise HTTPException(
+            status_code=502,
+            detail=f"OpenAI API error: {error_detail[:500]}"
+        )
+
+    response_json = response.json()
+    output_text = extract_openai_output_text(response_json)
+    if not output_text:
+        raise HTTPException(status_code=502, detail="OpenAI returned no quote draft.")
+
+    try:
+        draft = json.loads(output_text)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=502, detail="OpenAI returned an invalid structured quote draft.")
+
+    return {
+        "draft": draft,
+        "model": model,
+        "response_id": response_json.get("id", ""),
+        "review_required": True,
+    }
+
+
+
+
+
+@app.get("/api/ai-quote-status")
+def api_ai_quote_status():
+    configured = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    return JSONResponse(content={
+        "configured": configured,
+        "model": (os.getenv("OPENAI_MODEL") or "gpt-5.6-luna").strip(),
+    })
+
+
+@app.post("/api/ai-quote-draft")
+def api_ai_quote_draft(data: AIQuoteDraftRequest):
+    if not (data.job_description or "").strip():
+        raise HTTPException(status_code=400, detail="Enter a job description first.")
+
+    context = build_ai_quote_context(data)
+    result = call_openai_quote_builder(context)
+    result["context_summary"] = {
+        "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
+        "trade_templates": len(context.get("matching_trade_templates", [])),
+    }
+    return JSONResponse(content=result)
 
 
 @app.get("/api/supplier-preference")
