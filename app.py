@@ -21,6 +21,7 @@ import tempfile
 import gc
 from html import escape
 from pathlib import Path
+from urllib.parse import quote_plus, urljoin, urlparse
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -62,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "foundation-intelligence-v2-safety"
+APP_VERSION = "12.4-live-merchant-product-finder"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4607,8 +4608,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Survey Description Merge V12.3</strong><br>
-        <span class="small">Capture the site on your phone. After analysis, the app can create a new job description or add only the new site findings to an existing website enquiry.</span>
+        <strong>Live Merchant Product Finder V12.4</strong><br>
+        <span class="small">Capture the site, merge the findings into the enquiry and search supported merchants for missing main products with current prices and product links.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
           <button type="button" class="btn-light" onclick="takeSitePhoto()">📷 Take photo</button>
@@ -4650,8 +4651,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Survey‑Enriched Quote Intelligence V12.3</strong><br>
-        <span class="small">Uses the enquiry, site photos and spoken video together. Existing enquiry wording is preserved, while confirmed site findings can be appended before the quote is built.</span>
+        <strong>Live‑Priced Quote Intelligence V12.4</strong><br>
+        <span class="small">Uses the enquiry and site survey, then identifies missing main products and lets you search City Plumbing, Screwfix, Toolstation and Selco before applying the draft.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
         </div>
@@ -7639,7 +7640,7 @@ async function analyseSiteSurvey() {
     return;
   }
   if (photos.length > 6) {
-    alert("V12.3 analyses up to 6 photos at a time.");
+    alert("V12.4 analyses up to 6 photos at a time.");
     return;
   }
   const oversizedPhoto = photos.find(file => file.size > 10 * 1024 * 1024);
@@ -8081,6 +8082,136 @@ function addV11JobBundle(jobType, essentialOnly = false) {
   showNotice(added ? `${added} material(s) added from ${bundle.display_name}.` : "Bundle materials are already present.");
 }
 
+
+let LIVE_PRODUCT_SEARCHES = {};
+let LIVE_PRODUCT_RESULTS = {};
+
+function liveProductQueriesFromDraft(draft) {
+  const searches = [];
+  const existing = (draft.materials || []).map(item => String(item.name || "").toLowerCase());
+  const surveyActions = CURRENT_SITE_SURVEY?.material_actions || [];
+  const scope = String(draft.scope_of_work || document.getElementById("job")?.value || "").toLowerCase();
+
+  const addSearch = (query, label, reason) => {
+    if (!query || searches.some(item => item.query.toLowerCase() === query.toLowerCase())) return;
+    const key = query.toLowerCase();
+    const alreadyPresent = existing.some(name => name.includes(key) || key.includes(name));
+    if (!alreadyPresent) searches.push({query, label, reason});
+  };
+
+  surveyActions.forEach(action => {
+    if (action.action !== "include_required") return;
+    const name = String(action.material_name || "").trim();
+    const lower = name.toLowerCase();
+    if (/(radiator|toilet|basin|sink|tap|shower|pump|cylinder|towel rail)/i.test(lower) &&
+        !/(pipework|connection|floorboard|lifting|reinstatement|access|fitting)/i.test(lower)) {
+      addSearch(name, name, action.reason || "Required by the site survey.");
+    }
+  });
+
+  const radiatorMatch = scope.match(/(\d{3,4})\s*[x×]\s*(\d{3,4})\s*mm?\s*radiator/i);
+  if (radiatorMatch) {
+    addSearch(
+      `${radiatorMatch[1]} x ${radiatorMatch[2]}mm white panel radiator`,
+      `${radiatorMatch[1]} × ${radiatorMatch[2]} mm radiator`,
+      "The quote requires a radiator, but no priced radiator product is in the material list."
+    );
+  } else if (scope.includes("radiator") && !existing.some(name => name.includes("radiator") && !name.includes("valve"))) {
+    addSearch("white panel radiator", "Radiator", "The quote requires a radiator, but no priced radiator product is in the material list.");
+  }
+  return searches.slice(0, 4);
+}
+
+function liveProductFinderHtml(draft) {
+  const searches = liveProductQueriesFromDraft(draft);
+  LIVE_PRODUCT_SEARCHES = Object.fromEntries(searches.map((item, index) => [String(index), item]));
+  if (!searches.length) return "";
+
+  return `
+    <div style="margin-top:10px;padding:10px;border:2px solid #0284c7;border-radius:10px;background:#f0f9ff;">
+      <strong>Live merchant product finder</strong><br>
+      <span class="small">A main product is missing from the draft. Search supported merchants and approve the exact product before adding it.</span>
+      ${searches.map((item, index) => `
+        <div style="margin-top:9px;padding:9px;border:1px solid #bae6fd;border-radius:9px;background:white;">
+          <strong>${escapeHtml(item.label)}</strong><br>
+          <span class="small">${escapeHtml(item.reason)}</span>
+          <div class="history-actions" style="grid-template-columns:1fr;margin-top:7px;">
+            <button type="button" class="btn-green" onclick="searchLiveMerchantProduct('${index}')">Find live products</button>
+          </div>
+          <div id="liveProductResults-${index}" style="margin-top:7px;"></div>
+        </div>
+      `).join("")}
+      <div class="small" style="margin-top:8px;">Prices and availability can change. Open the merchant page and confirm before ordering.</div>
+    </div>`;
+}
+
+async function searchLiveMerchantProduct(searchId) {
+  const search = LIVE_PRODUCT_SEARCHES[String(searchId)];
+  const box = document.getElementById(`liveProductResults-${searchId}`);
+  if (!search || !box) return;
+  box.innerHTML = "Searching City Plumbing, Screwfix, Toolstation and Selco…";
+
+  try {
+    const response = await fetch("/api/live-product-search?q=" + encodeURIComponent(search.query));
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Merchant search failed.");
+    const results = data.results || [];
+    LIVE_PRODUCT_RESULTS[String(searchId)] = results;
+
+    if (!results.length) {
+      box.innerHTML = `<div class="notice">No merchant matches were found. Try a more specific product description.</div>`;
+      return;
+    }
+
+    box.innerHTML = results.map((item, resultIndex) => `
+      <div style="margin-top:7px;padding:9px;border:1px solid #ddd;border-radius:9px;background:#fff;">
+        <strong>${escapeHtml(item.name || "")}</strong><br>
+        <span class="small">
+          ${escapeHtml(item.supplier || "")}
+          ${item.live_price ? ` · <strong>${pounds(item.live_price)}</strong>` : " · price unavailable"}
+          ${item.availability ? ` · ${escapeHtml(item.availability)}` : ""}
+          ${item.match_score ? ` · ${Number(item.match_score)}% match` : ""}
+        </span>
+        <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:7px;margin-top:7px;">
+          <button type="button" class="btn-light" onclick='window.open(${JSON.stringify(item.url || "")}, "_blank", "noopener")'>
+            ${item.search_only ? "Open merchant search" : "View product"}
+          </button>
+          ${item.search_only ? "" : `<button type="button" class="btn-green" onclick="addLiveMerchantProduct('${searchId}', ${resultIndex})">Add to quote</button>`}
+        </div>
+      </div>
+    `).join("");
+  } catch (error) {
+    box.innerHTML = `<div class="notice" style="border-color:#dc2626;">${escapeHtml(error.message || "Merchant search failed.")}</div>`;
+  }
+}
+
+function addLiveMerchantProduct(searchId, resultIndex) {
+  const item = LIVE_PRODUCT_RESULTS[String(searchId)]?.[Number(resultIndex)];
+  if (!item || !LAST_AI_QUOTE_DRAFT) return;
+
+  const product = {
+    name: item.name || "",
+    quantity: 1,
+    supplier: item.supplier || "City Plumbing",
+    url: item.url || "",
+    manual_price: Number(item.live_price || item.default_price || 0),
+    status: "required",
+    source: "live_merchant_search",
+    price_source: item.price_source || "live"
+  };
+
+  LAST_AI_QUOTE_DRAFT.materials = LAST_AI_QUOTE_DRAFT.materials || [];
+  const canonical = product.name.toLowerCase();
+  const duplicate = LAST_AI_QUOTE_DRAFT.materials.some(existing => {
+    const name = String(existing.name || "").toLowerCase();
+    return name === canonical || name.includes(canonical) || canonical.includes(name);
+  });
+  if (!duplicate) LAST_AI_QUOTE_DRAFT.materials.unshift(product);
+
+  renderAIQuoteDraft({draft: LAST_AI_QUOTE_DRAFT});
+  showNotice(`${product.name} added with its merchant link and current price.`);
+}
+
 function renderAIQuoteDraft(data) {
   const box = document.getElementById("aiQuoteResult");
   if (!box) return;
@@ -8256,6 +8387,8 @@ function renderAIQuoteDraft(data) {
         materials ${pounds(draft.multi_job_summary.materials_total_before_handling || 0)} before handling
       </div>` : ""}
 
+      ${liveProductFinderHtml(draft)}
+
       <details style="margin-top:10px;">
         <summary><strong>Internal estimator detail</strong></summary>
         <div style="margin-top:8px;padding:8px;background:#fafafa;border-radius:8px;">
@@ -8303,7 +8436,7 @@ function applyAIQuoteDraft() {
       quantity: Number(m.quantity || 1),
       supplier: m.supplier || "City Plumbing",
       url: m.url || "",
-      manual_price: Number(m.manual_price || 0),
+      manual_price: Number(m.manual_price || m.live_price || m.default_price || 0),
       quantity_source: m.quantity_source || "ai",
       learned_used_count: Number(m.learned_used_count || 0)
     });
@@ -8847,6 +8980,255 @@ def get_material_search_library():
         pass
 
     return items
+
+
+
+LIVE_MERCHANTS = {
+    "City Plumbing": {
+        "search_urls": [
+            "https://www.cityplumbing.co.uk/search?q={query}",
+            "https://www.cityplumbing.co.uk/search?text={query}",
+        ],
+        "allowed_hosts": ["cityplumbing.co.uk"],
+    },
+    "Screwfix": {
+        "search_urls": [
+            "https://www.screwfix.com/search?search={query}",
+            "https://www.screwfix.com/search?query={query}",
+        ],
+        "allowed_hosts": ["screwfix.com"],
+    },
+    "Toolstation": {
+        "search_urls": ["https://www.toolstation.com/search?q={query}"],
+        "allowed_hosts": ["toolstation.com"],
+    },
+    "Selco": {
+        "search_urls": [
+            "https://www.selcobw.com/search?q={query}",
+            "https://www.selcobw.com/catalogsearch/result/?q={query}",
+        ],
+        "allowed_hosts": ["selcobw.com"],
+    },
+}
+
+
+def _clean_product_title(value: str):
+    value = BeautifulSoup(value or "", "html.parser").get_text(" ", strip=True)
+    value = re.sub(r"\s+", " ", value).strip()
+    value = re.sub(r"\s*[|\-–]\s*(City Plumbing|Screwfix|Toolstation|Selco).*$", "", value, flags=re.I)
+    return value[:220]
+
+
+def _merchant_host_allowed(url: str, allowed_hosts):
+    host = (urlparse(url).netloc or "").lower()
+    return any(host == allowed or host.endswith("." + allowed) for allowed in allowed_hosts)
+
+
+def _looks_like_product_url(url: str, merchant_name: str):
+    lower = (url or "").lower()
+    if any(part in lower for part in [
+        "/search", "catalogsearch", "/category/", "/categories/", "/help/",
+        "/stores", "/login", "/basket", "/checkout", "javascript:", "#",
+    ]):
+        return False
+    if merchant_name == "Screwfix":
+        return "/p/" in lower or re.search(r"/\d{4,8}$", lower) is not None
+    if merchant_name == "Toolstation":
+        return "/p" in lower or re.search(r"/\d{4,8}$", lower) is not None
+    if merchant_name == "City Plumbing":
+        return "/p/" in lower or "/product/" in lower or re.search(r"/\d{5,}$", lower) is not None
+    if merchant_name == "Selco":
+        return "/products/" in lower or "/product/" in lower or re.search(r"/\d{5,}$", lower) is not None
+    return True
+
+
+def _extract_search_page_products(html: str, search_url: str, merchant_name: str, allowed_hosts):
+    soup = BeautifulSoup(html or "", "html.parser")
+    candidates = []
+
+    for script in soup.select('script[type="application/ld+json"]'):
+        try:
+            payload = json.loads(script.get_text(strip=True))
+        except Exception:
+            continue
+        stack = payload if isinstance(payload, list) else [payload]
+        while stack:
+            item = stack.pop()
+            if isinstance(item, list):
+                stack.extend(item)
+                continue
+            if not isinstance(item, dict):
+                continue
+            stack.extend(value for value in item.values() if isinstance(value, (dict, list)))
+            if str(item.get("@type", "")).lower() not in ("product", "listitem"):
+                continue
+            target = item.get("url") or item.get("item")
+            if isinstance(target, dict):
+                target = target.get("url")
+            if not target:
+                continue
+            target = urljoin(search_url, str(target))
+            if not _merchant_host_allowed(target, allowed_hosts) or not _looks_like_product_url(target, merchant_name):
+                continue
+            offers = item.get("offers") or {}
+            if isinstance(offers, list):
+                offers = offers[0] if offers else {}
+            price = safe_float((offers.get("price") or offers.get("lowPrice") or 0) if isinstance(offers, dict) else 0, 0)
+            candidates.append({
+                "name": _clean_product_title(item.get("name") or item.get("title") or ""),
+                "url": target,
+                "price": round(price, 2) if price else 0,
+            })
+
+    for anchor in soup.select("a[href]"):
+        target = urljoin(search_url, anchor.get("href") or "")
+        if not _merchant_host_allowed(target, allowed_hosts) or not _looks_like_product_url(target, merchant_name):
+            continue
+        title = _clean_product_title(anchor.get("aria-label") or anchor.get("title") or anchor.get_text(" ", strip=True))
+        if len(title) >= 5:
+            candidates.append({"name": title, "url": target, "price": 0})
+
+    output, seen = [], set()
+    for item in candidates:
+        clean_url = normalize_material_url(item.get("url", ""))
+        key = clean_url.split("?")[0].rstrip("/")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        item["url"] = clean_url
+        output.append(item)
+        if len(output) >= 8:
+            break
+    return output
+
+
+def _read_product_page_details(product, merchant_name):
+    url = product.get("url", "")
+    name = product.get("name", "")
+    price = safe_float(product.get("price", 0), 0)
+    availability = ""
+    try:
+        response = requests.get(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; NigelHarveyLtd/1.0; +https://www.nigelharveyplumbing.co.uk)",
+                "Accept-Language": "en-GB,en;q=0.9",
+            },
+            timeout=9,
+            allow_redirects=True,
+        )
+        if response.status_code == 200 and response.text:
+            soup = BeautifulSoup(response.text, "html.parser")
+            og_title = soup.select_one('meta[property="og:title"]')
+            page_h1 = soup.select_one("h1")
+            if og_title and og_title.get("content"):
+                name = _clean_product_title(og_title.get("content"))
+            elif page_h1:
+                name = _clean_product_title(page_h1.get_text(" ", strip=True))
+            if not price:
+                price = safe_float(scrape_live_price(url), 0)
+            page_text = soup.get_text(" ", strip=True).lower()
+            if any(word in page_text for word in ["in stock", "available for delivery", "available to collect"]):
+                availability = "Available"
+            elif any(word in page_text for word in ["out of stock", "currently unavailable"]):
+                availability = "Unavailable"
+    except Exception:
+        pass
+
+    return {
+        "name": name or "Merchant product",
+        "supplier": merchant_name,
+        "url": url,
+        "default_price": round(price, 2) if price else 0,
+        "live_price": round(price, 2) if price else 0,
+        "price_source": "live" if price else "unavailable",
+        "availability": availability,
+    }
+
+
+def search_live_merchant_products(query: str, suppliers=None, per_supplier: int = 3):
+    query = re.sub(r"\s+", " ", (query or "")).strip()
+    if len(query) < 3:
+        return []
+
+    selected = suppliers or list(LIVE_MERCHANTS.keys())
+    results = []
+
+    for merchant_name in selected:
+        merchant = LIVE_MERCHANTS.get(merchant_name)
+        if not merchant:
+            continue
+
+        merchant_candidates = []
+        for url_template in merchant["search_urls"]:
+            search_url = url_template.format(query=quote_plus(query))
+            try:
+                response = requests.get(
+                    search_url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (compatible; NigelHarveyLtd/1.0; +https://www.nigelharveyplumbing.co.uk)",
+                        "Accept-Language": "en-GB,en;q=0.9",
+                    },
+                    timeout=10,
+                    allow_redirects=True,
+                )
+                if response.status_code == 200 and response.text:
+                    merchant_candidates = _extract_search_page_products(
+                        response.text, response.url, merchant_name, merchant["allowed_hosts"]
+                    )
+                    if merchant_candidates:
+                        break
+            except Exception:
+                continue
+
+        if not merchant_candidates:
+            results.append({
+                "name": f"Search {merchant_name} for {query}",
+                "supplier": merchant_name,
+                "url": merchant["search_urls"][0].format(query=quote_plus(query)),
+                "default_price": 0,
+                "live_price": 0,
+                "price_source": "merchant_search",
+                "availability": "",
+                "search_only": True,
+                "match_score": 50,
+            })
+            continue
+
+        for product in merchant_candidates[:max(1, per_supplier)]:
+            detailed = _read_product_page_details(product, merchant_name)
+            query_terms = set(re.findall(r"[a-z0-9]+", query.lower()))
+            name_terms = set(re.findall(r"[a-z0-9]+", detailed["name"].lower()))
+            detailed["match_score"] = min(99, 55 + len(query_terms & name_terms) * 9)
+            detailed["search_only"] = False
+            if detailed["url"]:
+                upsert_material_price_cache(
+                    detailed["url"], detailed["name"], detailed["supplier"],
+                    price=detailed["live_price"] or None, manual_price=0,
+                    status=detailed["price_source"],
+                )
+            results.append(detailed)
+
+    results.sort(key=lambda item: (
+        1 if item.get("search_only") else 0,
+        -safe_float(item.get("match_score", 0), 0),
+        0 if safe_float(item.get("live_price", 0), 0) > 0 else 1,
+        safe_float(item.get("live_price", 0), 0) or 999999,
+    ))
+    return results[:16]
+
+
+@app.get("/api/live-product-search")
+def api_live_product_search(q: str = "", suppliers: str = "", request: Request = None):
+    if request is not None and not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    selected = [value.strip() for value in (suppliers or "").split(",") if value.strip() in LIVE_MERCHANTS]
+    return JSONResponse({
+        "query": q,
+        "suppliers": selected or list(LIVE_MERCHANTS.keys()),
+        "results": search_live_merchant_products(q, selected or None, 3),
+        "live_price_note": "Prices are checked from merchant product pages where accessible. Confirm price and availability before ordering.",
+    })
 
 
 @app.get("/api/material-search")
@@ -12012,7 +12394,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "survey-description-merge-v12.3",
+        "estimator_version": "live-merchant-products-v12.4",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -12589,7 +12971,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "survey-description-merge-v12.3"),
+        "version": context.get("estimator_version", "live-merchant-products-v12.4"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
