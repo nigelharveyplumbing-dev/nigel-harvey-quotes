@@ -63,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "12.4-live-merchant-product-finder"
+APP_VERSION = "12.6-auto-material-population"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4608,8 +4608,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Live Merchant Product Finder V12.4</strong><br>
-        <span class="small">Capture the site, merge the findings into the enquiry and search supported merchants for missing main products with current prices and product links.</span>
+        <strong>Auto Material Population V12.6</strong><br>
+        <span class="small">Capture the site, merge the findings and search merchants using strict product type and dimension matching. Concealed pipe routes receive a provisional fittings allowance instead of invented fitting quantities.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
           <button type="button" class="btn-light" onclick="takeSitePhoto()">📷 Take photo</button>
@@ -4651,8 +4651,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Live‑Priced Quote Intelligence V12.4</strong><br>
-        <span class="small">Uses the enquiry and site survey, then identifies missing main products and lets you search City Plumbing, Screwfix, Toolstation and Selco before applying the draft.</span>
+        <strong>Strict Live‑Priced Quote Intelligence V12.6</strong><br>
+        <span class="small">Uses strict dimensions and product-type matching, removes unrelated merchant results, searches missing valve links and adds provisional fittings allowances for concealed pipe routes.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
         </div>
@@ -5934,6 +5934,69 @@ function updateLabourSuggestion() {
 }
 
 
+
+function updateMaterialLiveBadge(row) {
+  if (!row) return;
+  const status = row.querySelector(".material-live-status");
+  if (!status) return;
+  const url = String(row.querySelector(".m-url")?.value || "").trim();
+  const checkedAt = row.dataset.checkedAt || "";
+  const sku = row.dataset.sku || "";
+  const imageUrl = row.dataset.imageUrl || "";
+  if (/^https?:\/\//i.test(url)) {
+    status.innerHTML = `
+      <span style="display:inline-block;padding:3px 7px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:700;">Live priced</span>
+      ${sku ? ` · SKU ${escapeHtml(sku)}` : ""}
+      ${checkedAt ? ` · checked ${escapeHtml(new Date(checkedAt).toLocaleString())}` : ""}
+      ${imageUrl ? ` · <a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener">product image</a>` : ""}
+    `;
+  } else {
+    status.innerHTML = `<span style="color:#92400e;">No product URL saved — live refresh unavailable.</span>`;
+  }
+}
+
+async function refreshMaterialRowPrice(button) {
+  const row = button.closest(".material-row");
+  if (!row) return;
+  const url = String(row.querySelector(".m-url")?.value || "").trim();
+  const name = String(row.querySelector(".m-name")?.value || "").trim();
+  const supplier = String(row.querySelector(".m-supplier")?.value || "").trim();
+  if (!/^https?:\/\//i.test(url)) {
+    showNotice("Add a confirmed product URL before refreshing the price.");
+    return;
+  }
+
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "Checking…";
+  try {
+    const response = await fetch(
+      "/api/live-product-refresh?url=" + encodeURIComponent(url) +
+      "&name=" + encodeURIComponent(name) +
+      "&supplier=" + encodeURIComponent(supplier)
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Price refresh failed.");
+    if (Number(data.live_price || 0) > 0) {
+      row.querySelector(".m-manual").value = Number(data.live_price).toFixed(2);
+    }
+    if (data.name) row.querySelector(".m-name").value = data.name;
+    if (data.url) row.querySelector(".m-url").value = data.url;
+    if (data.supplier) row.querySelector(".m-supplier").value = data.supplier;
+    row.dataset.liveProduct = "1";
+    row.dataset.sku = data.sku || row.dataset.sku || "";
+    row.dataset.imageUrl = data.image_url || row.dataset.imageUrl || "";
+    row.dataset.checkedAt = data.checked_at || new Date().toISOString();
+    updateMaterialLiveBadge(row);
+    showNotice(Number(data.live_price || 0) > 0 ? "Live price updated." : "Product page confirmed, but no live price was available.");
+  } catch (error) {
+    showNotice(error.message || "Price refresh failed.");
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
 function materialQuoteUnitPrice(material) {
   const ruled = applyChargingRuleToMaterial(material || {});
   if (ruled.quote_charge_override !== undefined && ruled.quote_charge_override !== null && Number(ruled.quote_charge_override) >= 0) {
@@ -5974,6 +6037,10 @@ function addMaterial(prefill = null) {
   }
   const div = document.createElement("div");
   div.className = "material-row";
+  div.dataset.liveProduct = prefill && prefill.source === "live_merchant_search" ? "1" : "";
+  div.dataset.sku = prefill && prefill.sku ? String(prefill.sku) : "";
+  div.dataset.imageUrl = prefill && prefill.image_url ? String(prefill.image_url) : "";
+  div.dataset.checkedAt = prefill && prefill.checked_at ? String(prefill.checked_at) : "";
 
   const qty = prefill && prefill.quantity ? prefill.quantity : 1;
   const manualPrice = prefill && prefill.manual_price != null
@@ -6004,13 +6071,18 @@ function addMaterial(prefill = null) {
       <div class="small quantity-learning-note"></div>
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${manualPrice}">
 
-    <button type="button" class="btn-red" style="margin-top:12px;" onclick="this.parentElement.remove()">Remove</button>
+    <div class="material-live-status small" style="margin-top:8px;"></div>
+    <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+      <button type="button" class="btn-light refresh-material-price" onclick="refreshMaterialRowPrice(this)">Update price</button>
+      <button type="button" class="btn-red" onclick="this.closest('.material-row').remove()">Remove</button>
+    </div>
   `;
   document.getElementById("materials").appendChild(div);
 
   if (prefill) {
     div.querySelector(".m-supplier").value = prefill.supplier || "City Plumbing";
   }
+  updateMaterialLiveBadge(div);
   updateForgottenItemWarnings();
   updateSupplierPreferenceNotes();
 }
@@ -8086,40 +8158,90 @@ function addV11JobBundle(jobType, essentialOnly = false) {
 let LIVE_PRODUCT_SEARCHES = {};
 let LIVE_PRODUCT_RESULTS = {};
 
+function prepareDraftForV125(draft) {
+  draft.materials = draft.materials || [];
+  const scope = String(draft.scope_of_work || document.getElementById("job")?.value || "").toLowerCase();
+  const names = draft.materials.map(item => String(item.name || "").toLowerCase());
+
+  // Remove obvious duplicate radiator valve entries. Keep a complete valve set over separate generic duplicates.
+  const hasValveSet = names.some(name => name.includes("radiator valve set"));
+  if (hasValveSet) {
+    let keptSet = false;
+    draft.materials = draft.materials.filter(item => {
+      const name = String(item.name || "").toLowerCase();
+      if (name.includes("radiator valve set")) {
+        if (keptSet) return false;
+        keptSet = true;
+        return true;
+      }
+      if (name === "trv valve" || name === "lockshield valve") return false;
+      return true;
+    });
+  }
+
+  // Concealed/new copper routes need fittings, but exact elbows/couplers must not be invented.
+  const routeNeedsFittings = /(copper|pipework|flow and return)/.test(scope) && /(metre|meter|route|floorboard|carpet|concealed)/.test(scope);
+  const hasFittings = draft.materials.some(item => /elbow|coupler|tee|fittings allowance/i.test(String(item.name || "")));
+  if (routeNeedsFittings && !hasFittings) {
+    draft.materials.push({
+      name: "15mm copper fittings allowance",
+      quantity: 1,
+      supplier: "City Plumbing",
+      url: "",
+      manual_price: 0,
+      required: false,
+      display_status: "site_check",
+      status: "site_check",
+      source: "v12.5_provisional_allowance",
+      material_confidence: 55,
+      reason: "Provisional allowance only. Confirm elbow, tee and coupler quantities after the route is exposed or clearly stated."
+    });
+  }
+  return draft;
+}
+
 function liveProductQueriesFromDraft(draft) {
   const searches = [];
   const existing = (draft.materials || []).map(item => String(item.name || "").toLowerCase());
   const surveyActions = CURRENT_SITE_SURVEY?.material_actions || [];
   const scope = String(draft.scope_of_work || document.getElementById("job")?.value || "").toLowerCase();
 
-  const addSearch = (query, label, reason) => {
+  const addSearch = (query, label, reason, productType = "general") => {
     if (!query || searches.some(item => item.query.toLowerCase() === query.toLowerCase())) return;
-    const key = query.toLowerCase();
-    const alreadyPresent = existing.some(name => name.includes(key) || key.includes(name));
-    if (!alreadyPresent) searches.push({query, label, reason});
+    searches.push({query, label, reason, productType});
   };
 
   surveyActions.forEach(action => {
     if (action.action !== "include_required") return;
     const name = String(action.material_name || "").trim();
     const lower = name.toLowerCase();
-    if (/(radiator|toilet|basin|sink|tap|shower|pump|cylinder|towel rail)/i.test(lower) &&
-        !/(pipework|connection|floorboard|lifting|reinstatement|access|fitting)/i.test(lower)) {
-      addSearch(name, name, action.reason || "Required by the site survey.");
+    if (/radiator/.test(lower) && !/valve|pipework|connection/.test(lower)) {
+      addSearch(name, name, action.reason || "Required by the site survey.", "radiator");
     }
   });
 
   const radiatorMatch = scope.match(/(\d{3,4})\s*[x×]\s*(\d{3,4})\s*mm?\s*radiator/i);
-  if (radiatorMatch) {
+  if (radiatorMatch && !existing.some(name => name.includes("radiator") && !name.includes("valve"))) {
     addSearch(
-      `${radiatorMatch[1]} x ${radiatorMatch[2]}mm white panel radiator`,
+      `${radiatorMatch[1]} x ${radiatorMatch[2]}mm white central heating panel radiator`,
       `${radiatorMatch[1]} × ${radiatorMatch[2]} mm radiator`,
-      "The quote requires a radiator, but no priced radiator product is in the material list."
+      "The quote requires a radiator, but no priced radiator product is in the material list.",
+      "radiator"
     );
-  } else if (scope.includes("radiator") && !existing.some(name => name.includes("radiator") && !name.includes("valve"))) {
-    addSearch("white panel radiator", "Radiator", "The quote requires a radiator, but no priced radiator product is in the material list.");
   }
-  return searches.slice(0, 4);
+
+  // Search for required main valve products that still have no product link.
+  (draft.materials || []).forEach(material => {
+    const name = String(material.name || "").trim();
+    const lower = name.toLowerCase();
+    const required = (material.status || material.display_status || (material.required ? "required" : "optional")) === "required";
+    if (!required || material.url) return;
+    if (lower.includes("radiator valve set")) addSearch("angled thermostatic radiator valve and lockshield set 15mm", name, "Required valve set has no product link.", "radiator_valve_set");
+    else if (lower.includes("trv")) addSearch("angled thermostatic radiator valve TRV 15mm", name, "Required TRV has no product link.", "trv");
+    else if (lower.includes("lockshield")) addSearch("angled lockshield radiator valve 15mm", name, "Required lockshield has no product link.", "lockshield");
+  });
+
+  return searches.slice(0, 6);
 }
 
 function liveProductFinderHtml(draft) {
@@ -8130,13 +8252,14 @@ function liveProductFinderHtml(draft) {
   return `
     <div style="margin-top:10px;padding:10px;border:2px solid #0284c7;border-radius:10px;background:#f0f9ff;">
       <strong>Live merchant product finder</strong><br>
-      <span class="small">A main product is missing from the draft. Search supported merchants and approve the exact product before adding it.</span>
+      <span class="small">Missing main products and unlinked required items are shown here. A confirmed product is added directly to the Materials list with its supplier, current price and product URL.</span>
       ${searches.map((item, index) => `
         <div style="margin-top:9px;padding:9px;border:1px solid #bae6fd;border-radius:9px;background:white;">
           <strong>${escapeHtml(item.label)}</strong><br>
           <span class="small">${escapeHtml(item.reason)}</span>
+          ${item.productType === "radiator" ? `<label class="small" style="display:block;margin-top:7px;">Radiator type</label><select id="radiatorType-${index}"><option value="">Any panel type</option><option value="type 11">Type 11</option><option value="type 21">Type 21</option><option value="type 22">Type 22</option></select>` : ""}
           <div class="history-actions" style="grid-template-columns:1fr;margin-top:7px;">
-            <button type="button" class="btn-green" onclick="searchLiveMerchantProduct('${index}')">Find live products</button>
+            <button type="button" class="btn-green" onclick="searchLiveMerchantProduct('${index}')">Find matching products</button>
           </div>
           <div id="liveProductResults-${index}" style="margin-top:7px;"></div>
         </div>
@@ -8152,7 +8275,9 @@ async function searchLiveMerchantProduct(searchId) {
   box.innerHTML = "Searching City Plumbing, Screwfix, Toolstation and Selco…";
 
   try {
-    const response = await fetch("/api/live-product-search?q=" + encodeURIComponent(search.query));
+    const typeSelect = document.getElementById(`radiatorType-${searchId}`);
+    const refinedQuery = [search.query, typeSelect?.value || ""].filter(Boolean).join(" ");
+    const response = await fetch("/api/live-product-search?q=" + encodeURIComponent(refinedQuery));
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Merchant search failed.");
     const results = data.results || [];
@@ -8170,8 +8295,10 @@ async function searchLiveMerchantProduct(searchId) {
           ${escapeHtml(item.supplier || "")}
           ${item.live_price ? ` · <strong>${pounds(item.live_price)}</strong>` : " · price unavailable"}
           ${item.availability ? ` · ${escapeHtml(item.availability)}` : ""}
-          ${item.match_score ? ` · ${Number(item.match_score)}% match` : ""}
+          ${item.sku ? ` · SKU ${escapeHtml(item.sku)}` : ""}
+          ${item.search_only ? "" : ` · ${Number(item.match_score || 0)}% strict match`}
         </span>
+        ${item.image_url ? `<img src="${escapeHtml(item.image_url)}" alt="" loading="lazy" style="display:block;max-width:110px;max-height:90px;object-fit:contain;margin-top:7px;border-radius:6px;">` : ""}
         <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:7px;margin-top:7px;">
           <button type="button" class="btn-light" onclick='window.open(${JSON.stringify(item.url || "")}, "_blank", "noopener")'>
             ${item.search_only ? "Open merchant search" : "View product"}
@@ -8185,38 +8312,85 @@ async function searchLiveMerchantProduct(searchId) {
   }
 }
 
+function findExistingMaterialRowByUrlOrName(url, name) {
+  const cleanUrl = String(url || "").split("?")[0].replace(/\/+$/, "").toLowerCase();
+  const canonical = canonicalMaterialName(name || "");
+  return [...document.querySelectorAll("#materials .material-row")].find(row => {
+    const rowUrl = String(row.querySelector(".m-url")?.value || "").split("?")[0].replace(/\/+$/, "").toLowerCase();
+    const rowName = canonicalMaterialName(row.querySelector(".m-name")?.value || "");
+    return (cleanUrl && rowUrl === cleanUrl) || (canonical && rowName === canonical);
+  });
+}
+
 function addLiveMerchantProduct(searchId, resultIndex) {
   const item = LIVE_PRODUCT_RESULTS[String(searchId)]?.[Number(resultIndex)];
   if (!item || !LAST_AI_QUOTE_DRAFT) return;
+
+  const productUrl = String(item.url || "").trim();
+  if (!/^https?:\/\//i.test(productUrl) || item.search_only) {
+    showNotice("Open the merchant result and choose a confirmed product page before adding it.");
+    return;
+  }
 
   const product = {
     name: item.name || "",
     quantity: 1,
     supplier: item.supplier || "City Plumbing",
-    url: item.url || "",
+    url: productUrl,
     manual_price: Number(item.live_price || item.default_price || 0),
+    live_price: Number(item.live_price || item.default_price || 0),
     status: "required",
     source: "live_merchant_search",
-    price_source: item.price_source || "live"
+    price_source: item.price_source || "live",
+    image_url: item.image_url || "",
+    sku: item.sku || "",
+    checked_at: item.checked_at || new Date().toISOString()
   };
 
   LAST_AI_QUOTE_DRAFT.materials = LAST_AI_QUOTE_DRAFT.materials || [];
-  const canonical = product.name.toLowerCase();
-  const duplicate = LAST_AI_QUOTE_DRAFT.materials.some(existing => {
-    const name = String(existing.name || "").toLowerCase();
-    return name === canonical || name.includes(canonical) || canonical.includes(name);
+  const canonical = canonicalMaterialName(product.name);
+  const existingDraftIndex = LAST_AI_QUOTE_DRAFT.materials.findIndex(existing => {
+    const existingUrl = String(existing.url || "").split("?")[0].replace(/\/+$/, "").toLowerCase();
+    const incomingUrl = product.url.split("?")[0].replace(/\/+$/, "").toLowerCase();
+    return (existingUrl && existingUrl === incomingUrl) ||
+           canonicalMaterialName(existing.name || "") === canonical;
   });
-  if (!duplicate) LAST_AI_QUOTE_DRAFT.materials.unshift(product);
+
+  if (existingDraftIndex >= 0) {
+    LAST_AI_QUOTE_DRAFT.materials[existingDraftIndex] = {
+      ...LAST_AI_QUOTE_DRAFT.materials[existingDraftIndex],
+      ...product
+    };
+  } else {
+    LAST_AI_QUOTE_DRAFT.materials.unshift(product);
+  }
+
+  const existingRow = findExistingMaterialRowByUrlOrName(product.url, product.name);
+  if (existingRow) {
+    existingRow.querySelector(".m-name").value = product.name;
+    existingRow.querySelector(".m-qty").value = product.quantity;
+    existingRow.querySelector(".m-supplier").value = product.supplier;
+    existingRow.querySelector(".m-url").value = product.url;
+    existingRow.querySelector(".m-manual").value = product.manual_price || "";
+    existingRow.dataset.liveProduct = "1";
+    existingRow.dataset.sku = product.sku || "";
+    existingRow.dataset.imageUrl = product.image_url || "";
+    existingRow.dataset.checkedAt = product.checked_at || "";
+    updateMaterialLiveBadge(existingRow);
+  } else {
+    addMaterial(product);
+  }
 
   renderAIQuoteDraft({draft: LAST_AI_QUOTE_DRAFT});
-  showNotice(`${product.name} added with its merchant link and current price.`);
+  showNotice(`${product.name} added to the materials list with supplier, price and product URL.`);
 }
+
 
 function renderAIQuoteDraft(data) {
   const box = document.getElementById("aiQuoteResult");
   if (!box) return;
 
-  const draft = data.draft || {};
+  const draft = prepareDraftForV125(data.draft || {});
   const materials = draft.materials || [];
   const professional = draft.professional_quote || {};
   const confidence = professional.confidence || {};
@@ -8239,6 +8413,7 @@ function renderAIQuoteDraft(data) {
   const statusBadge = (status) => {
     if (status === "required") return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#dcfce7;font-size:12px;">Required</span>`;
     if (status === "customer_supplied") return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#dbeafe;font-size:12px;">Customer supplied</span>`;
+    if (status === "site_check") return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#fef3c7;font-size:12px;">Site check</span>`;
     return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#f3f4f6;font-size:12px;">Optional</span>`;
   };
 
@@ -8437,6 +8612,11 @@ function applyAIQuoteDraft() {
       supplier: m.supplier || "City Plumbing",
       url: m.url || "",
       manual_price: Number(m.manual_price || m.live_price || m.default_price || 0),
+      source: m.source || "",
+      price_source: m.price_source || "",
+      sku: m.sku || "",
+      image_url: m.image_url || "",
+      checked_at: m.checked_at || "",
       quantity_source: m.quantity_source || "ai",
       learned_used_count: Number(m.learned_used_count || 0)
     });
@@ -9103,10 +9283,13 @@ def _extract_search_page_products(html: str, search_url: str, merchant_name: str
 
 
 def _read_product_page_details(product, merchant_name):
-    url = product.get("url", "")
+    url = normalize_material_url(product.get("url", ""))
     name = product.get("name", "")
     price = safe_float(product.get("price", 0), 0)
     availability = ""
+    image_url = ""
+    sku = ""
+    checked_at = datetime.now().isoformat(timespec="seconds")
     try:
         response = requests.get(
             url,
@@ -9118,13 +9301,44 @@ def _read_product_page_details(product, merchant_name):
             allow_redirects=True,
         )
         if response.status_code == 200 and response.text:
+            url = normalize_material_url(response.url or url)
             soup = BeautifulSoup(response.text, "html.parser")
             og_title = soup.select_one('meta[property="og:title"]')
+            og_image = soup.select_one('meta[property="og:image"]')
             page_h1 = soup.select_one("h1")
             if og_title and og_title.get("content"):
                 name = _clean_product_title(og_title.get("content"))
             elif page_h1:
                 name = _clean_product_title(page_h1.get_text(" ", strip=True))
+            if og_image and og_image.get("content"):
+                image_url = urljoin(url, og_image.get("content"))
+            for script in soup.select('script[type="application/ld+json"]'):
+                try:
+                    payload = json.loads(script.get_text(strip=True))
+                except Exception:
+                    continue
+                stack = payload if isinstance(payload, list) else [payload]
+                while stack:
+                    item = stack.pop()
+                    if isinstance(item, list):
+                        stack.extend(item)
+                        continue
+                    if not isinstance(item, dict):
+                        continue
+                    stack.extend(v for v in item.values() if isinstance(v, (dict, list)))
+                    if str(item.get("@type", "")).lower() == "product":
+                        sku = str(item.get("sku") or item.get("mpn") or item.get("productID") or sku or "")
+                        image = item.get("image")
+                        if not image_url:
+                            if isinstance(image, list) and image:
+                                image_url = str(image[0])
+                            elif isinstance(image, str):
+                                image_url = image
+            if not sku:
+                body_text = soup.get_text(" ", strip=True)
+                m = re.search(r"(?:product\s*code|item\s*code|sku|part\s*number)\s*[:#]?\s*([A-Z0-9\-]{4,30})", body_text, re.I)
+                if m:
+                    sku = m.group(1)
             if not price:
                 price = safe_float(scrape_live_price(url), 0)
             page_text = soup.get_text(" ", strip=True).lower()
@@ -9143,10 +9357,103 @@ def _read_product_page_details(product, merchant_name):
         "live_price": round(price, 2) if price else 0,
         "price_source": "live" if price else "unavailable",
         "availability": availability,
+        "image_url": image_url,
+        "sku": sku,
+        "checked_at": checked_at,
     }
 
 
-def search_live_merchant_products(query: str, suppliers=None, per_supplier: int = 3):
+def _product_search_intent(query: str):
+    q = re.sub(r"\s+", " ", (query or "").lower()).strip()
+    dims = re.search(r"(\d{3,4})\s*[x×]\s*(\d{3,4})", q)
+    dimensions = set(dims.groups()) if dims else set()
+    radiator_type = ""
+    type_match = re.search(r"\btype\s*(11|21|22)\b", q)
+    if type_match:
+        radiator_type = type_match.group(1)
+
+    if "radiator" in q or "convector" in q:
+        product_type = "radiator"
+    elif "trv" in q or "thermostatic radiator valve" in q:
+        product_type = "trv"
+    elif "lockshield" in q:
+        product_type = "lockshield"
+    elif "radiator valve" in q or "valve set" in q:
+        product_type = "radiator_valve_set"
+    elif "toilet" in q or "wc" in q:
+        product_type = "toilet"
+    elif "tap" in q:
+        product_type = "tap"
+    else:
+        product_type = "general"
+    return {"query": q, "dimensions": dimensions, "radiator_type": radiator_type, "product_type": product_type}
+
+
+def _strict_product_match(name: str, query: str):
+    intent = _product_search_intent(query)
+    title = re.sub(r"\s+", " ", (name or "").lower()).strip()
+    if not title:
+        return 0, False, "Missing product title"
+
+    category_noise = [
+        "painting & decorating", "power tools", "bricks & blocks", "air bricks",
+        "plumbing fittings", "building materials", "work tools", "category",
+        "central heating radiators", "search results", "shop all",
+    ]
+    if any(term in title for term in category_noise):
+        return 0, False, "Category or unrelated page"
+
+    ptype = intent["product_type"]
+    score = 35
+    required_terms = []
+    forbidden_terms = []
+
+    if ptype == "radiator":
+        required_terms = ["radiator"]
+        forbidden_terms = ["electric", "panel heater", "towel radiator", "towelrad", "heated towel"]
+        if "convector" in title or "panel radiator" in title:
+            score += 22
+        if "white" in intent["query"] and "white" in title:
+            score += 5
+    elif ptype == "trv":
+        required_terms = ["trv"] if "trv" in title else ["thermostatic", "radiator", "valve"]
+        forbidden_terms = ["radiator", "heater"] if "valve" not in title else []
+    elif ptype == "lockshield":
+        required_terms = ["lockshield", "valve"]
+    elif ptype == "radiator_valve_set":
+        required_terms = ["radiator", "valve"]
+    elif ptype == "toilet":
+        required_terms = ["toilet"]
+    elif ptype == "tap":
+        required_terms = ["tap"]
+
+    if required_terms and not all(term in title for term in required_terms):
+        return 0, False, "Wrong product type"
+    if any(term in title for term in forbidden_terms):
+        return 0, False, "Wrong product subtype"
+    score += 25 if required_terms else 0
+
+    if intent["dimensions"]:
+        title_numbers = set(re.findall(r"\b\d{3,4}\b", title))
+        if intent["dimensions"].issubset(title_numbers):
+            score += 28
+        else:
+            return 0, False, "Dimensions do not match"
+
+    if intent["radiator_type"]:
+        type_no = intent["radiator_type"]
+        if re.search(rf"\btype\s*{type_no}\b", title):
+            score += 12
+        else:
+            return 0, False, "Radiator type does not match"
+
+    query_terms = {x for x in re.findall(r"[a-z0-9]+", intent["query"]) if len(x) > 2}
+    title_terms = set(re.findall(r"[a-z0-9]+", title))
+    score += min(12, len(query_terms & title_terms) * 2)
+    return min(99, score), score >= 72, ""
+
+
+def search_live_merchant_products(query: str, suppliers=None, per_supplier: int = 5):
     query = re.sub(r"\s+", " ", (query or "")).strip()
     if len(query) < 3:
         return []
@@ -9181,7 +9488,27 @@ def search_live_merchant_products(query: str, suppliers=None, per_supplier: int 
             except Exception:
                 continue
 
-        if not merchant_candidates:
+        accepted = 0
+        for product in merchant_candidates:
+            detailed = _read_product_page_details(product, merchant_name)
+            score, is_match, rejection = _strict_product_match(detailed.get("name", ""), query)
+            if not is_match:
+                continue
+            detailed["match_score"] = score
+            detailed["search_only"] = False
+            detailed["strict_match"] = True
+            if detailed["url"]:
+                upsert_material_price_cache(
+                    detailed["url"], detailed["name"], detailed["supplier"],
+                    price=detailed["live_price"] or None, manual_price=0,
+                    status=detailed["price_source"],
+                )
+            results.append(detailed)
+            accepted += 1
+            if accepted >= max(1, per_supplier):
+                break
+
+        if accepted == 0:
             results.append({
                 "name": f"Search {merchant_name} for {query}",
                 "supplier": merchant_name,
@@ -9191,23 +9518,9 @@ def search_live_merchant_products(query: str, suppliers=None, per_supplier: int 
                 "price_source": "merchant_search",
                 "availability": "",
                 "search_only": True,
-                "match_score": 50,
+                "strict_match": False,
+                "match_score": 0,
             })
-            continue
-
-        for product in merchant_candidates[:max(1, per_supplier)]:
-            detailed = _read_product_page_details(product, merchant_name)
-            query_terms = set(re.findall(r"[a-z0-9]+", query.lower()))
-            name_terms = set(re.findall(r"[a-z0-9]+", detailed["name"].lower()))
-            detailed["match_score"] = min(99, 55 + len(query_terms & name_terms) * 9)
-            detailed["search_only"] = False
-            if detailed["url"]:
-                upsert_material_price_cache(
-                    detailed["url"], detailed["name"], detailed["supplier"],
-                    price=detailed["live_price"] or None, manual_price=0,
-                    status=detailed["price_source"],
-                )
-            results.append(detailed)
 
     results.sort(key=lambda item: (
         1 if item.get("search_only") else 0,
@@ -9215,7 +9528,7 @@ def search_live_merchant_products(query: str, suppliers=None, per_supplier: int 
         0 if safe_float(item.get("live_price", 0), 0) > 0 else 1,
         safe_float(item.get("live_price", 0), 0) or 999999,
     ))
-    return results[:16]
+    return results[:20]
 
 
 @app.get("/api/live-product-search")
@@ -9229,6 +9542,25 @@ def api_live_product_search(q: str = "", suppliers: str = "", request: Request =
         "results": search_live_merchant_products(q, selected or None, 3),
         "live_price_note": "Prices are checked from merchant product pages where accessible. Confirm price and availability before ordering.",
     })
+
+
+
+@app.get("/api/live-product-refresh")
+def api_live_product_refresh(url: str = "", name: str = "", supplier: str = "", request: Request = None):
+    if request is not None and not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    clean_url = normalize_material_url(url)
+    if not clean_url.startswith("http"):
+        raise HTTPException(status_code=400, detail="A valid product URL is required.")
+    details = _read_product_page_details({"url": clean_url, "name": name, "price": 0}, supplier or "Merchant")
+    if not details.get("url"):
+        raise HTTPException(status_code=422, detail="The merchant product page could not be confirmed.")
+    if details.get("live_price"):
+        upsert_material_price_cache(
+            details["url"], details.get("name", name), details.get("supplier", supplier),
+            price=details["live_price"], manual_price=0, status="live",
+        )
+    return JSONResponse(details)
 
 
 @app.get("/api/material-search")
@@ -12394,7 +12726,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "live-merchant-products-v12.4",
+        "estimator_version": "auto-material-population-v12.6",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -12971,7 +13303,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "live-merchant-products-v12.4"),
+        "version": context.get("estimator_version", "auto-material-population-v12.6"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
