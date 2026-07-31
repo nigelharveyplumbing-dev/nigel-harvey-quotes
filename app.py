@@ -4602,8 +4602,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Quote Health Intelligence V10</strong><br>
-        <span class="small">Builds the quote, then checks missing items, unusual quantities, labour consistency and whether it is ready to send. Health checks are advisory and never change prices automatically.</span>
+        <strong>Context‑Aware Learning V11</strong><br>
+        <span class="small">Groups duplicate warnings, creates job-specific material bundles, shows material confidence and offers one-click quantity fixes while keeping every change under your control.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
         </div>
@@ -7514,6 +7514,82 @@ function ignoreQuoteHealthSuggestion(suggestionId) {
   showNotice("Suggestion ignored for this draft.");
 }
 
+
+function useSuggestedQuantity(warningId) {
+  const draft = LAST_AI_QUOTE_DRAFT;
+  if (!draft || !draft.quote_health) return;
+  const warning = (draft.quote_health.quantity_warnings || []).find(x => x.id === warningId);
+  if (!warning || warning.no_auto_fix) return;
+
+  const target = canonicalMaterialName(warning.material || "");
+  const matches = (draft.materials || []).filter(item => {
+    const current = canonicalMaterialName(item.name || "");
+    return current === target || current.includes(target) || target.includes(current);
+  });
+
+  if (!matches.length) return;
+
+  matches[0].quantity = Number(warning.suggested_quantity || 1);
+  for (let i = 1; i < matches.length; i++) matches[i].quantity = 0;
+  draft.materials = (draft.materials || []).filter(item => Number(item.quantity || 0) > 0);
+  draft.quote_health.quantity_warnings = (draft.quote_health.quantity_warnings || []).filter(x => x.id !== warningId);
+  draft.quote_health.checks_passed = draft.quote_health.checks_passed || [];
+  draft.quote_health.checks_passed.push(`${warning.material} quantity changed to ${warning.suggested_quantity}.`);
+  draft.quote_health.score = Math.min(100, Number(draft.quote_health.score || 0) + 6);
+
+  renderAIQuoteDraft({draft});
+  showNotice(`${warning.material} quantity changed to ${warning.suggested_quantity}.`);
+}
+
+function keepCurrentQuantity(warningId) {
+  const draft = LAST_AI_QUOTE_DRAFT;
+  if (!draft || !draft.quote_health) return;
+  const warning = (draft.quote_health.quantity_warnings || []).find(x => x.id === warningId);
+  draft.quote_health.quantity_warnings = (draft.quote_health.quantity_warnings || []).filter(x => x.id !== warningId);
+  if (warning) {
+    draft.quote_health.checks_passed = draft.quote_health.checks_passed || [];
+    draft.quote_health.checks_passed.push(`${warning.material} quantity reviewed and kept.`);
+  }
+  renderAIQuoteDraft({draft});
+  showNotice("Current quantity kept for this draft.");
+}
+
+function addV11JobBundle(jobType, essentialOnly = false) {
+  const draft = LAST_AI_QUOTE_DRAFT;
+  if (!draft || !draft.quote_health) return;
+  const bundle = (draft.quote_health.job_specific_bundles || []).find(x => x.job_type === jobType);
+  if (!bundle) return;
+
+  draft.materials = draft.materials || [];
+  let added = 0;
+  (bundle.items || []).forEach(item => {
+    if (essentialOnly && item.optional) return;
+    if (item.already_in_quote) return;
+    const exists = draft.materials.some(existing =>
+      canonicalMaterialName(existing.name || "") === canonicalMaterialName(item.name || "")
+    );
+    if (!exists) {
+      draft.materials.push({
+        name: item.name || "",
+        quantity: Number(item.quantity || 1),
+        supplier: "City Plumbing",
+        url: "",
+        manual_price: 0,
+        required: !item.optional,
+        display_status: item.optional ? "optional" : "required",
+        data_source: "context_job_bundle",
+        material_confidence: Number(item.confidence || 75),
+        reason: item.reason || ""
+      });
+      item.already_in_quote = true;
+      added += 1;
+    }
+  });
+
+  renderAIQuoteDraft({draft});
+  showNotice(added ? `${added} material(s) added from ${bundle.display_name}.` : "Bundle materials are already present.");
+}
+
 function renderAIQuoteDraft(data) {
   const box = document.getElementById("aiQuoteResult");
   if (!box) return;
@@ -7535,6 +7611,7 @@ function renderAIQuoteDraft(data) {
   const healthQuantities = health.quantity_warnings || [];
   const healthLabour = health.labour_warnings || [];
   const healthPassed = health.checks_passed || [];
+  const jobBundles = health.job_specific_bundles || [];
 
   const statusBadge = (status) => {
     if (status === "required") return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#dcfce7;font-size:12px;">Required</span>`;
@@ -7548,7 +7625,7 @@ function renderAIQuoteDraft(data) {
     <div class="history-item" style="padding:10px;border-color:#7c3aed;">
       <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px;background:#f3f4f6;border-radius:10px;">
         <div>
-          <strong style="font-size:18px;">Estimator dashboard & quote health</strong><br>
+          <strong style="font-size:18px;">Estimator dashboard, learning & fixes</strong><br>
           <span style="font-size:22px;letter-spacing:2px;">${stars}</span><br>
           <span class="small">Overall estimate quality ${Number(quality.overall || 0)}%</span>
         </div>
@@ -7584,10 +7661,31 @@ function renderAIQuoteDraft(data) {
           </div>`).join("")}
         </div>` : ""}
 
-        ${healthQuantities.length ? `<div style="margin-top:9px;"><strong>Quantities to check</strong><br>${healthQuantities.map(x => `△ ${escapeHtml(x.message || "")}`).join("<br>")}</div>` : ""}
+        ${healthQuantities.length ? `<div style="margin-top:9px;"><strong>Quantities to check</strong>
+          ${healthQuantities.map(x => `<div style="margin-top:6px;padding:8px;background:white;border:1px solid #ddd;border-radius:8px;">
+            <strong>${escapeHtml(x.material || "")}</strong><br>
+            <span class="small">${escapeHtml(x.message || "")}</span>
+            ${x.no_auto_fix ? "" : `<div style="margin-top:6px;"><strong>Current:</strong> ${Number(x.actual_quantity || 0)} &nbsp; <strong>Suggested:</strong> ${Number(x.suggested_quantity || 0)}</div>
+            <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:7px;">
+              <button type="button" class="btn-light" onclick='useSuggestedQuantity(${JSON.stringify(x.id)})'>Use suggested</button>
+              <button type="button" class="btn-light" onclick='keepCurrentQuantity(${JSON.stringify(x.id)})'>Keep current</button>
+            </div>`}
+          </div>`).join("")}
+        </div>` : ""}
         ${healthLabour.length ? `<div style="margin-top:9px;"><strong>Labour checks</strong><br>${healthLabour.map(x => `△ ${escapeHtml(x.message || "")}`).join("<br>")}</div>` : ""}
         <div class="small" style="margin-top:7px;">Advisory only — nothing is added or repriced unless you approve it.</div>
       </div>
+
+      ${jobBundles.length ? `<div style="margin-top:10px;"><strong>Recommended job bundles</strong>
+        ${jobBundles.map(bundle => `<div style="margin-top:7px;padding:9px;border:1px solid #16a34a;border-radius:9px;background:#f0fdf4;">
+          <strong>${escapeHtml(bundle.display_name || "")}</strong><br>
+          ${(bundle.items || []).map(item => `• ${escapeHtml(item.name)} × ${Number(item.quantity || 1)} — ${Number(item.confidence || 0)}% confidence ${item.already_in_quote ? "✓ already included" : item.optional ? "(optional)" : ""}`).join("<br>")}
+          <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:7px;">
+            <button type="button" class="btn-light" onclick='addV11JobBundle(${JSON.stringify(bundle.job_type)}, false)'>Add bundle</button>
+            <button type="button" class="btn-light" onclick='addV11JobBundle(${JSON.stringify(bundle.job_type)}, true)'>Add essential only</button>
+          </div>
+        </div>`).join("")}
+      </div>` : ""}
 
       ${(confidence.positive_reasons || []).length || (confidence.gaps || []).length ? `
         <div style="margin-top:8px;padding:9px;border:1px solid #ddd;border-radius:8px;">
@@ -7631,6 +7729,7 @@ function renderAIQuoteDraft(data) {
               <th style="text-align:left;padding:5px;border-bottom:1px solid #ddd;">Status</th>
               <th style="text-align:right;padding:5px;border-bottom:1px solid #ddd;">Qty</th>
               <th style="text-align:right;padding:5px;border-bottom:1px solid #ddd;">Price</th>
+              <th style="text-align:center;padding:5px;border-bottom:1px solid #ddd;">Confidence</th>
               <th style="text-align:left;padding:5px;border-bottom:1px solid #ddd;">Supplier</th>
             </tr></thead>
             <tbody>${materials.length ? materials.map(m => `<tr>
@@ -7638,8 +7737,9 @@ function renderAIQuoteDraft(data) {
               <td style="padding:5px;border-bottom:1px solid #eee;">${statusBadge(m.display_status || (m.required ? "required" : "optional"))}</td>
               <td style="padding:5px;text-align:right;border-bottom:1px solid #eee;">${Number(m.quantity || 1)}</td>
               <td style="padding:5px;text-align:right;border-bottom:1px solid #eee;">${Number(m.manual_price || 0) > 0 ? pounds(m.manual_price) : "TBC"}</td>
+              <td style="padding:5px;text-align:center;border-bottom:1px solid #eee;">${Number(m.material_confidence || 65)}%</td>
               <td style="padding:5px;border-bottom:1px solid #eee;">${escapeHtml(m.supplier || "")}</td>
-            </tr>`).join("") : `<tr><td colspan="5" style="padding:7px;">No materials suggested.</td></tr>`}</tbody>
+            </tr>`).join("") : `<tr><td colspan="6" style="padding:7px;">No materials suggested.</td></tr>`}</tbody>
           </table>
         </div>
       </div>
@@ -11029,16 +11129,71 @@ def count_jobs_by_type(context: dict):
     return counts
 
 
+def material_confidence_score(item: dict):
+    source = item.get("data_source", "")
+    used_count = int(item.get("learned_used_count", 0) or 0)
+    if source in {"database first saved material", "database_first_saved_material", "trade_library", "saved_material"}:
+        base = 92
+    elif source in {"quote_history", "template", "smart_job_kit"}:
+        base = 84
+    elif source == "quote_health_suggestion":
+        base = 72
+    else:
+        base = 65
+    return max(40, min(98, base + min(used_count * 2, 6)))
+
+
+def build_job_specific_bundles(draft: dict, context: dict):
+    bundles = []
+    jobs = (context.get("multi_job_estimate", {}) or {}).get("classified_jobs", []) or []
+    if not jobs:
+        smart = context.get("smart_job_kit", {}) or {}
+        classification = smart.get("classification", {}) or {}
+        if classification.get("job_type"):
+            jobs = [{
+                "job_type": classification.get("job_type"),
+                "display_name": classification.get("display_name") or classification.get("job_type"),
+                "supply_responsibility": smart.get("supply_responsibility", "unknown"),
+            }]
+
+    seen_job_types = set()
+    for job in jobs:
+        job_type = job.get("job_type")
+        if not job_type or job_type in seen_job_types:
+            continue
+        seen_job_types.add(job_type)
+        rule = QUOTE_HEALTH_JOB_RULES.get(job_type, {})
+        items = []
+        for rec in rule.get("recommended", []):
+            confidence = 94 if not rec.get("optional") else 76
+            items.append({
+                "id": f"{job_type}:{rec.get('key')}",
+                "name": rec.get("name", ""),
+                "quantity": safe_float(rec.get("quantity", 1), 1),
+                "reason": rec.get("reason", ""),
+                "optional": bool(rec.get("optional", False)),
+                "confidence": confidence,
+                "already_in_quote": any(
+                    material_name_matches(material.get("name", ""), rec.get("aliases", []))
+                    for material in (draft.get("materials", []) or [])
+                ),
+            })
+        if items:
+            bundles.append({
+                "job_type": job_type,
+                "display_name": job.get("display_name") or job_type.replace("_", " ").title(),
+                "items": items,
+            })
+    return bundles
+
+
 def build_quote_health(draft: dict, context: dict):
     materials = draft.get("materials", []) or []
     job_counts = count_jobs_by_type(context)
-    missing_items = []
-    quantity_warnings = []
-    labour_warnings = []
-    checks_passed = []
+    missing_items, quantity_warnings, labour_warnings, checks_passed = [], [], [], []
     seen_missing = set()
-    seen_quantity = set()
 
+    # Missing items remain job-specific.
     for job_type, job_count in job_counts.items():
         rule = QUOTE_HEALTH_JOB_RULES.get(job_type, {})
         for recommended in rule.get("recommended", []):
@@ -11054,80 +11209,89 @@ def build_quote_health(draft: dict, context: dict):
                         "id": key,
                         "job_type": job_type,
                         "name": recommended.get("name", ""),
-                        "quantity": round(
-                            safe_float(recommended.get("quantity", 1), 1) * job_count,
-                            2
-                        ),
+                        "quantity": round(safe_float(recommended.get("quantity", 1), 1) * job_count, 2),
                         "reason": recommended.get("reason", ""),
                         "optional": bool(recommended.get("optional", False)),
                         "supplier": "",
                         "url": "",
                         "manual_price": 0,
+                        "confidence": 94 if not recommended.get("optional") else 76,
                     })
 
+    # Aggregate quantity limits across all relevant jobs to avoid duplicate warnings.
+    aggregate_limits = {}
+    for job_type, job_count in job_counts.items():
+        rule = QUOTE_HEALTH_JOB_RULES.get(job_type, {})
         for alias, limit in (rule.get("quantity_limits", {}) or {}).items():
-            matching = [
-                item for item in materials
-                if material_name_matches(item.get("name", ""), [alias])
-            ]
-            if not matching:
-                continue
-            actual = sum(safe_float(item.get("quantity", 0), 0) for item in matching)
-            expected_max = safe_float(limit.get("max_per_job", 0), 0) * job_count
-            if expected_max > 0 and actual > expected_max + 0.001:
-                warning_key = f"{job_type}:{alias}"
-                if warning_key not in seen_quantity:
-                    seen_quantity.add(warning_key)
-                    quantity_warnings.append({
-                        "id": warning_key,
-                        "job_type": job_type,
-                        "material": matching[0].get("name", alias),
-                        "actual_quantity": round(actual, 2),
-                        "expected_max": round(expected_max, 2),
-                        "message": (
-                            f"{matching[0].get('name', alias)} quantity is {actual:g}; "
-                            f"normally no more than {expected_max:g} for {job_count} job(s)."
-                        ),
-                    })
+            canonical_alias = canonical_material_name(alias)
+            aggregate_limits.setdefault(canonical_alias, {
+                "aliases": set(),
+                "expected_max": 0.0,
+                "job_types": set(),
+            })
+            aggregate_limits[canonical_alias]["aliases"].add(alias)
+            aggregate_limits[canonical_alias]["expected_max"] += safe_float(limit.get("max_per_job", 0), 0) * job_count
+            aggregate_limits[canonical_alias]["job_types"].add(job_type)
 
-    # General consumable quantity checks.
+    grouped_materials = {}
+    for item in materials:
+        canonical = canonical_material_name(item.get("name", ""))
+        grouped_materials.setdefault(canonical, {
+            "name": item.get("name", ""),
+            "quantity": 0.0,
+        })
+        grouped_materials[canonical]["quantity"] += safe_float(item.get("quantity", 0), 0)
+
+    emitted = set()
+    for canonical_alias, limit_data in aggregate_limits.items():
+        matching_keys = [
+            key for key in grouped_materials
+            if canonical_alias in key or key in canonical_alias
+        ]
+        if not matching_keys:
+            continue
+        actual = sum(grouped_materials[key]["quantity"] for key in matching_keys)
+        expected_max = round(limit_data["expected_max"], 2)
+        display_name = grouped_materials[matching_keys[0]]["name"]
+        warning_key = canonical_material_name(display_name)
+        if actual > expected_max + 0.001 and warning_key not in emitted:
+            emitted.add(warning_key)
+            quantity_warnings.append({
+                "id": f"quantity:{warning_key}",
+                "material": display_name,
+                "material_key": warning_key,
+                "actual_quantity": round(actual, 2),
+                "suggested_quantity": expected_max,
+                "expected_max": expected_max,
+                "job_types": sorted(limit_data["job_types"]),
+                "message": f"{display_name}: current quantity {actual:g}; suggested maximum {expected_max:g} for the identified jobs.",
+            })
+
+    # General consumable checks, deduplicated.
     for item in materials:
         name = canonical_material_name(item.get("name", ""))
         quantity = safe_float(item.get("quantity", 0), 0)
-        if "ptfe" in name and quantity > 0.5:
+        if "ptfe" in name and quantity > 0.5 and "ptfe" not in emitted:
+            emitted.add("ptfe")
             quantity_warnings.append({
-                "id": "general:ptfe",
-                "job_type": "general",
+                "id": "quantity:ptfe",
                 "material": item.get("name", "PTFE tape"),
+                "material_key": name,
                 "actual_quantity": quantity,
+                "suggested_quantity": 0.1,
                 "expected_max": 0.5,
-                "message": "PTFE allowance looks high for consumable use; check that a partial roll rather than a full roll is being charged.",
-            })
-        if "silicone" in name and quantity > max(1.0, sum(job_counts.values()) * 0.5):
-            quantity_warnings.append({
-                "id": "general:silicone",
-                "job_type": "general",
-                "material": item.get("name", "Silicone"),
-                "actual_quantity": quantity,
-                "expected_max": max(1.0, sum(job_counts.values()) * 0.5),
-                "message": "Silicone quantity looks high compared with the number of jobs; confirm whether full tubes are genuinely required.",
+                "job_types": ["general"],
+                "message": "PTFE allowance looks high. A 0.1 consumable allowance is normally more suitable than charging a full roll.",
             })
 
-    # Labour checks.
     breakdown = draft.get("job_breakdown", []) or []
     total_labour = safe_float(draft.get("labour_suggestion", 0), 0)
-    breakdown_total = round(sum(
-        safe_float(job.get("labour_suggestion", 0), 0)
-        for job in breakdown
-    ), 2)
+    breakdown_total = round(sum(safe_float(job.get("labour_suggestion", 0), 0) for job in breakdown), 2)
 
     if breakdown and abs(total_labour - breakdown_total) > 0.01:
         labour_warnings.append({
             "id": "labour:total_mismatch",
-            "message": (
-                f"Combined labour is £{total_labour:.2f}, but the job breakdown totals "
-                f"£{breakdown_total:.2f}. Check for duplicated or missing labour."
-            ),
+            "message": f"Combined labour is £{total_labour:.2f}, but the job breakdown totals £{breakdown_total:.2f}.",
         })
     else:
         checks_passed.append("Labour total matches the individual job breakdown.")
@@ -11137,10 +11301,7 @@ def build_quote_health(draft: dict, context: dict):
         if confidence == "low":
             labour_warnings.append({
                 "id": f"labour:low_confidence:{job.get('job_number', 0)}",
-                "message": (
-                    f"{job.get('display_name', 'Job')} labour has low historical confidence "
-                    "and should be reviewed manually."
-                ),
+                "message": f"{job.get('display_name', 'Job')} labour has low historical confidence and should be reviewed.",
             })
 
     if materials and all(safe_float(item.get("manual_price", 0), 0) > 0 for item in materials):
@@ -11149,17 +11310,20 @@ def build_quote_health(draft: dict, context: dict):
         unpriced = sum(1 for item in materials if safe_float(item.get("manual_price", 0), 0) <= 0)
         quantity_warnings.append({
             "id": "materials:unpriced",
-            "job_type": "general",
             "material": "Unpriced materials",
+            "material_key": "unpriced materials",
             "actual_quantity": unpriced,
+            "suggested_quantity": 0,
             "expected_max": 0,
-            "message": f"{unpriced} material item(s) still need a price before the quote is sent.",
+            "job_types": ["general"],
+            "message": f"{unpriced} material item(s) still need a price before sending.",
+            "no_auto_fix": True,
         })
 
     if not missing_items:
         checks_passed.append("No common required materials appear to be missing.")
     if not quantity_warnings:
-        checks_passed.append("Material quantities are within the normal advisory ranges.")
+        checks_passed.append("Material quantities are within normal advisory ranges.")
     if not labour_warnings:
         checks_passed.append("No labour inconsistencies were found.")
     if job_counts:
@@ -11169,23 +11333,16 @@ def build_quote_health(draft: dict, context: dict):
     score -= sum(4 if item.get("optional") else 9 for item in missing_items)
     score -= min(25, len(quantity_warnings) * 6)
     score -= min(25, len(labour_warnings) * 10)
-
-    professional = draft.get("professional_quote", {}) or {}
-    open_questions = len(professional.get("questions", []) or [])
+    open_questions = len(((draft.get("professional_quote", {}) or {}).get("questions", []) or []))
     score -= min(15, open_questions * 2)
     score = max(20, min(100, int(round(score))))
 
-    if score >= 90 and not labour_warnings and not any(
-        not item.get("optional") for item in missing_items
-    ):
-        readiness = "ready_to_send"
-        readiness_label = "Ready to send"
+    if score >= 90 and not labour_warnings and not any(not item.get("optional") for item in missing_items):
+        readiness, readiness_label = "ready_to_send", "Ready to send"
     elif score >= 65:
-        readiness = "review_recommended"
-        readiness_label = "Review recommended"
+        readiness, readiness_label = "review_recommended", "Review recommended"
     else:
-        readiness = "do_not_send"
-        readiness_label = "Do not send yet"
+        readiness, readiness_label = "do_not_send", "Do not send yet"
 
     return {
         "score": score,
@@ -11197,12 +11354,15 @@ def build_quote_health(draft: dict, context: dict):
         "checks_passed": unique_short_items(checks_passed, 8),
         "open_site_checks": open_questions,
         "advisory_only": True,
+        "job_specific_bundles": build_job_specific_bundles(draft, context),
     }
 
 
 def enhance_v10_quote(draft: dict, context: dict):
     if not isinstance(draft, dict):
         return draft
+    for item in draft.get("materials", []) or []:
+        item["material_confidence"] = material_confidence_score(item)
     draft["quote_health"] = build_quote_health(draft, context)
     return draft
 
@@ -11315,7 +11475,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "quote-health-intelligence-v10",
+        "estimator_version": "context-aware-learning-v11",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -11502,7 +11662,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "quote-health-intelligence-v10"),
+        "version": context.get("estimator_version", "context-aware-learning-v11"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
