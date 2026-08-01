@@ -63,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "12.9-complete-material-merge"
+APP_VERSION = "14.0-ai-job-walkthrough"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4608,51 +4608,78 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Complete Material Merge Intelligence V12.9</strong><br>
-        <span class="small">Capture the site, merge the findings and search merchant result and category pages using strict product type, dimensions and radiator-type matching. Concealed pipe routes receive a provisional fittings allowance instead of invented fitting quantities.</span>
+        <strong>AI Job Walkthrough V14</strong><br>
+        <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
-        <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
-          <button type="button" class="btn-light" onclick="takeSitePhoto()">📷 Take photo</button>
-          <button type="button" id="recordSiteVideoButton" class="btn-light" onclick="startSiteVideoRecording()">🎥 Record video</button>
+        <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
+          <button type="button" class="btn-green" onclick="toggleSiteInformationPanel()">➕ Add Site Information</button>
         </div>
 
-        <input id="siteCameraPhoto" type="file" accept="image/*" capture="environment" hidden>
-        <input id="siteCameraVideoFallback" type="file" accept="video/*" capture="environment" hidden>
-
-        <div id="siteCaptureSummary" class="small" style="margin-top:8px;">No site media captured yet.</div>
-
-        <div id="siteVideoRecorder" class="hidden" style="margin-top:10px;padding:10px;border:1px solid #93c5fd;border-radius:10px;background:white;">
-          <video id="siteVideoPreview" autoplay muted playsinline style="width:100%;max-height:360px;border-radius:8px;background:#111;"></video>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
-            <strong id="siteVideoTimer">00:00</strong>
-            <span id="siteVideoSize" class="small">Preparing camera…</span>
+        <div id="siteInformationPanel" class="hidden" style="margin-top:10px;padding:10px;border:1px solid #93c5fd;border-radius:10px;background:white;">
+          <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;">
+            <button type="button" id="recordSiteAudioButton" class="btn-green" onclick="startSiteAudioRecording()">🎙️ Record Job Walkthrough</button>
+            <button type="button" id="recordSiteVideoButton" class="btn-light" onclick="startSiteVideoRecording()">📹 Record Video Walkthrough</button>
+            <button type="button" class="btn-light" onclick="takeSitePhoto()">📷 Add Photos</button>
+            <button type="button" class="btn-light" onclick="document.getElementById('sitePlans')?.click()">📄 Add Plans / Drawings</button>
           </div>
-          <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
-            <button type="button" class="btn-red" onclick="stopSiteVideoRecording()">Stop & use video</button>
-            <button type="button" class="btn-light" onclick="cancelSiteVideoRecording()">Cancel</button>
+
+          <div id="siteAudioRecorder" class="hidden" style="margin-top:10px;padding:10px;border:1px solid #86efac;border-radius:10px;background:#f0fdf4;">
+            <strong>Recording job walkthrough</strong><br>
+            <span class="small">Say what is being fitted, measurements, pipe/fitting quantities, what can stay, who supplies the main product, access and making-good.</span>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+              <strong id="siteAudioTimer">00:00</strong>
+              <span id="siteAudioSize" class="small">Recording…</span>
+            </div>
+            <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+              <button type="button" class="btn-red" onclick="stopSiteAudioRecording()">Stop & use audio</button>
+              <button type="button" class="btn-light" onclick="cancelSiteAudioRecording()">Cancel</button>
+            </div>
           </div>
+
+          <div id="siteVideoRecorder" class="hidden" style="margin-top:10px;padding:10px;border:1px solid #93c5fd;border-radius:10px;background:white;">
+            <video id="siteVideoPreview" autoplay muted playsinline style="width:100%;max-height:360px;border-radius:8px;background:#111;"></video>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+              <strong id="siteVideoTimer">00:00</strong>
+              <span id="siteVideoSize" class="small">Preparing camera…</span>
+            </div>
+            <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+              <button type="button" class="btn-red" onclick="stopSiteVideoRecording()">Stop & use video</button>
+              <button type="button" class="btn-light" onclick="cancelSiteVideoRecording()">Cancel</button>
+            </div>
+          </div>
+
+          <input id="siteCameraPhoto" type="file" accept="image/*" capture="environment" multiple hidden>
+          <input id="siteCameraVideoFallback" type="file" accept="video/*" capture="environment" hidden>
+          <input id="siteAudioFallback" type="file" accept="audio/*" capture hidden>
+          <input id="sitePlans" type="file" accept="image/*,application/pdf" multiple hidden>
+
+          <details style="margin-top:10px;">
+            <summary><strong>Choose existing files</strong></summary>
+            <label for="siteSurveyPhotos" style="margin-top:8px;">Existing photos</label>
+            <input id="siteSurveyPhotos" type="file" accept="image/*" multiple>
+            <label for="siteSurveyVideo" style="margin-top:8px;">Existing video</label>
+            <input id="siteSurveyVideo" type="file" accept="video/*">
+            <label for="siteSurveyAudio" style="margin-top:8px;">Existing audio</label>
+            <input id="siteSurveyAudio" type="file" accept="audio/*">
+          </details>
+
+          <label for="siteVisitNotes" style="margin-top:10px;">Site notes</label>
+          <textarea id="siteVisitNotes" placeholder="Optional notes, measurements, customer choices or anything not said in the recording."></textarea>
         </div>
 
-        <details style="margin-top:10px;">
-          <summary><strong>Choose existing photos or video</strong></summary>
-          <label for="siteSurveyPhotos" style="margin-top:8px;">Existing photos</label>
-          <input id="siteSurveyPhotos" type="file" accept="image/*" multiple>
-
-          <label for="siteSurveyVideo" style="margin-top:8px;">Existing video</label>
-          <input id="siteSurveyVideo" type="file" accept="video/*">
-        </details>
+        <div id="siteCaptureSummary" class="small" style="margin-top:8px;">No site information added yet.</div>
 
         <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
-          <button type="button" class="btn-green" onclick="analyseSiteSurvey()">Analyse captured media</button>
-          <button type="button" class="btn-light" onclick="clearSiteSurvey()">Clear survey</button>
+          <button type="button" class="btn-green" onclick="analyseSiteSurvey()">Analyse Site Visit</button>
+          <button type="button" class="btn-light" onclick="clearSiteSurvey()">Clear Site Visit</button>
         </div>
         <div id="siteSurveyStatus" class="small" style="margin-top:8px;"></div>
         <div id="siteSurveyResult" style="margin-top:8px;"></div>
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Strict Live‑Priced Quote Intelligence V12.9</strong><br>
-        <span class="small">Uses strict dimensions and product-type matching, removes unrelated merchant results, searches missing valve links and adds provisional fittings allowances for concealed pipe routes.</span>
+        <strong>AI Job Walkthrough & Quote Intelligence V14</strong><br>
+        <span class="small">Combines the enquiry, audio walkthrough, optional visual evidence, material database, merchant search and labour intelligence in one quote workflow.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
         </div>
@@ -5405,10 +5432,147 @@ function cleanMaterialNameForMatching(name) {
   return (name || "")
     .toLowerCase()
     .replace(/https?:\/\/\S+/g, " ")
+    .replace(/(\d+)\s*mm\b/g, "$1mm")
+    .replace(/\bend[\s-]?feed\b/g, "endfeed")
+    .replace(/\b90\s*(?:degree|degrees|deg)\b/g, " ")
+    .replace(/\b(plumbright|plumbfix|regin|kudox|stelrad|city plumbing|screwfix|toolstation|selco|topps tiles)\b/g, " ")
+    .replace(/\b(white|chrome plated|chrome|copper|each|single|individual|pack of|pack)\b/g, " ")
+    .replace(/\b(fitting|fittings|connector|connectors)\b/g, " ")
     .replace(/[^a-z0-9/.\- ]+/g, " ")
-    .replace(/\b(plumbright|plumbright|city plumbing|screwfix|toolstation|topps tiles|white|chrome|each|pack|pack of)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function materialMatchTokens(name) {
+  const cleaned = cleanMaterialNameForMatching(name);
+  const stop = new Set(["the", "and", "for", "with", "type", "degree", "degrees"]);
+  return cleaned
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter(token => !stop.has(token));
+}
+
+function materialDimensions(name) {
+  const cleaned = String(name || "").toLowerCase().replace(/\s+/g, " ");
+  const sizes = [...cleaned.matchAll(/\b(\d{1,4})\s*mm\b/g)].map(match => Number(match[1]));
+  return [...new Set(sizes)].sort((a, b) => a - b);
+}
+
+function materialFamily(name) {
+  const cleaned = cleanMaterialNameForMatching(name);
+  if (/\breducing tee\b|\btee\b/.test(cleaned)) return "tee";
+  if (/\belbow\b|\bbend\b/.test(cleaned)) return "elbow";
+  if (/\bcoupler\b|\bcoupling\b/.test(cleaned)) return "coupler";
+  if (/\bcopper pipe\b|\bpipe 3m\b/.test(cleaned)) return "pipe";
+  if (/\bradiator valve set\b/.test(cleaned)) return "radiator valve set";
+  if (/\btrv\b|\bthermostatic radiator valve\b/.test(cleaned)) return "trv";
+  if (/\blockshield\b/.test(cleaned)) return "lockshield";
+  if (/\binhibitor\b/.test(cleaned)) return "inhibitor";
+  if (/\bptfe\b/.test(cleaned)) return "ptfe";
+  if (/\bradiator\b/.test(cleaned)) return "radiator";
+  return "";
+}
+
+function savedMaterialPrice(item) {
+  return Number(
+    item?.last_live_price ||
+    item?.last_price ||
+    item?.last_manual_price ||
+    item?.default_price ||
+    0
+  );
+}
+
+function scoreSavedMaterialMatch(requestedName, candidate) {
+  const requestedTokens = materialMatchTokens(requestedName);
+  const candidateTokens = materialMatchTokens(candidate?.name || "");
+  if (!requestedTokens.length || !candidateTokens.length) return 0;
+
+  const requestedFamily = materialFamily(requestedName);
+  const candidateFamily = materialFamily(candidate?.name || "");
+  if (requestedFamily && candidateFamily && requestedFamily !== candidateFamily) return 0;
+
+  const requestedSizes = materialDimensions(requestedName);
+  const candidateSizes = materialDimensions(candidate?.name || "");
+  if (requestedSizes.length && candidateSizes.length) {
+    const sameSizes = requestedSizes.length === candidateSizes.length &&
+      requestedSizes.every((size, index) => size === candidateSizes[index]);
+    if (!sameSizes) return 0;
+  }
+
+  const candidateSet = new Set(candidateTokens);
+  const shared = requestedTokens.filter(token => candidateSet.has(token));
+  let score = (shared.length / Math.max(requestedTokens.length, candidateTokens.length)) * 70;
+
+  if (requestedFamily && requestedFamily === candidateFamily) score += 20;
+  if (requestedSizes.length && candidateSizes.length) score += 10;
+  if (candidate?.url) score += 4;
+  if (savedMaterialPrice(candidate) > 0) score += 4;
+  if (String(candidate?.last_status || "").toLowerCase().includes("live")) score += 2;
+
+  return Math.min(100, Math.round(score));
+}
+
+function findBestSavedMaterialMatch(name) {
+  const candidates = [
+    ...(Array.isArray(SAVED_MATERIAL_DB) ? SAVED_MATERIAL_DB : []),
+    ...(Array.isArray(MATERIAL_LIBRARY) ? MATERIAL_LIBRARY : [])
+  ];
+
+  const seen = new Set();
+  let best = null;
+
+  for (const candidate of candidates) {
+    const key = `${candidate?.name || ""}|${candidate?.supplier || ""}|${candidate?.url || ""}`;
+    if (!candidate?.name || seen.has(key)) continue;
+    seen.add(key);
+
+    const score = scoreSavedMaterialMatch(name, candidate);
+    if (!best || score > best.score) best = {candidate, score};
+  }
+
+  return best && best.score >= 72 ? best : null;
+}
+
+function enrichMaterialFromSavedDatabase(material) {
+  if (!material || !material.name) return material;
+  const currentPrice = Number(material.manual_price || material.price || 0);
+  const currentUrl = String(material.url || "").trim();
+
+  // Preserve an already confirmed live product.
+  if (currentUrl && currentPrice > 0) return material;
+
+  const match = findBestSavedMaterialMatch(material.name);
+  if (!match) {
+    material.database_match_status = "not_found";
+    material.database_match_score = 0;
+    return material;
+  }
+
+  const saved = match.candidate;
+  const savedPrice = savedMaterialPrice(saved);
+
+  material.original_requested_name = material.original_requested_name || material.name;
+  material.name = saved.name || material.name;
+  material.supplier = saved.supplier || material.supplier || "City Plumbing";
+  material.url = saved.url || material.url || "";
+  material.manual_price = savedPrice || currentPrice || 0;
+  material.price = savedPrice || Number(material.price || 0);
+  material.data_source = saved.url ? "saved_database_match" : (material.data_source || "saved_database_match");
+  material.source = material.data_source;
+  material.database_match_status = "matched";
+  material.database_match_score = match.score;
+  material.material_confidence = Math.max(Number(material.material_confidence || 0), match.score);
+  material.price_status = saved.last_status || material.price_status || (savedPrice ? "cached" : "unpriced");
+  material.saved_material_id = saved.id || material.saved_material_id || null;
+
+  return material;
+}
+
+function enrichDraftMaterialsFromSavedDatabase(draft) {
+  if (!draft || !Array.isArray(draft.materials)) return draft;
+  draft.materials = draft.materials.map(item => enrichMaterialFromSavedDatabase(item));
+  return draft;
 }
 
 function materialAliasInfo(name) {
@@ -5951,7 +6115,7 @@ function updateMaterialLiveBadge(row) {
       ${imageUrl ? ` · <a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener">product image</a>` : ""}
     `;
   } else {
-    status.innerHTML = `<span style="color:#92400e;">No product URL saved — live refresh unavailable.</span>`;
+    status.innerHTML = `<span style="color:#92400e;">No product URL saved — database and live-product matching did not find a confirmed product.</span>`;
   }
 }
 
@@ -7513,6 +7677,12 @@ async function checkAIQuoteStatus() {
 
 
 let CURRENT_SITE_SURVEY = null;
+let RECORDED_SITE_AUDIO = null;
+let SITE_AUDIO_RECORDER = null;
+let SITE_AUDIO_STREAM = null;
+let SITE_AUDIO_CHUNKS = [];
+let SITE_AUDIO_TIMER = null;
+let SITE_AUDIO_STARTED_AT = 0;
 let CAPTURED_SITE_PHOTOS = [];
 let RECORDED_SITE_VIDEO = null;
 let SITE_MEDIA_RECORDER = null;
@@ -7521,6 +7691,99 @@ let SITE_VIDEO_CHUNKS = [];
 let SITE_RECORDING_TIMER = null;
 let SITE_RECORDING_STARTED_AT = 0;
 let SITE_SURVEY_ATTACHED = false;
+
+
+function toggleSiteInformationPanel() {
+  document.getElementById("siteInformationPanel")?.classList.toggle("hidden");
+}
+
+function preferredAudioMimeType() {
+  if (!window.MediaRecorder) return "";
+  const options = [
+    "audio/mp4",
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus"
+  ];
+  return options.find(type => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+async function startSiteAudioRecording() {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    document.getElementById("siteAudioFallback")?.click();
+    return;
+  }
+
+  try {
+    SITE_AUDIO_STREAM = await navigator.mediaDevices.getUserMedia({audio: true});
+    SITE_AUDIO_CHUNKS = [];
+    const mimeType = preferredAudioMimeType();
+    const options = {audioBitsPerSecond: 48000};
+    if (mimeType) options.mimeType = mimeType;
+
+    SITE_AUDIO_RECORDER = new MediaRecorder(SITE_AUDIO_STREAM, options);
+    SITE_AUDIO_RECORDER.ondataavailable = event => {
+      if (event.data && event.data.size) SITE_AUDIO_CHUNKS.push(event.data);
+      const bytes = SITE_AUDIO_CHUNKS.reduce((sum, item) => sum + item.size, 0);
+      document.getElementById("siteAudioSize").innerText = `Recorded ${formatMediaBytes(bytes)}`;
+    };
+    SITE_AUDIO_RECORDER.onstop = finishSiteAudioRecording;
+    SITE_AUDIO_RECORDER.start(1000);
+
+    SITE_AUDIO_STARTED_AT = Date.now();
+    document.getElementById("siteAudioRecorder")?.classList.remove("hidden");
+    document.getElementById("recordSiteAudioButton").disabled = true;
+
+    SITE_AUDIO_TIMER = setInterval(() => {
+      const seconds = Math.floor((Date.now() - SITE_AUDIO_STARTED_AT) / 1000);
+      document.getElementById("siteAudioTimer").innerText =
+        `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+      if (seconds >= 300) stopSiteAudioRecording();
+    }, 250);
+  } catch (error) {
+    document.getElementById("siteAudioFallback")?.click();
+  }
+}
+
+function stopSiteAudioRecording() {
+  if (SITE_AUDIO_RECORDER && SITE_AUDIO_RECORDER.state !== "inactive") {
+    SITE_AUDIO_RECORDER.stop();
+  }
+}
+
+function finishSiteAudioRecording() {
+  const mimeType = SITE_AUDIO_RECORDER?.mimeType || "audio/webm";
+  const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
+  const blob = new Blob(SITE_AUDIO_CHUNKS, {type: mimeType});
+  RECORDED_SITE_AUDIO = new File(
+    [blob],
+    `job-walkthrough-${Date.now()}.${extension}`,
+    {type: mimeType, lastModified: Date.now()}
+  );
+  cleanupSiteAudioRecorder();
+  updateSiteCaptureSummary();
+  document.getElementById("siteSurveyStatus").innerHTML =
+    `Audio walkthrough recorded (${formatMediaBytes(RECORDED_SITE_AUDIO.size)}). Press Analyse Site Visit.`;
+}
+
+function cancelSiteAudioRecording() {
+  SITE_AUDIO_CHUNKS = [];
+  RECORDED_SITE_AUDIO = null;
+  cleanupSiteAudioRecorder();
+  updateSiteCaptureSummary();
+}
+
+function cleanupSiteAudioRecorder() {
+  if (SITE_AUDIO_TIMER) clearInterval(SITE_AUDIO_TIMER);
+  SITE_AUDIO_TIMER = null;
+  if (SITE_AUDIO_STREAM) SITE_AUDIO_STREAM.getTracks().forEach(track => track.stop());
+  SITE_AUDIO_STREAM = null;
+  document.getElementById("siteAudioRecorder")?.classList.add("hidden");
+  const button = document.getElementById("recordSiteAudioButton");
+  if (button) button.disabled = false;
+  const timer = document.getElementById("siteAudioTimer");
+  if (timer) timer.innerText = "00:00";
+}
 
 function formatMediaBytes(bytes) {
   const value = Number(bytes || 0);
@@ -7531,13 +7794,23 @@ function formatMediaBytes(bytes) {
 function updateSiteCaptureSummary() {
   const existingPhotos = [...(document.getElementById("siteSurveyPhotos")?.files || [])];
   const existingVideo = document.getElementById("siteSurveyVideo")?.files?.[0];
+  const existingAudio = document.getElementById("siteSurveyAudio")?.files?.[0];
+  const plans = [...(document.getElementById("sitePlans")?.files || [])];
+  const notes = String(document.getElementById("siteVisitNotes")?.value || "").trim();
+
   const photoCount = CAPTURED_SITE_PHOTOS.length + existingPhotos.length;
   const video = RECORDED_SITE_VIDEO || existingVideo;
+  const audio = RECORDED_SITE_AUDIO || existingAudio;
   const parts = [];
-  if (photoCount) parts.push(`${photoCount} photo${photoCount === 1 ? "" : "s"}`);
+
+  if (audio) parts.push(`audio ${formatMediaBytes(audio.size)}`);
   if (video) parts.push(`video ${formatMediaBytes(video.size)}`);
+  if (photoCount) parts.push(`${photoCount} photo${photoCount === 1 ? "" : "s"}`);
+  if (plans.length) parts.push(`${plans.length} plan${plans.length === 1 ? "" : "s"}`);
+  if (notes) parts.push("notes");
+
   document.getElementById("siteCaptureSummary").innerHTML =
-    parts.length ? `Ready: ${parts.join(" · ")}` : "No site media captured yet.";
+    parts.length ? `Ready: ${parts.join(" · ")}` : "No site information added yet.";
 }
 
 function takeSitePhoto() {
@@ -7679,6 +7952,15 @@ document.getElementById("siteCameraVideoFallback")?.addEventListener("change", e
 
 document.getElementById("siteSurveyPhotos")?.addEventListener("change", updateSiteCaptureSummary);
 document.getElementById("siteSurveyVideo")?.addEventListener("change", updateSiteCaptureSummary);
+document.getElementById("siteSurveyAudio")?.addEventListener("change", updateSiteCaptureSummary);
+document.getElementById("sitePlans")?.addEventListener("change", updateSiteCaptureSummary);
+document.getElementById("siteVisitNotes")?.addEventListener("input", updateSiteCaptureSummary);
+document.getElementById("siteAudioFallback")?.addEventListener("change", event => {
+  const file = event.target.files?.[0];
+  if (file) RECORDED_SITE_AUDIO = file;
+  event.target.value = "";
+  updateSiteCaptureSummary();
+});
 
 function surveyStatusLabel(value) {
   return ({
@@ -7705,10 +7987,14 @@ async function analyseSiteSurvey() {
   const photos = [...CAPTURED_SITE_PHOTOS, ...chosenPhotos];
   const chosenVideo = document.getElementById("siteSurveyVideo")?.files?.[0];
   const video = RECORDED_SITE_VIDEO || chosenVideo;
+  const chosenAudio = document.getElementById("siteSurveyAudio")?.files?.[0];
+  const audio = RECORDED_SITE_AUDIO || chosenAudio;
+  const plans = [...(document.getElementById("sitePlans")?.files || [])];
+  const siteNotes = document.getElementById("siteVisitNotes")?.value || "";
   const status = document.getElementById("siteSurveyStatus");
 
-  if (!photos.length && !video) {
-    alert("Take a photo, record a video or choose existing media first.");
+  if (!photos.length && !video && !audio && !plans.length && !siteNotes.trim()) {
+    alert("Record a job walkthrough, or add video, photos, plans or notes.");
     return;
   }
   if (photos.length > 6) {
@@ -7721,16 +8007,23 @@ async function analyseSiteSurvey() {
     return;
   }
   if (video && video.size > 80 * 1024 * 1024) {
-    alert("This video is over 80 MB. Use Record video in the app, which records a smaller 720p clip, or record a shorter video.");
+    alert("This video is over 80 MB. Use the in-app recorder or record a shorter video.");
+    return;
+  }
+  if (audio && audio.size > 40 * 1024 * 1024) {
+    alert("Keep the audio walkthrough below 40 MB.");
     return;
   }
 
   const form = new FormData();
   form.append("job_description", document.getElementById("job")?.value || "");
+  form.append("site_notes", siteNotes);
   photos.forEach(file => form.append("photos", file));
+  plans.forEach(file => form.append("plans", file));
   if (video) form.append("video", video);
+  if (audio) form.append("audio", audio);
 
-  status.innerHTML = "Uploading safely, extracting six compact frames and transcribing your explanation…";
+  status.innerHTML = "Analysing the walkthrough, transcript, visual evidence, plans and notes…";
   document.getElementById("siteSurveyResult").innerHTML = "";
   SITE_SURVEY_ATTACHED = false;
 
@@ -7752,8 +8045,8 @@ async function analyseSiteSurvey() {
 
     renderSiteSurvey(data);
     status.innerHTML =
-      `✓ Survey complete and automatically attached · ${Number(data.evidence_count || 0)} visual evidence item(s) reviewed.`;
-    showNotice("Site survey complete and attached to the next AI quote.");
+      `✓ Site visit analysed and attached · ${(data.input_modes || []).join(", ") || "notes"} used.`;
+    showNotice("Site visit complete and attached to the next quote.");
   } catch (error) {
     CURRENT_SITE_SURVEY = null;
     SITE_SURVEY_ATTACHED = false;
@@ -7885,10 +8178,10 @@ function renderSiteSurvey(data) {
   const warnings = data.warnings || [];
 
   box.innerHTML = `<div class="history-item" style="padding:10px;border-color:#2563eb;">
-    <strong>Site survey summary</strong><br>${escapeHtml(data.summary || "")}
+    <strong>AI site visit summary</strong><br>${escapeHtml(data.summary || "")}
     <div style="margin-top:6px;color:#166534;"><strong>✓ Attached to the next AI quote</strong></div>
     ${surveyDescriptionPreview(data)}
-    ${data.transcript ? `<details style="margin-top:7px;"><summary><strong>Video transcript</strong></summary><div style="margin-top:5px;">${escapeHtml(data.transcript)}</div></details>` : ""}
+    ${data.transcript ? `<details style="margin-top:7px;"><summary><strong>Walkthrough transcript</strong></summary><div style="margin-top:5px;">${escapeHtml(data.transcript)}</div></details>` : ""}
     ${components.length ? `<div style="margin-top:9px;"><strong>Components reviewed</strong>${components.map(item => `<div style="margin-top:6px;padding:8px;border:1px solid #ddd;border-radius:8px;background:white;"><strong>${escapeHtml(item.component || "")}</strong><br><span class="small">${escapeHtml(surveyStatusLabel(item.status))} · ${Number(item.confidence || 0)}%</span><br>${escapeHtml(item.condition || "")}<br><strong>Quote action:</strong> ${escapeHtml(surveyActionLabel(item.quote_action))}${item.evidence ? `<br><span class="small">${escapeHtml(item.evidence)}</span>` : ""}</div>`).join("")}</div>` : ""}
     ${actions.length ? `<div style="margin-top:9px;"><strong>Material decisions</strong><br>${actions.map(item => `• ${escapeHtml(item.material_name)}: ${escapeHtml(surveyActionLabel(item.action))} — ${escapeHtml(item.reason)} (${Number(item.confidence || 0)}%)`).join("<br>")}</div>` : ""}
     ${warnings.length ? `<div style="margin-top:9px;"><strong>Limitations</strong><br>${warnings.map(item => `△ ${escapeHtml(item)}`).join("<br>")}</div>` : ""}
@@ -7909,11 +8202,18 @@ function clearSiteSurvey() {
   SITE_SURVEY_ATTACHED = false;
   CAPTURED_SITE_PHOTOS = [];
   RECORDED_SITE_VIDEO = null;
+  RECORDED_SITE_AUDIO = null;
 
   const photos = document.getElementById("siteSurveyPhotos");
   const video = document.getElementById("siteSurveyVideo");
+  const audio = document.getElementById("siteSurveyAudio");
+  const plans = document.getElementById("sitePlans");
+  const notes = document.getElementById("siteVisitNotes");
   if (photos) photos.value = "";
   if (video) video.value = "";
+  if (audio) audio.value = "";
+  if (plans) plans.value = "";
+  if (notes) notes.value = "";
 
   document.getElementById("siteSurveyResult").innerHTML = "";
   document.getElementById("siteSurveyStatus").innerHTML = "";
@@ -7931,6 +8231,9 @@ function currentMaterialsForAI() {
 }
 
 async function generateAIQuoteDraft() {
+  if (!Array.isArray(SAVED_MATERIAL_DB) || !SAVED_MATERIAL_DB.length) {
+    try { await loadMaterialDb(); } catch (e) {}
+  }
   const button = document.getElementById("aiQuoteButton");
   const status = document.getElementById("aiQuoteStatus");
   const resultBox = document.getElementById("aiQuoteResult");
@@ -7952,7 +8255,7 @@ async function generateAIQuoteDraft() {
   }
   if (status) {
     status.innerHTML = CURRENT_SITE_SURVEY
-      ? "Using the attached site survey, transcript, visual evidence, job history, materials and labour…"
+      ? "Using the attached site visit, audio transcript, any visual evidence, job history, materials and labour…"
       : "No site survey attached — using the written job description, history, materials and labour only…";
   }
   if (resultBox) resultBox.innerHTML = "";
@@ -8398,6 +8701,7 @@ function prepareDraftForV125(draft) {
       reason: "Provisional allowance only. Confirm elbow, tee and coupler quantities after the route is exposed or clearly stated."
     });
   }
+  draft = enrichDraftMaterialsFromSavedDatabase(draft);
   return draft;
 }
 
@@ -8453,7 +8757,7 @@ function liveProductFinderHtml(draft) {
   return `
     <div style="margin-top:10px;padding:10px;border:2px solid #0284c7;border-radius:10px;background:#f0f9ff;">
       <strong>Live merchant product finder</strong><br>
-      <span class="small">Missing main products and unlinked required items are shown here. Explicit pipe lengths and fitting quantities from the description or survey are retained when the main product is selected. For radiators, you must choose the type before searching. A confirmed product is added directly to the Materials list with its supplier, current price and product URL.</span>
+      <span class="small">V13 matches every material against your saved database first, ignoring brand names, word order and common filler words. Saved URLs and cached prices are inherited automatically before a blank material is created. For radiators, you must choose the type before searching. A confirmed product is added directly to the Materials list with its supplier, current price and product URL.</span>
       ${searches.map((item, index) => `
         <div style="margin-top:9px;padding:9px;border:1px solid #bae6fd;border-radius:9px;background:white;">
           <strong>${escapeHtml(item.label)}</strong><br>
@@ -10168,22 +10472,152 @@ def api_live_product_refresh(url: str = "", name: str = "", supplier: str = "", 
     return JSONResponse(details)
 
 
+def _material_match_normalise(value: str) -> str:
+    text_value = (value or "").lower()
+    text_value = re.sub(r"https?://\S+", " ", text_value)
+    text_value = re.sub(r"(\d+)\s*mm\b", r"\1mm", text_value)
+    text_value = re.sub(r"\bend[\s-]?feed\b", "endfeed", text_value)
+    text_value = re.sub(r"\b90\s*(?:degree|degrees|deg)\b", " ", text_value)
+    text_value = re.sub(
+        r"\b(plumbright|plumbfix|regin|kudox|stelrad|city plumbing|screwfix|toolstation|selco|topps tiles)\b",
+        " ",
+        text_value,
+    )
+    text_value = re.sub(
+        r"\b(white|chrome plated|chrome|copper|each|single|individual|pack of|pack|fitting|fittings|connector|connectors)\b",
+        " ",
+        text_value,
+    )
+    text_value = re.sub(r"[^a-z0-9/.\- ]+", " ", text_value)
+    return re.sub(r"\s+", " ", text_value).strip()
+
+
+def _material_match_family(value: str) -> str:
+    cleaned = _material_match_normalise(value)
+    if re.search(r"\breducing tee\b|\btee\b", cleaned):
+        return "tee"
+    if re.search(r"\belbow\b|\bbend\b", cleaned):
+        return "elbow"
+    if re.search(r"\bcoupler\b|\bcoupling\b", cleaned):
+        return "coupler"
+    if re.search(r"\bcopper pipe\b|\bpipe 3m\b", cleaned):
+        return "pipe"
+    if "radiator valve set" in cleaned:
+        return "radiator valve set"
+    if re.search(r"\btrv\b|thermostatic radiator valve", cleaned):
+        return "trv"
+    if "lockshield" in cleaned:
+        return "lockshield"
+    if "inhibitor" in cleaned:
+        return "inhibitor"
+    if "ptfe" in cleaned:
+        return "ptfe"
+    if "radiator" in cleaned:
+        return "radiator"
+    return ""
+
+
+def _material_match_sizes(value: str) -> list[int]:
+    return sorted(set(int(number) for number in re.findall(r"\b(\d{1,4})\s*mm\b", (value or "").lower())))
+
+
+def _material_match_score(query: str, item: dict) -> int:
+    query_clean = _material_match_normalise(query)
+    item_clean = _material_match_normalise(item.get("name", ""))
+    query_tokens = [token for token in query_clean.split() if token]
+    item_tokens = [token for token in item_clean.split() if token]
+    if not query_tokens or not item_tokens:
+        return 0
+
+    query_family = _material_match_family(query)
+    item_family = _material_match_family(item.get("name", ""))
+    if query_family and item_family and query_family != item_family:
+        return 0
+
+    query_sizes = _material_match_sizes(query)
+    item_sizes = _material_match_sizes(item.get("name", ""))
+    if query_sizes and item_sizes and query_sizes != item_sizes:
+        return 0
+
+    shared = set(query_tokens).intersection(item_tokens)
+    score = int((len(shared) / max(len(set(query_tokens)), len(set(item_tokens)))) * 70)
+    if query_family and query_family == item_family:
+        score += 20
+    if query_sizes and item_sizes:
+        score += 10
+    if item.get("url"):
+        score += 4
+    if safe_float(item.get("default_price", 0), 0) > 0:
+        score += 4
+    if "live" in str(item.get("last_status", "")).lower():
+        score += 2
+    return min(100, score)
+
+
 @app.get("/api/material-search")
 def api_material_search(q: str = "", request: Request = None):
     if request is not None and not check_basic_auth(request):
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    query = (q or "").strip().lower()
-    terms = [term for term in re.split(r"\s+", query) if term]
+    query = (q or "").strip()
     items = get_material_search_library()
 
-    if terms:
-        def matches(item):
-            hay = f"{item.get('name','')} {item.get('supplier','')} {item.get('url','')}".lower()
-            return all(term in hay for term in terms)
-        items = [item for item in items if matches(item)]
+    if query:
+        scored = []
+        for item in items:
+            score = _material_match_score(query, item)
+            if score >= 45:
+                enriched = dict(item)
+                enriched["match_score"] = score
+                scored.append(enriched)
+
+        scored.sort(key=lambda item: (
+            -int(item.get("match_score", 0)),
+            0 if item.get("url") else 1,
+            0 if safe_float(item.get("default_price", 0), 0) > 0 else 1,
+            -(int(item.get("times_used", 0) or 0)),
+        ))
+        items = scored
+    else:
+        items = list(items)
 
     return JSONResponse(items[:30])
+
+
+
+
+@app.get("/api/material-resolve")
+def api_material_resolve(name: str = "", request: Request = None):
+    if request is not None and not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    requested = (name or "").strip()
+    if not requested:
+        raise HTTPException(status_code=400, detail="Material name is required.")
+
+    candidates = get_material_search_library()
+    scored = []
+    for item in candidates:
+        score = _material_match_score(requested, item)
+        if score >= 60:
+            result = dict(item)
+            result["match_score"] = score
+            scored.append(result)
+
+    scored.sort(key=lambda item: (
+        -int(item.get("match_score", 0)),
+        0 if item.get("url") else 1,
+        0 if safe_float(item.get("default_price", 0), 0) > 0 else 1,
+        -(int(item.get("times_used", 0) or 0)),
+    ))
+
+    best = scored[0] if scored and int(scored[0].get("match_score", 0)) >= 72 else None
+    return JSONResponse({
+        "requested_name": requested,
+        "matched": bool(best),
+        "best": best,
+        "alternatives": scored[:5],
+    })
 
 
 @app.get("/api/material-prices")
@@ -13331,7 +13765,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "complete-material-merge-v12.9",
+        "estimator_version": "ai-job-walkthrough-v14",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -13614,6 +14048,42 @@ def _normalise_survey_image(source: Path, destination: Path):
     return destination.exists() and destination.stat().st_size > 0, message
 
 
+def _transcribe_site_audio(audio_path: Path):
+    transcript = ""
+    warnings = []
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        return "", ["OPENAI_API_KEY is not configured for audio transcription."]
+
+    try:
+        with audio_path.open("rb") as audio_file:
+            response = requests.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                files={
+                    "file": (
+                        audio_path.name,
+                        audio_file,
+                        mimetypes.guess_type(audio_path.name)[0] or "audio/webm",
+                    )
+                },
+                data={
+                    "model": (
+                        os.getenv("OPENAI_TRANSCRIBE_MODEL")
+                        or "gpt-4o-mini-transcribe"
+                    ).strip()
+                },
+                timeout=120,
+            )
+        if response.status_code < 400:
+            transcript = response.json().get("text", "")
+        else:
+            warnings.append("The job walkthrough audio could not be transcribed.")
+    except requests.RequestException:
+        warnings.append("The job walkthrough audio could not be transcribed.")
+    return transcript, warnings
+
+
 def _extract_video_evidence(video_path: Path, work_dir: Path):
     """Extract only a small number of resized frames and a compressed audio track."""
     transcript, warnings = "", []
@@ -13686,7 +14156,7 @@ def _extract_video_evidence(video_path: Path, work_dir: Path):
     return frame_paths, transcript, [item for item in warnings if item]
 
 
-def _analyse_site_survey(job_description, transcript, image_paths, warnings):
+def _analyse_site_survey(job_description, transcript, image_paths, warnings, site_notes=''):
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
     if not api_key:
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured.")
@@ -13706,6 +14176,9 @@ Job description:
 
 Nigel's spoken transcript:
 {transcript or 'No transcript available'}
+
+Additional site notes:
+{site_notes or 'No additional notes'}
 
 Use only supported evidence. Nigel explicitly saying he tested an item and it works is stronger than visual evidence. Seeing an item does not prove it works or will reseal after disturbance. Hidden pipework cannot be confirmed. Do not call something absent merely because the angle does not show it. Use reuse_existing only when Nigel explicitly confirms it works; keep_optional when visible but condition is uncertain; include_required when clearly absent/damaged or Nigel says it needs replacement; otherwise site_check. Use concise UK plumbing terminology.
 
@@ -13797,20 +14270,40 @@ Do not repeat vague enquiry wording. Do not include prices. Do not describe AI a
 @app.post("/api/site-survey")
 async def api_site_survey(
     job_description: str = Form(""),
+    site_notes: str = Form(""),
     photos: list[UploadFile] = File(default=[]),
+    plans: list[UploadFile] = File(default=[]),
     video: UploadFile | None = File(default=None),
+    audio: UploadFile | None = File(default=None),
 ):
     warnings = []
-    transcript = ""
+    transcript_parts = []
     compact_images = []
     photo_count = 0
+    plan_count = 0
     video_used = bool(video and video.filename)
+    audio_used = bool(audio and audio.filename)
 
-    # All uploaded media is streamed to disk. Nothing large is retained in RAM.
-    with tempfile.TemporaryDirectory(prefix="site-survey-") as temp_folder:
+    with tempfile.TemporaryDirectory(prefix="site-visit-") as temp_folder:
         work_dir = Path(temp_folder)
 
-        for index, photo in enumerate(photos[:6], start=1):
+        all_images = list(photos[:6])
+        for plan in plans[:4]:
+            mime_type = (
+                plan.content_type
+                or mimetypes.guess_type(plan.filename or "")[0]
+                or ""
+            )
+            if mime_type.startswith("image/"):
+                all_images.append(plan)
+                plan_count += 1
+            else:
+                warnings.append(
+                    f"{plan.filename or 'A plan'} was attached but PDF plans are not visually analysed in this version."
+                )
+                await plan.close()
+
+        for index, photo in enumerate(all_images[:8], start=1):
             mime_type = (
                 photo.content_type
                 or mimetypes.guess_type(photo.filename or "")[0]
@@ -13821,8 +14314,8 @@ async def api_site_survey(
                 continue
 
             source_suffix = Path(photo.filename or "").suffix.lower() or ".jpg"
-            source_path = work_dir / f"photo-source-{index}{source_suffix}"
-            compact_path = work_dir / f"photo-{index}.jpg"
+            source_path = work_dir / f"image-source-{index}{source_suffix}"
+            compact_path = work_dir / f"image-{index}.jpg"
 
             await _stream_upload_to_disk(
                 photo,
@@ -13837,36 +14330,52 @@ async def api_site_survey(
                 photo_count += 1
             elif message:
                 warnings.append(
-                    f"{photo.filename or 'A photo'} could not be prepared for analysis."
+                    f"{photo.filename or 'An image'} could not be prepared for analysis."
                 )
+
+        if audio_used:
+            audio_suffix = Path(audio.filename or "").suffix.lower() or ".webm"
+            audio_path = work_dir / f"job-walkthrough{audio_suffix}"
+            await _stream_upload_to_disk(
+                audio,
+                audio_path,
+                max_bytes=40 * 1024 * 1024,
+            )
+            audio_transcript, audio_warnings = _transcribe_site_audio(audio_path)
+            if audio_transcript:
+                transcript_parts.append(audio_transcript)
+            warnings.extend(audio_warnings)
+            audio_path.unlink(missing_ok=True)
+        elif audio:
+            await audio.close()
 
         if video_used:
             suffix = Path(video.filename or "").suffix.lower() or ".mp4"
             video_path = work_dir / f"survey-video{suffix}"
-
             await _stream_upload_to_disk(
                 video,
                 video_path,
                 max_bytes=80 * 1024 * 1024,
             )
-
-            frame_paths, transcript, video_warnings = _extract_video_evidence(
+            frame_paths, video_transcript, video_warnings = _extract_video_evidence(
                 video_path,
                 work_dir,
             )
             compact_images.extend(frame_paths)
+            if video_transcript:
+                transcript_parts.append(video_transcript)
             warnings.extend(video_warnings)
             video_path.unlink(missing_ok=True)
         elif video:
             await video.close()
 
-        # Keep the total vision request intentionally small.
         compact_images = compact_images[:8]
+        transcript = "\n\n".join(part.strip() for part in transcript_parts if part.strip())
 
-        if not compact_images and not transcript:
+        if not compact_images and not transcript and not site_notes.strip():
             raise HTTPException(
                 status_code=400,
-                detail="Add at least one usable photo or video.",
+                detail="Record an audio walkthrough, add video/photos, or enter site notes.",
             )
 
         result = _analyse_site_survey(
@@ -13874,13 +14383,27 @@ async def api_site_survey(
             transcript,
             compact_images,
             warnings,
+            site_notes=site_notes,
         )
         result.update({
             "evidence_count": len(compact_images),
             "photo_count": photo_count,
+            "plan_count": plan_count,
             "video_used": video_used,
+            "audio_used": audio_used,
+            "site_notes": site_notes,
+            "input_modes": [
+                mode for mode, used in [
+                    ("audio", audio_used),
+                    ("video", video_used),
+                    ("photos", photo_count > 0),
+                    ("plans", plan_count > 0),
+                    ("notes", bool(site_notes.strip())),
+                ] if used
+            ],
             "media_limits": {
-                "photos": 6,
+                "photos_and_plan_images": 8,
+                "audio_mb": 40,
                 "video_mb": 80,
                 "video_frames": 6,
                 "image_width_px": 1024,
@@ -13908,7 +14431,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "complete-material-merge-v12.9"),
+        "version": context.get("estimator_version", "ai-job-walkthrough-v14"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
