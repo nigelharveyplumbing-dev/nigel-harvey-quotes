@@ -63,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "15.1-smart-bundle-engine"
+APP_VERSION = "15.1.1-duplicate-pipe-fix"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4608,7 +4608,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Smart Bundle Engine V15.1</strong><br>
+        <strong>Smart Bundle Engine V15.1.1</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -4678,7 +4678,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Smart Bundle Engine & Quote Intelligence V15.1</strong><br>
+        <strong>Smart Bundle Engine & Quote Intelligence V15.1.1</strong><br>
         <span class="small">Combines the enquiry, audio walkthrough, optional visual evidence, material database, merchant search and labour intelligence in one quote workflow.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
@@ -8422,39 +8422,100 @@ function keepCurrentQuantity(warningId) {
 }
 
 
+
+function bundleMaterialIdentity(name) {
+  const raw = String(name || "").toLowerCase();
+  const sizes = [...raw.matchAll(/\b(\d{1,3})\s*mm\b/g)]
+    .map(match => Number(match[1]))
+    .sort((a, b) => a - b);
+  const sizeKey = sizes.length ? sizes.join("x") : "";
+
+  if (/\bcopper\b/.test(raw) && /\b(pipe|tube)\b/.test(raw)) {
+    return `copper-pipe:${sizeKey || "unknown"}`;
+  }
+  if (/\bplastic\b/.test(raw) && /\b(pipe|tube)\b/.test(raw)) {
+    return `plastic-pipe:${sizeKey || "unknown"}`;
+  }
+  if (/\bend[\s-]?feed\b/.test(raw) && /\belbow\b|\bbend\b/.test(raw)) {
+    return `endfeed-elbow:${sizeKey || "unknown"}`;
+  }
+  if (/\bend[\s-]?feed\b/.test(raw) && /\btee\b/.test(raw)) {
+    return `endfeed-tee:${sizeKey || "unknown"}`;
+  }
+  if (/\bcoupler\b|\bcoupling\b/.test(raw)) {
+    return `coupler:${sizeKey || "unknown"}`;
+  }
+  return `canonical:${canonicalMaterialName(name || "")}`;
+}
+
+function materialValuesScore(material) {
+  let score = 0;
+  if (String(material?.url || "").trim()) score += 8;
+  if (Number(material?.manual_price || material?.live_price || 0) > 0) score += 6;
+  if (String(material?.supplier || "").trim()) score += 2;
+  if (String(material?.source || "").includes("live")) score += 2;
+  return score;
+}
+
+function mergePreferredMaterialValues(target, incoming) {
+  const targetScore = materialValuesScore(target);
+  const incomingScore = materialValuesScore(incoming);
+
+  // Keep the more useful product identity where one row has URL/price data.
+  if (incomingScore > targetScore) {
+    if (incoming.name) target.name = incoming.name;
+    if (incoming.supplier) target.supplier = incoming.supplier;
+    if (incoming.url) target.url = incoming.url;
+    if (Number(incoming.manual_price || incoming.live_price || 0) > 0) {
+      target.manual_price = Number(incoming.manual_price || incoming.live_price || 0);
+    }
+    if (incoming.source) target.source = incoming.source;
+    if (incoming.price_source) target.price_source = incoming.price_source;
+    if (incoming.sku) target.sku = incoming.sku;
+    if (incoming.image_url) target.image_url = incoming.image_url;
+    if (incoming.checked_at) target.checked_at = incoming.checked_at;
+  } else {
+    if (!target.supplier && incoming.supplier) target.supplier = incoming.supplier;
+    if (!target.url && incoming.url) target.url = incoming.url;
+    if (!Number(target.manual_price || 0) && Number(incoming.manual_price || incoming.live_price || 0) > 0) {
+      target.manual_price = Number(incoming.manual_price || incoming.live_price || 0);
+    }
+  }
+
+  target.required = Boolean(target.required || incoming.required);
+  target.display_status = target.required ? "required" : (target.display_status || incoming.display_status || "optional");
+  target.material_confidence = Math.max(
+    Number(target.material_confidence || 0),
+    Number(incoming.material_confidence || 0)
+  );
+  return target;
+}
+
 function findMaterialRowByCanonicalName(materialName) {
-  const target = canonicalMaterialName(materialName || "");
-  if (!target) return null;
+  const targetIdentity = bundleMaterialIdentity(materialName || "");
   return [...document.querySelectorAll("#materials .material-row")].find(row => {
-    const existing = canonicalMaterialName(row.querySelector(".m-name")?.value || "");
-    return existing === target || existing.includes(target) || target.includes(existing);
+    const existingName = row.querySelector(".m-name")?.value || "";
+    return bundleMaterialIdentity(existingName) === targetIdentity;
   }) || null;
 }
 
 function mergeBundleMaterialIntoDraft(draft, item) {
   draft.materials = draft.materials || [];
-  const target = canonicalMaterialName(item.name || "");
-  let existing = draft.materials.find(material => {
-    const current = canonicalMaterialName(material.name || "");
-    return current === target || current.includes(target) || target.includes(current);
-  });
+  const targetIdentity = bundleMaterialIdentity(item.name || "");
+  let existing = draft.materials.find(material =>
+    bundleMaterialIdentity(material.name || "") === targetIdentity
+  );
 
   const incomingQty = Number(item.quantity || 1);
   if (existing) {
     existing.quantity = Math.max(Number(existing.quantity || 0), incomingQty);
-    if (!item.optional) {
-      existing.required = true;
-      existing.display_status = "required";
-    }
-    existing.material_confidence = Math.max(
-      Number(existing.material_confidence || 0),
-      Number(item.confidence || 75)
-    );
-    if (!existing.url && item.url) existing.url = item.url;
-    if (!Number(existing.manual_price || 0) && Number(item.manual_price || item.price || 0)) {
-      existing.manual_price = Number(item.manual_price || item.price || 0);
-    }
-    if (!existing.supplier && item.supplier) existing.supplier = item.supplier;
+    mergePreferredMaterialValues(existing, {
+      ...item,
+      required: !item.optional,
+      display_status: item.optional ? "optional" : "required",
+      material_confidence: Number(item.confidence || 75),
+      manual_price: Number(item.manual_price || item.live_price || item.price || 0)
+    });
     return {material: existing, created: false};
   }
 
@@ -8517,7 +8578,53 @@ function mergeBundleMaterialIntoForm(material) {
   return true;
 }
 
+
+function mergeDuplicateMaterialRowsInForm() {
+  const rows = [...document.querySelectorAll("#materials .material-row")];
+  const kept = new Map();
+
+  rows.forEach(row => {
+    const name = row.querySelector(".m-name")?.value || "";
+    const identity = bundleMaterialIdentity(name);
+    if (!identity) return;
+
+    const existingRow = kept.get(identity);
+    if (!existingRow) {
+      kept.set(identity, row);
+      return;
+    }
+
+    const currentMaterial = {
+      name: existingRow.querySelector(".m-name")?.value || "",
+      quantity: Number(existingRow.querySelector(".m-qty")?.value || 0),
+      supplier: existingRow.querySelector(".m-supplier")?.value || "",
+      url: existingRow.querySelector(".m-url")?.value || "",
+      manual_price: Number(existingRow.querySelector(".m-manual")?.value || 0),
+    };
+    const incomingMaterial = {
+      name: row.querySelector(".m-name")?.value || "",
+      quantity: Number(row.querySelector(".m-qty")?.value || 0),
+      supplier: row.querySelector(".m-supplier")?.value || "",
+      url: row.querySelector(".m-url")?.value || "",
+      manual_price: Number(row.querySelector(".m-manual")?.value || 0),
+    };
+
+    const preferred = mergePreferredMaterialValues(currentMaterial, incomingMaterial);
+    existingRow.querySelector(".m-name").value = preferred.name || currentMaterial.name;
+    existingRow.querySelector(".m-qty").value = Math.max(
+      Number(currentMaterial.quantity || 0),
+      Number(incomingMaterial.quantity || 0)
+    );
+    existingRow.querySelector(".m-supplier").value = preferred.supplier || "City Plumbing";
+    existingRow.querySelector(".m-url").value = preferred.url || "";
+    existingRow.querySelector(".m-manual").value = Number(preferred.manual_price || 0) || "";
+    row.remove();
+    updateMaterialLiveBadge(existingRow);
+  });
+}
+
 function refreshAfterBundleChange() {
+  mergeDuplicateMaterialRowsInForm();
   scheduleQuoteLearning();
   scheduleLabourIntelligence();
   updateForgottenItemWarnings();
@@ -8567,26 +8674,22 @@ function addV151JobBundle(bundleIndex, essentialOnly = false) {
   // Merge any duplicates already present in the draft.
   const combined = [];
   (draft.materials || []).forEach(material => {
-    const target = canonicalMaterialName(material.name || "");
-    const existing = combined.find(item => {
-      const current = canonicalMaterialName(item.name || "");
-      return current === target || current.includes(target) || target.includes(current);
-    });
+    const identity = bundleMaterialIdentity(material.name || "");
+    const existing = combined.find(item =>
+      bundleMaterialIdentity(item.name || "") === identity
+    );
     if (!existing) {
       combined.push({...material});
       return;
     }
-    existing.quantity = Math.max(Number(existing.quantity || 0), Number(material.quantity || 0));
-    existing.required = Boolean(existing.required || material.required);
-    existing.display_status = existing.required ? "required" : (existing.display_status || material.display_status || "optional");
-    existing.material_confidence = Math.max(
-      Number(existing.material_confidence || 0),
-      Number(material.material_confidence || 0)
+
+    // Do not double the same bundle requirement. Keep the highest required
+    // quantity and the row with the most useful URL/price information.
+    existing.quantity = Math.max(
+      Number(existing.quantity || 0),
+      Number(material.quantity || 0)
     );
-    if (!existing.url && material.url) existing.url = material.url;
-    if (!Number(existing.manual_price || 0) && Number(material.manual_price || 0)) {
-      existing.manual_price = Number(material.manual_price || 0);
-    }
+    mergePreferredMaterialValues(existing, material);
   });
   draft.materials = combined;
 
@@ -13930,7 +14033,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "smart-bundle-engine-v15-1",
+        "estimator_version": "smart-bundle-engine-v15-1-1",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -14596,7 +14699,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "smart-bundle-engine-v15-1"),
+        "version": context.get("estimator_version", "smart-bundle-engine-v15-1-1"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
