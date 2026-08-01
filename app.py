@@ -79,7 +79,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "16.2.1-job-ref-modal-fix"
+APP_VERSION = "16.2.2-matching-invoice-pdf"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 INVOICE_PHOTO_DIR = Path("/var/data/invoice_photos")
@@ -3743,98 +3743,231 @@ def generate_invoice_pdf_bytes(item: dict):
     c = canvas.Canvas(buffer, pagesize=A4)
     invoice = item["invoice"]
     quote_result = item["quote_result"]
+    page_width, page_height = A4
+
     y = _pdf_header(c, "INVOICE", item["invoice_number"])
 
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Bill To")
-    c.drawString(320, y, "Invoice Details")
-    y -= 18
-    c.setFont("Helvetica", 11)
-    for line in [invoice.get("customer_name", "-"), invoice.get("customer_address", "-"), invoice.get("customer_phone", "-")]:
-        if line:
-            c.drawString(40, y, str(line)[:65])
-            y -= 15
-    detail_y = y + 30
-    c.drawString(320, detail_y, f"Date: {item['created_at']}")
-    c.drawString(320, detail_y - 15, f"Due: {item['due_date']}")
-    c.drawString(320, detail_y - 30, f"Status: {item['status'].title()}")
-    if item.get("job_reference"):
-        c.drawString(320, detail_y - 45, f"Job Ref: {str(item['job_reference'])[:35]}")
-    y -= 8
-    c.line(40, y, A4[0] - 40, y)
-    y -= 22
+    # Match the online invoice with two separate information boxes.
+    left_x = 40
+    gap = 16
+    box_width = (page_width - 80 - gap) / 2
+    right_x = left_x + box_width + gap
 
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Work Description")
-    y -= 18
-    c.setFont("Helvetica", 11)
-    text_obj = c.beginText(40, y)
-    for line in str(invoice.get("job", "-")).splitlines() or ["-"]:
-        text_obj.textLine(line[:105])
-    c.drawText(text_obj)
-    y = text_obj.getY() - 10
-    c.line(40, y, A4[0] - 40, y)
-    y -= 24
+    customer_lines = []
+    for value in [
+        invoice.get("customer_name", ""),
+        invoice.get("customer_address", ""),
+        invoice.get("customer_phone", ""),
+    ]:
+        for raw_line in str(value or "").replace("\r", "").splitlines():
+            raw_line = raw_line.strip()
+            if raw_line:
+                customer_lines.extend(textwrap.wrap(raw_line, width=43) or [raw_line])
 
+    if not customer_lines:
+        customer_lines = ["-"]
+
+    detail_lines = [
+        ("Date", item.get("created_at", "-")),
+        ("Job Ref", item.get("job_reference") or "-"),
+        ("Due date", item.get("due_date", "-")),
+        ("Status", str(item.get("status", "-")).title()),
+    ]
+
+    left_height = 38 + len(customer_lines) * 13
+    right_height = 38 + len(detail_lines) * 18
+    box_height = max(105, left_height, right_height)
+    box_bottom = y - box_height
+
+    c.setFillColorRGB(0.98, 0.98, 0.98)
+    c.setStrokeColorRGB(0.88, 0.89, 0.91)
+    c.roundRect(left_x, box_bottom, box_width, box_height, 10, fill=1, stroke=1)
+    c.roundRect(right_x, box_bottom, box_width, box_height, 10, fill=1, stroke=1)
+
+    c.setFillColorRGB(0.35, 0.35, 0.35)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(left_x + 12, y - 18, "BILL TO")
+    c.drawString(right_x + 12, y - 18, "INVOICE DETAILS")
+
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica", 10)
+    line_y = y - 36
+    for line in customer_lines:
+        c.drawString(left_x + 12, line_y, line)
+        line_y -= 13
+
+    detail_y = y - 38
+    for label, value in detail_lines:
+        c.setFont("Helvetica", 10)
+        c.setFillColorRGB(0.35, 0.35, 0.35)
+        c.drawString(right_x + 12, detail_y, str(label))
+        c.setFillColorRGB(0, 0, 0)
+        c.drawRightString(right_x + box_width - 12, detail_y, str(value)[:38])
+        detail_y -= 18
+
+    y = box_bottom - 24
+
+    # Work description, fully wrapped rather than clipped.
+    y = _pdf_new_page_if_needed(c, y, 150)
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(40, y, "Work")
+    y -= 18
+
+    work_lines = []
+    for raw_line in str(invoice.get("job", "-") or "-").replace("\r", "").splitlines():
+        raw_line = raw_line.strip()
+        if not raw_line:
+            work_lines.append("")
+        else:
+            work_lines.extend(textwrap.wrap(raw_line, width=94) or [raw_line])
+
+    work_height = max(54, 24 + len(work_lines) * 13)
+    if y - work_height < 70:
+        c.showPage()
+        y = page_height - 50
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(40, y, "Work")
+        y -= 18
+
+    work_bottom = y - work_height
+    c.setFillColorRGB(0.98, 0.98, 0.98)
+    c.setStrokeColorRGB(0.88, 0.89, 0.91)
+    c.roundRect(40, work_bottom, page_width - 80, work_height, 10, fill=1, stroke=1)
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica", 10)
+    work_y = y - 18
+    for line in work_lines:
+        c.drawString(52, work_y, line)
+        work_y -= 13
+
+    y = work_bottom - 24
+
+    # Materials remain itemised in the downloaded PDF.
     y = _pdf_draw_materials_section(c, y, quote_result)
 
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Summary")
-    y -= 20
+    y = _pdf_new_page_if_needed(c, y, 255)
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(40, y, "Invoice totals")
+    y -= 18
 
     materials_base = quote_result.get("materials_base", invoice.get("materials", 0))
     procurement_amount = quote_result.get("materials_procurement_amount", 0)
     procurement_percent = quote_result.get("materials_procurement_percent", 0)
 
-    y = _pdf_row(c, y, "Labour", pounds_text(invoice.get("labour", 0)))
-    y = _pdf_row(c, y, "Materials supplied", pounds_text(materials_base))
+    total_rows = [
+        ("Labour", pounds_text(invoice.get("labour", 0)), False),
+        ("Materials", pounds_text(materials_base), False),
+    ]
     if safe_float(procurement_amount, 0) > 0:
-        y = _pdf_row(c, y, f"Materials procurement & handling ({safe_float(procurement_percent, 0):.0f}%)", pounds_text(procurement_amount))
-    y = _pdf_row(c, y, "Materials total", pounds_text(invoice.get("materials", 0)))
-    y = _pdf_row(c, y, "Total", pounds_text(item.get("total_price", 0)), bold=True)
-    y = _pdf_row(c, y, "Amount Paid", pounds_text(item.get("amount_paid", 0)))
-    y = _pdf_row(c, y, "Balance Due", pounds_text(item.get("balance_due", 0)), bold=True)
+        total_rows.append((
+            f"Materials procurement & handling ({safe_float(procurement_percent, 0):.0f}%)",
+            pounds_text(procurement_amount),
+            False,
+        ))
+    total_rows.extend([
+        ("Total", pounds_text(item.get("total_price", 0)), False),
+        ("Amount paid", pounds_text(item.get("amount_paid", 0)), False),
+        ("Balance due", pounds_text(item.get("balance_due", 0)), True),
+    ])
 
-    y -= 14
-    y = _pdf_new_page_if_needed(c, y, 155)
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Bank Transfer Details")
+    totals_height = 24 + len(total_rows) * 20
+    totals_bottom = y - totals_height
+    c.setFillColorRGB(0.98, 0.98, 0.98)
+    c.setStrokeColorRGB(0.88, 0.89, 0.91)
+    c.roundRect(40, totals_bottom, page_width - 80, totals_height, 10, fill=1, stroke=1)
+
+    row_y = y - 18
+    for label, value, important in total_rows:
+        c.setFillColorRGB(0.35, 0.35, 0.35)
+        c.setFont("Helvetica-Bold" if important else "Helvetica", 11 if not important else 12)
+        c.drawString(52, row_y, label)
+        c.setFillColorRGB(0, 0, 0)
+        c.setFont("Helvetica-Bold" if important else "Helvetica", 11 if not important else 16)
+        c.drawRightString(page_width - 52, row_y, value)
+        row_y -= 20
+
+    y = totals_bottom - 24
+
+    # Payment panel matching the online invoice.
+    y = _pdf_new_page_if_needed(c, y, 210)
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(40, y, "Payment details")
     y -= 18
-    c.setFont("Helvetica", 10)
-    for payment_line in [
-        f"Bank: {BANK_NAME}",
-        f"Account name: {BANK_ACCOUNT_NAME}",
-        f"Sort code: {BANK_SORT_CODE}",
-        f"Account number: {BANK_ACCOUNT_NUMBER}",
-        f"Payment reference: {bank_payment_reference(item)}",
-        "Please use the invoice number as the payment reference.",
-    ]:
-        c.drawString(40, y, payment_line)
-        y -= 13
+
+    payment_height = 138
+    payment_bottom = y - payment_height
+    c.setFillColorRGB(0.93, 0.97, 1.0)
+    c.setStrokeColorRGB(0.75, 0.87, 0.97)
+    c.roundRect(40, payment_bottom, page_width - 80, payment_height, 10, fill=1, stroke=1)
+
+    payment_lines = [
+        ("Bank", BANK_NAME),
+        ("Account name", BANK_ACCOUNT_NAME),
+        ("Sort code", BANK_SORT_CODE),
+        ("Account number", BANK_ACCOUNT_NUMBER),
+        ("Reference", bank_payment_reference(item)),
+        ("Amount due", pounds_text(item.get("balance_due", 0))),
+    ]
+    payment_y = y - 20
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(52, payment_y, "Bank transfer")
+    payment_y -= 16
+
+    for label, value in payment_lines:
+        c.setFont("Helvetica", 10)
+        c.drawString(52, payment_y, f"{label}:")
+        c.setFont("Helvetica-Bold" if label in {"Sort code", "Account number", "Reference", "Amount due"} else "Helvetica", 10)
+        c.drawString(130, payment_y, str(value))
+        payment_y -= 15
+
     try:
-        qr_bytes = bank_payment_qr_png(item)
-        c.drawImage(ImageReader(io.BytesIO(qr_bytes)), A4[0] - 145, y + 8, width=92, height=92, preserveAspectRatio=True, mask="auto")
+        if QRCODE_AVAILABLE:
+            qr_bytes = bank_payment_qr_png(item)
+            c.drawImage(
+                ImageReader(io.BytesIO(qr_bytes)),
+                page_width - 152,
+                payment_bottom + 17,
+                width=102,
+                height=102,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
     except Exception:
         pass
 
-    y -= 4
+    y = payment_bottom - 22
+
+    # Full payment terms, wrapped properly.
+    y = _pdf_new_page_if_needed(c, y, 130)
     c.setFont("Helvetica-Bold", 12)
     c.drawString(40, y, "Payment Terms")
-    y -= 18
-    c.setFont("Helvetica", 10)
+    y -= 17
+    c.setFont("Helvetica", 9)
+
     terms = INVOICE_TERMS[:]
     if (quote_result.get("quote_type", "") or "").lower() == "small":
         terms = terms[:3]
-    text_obj = c.beginText(40, y)
-    for line in terms:
-        text_obj.textLine(f"• {line}")
+
+    for term in terms:
+        for line_index, line in enumerate(textwrap.wrap(str(term), width=105) or [str(term)]):
+            prefix = "• " if line_index == 0 else "  "
+            c.drawString(40, y, prefix + line)
+            y -= 12
+            y = _pdf_new_page_if_needed(c, y, 55)
+            c.setFont("Helvetica", 9)
+
     if item.get("payment_link"):
-        text_obj.textLine("")
-        text_obj.textLine(f"Payment link: {item['payment_link']}")
-    c.drawText(text_obj)
+        y -= 4
+        c.drawString(40, y, f"Payment link: {item['payment_link']}")
+        y -= 12
+
     if str(item.get("status", "")).lower() == "paid":
         invoice_paid_watermark(c)
+
     _pdf_draw_invoice_photos(c, item)
+
     c.showPage()
     c.save()
     buffer.seek(0)
@@ -5051,7 +5184,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Job Ref Modal Fix V16.2.1</strong><br>
+        <strong>Matching Invoice PDF V16.2.2</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
