@@ -79,7 +79,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "16.2-manual-job-reference"
+APP_VERSION = "16.2-complete-invoice-editor"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 INVOICE_PHOTO_DIR = Path("/var/data/invoice_photos")
@@ -5020,7 +5020,19 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <label for="quote_type">Quote type</label>
-      <select id="quote_type" onchange="toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence();">
+      <select id="quote_type" onchange="document.addEventListener("click", function(event) {
+  const panel = document.getElementById("invoiceEditPanel");
+  if (panel && event.target === panel) cancelInvoiceEdit();
+});
+
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Escape") {
+    const panel = document.getElementById("invoiceEditPanel");
+    if (panel && !panel.classList.contains("hidden")) cancelInvoiceEdit();
+  }
+});
+
+toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence();">
         <option value="small">Small Job</option>
         <option value="bathroom">Bathroom</option>
         <option value="heating">Heating</option>
@@ -5039,7 +5051,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Manual Job Reference V16.2</strong><br>
+        <strong>Complete Invoice Editor V16.2</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -5443,7 +5455,9 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
     </div>
 
-    <div id="invoiceEditPanel" class="quote-box edit-panel hidden no-print">
+    <div id="invoiceEditPanel" class="hidden no-print"
+      style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);padding:18px;overflow:auto;">
+      <div style="max-width:760px;margin:24px auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
       <div class="quote-section-title" style="margin-top:0;">Edit invoice</div>
       <label for="edit_invoice_customer_name">Customer name</label>
       <input id="edit_invoice_customer_name" placeholder="Customer name">
@@ -5453,8 +5467,13 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <input id="edit_invoice_customer_phone" placeholder="Customer phone">
       <label for="edit_invoice_job">Job</label>
       <textarea id="edit_invoice_job" placeholder="Job details"></textarea>
-      <label for="edit_invoice_job_reference">Job Ref</label>
-      <input id="edit_invoice_job_reference" placeholder="Type the company's job reference">
+      <div style="margin:14px 0;padding:14px;border:2px solid #2563eb;border-radius:12px;background:#eff6ff;">
+        <label for="edit_invoice_job_reference" style="margin-top:0;font-size:18px;">Job Ref</label>
+        <input id="edit_invoice_job_reference"
+               placeholder="Type the company's job reference"
+               style="font-size:18px;font-weight:700;background:white;">
+        <div class="small" style="margin-top:6px;">This is the reference supplied by the company for the job you are invoicing.</div>
+      </div>
       <label for="edit_invoice_labour">Labour (£)</label>
       <input id="edit_invoice_labour" type="number" step="0.01" placeholder="0">
       <label for="edit_invoice_materials">Materials (£)</label>
@@ -5474,6 +5493,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <div class="history-actions" style="grid-template-columns:1fr 1fr; margin-top:12px;">
         <button type="button" class="btn-blue" onclick="saveInvoiceEdit()">Save Invoice Changes</button>
         <button type="button" class="btn-light" onclick="cancelInvoiceEdit()">Cancel</button>
+      </div>
       </div>
     </div>
 
@@ -5576,8 +5596,8 @@ async function loadSupplierPreferencesPanel() {
 
   try {
     const res = await fetch("/api/supplier-preferences");
-    if (!res.ok) throw new Error();
     const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Could not save invoice.");
     const items = data.items || [];
 
     if (!items.length) {
@@ -7688,6 +7708,7 @@ async function loadInvoices() {
         <div><strong>${escapeHtml(i.invoice_number)}</strong> — ${escapeHtml(i.customer_name || "No customer name")}</div>
         <div>${renderStatusBadge(i.status)}</div>
         <div class="small">${escapeHtml(i.created_at || "")} · Total ${pounds(i.total_price)} · Paid ${pounds(i.amount_paid)} · Balance ${pounds(i.balance_due)}</div>
+        <div class="small" style="margin-top:4px;"><strong>Job Ref:</strong> ${escapeHtml(i.job_reference || "Not entered")}</div>
 
         <label style="margin-top:10px;">Update payment</label>
         <div class="row">
@@ -7704,7 +7725,7 @@ async function loadInvoices() {
         <div class="history-actions" style="grid-template-columns:repeat(3, 1fr);">
           <button type="button" class="btn-secondary" onclick="markInvoicePaid(${i.id}, ${i.total_price})">Mark Paid</button>
           <button type="button" class="btn-light" onclick="markInvoiceUnpaid(${i.id})">Mark Unpaid</button>
-          <button type="button" class="btn-blue" onclick="editInvoice(${i.id})">Edit</button>
+          <button type="button" class="btn-blue" onclick="editInvoice(${i.id})">Edit Invoice / Job Ref</button>
           <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Open</button>
           <button type="button" class="btn-secondary" onclick="sendInvoiceWhatsApp(${i.id})">WhatsApp</button>
           <button type="button" class="btn-blue" onclick="emailInvoice(${i.id})">Email</button>
@@ -10536,12 +10557,22 @@ function populateInvoiceEditForm(item) {
 function showInvoiceEditPanel(item) {
   CURRENT_EDITING_INVOICE_ID = item.id;
   populateInvoiceEditForm(item);
-  document.getElementById("invoiceEditPanel").classList.remove("hidden");
+  const panel = document.getElementById("invoiceEditPanel");
+  panel.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  window.setTimeout(() => {
+    const ref = document.getElementById("edit_invoice_job_reference");
+    if (ref) {
+      ref.focus();
+      ref.select();
+    }
+  }, 100);
 }
 
 function cancelInvoiceEdit() {
   CURRENT_EDITING_INVOICE_ID = null;
   document.getElementById("invoiceEditPanel").classList.add("hidden");
+  document.body.style.overflow = "";
 }
 
 async function openInvoice(id) {
@@ -10604,11 +10635,14 @@ async function saveInvoiceEdit() {
       customer_address: document.getElementById("edit_invoice_customer_address").value || "",
       customer_phone: document.getElementById("edit_invoice_customer_phone").value || "",
       job: document.getElementById("edit_invoice_job").value || "",
+      job_reference: document.getElementById("edit_invoice_job_reference").value || "",
       labour: parseFloat(document.getElementById("edit_invoice_labour").value || 0),
       materials: parseFloat(document.getElementById("edit_invoice_materials").value || 0),
       due_date: document.getElementById("edit_invoice_due_date").value || "",
       payment_link: document.getElementById("edit_invoice_payment_link").value || "",
-      amount_paid: parseFloat(document.getElementById("edit_invoice_amount_paid").value || 0)
+      amount_paid: parseFloat(document.getElementById("edit_invoice_amount_paid").value || 0),
+      reminder_email: document.getElementById("edit_invoice_reminder_email").value || "",
+      reminders_enabled: !!document.getElementById("edit_invoice_reminders_enabled").checked
     };
 
     const res = await fetch("/api/invoices/" + CURRENT_EDITING_INVOICE_ID, {
@@ -10622,7 +10656,8 @@ async function saveInvoiceEdit() {
     await loadInvoices();
     await loadCustomers();
     await loadDashboard();
-    showNotice("Invoice updated.");
+    cancelInvoiceEdit();
+    showNotice("Invoice updated. Job Ref saved.");
   } catch (e) {
     alert("Could not save invoice changes.");
   }
