@@ -63,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "15.4-smarter-bundle-logic"
+APP_VERSION = "15.5-bundle-health"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4608,7 +4608,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Smarter Bundle Logic V15.4</strong><br>
+        <strong>Bundle Health V15.5</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -4678,7 +4678,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Smarter Bundle Logic & Quote Intelligence V15.4</strong><br>
+        <strong>Bundle Health & Quote Intelligence V15.5</strong><br>
         <span class="small">Combines the enquiry, audio walkthrough, optional visual evidence, material database, merchant search and labour intelligence in one quote workflow.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
@@ -8845,6 +8845,17 @@ function addV151JobBundle(bundleIndex, essentialOnly = false) {
   }
 
   LAST_AI_QUOTE_DRAFT = draft;
+  (draft.quote_health?.job_specific_bundles || []).forEach(bundle => {
+    if (!bundle.health) return;
+    const missingEssentials = (bundle.items || []).filter(item => !item.optional && !item.already_in_quote);
+    bundle.health.missing_essential_count = missingEssentials.length;
+    bundle.health.ready_to_apply = missingEssentials.length === 0;
+    if (missingEssentials.length === 0 && bundle.health.score < 90) {
+      bundle.health.score = Math.max(90, Number(bundle.health.score || 0));
+      bundle.health.status = "healthy";
+      bundle.health.label = "Healthy";
+    }
+  });
   refreshAfterBundleChange();
   renderAIQuoteDraft({draft});
 
@@ -9444,6 +9455,44 @@ function initialiseOptionalMaterialSelections(draft) {
   return draft;
 }
 
+
+function bundleHealthColour(status) {
+  if (status === "healthy") return {border:"#16a34a", background:"#f0fdf4", text:"#166534"};
+  if (status === "incomplete") return {border:"#dc2626", background:"#fef2f2", text:"#991b1b"};
+  return {border:"#d97706", background:"#fffbeb", text:"#92400e"};
+}
+
+function bundleHealthIssueIcon(severity) {
+  if (severity === "high") return "✕";
+  if (severity === "medium") return "△";
+  if (severity === "low") return "•";
+  return "ℹ";
+}
+
+function renderBundleHealth(bundle) {
+  const health = bundle.health || {};
+  const colours = bundleHealthColour(health.status || "review");
+  const issues = health.issues || [];
+  const checks = health.checks || [];
+
+  return `
+    <div style="margin-top:8px;padding:9px;border:1px solid ${colours.border};border-radius:9px;background:${colours.background};color:${colours.text};">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div>
+          <strong>Bundle health</strong><br>
+          <span class="small">${escapeHtml(health.label || "Review recommended")}</span>
+        </div>
+        <strong style="font-size:22px;">${Number(health.score || 0)}%</strong>
+      </div>
+      ${issues.length ? `<div style="margin-top:7px;">${issues.map(issue => `
+        <div style="margin-top:4px;">
+          ${bundleHealthIssueIcon(issue.severity)} ${escapeHtml(issue.message || "")}
+          ${(issue.items || []).length ? `<br><span class="small" style="display:inline-block;margin-left:14px;">${(issue.items || []).map(escapeHtml).join(", ")}</span>` : ""}
+        </div>`).join("")}</div>` : ""}
+      ${checks.length ? `<details style="margin-top:7px;"><summary style="cursor:pointer;font-weight:700;">Passed checks</summary><div class="small" style="margin-top:5px;">${checks.map(check => `✓ ${escapeHtml(check)}`).join("<br>")}</div></details>` : ""}
+    </div>`;
+}
+
 function renderAIQuoteDraft(data) {
   const box = document.getElementById("aiQuoteResult");
   if (!box) return;
@@ -9539,16 +9588,19 @@ function renderAIQuoteDraft(data) {
         ${jobBundles.map((bundle, bundleIndex) => {
           const pendingAll = (bundle.items || []).filter(item => !item.already_in_quote).length;
           const pendingEssential = (bundle.items || []).filter(item => !item.already_in_quote && !item.optional).length;
-          return `<div style="margin-top:7px;padding:9px;border:1px solid #16a34a;border-radius:9px;background:#f0fdf4;">
+          const health = bundle.health || {};
+          const colours = bundleHealthColour(health.status || "review");
+          return `<div style="margin-top:7px;padding:9px;border:1px solid ${colours.border};border-radius:9px;background:white;">
             <strong>${escapeHtml(bundle.display_name || "")}</strong>
             <span class="small"> · ${Number(bundle.required_count || 0)} essential · ${Number(bundle.optional_count || 0)} optional</span><br>
             ${(bundle.items || []).map(item => `• <strong>${escapeHtml(item.name)}</strong> × ${Number(item.quantity || 1)} — ${Number(item.confidence || 0)}% ${item.already_in_quote ? "✓ already included" : item.optional ? "(optional)" : "(essential)"}${item.reason ? `<br><span class="small" style="display:inline-block;margin-left:12px;">${escapeHtml(item.reason)}</span>` : ""}`).join("<br>")}
+            ${renderBundleHealth(bundle)}
             <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:7px;">
               <button type="button" class="btn-green" ${pendingAll ? "" : "disabled"} onclick="addV151JobBundle(${bundleIndex}, false)">
-                ${pendingAll ? `Add bundle (${pendingAll})` : "Bundle added"}
+                ${pendingAll ? `Add full bundle (${pendingAll})` : "Full bundle added"}
               </button>
               <button type="button" class="btn-light" ${pendingEssential ? "" : "disabled"} onclick="addV151JobBundle(${bundleIndex}, true)">
-                ${pendingEssential ? `Add essential only (${pendingEssential})` : "Essentials added"}
+                ${pendingEssential ? `Fix missing essentials (${pendingEssential})` : "Essentials complete"}
               </button>
             </div>
           </div>`;
@@ -14341,6 +14393,129 @@ def bundle_recommendation_decision(rec: dict, context: dict, job: dict):
     }
 
 
+
+def calculate_bundle_health(bundle: dict):
+    items = bundle.get("items", []) or []
+    suppressed = bundle.get("suppressed_items", []) or []
+
+    issues = []
+    checks = []
+    score = 100
+
+    essentials = [item for item in items if not item.get("optional")]
+    optionals = [item for item in items if item.get("optional")]
+    missing_essentials = [item for item in essentials if not item.get("already_in_quote")]
+    included_items = [item for item in items if item.get("already_in_quote")]
+
+    if missing_essentials:
+        score -= min(50, len(missing_essentials) * 18)
+        issues.append({
+            "severity": "high",
+            "code": "missing_essentials",
+            "message": f"{len(missing_essentials)} essential material item(s) have not been added.",
+            "items": [item.get("name", "") for item in missing_essentials],
+        })
+    else:
+        checks.append("All essential bundle items are already included.")
+
+    low_confidence = [
+        item for item in items
+        if int(item.get("confidence", 0) or 0) < 70
+    ]
+    if low_confidence:
+        score -= min(18, len(low_confidence) * 6)
+        issues.append({
+            "severity": "medium",
+            "code": "low_confidence",
+            "message": "Some bundle recommendations have low confidence and need review.",
+            "items": [item.get("name", "") for item in low_confidence],
+        })
+    else:
+        checks.append("All bundle recommendations have usable confidence.")
+
+    site_checks = [
+        item for item in items
+        if item.get("site_survey_action") in {"site_check", "keep_optional", "reuse_existing", "existing_reusable"}
+    ]
+    if site_checks:
+        score -= min(15, len(site_checks) * 4)
+        issues.append({
+            "severity": "medium",
+            "code": "site_checks",
+            "message": "Existing parts or site conditions still need confirmation.",
+            "items": [item.get("name", "") for item in site_checks],
+        })
+    else:
+        checks.append("No bundle items are waiting on a site-survey decision.")
+
+    unpriced_included = [
+        item for item in included_items
+        if safe_float(item.get("manual_price", 0), 0) <= 0
+    ]
+    if unpriced_included:
+        score -= min(15, len(unpriced_included) * 5)
+        issues.append({
+            "severity": "medium",
+            "code": "missing_prices",
+            "message": "Included bundle items still have no confirmed price.",
+            "items": [item.get("name", "") for item in unpriced_included],
+        })
+    elif included_items:
+        checks.append("Included bundle items have prices.")
+
+    missing_urls = [
+        item for item in included_items
+        if not str(item.get("url", "") or "").strip()
+    ]
+    if missing_urls:
+        score -= min(10, len(missing_urls) * 3)
+        issues.append({
+            "severity": "low",
+            "code": "missing_urls",
+            "message": "Some included bundle items have no saved product URL.",
+            "items": [item.get("name", "") for item in missing_urls],
+        })
+    elif included_items:
+        checks.append("Included bundle items have saved product links.")
+
+    if suppressed:
+        checks.append(
+            f"{len(suppressed)} unsuitable, customer-supplied or unconfirmed item(s) were suppressed."
+        )
+
+    if optionals and not any(item.get("already_in_quote") for item in optionals):
+        issues.append({
+            "severity": "info",
+            "code": "optional_review",
+            "message": f"{len(optionals)} optional item(s) are available for review.",
+            "items": [item.get("name", "") for item in optionals],
+        })
+
+    score = max(0, min(100, int(round(score))))
+    if score >= 90:
+        status = "healthy"
+        label = "Healthy"
+    elif score >= 70:
+        status = "review"
+        label = "Review recommended"
+    else:
+        status = "incomplete"
+        label = "Incomplete"
+
+    return {
+        "score": score,
+        "status": status,
+        "label": label,
+        "issues": issues,
+        "checks": checks[:6],
+        "missing_essential_count": len(missing_essentials),
+        "optional_review_count": len(optionals),
+        "included_count": len(included_items),
+        "total_count": len(items),
+        "ready_to_apply": len(missing_essentials) == 0,
+    }
+
+
 def build_job_specific_bundles(draft: dict, context: dict):
     bundles = []
     jobs = (context.get("multi_job_estimate", {}) or {}).get("classified_jobs", []) or []
@@ -14401,20 +14576,25 @@ def build_job_specific_bundles(draft: dict, context: dict):
                 "site_survey_action": survey_action.get("action", ""),
                 "site_survey_reason": survey_action.get("reason", ""),
                 "supply_responsibility": bundle_supply_responsibility(context, job),
+                "manual_price": safe_float((matched_material or {}).get("manual_price", 0), 0),
+                "url": (matched_material or {}).get("url", ""),
+                "supplier": (matched_material or {}).get("supplier", ""),
             })
 
         if items:
             required_count = sum(1 for item in items if not item.get("optional"))
             optional_count = sum(1 for item in items if item.get("optional"))
-            bundles.append({
+            bundle = {
                 "job_type": job_type,
                 "display_name": job.get("display_name") or job_type.replace("_", " ").title(),
                 "items": items,
                 "required_count": required_count,
                 "optional_count": optional_count,
                 "suppressed_items": suppressed,
-                "logic_version": "v15.4",
-            })
+                "logic_version": "v15.5",
+            }
+            bundle["health"] = calculate_bundle_health(bundle)
+            bundles.append(bundle)
 
     return bundles
 
@@ -14761,7 +14941,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "smarter-bundle-logic-v15-4",
+        "estimator_version": "bundle-health-v15-5",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -15427,7 +15607,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "smarter-bundle-logic-v15-4"),
+        "version": context.get("estimator_version", "bundle-health-v15-5"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
