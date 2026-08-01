@@ -79,7 +79,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "16.1.1-render-qr-dependency-fix"
+APP_VERSION = "16.2-manual-job-reference"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 INVOICE_PHOTO_DIR = Path("/var/data/invoice_photos")
@@ -1816,6 +1816,7 @@ class InvoiceEditRequest(BaseModel):
     customer_address: str = ""
     customer_phone: str = ""
     job: str = ""
+    job_reference: str = ""
     labour: float = 0
     materials: float = 0
     due_date: str = ""
@@ -1942,6 +1943,7 @@ def init_db():
             status TEXT NOT NULL,
             due_date TEXT NOT NULL,
             payment_link TEXT,
+            job_reference TEXT,
             reminder_email TEXT,
             reminders_enabled INTEGER NOT NULL DEFAULT 0,
             last_reminder_at TEXT,
@@ -2037,6 +2039,8 @@ def init_db():
     existing_invoice_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(invoices)").fetchall()
     }
+    if "job_reference" not in existing_invoice_columns:
+        conn.execute("ALTER TABLE invoices ADD COLUMN job_reference TEXT")
     if "reminder_email" not in existing_invoice_columns:
         conn.execute("ALTER TABLE invoices ADD COLUMN reminder_email TEXT")
     if "reminders_enabled" not in existing_invoice_columns:
@@ -2756,7 +2760,8 @@ def send_overdue_reminder_now(item: dict):
     if not invoice_is_overdue(item):
         raise RuntimeError("This invoice is not currently overdue.")
     message = (
-        f"This is a payment reminder for invoice {item['invoice_number']}. "
+        f"This is a payment reminder for invoice {item['invoice_number']}"
+        f"{f' (Job Ref {item.get("job_reference")})' if item.get("job_reference") else ''}. "
         f"The outstanding balance is {pounds_text(item.get('balance_due', 0))}. "
         f"Please use {item['invoice_number']} as the bank-transfer reference."
     )
@@ -2814,6 +2819,7 @@ def row_to_invoice(row):
         "status": row["status"],
         "due_date": row["due_date"],
         "payment_link": row["payment_link"] or "",
+        "job_reference": row["job_reference"] or "",
         "reminder_email": row["reminder_email"] or "",
         "reminders_enabled": bool(row["reminders_enabled"] or 0),
         "last_reminder_at": row["last_reminder_at"] or "",
@@ -3156,6 +3162,7 @@ def create_invoice_from_quote(quote_id: int):
         "deposit_amount": result.get("deposit_amount", 0),
         "due_date": due_date,
         "payment_link": payment_link,
+        "job_reference": "",
         "status": "unpaid",
         "amount_paid": 0.0,
         "balance_due": result.get("total_price", 0),
@@ -3165,9 +3172,9 @@ def create_invoice_from_quote(quote_id: int):
     conn.execute("""
         INSERT INTO invoices (
             quote_id, customer_id, invoice_number, customer_name, total_price, amount_paid, balance_due,
-            status, due_date, payment_link, reminder_email, reminders_enabled, last_reminder_at,
+            status, due_date, payment_link, job_reference, reminder_email, reminders_enabled, last_reminder_at,
             created_at, created_at_sort, quote_result_json, invoice_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         quote["id"],
         quote["customer_id"],
@@ -3179,6 +3186,7 @@ def create_invoice_from_quote(quote_id: int):
         "unpaid",
         due_date,
         payment_link,
+        "",
         "",
         0,
         "",
@@ -3312,6 +3320,7 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     job = (data.job or "").strip()
     due_date = (data.due_date or "").strip() or invoice["due_date"]
     payment_link = (data.payment_link or "").strip()
+    job_reference = (data.job_reference or "").strip()
     reminder_email = (data.reminder_email or "").strip()
     reminders_enabled = bool(data.reminders_enabled)
 
@@ -3358,6 +3367,7 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
         "total_price": round(total_price, 2),
         "due_date": due_date,
         "payment_link": payment_link,
+        "job_reference": job_reference,
         "status": status,
         "amount_paid": round(amount_paid, 2),
         "balance_due": round(balance_due, 2),
@@ -3367,7 +3377,7 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     conn.execute("""
         UPDATE invoices
         SET customer_id = ?, customer_name = ?, total_price = ?, amount_paid = ?, balance_due = ?, status = ?,
-            due_date = ?, payment_link = ?, reminder_email = ?, reminders_enabled = ?,
+            due_date = ?, payment_link = ?, job_reference = ?, reminder_email = ?, reminders_enabled = ?,
             quote_result_json = ?, invoice_json = ?
         WHERE id = ?
     """, (
@@ -3379,6 +3389,7 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
         status,
         due_date,
         payment_link,
+        job_reference,
         reminder_email,
         1 if reminders_enabled else 0,
         json.dumps(quote_result),
@@ -3747,6 +3758,8 @@ def generate_invoice_pdf_bytes(item: dict):
     c.drawString(320, detail_y, f"Date: {item['created_at']}")
     c.drawString(320, detail_y - 15, f"Due: {item['due_date']}")
     c.drawString(320, detail_y - 30, f"Status: {item['status'].title()}")
+    if item.get("job_reference"):
+        c.drawString(320, detail_y - 45, f"Job Ref: {str(item['job_reference'])[:35]}")
     y -= 8
     c.line(40, y, A4[0] - 40, y)
     y -= 22
@@ -3905,7 +3918,11 @@ def send_invoice_email_now(item: dict, to_email: str, extra_message: str = ""):
 
     invoice = item["invoice"]
     public_url = build_invoice_public_url(item["id"])
-    subject = f"Invoice {item['invoice_number']} - {COMPANY_NAME}"
+    subject = (
+        f"Invoice {item['invoice_number']}"
+        + (f" - Job Ref {item['job_reference']}" if item.get("job_reference") else "")
+        + f" - {COMPANY_NAME}"
+    )
 
     greeting = f"Hello {invoice.get('customer_name') or ''},".strip()
     plain_lines = [
@@ -3914,6 +3931,7 @@ def send_invoice_email_now(item: dict, to_email: str, extra_message: str = ""):
         extra_message.strip() if extra_message else "Please find your invoice attached as a PDF.",
         "",
         f"Invoice number: {item['invoice_number']}",
+        f"Job Ref: {item.get('job_reference') or '-'}",
         f"Balance due: {pounds_text(item.get('balance_due', 0))}",
         f"Invoice link: {public_url}",
         "",
@@ -5021,7 +5039,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Payment & Invoice Automation V16.1.1</strong><br>
+        <strong>Manual Job Reference V16.2</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -5396,6 +5414,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <div class="doc-panel doc-summary">
         <div class="doc-panel-title">Invoice details</div>
         <div class="row"><span class="muted">Invoice number</span><span id="i_number"></span></div>
+        <div class="row"><span class="muted">Job Ref</span><span id="i_job_reference">-</span></div>
         <div class="row"><span class="muted">Date</span><span id="i_date"></span></div>
         <div class="row"><span class="muted">Due date</span><span id="i_due_date"></span></div>
         <div class="row"><span class="muted">Status</span><span id="i_status"></span></div>
@@ -5434,6 +5453,8 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <input id="edit_invoice_customer_phone" placeholder="Customer phone">
       <label for="edit_invoice_job">Job</label>
       <textarea id="edit_invoice_job" placeholder="Job details"></textarea>
+      <label for="edit_invoice_job_reference">Job Ref</label>
+      <input id="edit_invoice_job_reference" placeholder="Type the company's job reference">
       <label for="edit_invoice_labour">Labour (£)</label>
       <input id="edit_invoice_labour" type="number" step="0.01" placeholder="0">
       <label for="edit_invoice_materials">Materials (£)</label>
@@ -7350,6 +7371,7 @@ function renderInvoiceCard(item) {
   const quoteResult = item.quote_result;
 
   document.getElementById("i_number").innerText = item.invoice_number || "-";
+  document.getElementById("i_job_reference").innerText = item.job_reference || "-";
   document.getElementById("i_date").innerText = item.created_at || "-";
   document.getElementById("i_due_date").innerText = item.due_date || "-";
   document.getElementById("i_status").innerHTML = renderStatusBadge(item.status);
@@ -10501,6 +10523,7 @@ function populateInvoiceEditForm(item) {
   document.getElementById("edit_invoice_customer_address").value = invoice.customer_address || "";
   document.getElementById("edit_invoice_customer_phone").value = invoice.customer_phone || "";
   document.getElementById("edit_invoice_job").value = invoice.job || "";
+  document.getElementById("edit_invoice_job_reference").value = item.job_reference || invoice.job_reference || "";
   document.getElementById("edit_invoice_labour").value = invoice.labour || 0;
   document.getElementById("edit_invoice_materials").value = invoice.materials || 0;
   document.getElementById("edit_invoice_due_date").value = item.due_date || "";
@@ -15522,7 +15545,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "payment-invoice-automation-v16-1",
+        "estimator_version": "manual-job-reference-v16-2",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -16189,7 +16212,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "payment-invoice-automation-v16-1"),
+        "version": context.get("estimator_version", "manual-job-reference-v16-2"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
@@ -16364,6 +16387,7 @@ def public_invoice(invoice_id: int):
           <div class="box"><div class="label">Bill To</div>{escape(invoice.get('customer_name', '-') or '-')}<br>{escape(invoice.get('customer_address', '-') or '-')}<br>{escape(invoice.get('customer_phone', '-') or '-')}</div>
           <div class="box">
             <div class="row"><span class="muted">Date</span><span>{escape(item['created_at'])}</span></div>
+            <div class="row"><span class="muted">Job Ref</span><span>{escape(item.get('job_reference') or '-')}</span></div>
             <div class="row"><span class="muted">Due date</span><span>{escape(item['due_date'])}</span></div>
             <div class="row"><span class="muted">Status</span><span>{escape(item['status'].title())}</span></div>
           </div>
