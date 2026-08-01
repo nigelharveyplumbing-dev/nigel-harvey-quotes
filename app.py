@@ -34,7 +34,13 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from PIL import Image, ImageOps
-import qrcode
+
+try:
+    import qrcode
+    QRCODE_AVAILABLE = True
+except ImportError:
+    qrcode = None
+    QRCODE_AVAILABLE = False
 
 app = FastAPI(title="Nigel Harvey Ltd Business App")
 
@@ -73,7 +79,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "16.1-payment-invoice-automation"
+APP_VERSION = "16.1.1-render-qr-dependency-fix"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 INVOICE_PHOTO_DIR = Path("/var/data/invoice_photos")
@@ -2691,6 +2697,11 @@ def bank_payment_text(item: dict) -> str:
 
 
 def bank_payment_qr_png(item: dict) -> bytes:
+    if not QRCODE_AVAILABLE:
+        raise RuntimeError(
+            "QR code support is not installed. Add qrcode[pil] to requirements.txt."
+        )
+
     qr = qrcode.QRCode(version=None, box_size=7, border=2)
     qr.add_data(bank_payment_text(item))
     qr.make(fit=True)
@@ -2810,6 +2821,7 @@ def row_to_invoice(row):
         "quote_result": json.loads(row["quote_result_json"]),
         "invoice": json.loads(row["invoice_json"]),
         "photos": load_invoice_photos(row["id"]),
+        "qr_available": QRCODE_AVAILABLE,
     }
 
 
@@ -5009,7 +5021,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Payment & Invoice Automation V16.1</strong><br>
+        <strong>Payment & Invoice Automation V16.1.1</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -7378,8 +7390,15 @@ function renderInvoiceCard(item) {
         Reference: <strong>${escapeHtml(bankDetails.reference)}</strong><br>
         Amount due: <strong>${pounds(bankDetails.amount)}</strong>
       </div>
-      <img src="/api/invoices/${item.id}/payment-qr" alt="Payment details QR"
-        style="width:112px;height:112px;border:1px solid #ddd;border-radius:8px;background:white;">
+      ${item.qr_available === false ? `
+        <div class="small" style="width:112px;padding:10px;border:1px solid #ddd;border-radius:8px;background:#fafafa;">
+          QR unavailable<br>Install qrcode[pil]
+        </div>
+      ` : `
+        <img src="/api/invoices/${item.id}/payment-qr" alt="Payment details QR"
+          onerror="this.style.display='none'"
+          style="width:112px;height:112px;border:1px solid #ddd;border-radius:8px;background:white;">
+      `}
     </div>
     <div class="history-actions" style="grid-template-columns:1fr;margin-top:8px;">
       <button type="button" class="btn-light" onclick="copyInvoiceBankDetails()">Copy bank details</button>
@@ -16158,6 +16177,7 @@ def api_ai_quote_status():
     return JSONResponse(content={
         "configured": configured,
         "model": (os.getenv("OPENAI_MODEL") or "gpt-5.6-luna").strip(),
+        "qr_code_support": QRCODE_AVAILABLE,
     })
 
 
@@ -16269,7 +16289,13 @@ def public_invoice(invoice_id: int):
             Reference: <strong>{escape(bank_payment_reference(item))}</strong><br>
             Amount due: <strong>{pounds_text(item.get("balance_due", 0))}</strong>
           </div>
-          <img src="/api/invoices/{item['id']}/payment-qr" alt="Payment details QR" style="width:120px;height:120px;background:white;border:1px solid #ddd;border-radius:8px;">
+          {(
+              f'<img src="/api/invoices/{item["id"]}/payment-qr" alt="Payment details QR" '
+              f'style="width:120px;height:120px;background:white;border:1px solid #ddd;border-radius:8px;">'
+              if QRCODE_AVAILABLE else
+              '<div style="width:120px;padding:10px;border:1px solid #ddd;border-radius:8px;'
+              'background:#fafafa;font-size:12px;">QR unavailable</div>'
+          )}
         </div>
         <div style="font-size:12px;color:#666;margin-top:6px;">The QR contains the payment details. Automatic bank-app prefilling varies.</div>
       </div>
@@ -16460,7 +16486,16 @@ def api_invoice_payment_qr(invoice_id: int):
     item = get_invoice_by_id(invoice_id)
     if not item:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    return Response(content=bank_payment_qr_png(item), media_type="image/png", headers={"Cache-Control":"private, max-age=300"})
+    if not QRCODE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="QR support is unavailable until qrcode[pil] is installed."
+        )
+    return Response(
+        content=bank_payment_qr_png(item),
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=300"},
+    )
 
 
 @app.post("/api/invoices/{invoice_id}/send-overdue-reminder")
