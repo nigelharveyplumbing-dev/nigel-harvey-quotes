@@ -63,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "15.1.1-duplicate-pipe-fix"
+APP_VERSION = "15.2-optional-material-selector"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4608,7 +4608,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Smart Bundle Engine V15.1.1</strong><br>
+        <strong>Optional Material Selector V15.2</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -4678,7 +4678,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Smart Bundle Engine & Quote Intelligence V15.1.1</strong><br>
+        <strong>Optional Material Selector & Quote Intelligence V15.2</strong><br>
         <span class="small">Combines the enquiry, audio walkthrough, optional visual evidence, material database, merchant search and labour intelligence in one quote workflow.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
@@ -8349,8 +8349,20 @@ function addQuoteHealthSuggestion(suggestionId) {
       required: !suggestion.optional,
       display_status: suggestion.optional ? "optional" : "required",
       data_source: "quote_health_suggestion",
-      reason: suggestion.reason || ""
+      reason: suggestion.reason || "",
+      include_in_quote: true,
+      optional_selected: Boolean(suggestion.optional)
     });
+  }
+
+  const selectedMaterial = draft.materials.find(item =>
+    canonicalMaterialName(item.name || "") === canonicalMaterialName(suggestion.name || "")
+  );
+  if (selectedMaterial) {
+    selectedMaterial.include_in_quote = true;
+    if (suggestion.optional) selectedMaterial.optional_selected = true;
+    mergeBundleMaterialIntoForm(selectedMaterial);
+    mergeDuplicateMaterialRowsInForm();
   }
 
   draft.quote_health.missing_items = (draft.quote_health.missing_items || [])
@@ -8667,6 +8679,8 @@ function addV151JobBundle(bundleIndex, essentialOnly = false) {
     else merged += 1;
 
     if (mergeBundleMaterialIntoForm(result.material)) addedToForm += 1;
+    result.material.include_in_quote = true;
+    if (item.optional) result.material.optional_selected = true;
     item.already_in_quote = true;
     includedNames.push(item.name || "Material");
   });
@@ -9216,11 +9230,98 @@ function addLiveMerchantProduct(searchId, resultIndex) {
 }
 
 
+
+function isOptionalDraftMaterial(material) {
+  const status = String(
+    material?.display_status ||
+    material?.status ||
+    (material?.required ? "required" : "optional")
+  ).toLowerCase();
+  return !material?.required && status !== "required" && status !== "customer_supplied";
+}
+
+function optionalMaterialIsSelected(material) {
+  if (!isOptionalDraftMaterial(material)) return true;
+  return material?.include_in_quote === true || material?.optional_selected === true;
+}
+
+function removeMaterialRowByIdentity(materialName) {
+  const identity = bundleMaterialIdentity(materialName || "");
+  const row = [...document.querySelectorAll("#materials .material-row")].find(candidate =>
+    bundleMaterialIdentity(candidate.querySelector(".m-name")?.value || "") === identity
+  );
+  if (row) row.remove();
+}
+
+function toggleOptionalDraftMaterial(materialIndex, forceValue = null) {
+  const draft = LAST_AI_QUOTE_DRAFT;
+  if (!draft || !Array.isArray(draft.materials)) return;
+
+  const material = draft.materials[Number(materialIndex)];
+  if (!material || !isOptionalDraftMaterial(material)) return;
+
+  const selected = forceValue === null
+    ? !optionalMaterialIsSelected(material)
+    : Boolean(forceValue);
+
+  material.include_in_quote = selected;
+  material.optional_selected = selected;
+
+  if (selected) {
+    const enriched = enrichMaterialFromSavedDatabase({...material});
+    Object.assign(material, enriched);
+    mergeBundleMaterialIntoForm(material);
+    mergeDuplicateMaterialRowsInForm();
+    showNotice(`${material.name} added to the editable Materials list.`);
+  } else {
+    removeMaterialRowByIdentity(material.name || "");
+    showNotice(`${material.name} removed from the editable Materials list.`);
+  }
+
+  LAST_AI_QUOTE_DRAFT = draft;
+  refreshAfterBundleChange();
+  renderAIQuoteDraft({draft});
+}
+
+function optionalMaterialControl(material, index) {
+  if (!isOptionalDraftMaterial(material)) {
+    return `<span style="display:inline-block;padding:4px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-size:12px;font-weight:700;">Included</span>`;
+  }
+
+  const selected = optionalMaterialIsSelected(material);
+  return `
+    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;">
+      <input type="checkbox" ${selected ? "checked" : ""}
+        onchange="toggleOptionalDraftMaterial(${index}, this.checked)"
+        style="width:18px;height:18px;margin:0;">
+      <span style="font-size:12px;font-weight:700;color:${selected ? "#166534" : "#374151"};">
+        ${selected ? "Added" : "Add"}
+      </span>
+    </label>`;
+}
+
+function initialiseOptionalMaterialSelections(draft) {
+  (draft?.materials || []).forEach(material => {
+    if (!isOptionalDraftMaterial(material)) {
+      material.include_in_quote = true;
+      return;
+    }
+    if (typeof material.include_in_quote !== "boolean") {
+      material.include_in_quote = false;
+      material.optional_selected = false;
+    }
+  });
+  return draft;
+}
+
 function renderAIQuoteDraft(data) {
   const box = document.getElementById("aiQuoteResult");
   if (!box) return;
 
-  const draft = prepareDraftForV125(data.draft || {});
+  const draft = initialiseOptionalMaterialSelections(
+    prepareDraftForV125(data.draft || {})
+  );
+  LAST_AI_QUOTE_DRAFT = draft;
   const materials = draft.materials || [];
   const professional = draft.professional_quote || {};
   const confidence = professional.confidence || {};
@@ -9359,25 +9460,28 @@ function renderAIQuoteDraft(data) {
         </div>
       </div>
 
-      <div style="margin-top:12px;"><strong>Materials</strong>
+      <div style="margin-top:12px;"><strong>Materials</strong><br>
+        <span class="small">Required items are included automatically. Tick an optional item to add it directly to the editable Materials list.</span>
         <div style="overflow-x:auto;margin-top:5px;">
-          <table style="width:100%;border-collapse:collapse;">
+          <table style="width:100%;border-collapse:collapse;min-width:720px;">
             <thead><tr>
               <th style="text-align:left;padding:5px;border-bottom:1px solid #ddd;">Item</th>
               <th style="text-align:left;padding:5px;border-bottom:1px solid #ddd;">Status</th>
+              <th style="text-align:center;padding:5px;border-bottom:1px solid #ddd;">Include</th>
               <th style="text-align:right;padding:5px;border-bottom:1px solid #ddd;">Qty</th>
               <th style="text-align:right;padding:5px;border-bottom:1px solid #ddd;">Price</th>
               <th style="text-align:center;padding:5px;border-bottom:1px solid #ddd;">Confidence</th>
               <th style="text-align:left;padding:5px;border-bottom:1px solid #ddd;">Supplier</th>
             </tr></thead>
-            <tbody>${materials.length ? materials.map(m => `<tr>
-              <td style="padding:5px;border-bottom:1px solid #eee;">${escapeHtml(m.name || "")}</td>
+            <tbody>${materials.length ? materials.map((m, materialIndex) => `<tr style="background:${isOptionalDraftMaterial(m) && !optionalMaterialIsSelected(m) ? "#fafafa" : "white"};">
+              <td style="padding:5px;border-bottom:1px solid #eee;"><strong>${escapeHtml(m.name || "")}</strong>${m.reason ? `<br><span class="small">${escapeHtml(m.reason)}</span>` : ""}</td>
               <td style="padding:5px;border-bottom:1px solid #eee;">${statusBadge(m.display_status || (m.required ? "required" : "optional"))}</td>
+              <td style="padding:5px;text-align:center;border-bottom:1px solid #eee;">${optionalMaterialControl(m, materialIndex)}</td>
               <td style="padding:5px;text-align:right;border-bottom:1px solid #eee;">${Number(m.quantity || 1)}</td>
               <td style="padding:5px;text-align:right;border-bottom:1px solid #eee;">${Number(m.manual_price || 0) > 0 ? pounds(m.manual_price) : "TBC"}</td>
               <td style="padding:5px;text-align:center;border-bottom:1px solid #eee;">${Number(m.material_confidence || 65)}%</td>
               <td style="padding:5px;border-bottom:1px solid #eee;">${escapeHtml(m.supplier || "")}</td>
-            </tr>`).join("") : `<tr><td colspan="6" style="padding:7px;">No materials suggested.</td></tr>`}</tbody>
+            </tr>`).join("") : `<tr><td colspan="7" style="padding:7px;">No materials suggested.</td></tr>`}</tbody>
           </table>
         </div>
       </div>
@@ -9445,22 +9549,25 @@ function applyAIQuoteDraft() {
   }
 
   clearMaterials();
-  (draft.materials || []).forEach(m => {
-    addMaterial({
-      name: m.name || "",
-      quantity: Number(m.quantity || 1),
-      supplier: m.supplier || "City Plumbing",
-      url: m.url || "",
-      manual_price: Number(m.manual_price || m.live_price || m.default_price || 0),
-      source: m.source || "",
-      price_source: m.price_source || "",
-      sku: m.sku || "",
-      image_url: m.image_url || "",
-      checked_at: m.checked_at || "",
-      quantity_source: m.quantity_source || "ai",
-      learned_used_count: Number(m.learned_used_count || 0)
+  (draft.materials || [])
+    .filter(m => !isOptionalDraftMaterial(m) || optionalMaterialIsSelected(m))
+    .forEach(m => {
+      addMaterial({
+        name: m.name || "",
+        quantity: Number(m.quantity || 1),
+        supplier: m.supplier || "City Plumbing",
+        url: m.url || "",
+        manual_price: Number(m.manual_price || m.live_price || m.default_price || 0),
+        source: m.source || "",
+        price_source: m.price_source || "",
+        sku: m.sku || "",
+        image_url: m.image_url || "",
+        checked_at: m.checked_at || "",
+        quantity_source: m.quantity_source || "ai",
+        learned_used_count: Number(m.learned_used_count || 0)
+      });
     });
-  });
+  mergeDuplicateMaterialRowsInForm();
 
   scheduleQuoteLearning();
   scheduleLabourIntelligence();
@@ -14033,7 +14140,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "smart-bundle-engine-v15-1-1",
+        "estimator_version": "optional-material-selector-v15-2",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -14699,7 +14806,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "smart-bundle-engine-v15-1-1"),
+        "version": context.get("estimator_version", "optional-material-selector-v15-2"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
