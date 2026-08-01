@@ -63,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "14.0-ai-job-walkthrough"
+APP_VERSION = "15.1-smart-bundle-engine"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4608,7 +4608,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>AI Job Walkthrough V14</strong><br>
+        <strong>Smart Bundle Engine V15.1</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -4678,7 +4678,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>AI Job Walkthrough & Quote Intelligence V14</strong><br>
+        <strong>Smart Bundle Engine & Quote Intelligence V15.1</strong><br>
         <span class="small">Combines the enquiry, audio walkthrough, optional visual evidence, material database, merchant search and labour intelligence in one quote workflow.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
@@ -6238,7 +6238,7 @@ function addMaterial(prefill = null) {
     <div class="material-live-status small" style="margin-top:8px;"></div>
     <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
       <button type="button" class="btn-light refresh-material-price" onclick="refreshMaterialRowPrice(this)">Update price</button>
-      <button type="button" class="btn-red" onclick="this.closest('.material-row').remove()">Remove</button>
+      <button type="button" class="btn-red" onclick="this.closest('.material-row').remove(); refreshAfterBundleChange()">Remove</button>
     </div>
   `;
   document.getElementById("materials").appendChild(div);
@@ -8421,40 +8421,197 @@ function keepCurrentQuantity(warningId) {
   showNotice("Current quantity kept for this draft.");
 }
 
-function addV11JobBundle(jobType, essentialOnly = false) {
-  const draft = LAST_AI_QUOTE_DRAFT;
-  if (!draft || !draft.quote_health) return;
-  const bundle = (draft.quote_health.job_specific_bundles || []).find(x => x.job_type === jobType);
-  if (!bundle) return;
 
+function findMaterialRowByCanonicalName(materialName) {
+  const target = canonicalMaterialName(materialName || "");
+  if (!target) return null;
+  return [...document.querySelectorAll("#materials .material-row")].find(row => {
+    const existing = canonicalMaterialName(row.querySelector(".m-name")?.value || "");
+    return existing === target || existing.includes(target) || target.includes(existing);
+  }) || null;
+}
+
+function mergeBundleMaterialIntoDraft(draft, item) {
   draft.materials = draft.materials || [];
-  let added = 0;
-  (bundle.items || []).forEach(item => {
-    if (essentialOnly && item.optional) return;
-    if (item.already_in_quote) return;
-    const exists = draft.materials.some(existing =>
-      canonicalMaterialName(existing.name || "") === canonicalMaterialName(item.name || "")
-    );
-    if (!exists) {
-      draft.materials.push({
-        name: item.name || "",
-        quantity: Number(item.quantity || 1),
-        supplier: "City Plumbing",
-        url: "",
-        manual_price: 0,
-        required: !item.optional,
-        display_status: item.optional ? "optional" : "required",
-        data_source: "context_job_bundle",
-        material_confidence: Number(item.confidence || 75),
-        reason: item.reason || ""
-      });
-      item.already_in_quote = true;
-      added += 1;
-    }
+  const target = canonicalMaterialName(item.name || "");
+  let existing = draft.materials.find(material => {
+    const current = canonicalMaterialName(material.name || "");
+    return current === target || current.includes(target) || target.includes(current);
   });
 
+  const incomingQty = Number(item.quantity || 1);
+  if (existing) {
+    existing.quantity = Math.max(Number(existing.quantity || 0), incomingQty);
+    if (!item.optional) {
+      existing.required = true;
+      existing.display_status = "required";
+    }
+    existing.material_confidence = Math.max(
+      Number(existing.material_confidence || 0),
+      Number(item.confidence || 75)
+    );
+    if (!existing.url && item.url) existing.url = item.url;
+    if (!Number(existing.manual_price || 0) && Number(item.manual_price || item.price || 0)) {
+      existing.manual_price = Number(item.manual_price || item.price || 0);
+    }
+    if (!existing.supplier && item.supplier) existing.supplier = item.supplier;
+    return {material: existing, created: false};
+  }
+
+  existing = {
+    name: item.name || "",
+    quantity: incomingQty,
+    supplier: item.supplier || "City Plumbing",
+    url: item.url || "",
+    manual_price: Number(item.manual_price || item.live_price || item.price || 0),
+    required: !item.optional,
+    display_status: item.optional ? "optional" : "required",
+    data_source: "v15_1_job_bundle",
+    material_confidence: Number(item.confidence || 75),
+    reason: item.reason || "",
+    source: item.source || "",
+    price_source: item.price_source || "",
+    sku: item.sku || "",
+    image_url: item.image_url || "",
+    checked_at: item.checked_at || ""
+  };
+  draft.materials.push(existing);
+  return {material: existing, created: true};
+}
+
+function mergeBundleMaterialIntoForm(material) {
+  const row = findMaterialRowByCanonicalName(material.name || "");
+  const incomingQty = Number(material.quantity || 1);
+
+  if (row) {
+    const qtyInput = row.querySelector(".m-qty");
+    const currentQty = Number(qtyInput?.value || 0);
+    if (qtyInput) qtyInput.value = Math.max(currentQty, incomingQty);
+
+    const supplier = row.querySelector(".m-supplier");
+    const url = row.querySelector(".m-url");
+    const manual = row.querySelector(".m-manual");
+
+    if (supplier && material.supplier) supplier.value = material.supplier;
+    if (url && !url.value && material.url) url.value = material.url;
+    if (manual && !Number(manual.value || 0) && Number(material.manual_price || 0)) {
+      manual.value = Number(material.manual_price || 0);
+    }
+    updateMaterialLiveBadge(row);
+    return false;
+  }
+
+  addMaterial({
+    name: material.name || "",
+    quantity: incomingQty,
+    supplier: material.supplier || "City Plumbing",
+    url: material.url || "",
+    manual_price: Number(material.manual_price || material.live_price || 0),
+    source: material.source || "v15_1_job_bundle",
+    price_source: material.price_source || "",
+    sku: material.sku || "",
+    image_url: material.image_url || "",
+    checked_at: material.checked_at || "",
+    quantity_source: "bundle"
+  });
+  return true;
+}
+
+function refreshAfterBundleChange() {
+  scheduleQuoteLearning();
+  scheduleLabourIntelligence();
+  updateForgottenItemWarnings();
+  updateSupplierPreferenceNotes();
+
+  // Refresh any already-generated quote preview so totals are not left stale.
+  const quoteResult = document.getElementById("result");
+  if (quoteResult && quoteResult.innerHTML.trim()) {
+    quoteResult.innerHTML = `
+      <div class="notice">
+        Materials changed. Press <strong>Update Quote</strong> to regenerate the saved/PDF preview with the new totals.
+      </div>`;
+  }
+}
+
+function addV151JobBundle(bundleIndex, essentialOnly = false) {
+  const draft = LAST_AI_QUOTE_DRAFT;
+  if (!draft || !draft.quote_health) {
+    alert("Generate the AI quote draft first.");
+    return;
+  }
+
+  const bundles = draft.quote_health.job_specific_bundles || [];
+  const bundle = bundles[Number(bundleIndex)];
+  if (!bundle) {
+    alert("This bundle could not be found. Generate the draft again.");
+    return;
+  }
+
+  let addedToDraft = 0;
+  let addedToForm = 0;
+  let merged = 0;
+  const includedNames = [];
+
+  (bundle.items || []).forEach(item => {
+    if (essentialOnly && item.optional) return;
+
+    const result = mergeBundleMaterialIntoDraft(draft, item);
+    if (result.created) addedToDraft += 1;
+    else merged += 1;
+
+    if (mergeBundleMaterialIntoForm(result.material)) addedToForm += 1;
+    item.already_in_quote = true;
+    includedNames.push(item.name || "Material");
+  });
+
+  // Merge any duplicates already present in the draft.
+  const combined = [];
+  (draft.materials || []).forEach(material => {
+    const target = canonicalMaterialName(material.name || "");
+    const existing = combined.find(item => {
+      const current = canonicalMaterialName(item.name || "");
+      return current === target || current.includes(target) || target.includes(current);
+    });
+    if (!existing) {
+      combined.push({...material});
+      return;
+    }
+    existing.quantity = Math.max(Number(existing.quantity || 0), Number(material.quantity || 0));
+    existing.required = Boolean(existing.required || material.required);
+    existing.display_status = existing.required ? "required" : (existing.display_status || material.display_status || "optional");
+    existing.material_confidence = Math.max(
+      Number(existing.material_confidence || 0),
+      Number(material.material_confidence || 0)
+    );
+    if (!existing.url && material.url) existing.url = material.url;
+    if (!Number(existing.manual_price || 0) && Number(material.manual_price || 0)) {
+      existing.manual_price = Number(material.manual_price || 0);
+    }
+  });
+  draft.materials = combined;
+
+  draft.quote_health.checks_passed = draft.quote_health.checks_passed || [];
+  if (includedNames.length) {
+    draft.quote_health.checks_passed.push(
+      `${bundle.display_name || "Bundle"} reviewed: ${includedNames.join(", ")}.`
+    );
+  }
+
+  LAST_AI_QUOTE_DRAFT = draft;
+  refreshAfterBundleChange();
   renderAIQuoteDraft({draft});
-  showNotice(added ? `${added} material(s) added from ${bundle.display_name}.` : "Bundle materials are already present.");
+
+  const mode = essentialOnly ? "essential material" : "bundle material";
+  if (!includedNames.length) {
+    showNotice("These bundle materials are already present.");
+  } else {
+    showNotice(
+      `${includedNames.length} ${mode}(s) added or merged. The editable Materials section has been updated.`
+    );
+  }
+
+  // Move the user to the editable material rows on mobile.
+  document.getElementById("materials")?.scrollIntoView({behavior: "smooth", block: "start"});
 }
 
 
@@ -9045,14 +9202,22 @@ function renderAIQuoteDraft(data) {
       </div>
 
       ${jobBundles.length ? `<div style="margin-top:10px;"><strong>Recommended job bundles</strong>
-        ${jobBundles.map(bundle => `<div style="margin-top:7px;padding:9px;border:1px solid #16a34a;border-radius:9px;background:#f0fdf4;">
-          <strong>${escapeHtml(bundle.display_name || "")}</strong><br>
-          ${(bundle.items || []).map(item => `• ${escapeHtml(item.name)} × ${Number(item.quantity || 1)} — ${Number(item.confidence || 0)}% confidence ${item.already_in_quote ? "✓ already included" : item.optional ? "(optional)" : ""}`).join("<br>")}
-          <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:7px;">
-            <button type="button" class="btn-light" onclick='addV11JobBundle(${JSON.stringify(bundle.job_type)}, false)'>Add bundle</button>
-            <button type="button" class="btn-light" onclick='addV11JobBundle(${JSON.stringify(bundle.job_type)}, true)'>Add essential only</button>
-          </div>
-        </div>`).join("")}
+        ${jobBundles.map((bundle, bundleIndex) => {
+          const pendingAll = (bundle.items || []).filter(item => !item.already_in_quote).length;
+          const pendingEssential = (bundle.items || []).filter(item => !item.already_in_quote && !item.optional).length;
+          return `<div style="margin-top:7px;padding:9px;border:1px solid #16a34a;border-radius:9px;background:#f0fdf4;">
+            <strong>${escapeHtml(bundle.display_name || "")}</strong><br>
+            ${(bundle.items || []).map(item => `• ${escapeHtml(item.name)} × ${Number(item.quantity || 1)} — ${Number(item.confidence || 0)}% confidence ${item.already_in_quote ? "✓ already included" : item.optional ? "(optional)" : ""}`).join("<br>")}
+            <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:7px;">
+              <button type="button" class="btn-green" ${pendingAll ? "" : "disabled"} onclick="addV151JobBundle(${bundleIndex}, false)">
+                ${pendingAll ? `Add bundle (${pendingAll})` : "Bundle added"}
+              </button>
+              <button type="button" class="btn-light" ${pendingEssential ? "" : "disabled"} onclick="addV151JobBundle(${bundleIndex}, true)">
+                ${pendingEssential ? `Add essential only (${pendingEssential})` : "Essentials added"}
+              </button>
+            </div>
+          </div>`;
+        }).join("")}
       </div>` : ""}
 
       ${(confidence.positive_reasons || []).length || (confidence.gaps || []).length ? `
@@ -13765,7 +13930,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "ai-job-walkthrough-v14",
+        "estimator_version": "smart-bundle-engine-v15-1",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -14431,7 +14596,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "ai-job-walkthrough-v14"),
+        "version": context.get("estimator_version", "smart-bundle-engine-v15-1"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
