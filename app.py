@@ -63,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "15.3-live-quote-refresh"
+APP_VERSION = "15.4-smarter-bundle-logic"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4608,7 +4608,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Live Quote Refresh V15.3</strong><br>
+        <strong>Smarter Bundle Logic V15.4</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -4678,7 +4678,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Live Quote Refresh & Quote Intelligence V15.3</strong><br>
+        <strong>Smarter Bundle Logic & Quote Intelligence V15.4</strong><br>
         <span class="small">Combines the enquiry, audio walkthrough, optional visual evidence, material database, merchant search and labour intelligence in one quote workflow.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
@@ -9540,8 +9540,9 @@ function renderAIQuoteDraft(data) {
           const pendingAll = (bundle.items || []).filter(item => !item.already_in_quote).length;
           const pendingEssential = (bundle.items || []).filter(item => !item.already_in_quote && !item.optional).length;
           return `<div style="margin-top:7px;padding:9px;border:1px solid #16a34a;border-radius:9px;background:#f0fdf4;">
-            <strong>${escapeHtml(bundle.display_name || "")}</strong><br>
-            ${(bundle.items || []).map(item => `• ${escapeHtml(item.name)} × ${Number(item.quantity || 1)} — ${Number(item.confidence || 0)}% confidence ${item.already_in_quote ? "✓ already included" : item.optional ? "(optional)" : ""}`).join("<br>")}
+            <strong>${escapeHtml(bundle.display_name || "")}</strong>
+            <span class="small"> · ${Number(bundle.required_count || 0)} essential · ${Number(bundle.optional_count || 0)} optional</span><br>
+            ${(bundle.items || []).map(item => `• <strong>${escapeHtml(item.name)}</strong> × ${Number(item.quantity || 1)} — ${Number(item.confidence || 0)}% ${item.already_in_quote ? "✓ already included" : item.optional ? "(optional)" : "(essential)"}${item.reason ? `<br><span class="small" style="display:inline-block;margin-left:12px;">${escapeHtml(item.reason)}</span>` : ""}`).join("<br>")}
             <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:7px;">
               <button type="button" class="btn-green" ${pendingAll ? "" : "disabled"} onclick="addV151JobBundle(${bundleIndex}, false)">
                 ${pendingAll ? `Add bundle (${pendingAll})` : "Bundle added"}
@@ -13729,95 +13730,270 @@ QUOTE_HEALTH_JOB_RULES = {
     "outside_tap": {
         "recommended": [
             {
-                "key": "isolation_valve",
-                "name": "15mm isolation valve",
-                "aliases": ["isolation valve", "isolating valve"],
+                "key": "outside_tap",
+                "name": "Hose union bib tap with double check valve",
+                "aliases": ["outside tap kit", "hose union bib", "bib tap", "double check"],
                 "quantity": 1,
-                "reason": "An accessible internal isolation point is normally required for maintenance and winter shut-off.",
+                "reason": "Main outside-tap fitting with backflow protection.",
             },
             {
-                "key": "backflow_protection",
-                "name": "Hose union bib tap with double check valve",
-                "aliases": ["double check", "dbl check", "backflow", "hose union bib"],
+                "key": "isolation_valve",
+                "name": "15mm isolation valve",
+                "aliases": ["15mm isolation valve", "15mm isolating valve"],
                 "quantity": 1,
-                "reason": "Backflow protection is normally required for an outside tap arrangement.",
+                "reason": "Internal isolation for servicing and winter shut-off.",
+                "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "wall_plate",
+                "name": "15mm wall plate elbow",
+                "aliases": ["wall plate elbow", "wallplate elbow"],
+                "quantity": 1,
+                "reason": "Secure wall termination where the tap is mounted through masonry.",
+                "optional": True,
+                "requires_any": ["through wall", "wall mounted", "outside wall", "external wall"],
+            },
+            {
+                "key": "pipework",
+                "name": "15mm copper pipe 3m",
+                "aliases": ["15mm copper pipe", "15mm copper tube"],
+                "quantity": 1,
+                "reason": "Provisional pipe allowance where a new cold-water route is required.",
+                "optional": True,
+                "requires_any": ["new pipe", "pipe run", "run pipe", "extend", "route"],
+            },
+            {
+                "key": "pipe_clips",
+                "name": "15mm pipe clips",
+                "aliases": ["15mm pipe clip", "pipe clips"],
+                "quantity": 6,
+                "reason": "Supports exposed or newly installed pipework.",
+                "optional": True,
+                "requires_any": ["new pipe", "pipe run", "exposed", "external"],
+            },
+            {
+                "key": "drain_off",
+                "name": "15mm drain off cock",
+                "aliases": ["drain off cock", "drain cock"],
+                "quantity": 1,
+                "reason": "Useful where exposed external pipework may need winter draining.",
+                "optional": True,
+                "requires_any": ["external pipe", "exposed", "winter", "freezing"],
+            },
+            {
+                "key": "sealant",
+                "name": "Sanitary silicone",
+                "aliases": ["sanitary silicone", "silicone", "sealant"],
+                "quantity": 0.1,
+                "reason": "Small sealant allowance around the wall penetration or wall plate.",
+                "optional": True,
             },
         ],
         "quantity_limits": {
+            "outside tap": {"max_per_job": 1},
+            "hose union bib": {"max_per_job": 1},
+            "isolation valve": {"max_per_job": 1},
+            "isolating valve": {"max_per_job": 1},
+            "wall plate elbow": {"max_per_job": 1},
+            "drain off": {"max_per_job": 1},
+            "copper pipe 3m": {"max_per_job": 3},
+        },
+    },
+    "tap_replacement": {
+        "recommended": [
+            {
+                "key": "replacement_tap",
+                "name": "Replacement tap",
+                "aliases": ["replacement tap", "kitchen tap", "basin tap", "mixer tap"],
+                "quantity": 1,
+                "reason": "Main product where Nigel Harvey Ltd is supplying the tap.",
+                "optional": True,
+                "supplier_sensitive": True,
+            },
+            {
+                "key": "tap_connectors",
+                "name": "Flexible tap connector",
+                "aliases": ["flexible tap connector", "flexi tap connector", "tap connector", "flexi hose"],
+                "quantity": 2,
+                "reason": "Hot and cold connectors where suitable tails are not supplied or cannot be reused.",
+                "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "isolation_valves",
+                "name": "15mm isolation valve",
+                "aliases": ["isolation valve", "isolating valve"],
+                "quantity": 2,
+                "reason": "Hot and cold isolation where existing valves are missing, seized or unreliable.",
+                "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "tap_fixing",
+                "name": "Tap fixing kit",
+                "aliases": ["tap fixing kit", "tap brace", "tap fixing"],
+                "quantity": 1,
+                "reason": "Optional support where the sink or worktop is thin or flexible.",
+                "optional": True,
+                "requires_any": ["loose tap", "thin sink", "flexing", "brace"],
+            },
+            {
+                "key": "ptfe",
+                "name": "PTFE tape",
+                "aliases": ["ptfe tape"],
+                "quantity": 0.1,
+                "reason": "Small threaded-joint consumable allowance.",
+                "optional": True,
+            },
+        ],
+        "quantity_limits": {
+            "replacement tap": {"max_per_job": 1},
+            "flexible tap connector": {"max_per_job": 2},
             "isolation valve": {"max_per_job": 2},
             "isolating valve": {"max_per_job": 2},
-            "double check": {"max_per_job": 1},
-            "hose union bib": {"max_per_job": 1},
-            "drain off": {"max_per_job": 1},
-            "copper pipe 3m": {"max_per_job": 2},
+            "tap fixing": {"max_per_job": 1},
         },
     },
     "toilet_replacement": {
         "recommended": [
+            {
+                "key": "replacement_toilet",
+                "name": "Replacement toilet",
+                "aliases": ["replacement toilet", "toilet pan", "wc pan"],
+                "quantity": 1,
+                "reason": "Main product where Nigel Harvey Ltd is supplying the toilet.",
+                "optional": True,
+                "supplier_sensitive": True,
+            },
             {
                 "key": "pan_connector",
                 "name": "Pan connector",
                 "aliases": ["pan connector"],
                 "quantity": 1,
                 "reason": "A suitable pan connector is commonly required when reconnecting the replacement toilet.",
+                "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "fixing_kit",
+                "name": "Toilet fixing kit",
+                "aliases": ["toilet fixing kit", "wc fixing kit", "pan fixing"],
+                "quantity": 1,
+                "reason": "Secures the pan where suitable manufacturer fixings are not supplied.",
+                "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "inlet_flexi",
+                "name": "15mm x 1/2 flexible connector",
+                "aliases": ["15mm x 1/2 flexi", "toilet flexi", "flexible connector"],
+                "quantity": 1,
+                "reason": "Inlet connection where the existing connector is unsuitable.",
+                "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "isolation_valve",
+                "name": "15mm isolation valve",
+                "aliases": ["isolation valve", "isolating valve"],
+                "quantity": 1,
+                "reason": "Local isolation where the existing valve is missing or unreliable.",
+                "optional": True,
+                "reuse_sensitive": True,
             },
             {
                 "key": "sanitary_sealant",
                 "name": "Sanitary silicone",
                 "aliases": ["silicone", "sanitary sealant"],
                 "quantity": 0.2,
-                "reason": "A small sanitary sealant allowance is normally required around the finished installation.",
+                "reason": "Small sanitary sealant allowance around the finished installation.",
+            },
+            {
+                "key": "close_coupling",
+                "name": "Close-coupling doughnut washer",
+                "aliases": ["doughnut washer", "close coupling washer"],
+                "quantity": 1,
+                "reason": "Required only for a close-coupled toilet where the supplied seal is absent or unsuitable.",
+                "optional": True,
+                "requires_any": ["close coupled", "close-coupled"],
             },
         ],
         "quantity_limits": {
+            "replacement toilet": {"max_per_job": 1},
             "pan connector": {"max_per_job": 1},
-            "flexible tap connector": {"max_per_job": 1},
+            "flexible connector": {"max_per_job": 1},
             "isolation valve": {"max_per_job": 1},
             "isolating valve": {"max_per_job": 1},
             "toilet fixing": {"max_per_job": 1},
-        },
-    },
-    "tap_replacement": {
-        "recommended": [
-            {
-                "key": "tap_connectors",
-                "name": "Flexible tap connector",
-                "aliases": ["flexible tap connector", "flexi tap connector", "tap connector"],
-                "quantity": 2,
-                "reason": "Two suitable hot and cold tap connections are commonly required unless the existing connections are reused.",
-                "optional": True,
-            },
-        ],
-        "quantity_limits": {
-            "flexible tap connector": {"max_per_job": 2},
-            "isolation valve": {"max_per_job": 2},
-            "isolating valve": {"max_per_job": 2},
+            "doughnut washer": {"max_per_job": 1},
         },
     },
     "radiator_replacement": {
         "recommended": [
             {
+                "key": "radiator",
+                "name": "Radiator",
+                "aliases": ["radiator", "panel radiator", "towel radiator"],
+                "quantity": 1,
+                "reason": "Main product where Nigel Harvey Ltd is supplying the radiator.",
+                "optional": True,
+                "supplier_sensitive": True,
+            },
+            {
                 "key": "radiator_valves",
                 "name": "Radiator valve pair",
-                "aliases": ["radiator valve", "trv valve", "lockshield"],
-                "quantity": 2,
-                "reason": "A compatible valve pair may be required if the existing valves cannot be reused.",
+                "aliases": ["radiator valve pair", "radiator valve set", "trv valve", "lockshield"],
+                "quantity": 1,
+                "reason": "A compatible TRV and lockshield pair where existing valves cannot be reused.",
                 "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "radiator_tails",
+                "name": "Radiator valve tails",
+                "aliases": ["radiator valve tail", "radiator tails"],
+                "quantity": 2,
+                "reason": "New tails where the valve set does not include them or the old tails are incompatible.",
+                "optional": True,
+                "reuse_sensitive": True,
             },
             {
                 "key": "inhibitor",
                 "name": "Central heating inhibitor",
                 "aliases": ["inhibitor"],
-                "quantity": 0.1,
-                "reason": "Inhibitor should be considered where the heating system is drained or significantly topped up.",
+                "quantity": 1,
+                "reason": "Required where the heating circuit is drained and refilled.",
                 "optional": True,
+                "requires_any": ["drain down", "drain system", "drain the system", "refill", "new pipework"],
+            },
+            {
+                "key": "pipework",
+                "name": "15mm copper pipe 3m",
+                "aliases": ["15mm copper pipe", "15mm copper tube"],
+                "quantity": 1,
+                "reason": "Provisional pipe allowance where the radiator position or pipe centres are changing.",
+                "optional": True,
+                "requires_any": ["new position", "move radiator", "new pipe", "extend pipe", "pipework"],
+            },
+            {
+                "key": "fittings_allowance",
+                "name": "15mm copper fittings allowance",
+                "aliases": ["15mm copper fittings allowance", "15mm endfeed elbow", "15mm endfeed tee"],
+                "quantity": 1,
+                "reason": "Provisional fitting allowance where final elbow and tee quantities depend on the concealed route.",
+                "optional": True,
+                "requires_any": ["new position", "move radiator", "new pipe", "extend pipe", "pipework", "floorboard"],
             },
         ],
         "quantity_limits": {
+            "radiator": {"max_per_job": 1},
+            "radiator valve pair": {"max_per_job": 1},
             "radiator valve": {"max_per_job": 2},
             "trv valve": {"max_per_job": 1},
             "lockshield": {"max_per_job": 1},
             "radiator tail": {"max_per_job": 2},
+            "copper pipe 3m": {"max_per_job": 4},
         },
     },
     "trv_replacement": {
@@ -13827,12 +14003,41 @@ QUOTE_HEALTH_JOB_RULES = {
                 "name": "TRV valve",
                 "aliases": ["trv valve", "thermostatic radiator valve"],
                 "quantity": 1,
-                "reason": "One thermostatic radiator valve is required for each TRV replacement.",
+                "reason": "One thermostatic radiator valve for each replacement.",
+            },
+            {
+                "key": "lockshield",
+                "name": "Lockshield valve",
+                "aliases": ["lockshield", "lockshield valve"],
+                "quantity": 1,
+                "reason": "Optional matching lockshield where the existing valve is unsuitable.",
+                "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "tail",
+                "name": "Radiator valve tail",
+                "aliases": ["radiator valve tail", "radiator tail"],
+                "quantity": 1,
+                "reason": "Optional replacement tail where the existing tail is incompatible.",
+                "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "inhibitor",
+                "name": "Central heating inhibitor",
+                "aliases": ["inhibitor"],
+                "quantity": 1,
+                "reason": "Consider where the circuit is drained and refilled.",
+                "optional": True,
+                "requires_any": ["drain", "refill"],
             },
         ],
         "quantity_limits": {
             "trv valve": {"max_per_job": 1},
             "thermostatic radiator valve": {"max_per_job": 1},
+            "lockshield": {"max_per_job": 1},
+            "radiator tail": {"max_per_job": 1},
         },
     },
     "basin_waste": {
@@ -13842,12 +14047,48 @@ QUOTE_HEALTH_JOB_RULES = {
                 "name": "Basin waste",
                 "aliases": ["basin waste"],
                 "quantity": 1,
-                "reason": "A compatible basin waste is the main fitting for this job.",
+                "reason": "Compatible slotted or unslotted basin waste.",
+            },
+            {
+                "key": "basin_trap",
+                "name": "32mm basin trap",
+                "aliases": ["basin trap", "32mm trap", "bottle trap"],
+                "quantity": 1,
+                "reason": "Trap required where an existing suitable trap is not being reused.",
+                "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "waste_pipe",
+                "name": "32mm waste pipe 3m",
+                "aliases": ["32mm waste pipe", "32mm solvent waste pipe"],
+                "quantity": 1,
+                "reason": "Waste pipe where the existing route requires alteration.",
+                "optional": True,
+                "requires_any": ["alter waste", "new waste", "move basin", "extend waste", "pipework"],
+            },
+            {
+                "key": "waste_bends",
+                "name": "32mm solvent waste bend",
+                "aliases": ["32mm waste bend", "32mm solvent weld bend"],
+                "quantity": 2,
+                "reason": "Provisional bends where the waste route is being altered.",
+                "optional": True,
+                "requires_any": ["alter waste", "new waste", "move basin", "extend waste", "pipework"],
+            },
+            {
+                "key": "sealant",
+                "name": "Sanitary silicone",
+                "aliases": ["sanitary silicone", "silicone"],
+                "quantity": 0.1,
+                "reason": "Small sealant allowance around the waste fitting if required.",
+                "optional": True,
             },
         ],
         "quantity_limits": {
             "basin waste": {"max_per_job": 1},
             "basin trap": {"max_per_job": 1},
+            "32mm waste pipe": {"max_per_job": 1},
         },
     },
     "kitchen_sink_waste": {
@@ -13857,16 +14098,108 @@ QUOTE_HEALTH_JOB_RULES = {
                 "name": "Kitchen sink waste kit",
                 "aliases": ["kitchen sink waste", "sink waste kit", "sink waste"],
                 "quantity": 1,
-                "reason": "A compatible sink waste assembly is the main fitting for this job.",
+                "reason": "Compatible waste and overflow arrangement for the selected sink.",
+            },
+            {
+                "key": "sink_trap",
+                "name": "40mm sink trap",
+                "aliases": ["40mm sink trap", "sink trap", "p trap"],
+                "quantity": 1,
+                "reason": "Trap where a suitable trap is not supplied with the waste kit or reused.",
+                "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "appliance_spigot",
+                "name": "Appliance waste spigot",
+                "aliases": ["appliance waste spigot", "washing machine spigot", "dishwasher spigot"],
+                "quantity": 1,
+                "reason": "Required only where a washing machine or dishwasher connects to the sink waste.",
+                "optional": True,
+                "requires_any": ["washing machine", "dishwasher", "appliance"],
+            },
+            {
+                "key": "waste_pipe",
+                "name": "40mm waste pipe 3m",
+                "aliases": ["40mm waste pipe", "40mm solvent waste pipe"],
+                "quantity": 1,
+                "reason": "Waste pipe where the existing route needs alteration or extension.",
+                "optional": True,
+                "requires_any": ["alter waste", "new waste", "move sink", "extend waste", "pipework", "elbow", "tee"],
+            },
+            {
+                "key": "waste_bends",
+                "name": "40mm solvent waste bend",
+                "aliases": ["40mm waste bend", "40mm solvent weld bend", "40mm elbow"],
+                "quantity": 2,
+                "reason": "Provisional bends where the waste route is being altered.",
+                "optional": True,
+                "requires_any": ["alter waste", "new waste", "move sink", "extend waste", "pipework", "elbow"],
+            },
+            {
+                "key": "waste_tee",
+                "name": "40mm solvent waste tee",
+                "aliases": ["40mm waste tee", "40mm solvent weld tee", "waste tee"],
+                "quantity": 1,
+                "reason": "Tee where the specified waste arrangement requires a branch.",
+                "optional": True,
+                "requires_any": ["tee", "branch", "appliance"],
+            },
+            {
+                "key": "solvent_cement",
+                "name": "Solvent cement",
+                "aliases": ["solvent cement", "solvent weld cement"],
+                "quantity": 0.1,
+                "reason": "Small consumable allowance for solvent-weld pipework.",
+                "optional": True,
+                "requires_any": ["solvent", "waste pipe", "elbow", "tee"],
             },
         ],
         "quantity_limits": {
             "sink waste": {"max_per_job": 1},
             "kitchen sink waste": {"max_per_job": 1},
             "sink trap": {"max_per_job": 1},
+            "40mm waste pipe": {"max_per_job": 1},
+            "40mm waste bend": {"max_per_job": 6},
+            "40mm waste tee": {"max_per_job": 2},
+        },
+    },
+    "shower_replacement": {
+        "recommended": [
+            {
+                "key": "shower",
+                "name": "Replacement shower",
+                "aliases": ["replacement shower", "shower valve", "shower mixer"],
+                "quantity": 1,
+                "reason": "Main product where Nigel Harvey Ltd is supplying the shower.",
+                "optional": True,
+                "supplier_sensitive": True,
+            },
+            {
+                "key": "connectors",
+                "name": "Shower connection fittings",
+                "aliases": ["shower connector", "wall plate elbow", "shower connection fitting"],
+                "quantity": 2,
+                "reason": "Connection fittings where the existing first-fix outlets are unsuitable.",
+                "optional": True,
+                "reuse_sensitive": True,
+            },
+            {
+                "key": "sealant",
+                "name": "Sanitary silicone",
+                "aliases": ["sanitary silicone", "silicone"],
+                "quantity": 0.2,
+                "reason": "Seal around covers and penetrations where required.",
+                "optional": True,
+            },
+        ],
+        "quantity_limits": {
+            "replacement shower": {"max_per_job": 1},
+            "shower connection": {"max_per_job": 2},
         },
     },
 }
+
 
 
 def material_name_matches(name: str, aliases: list):
@@ -13910,6 +14243,104 @@ def material_confidence_score(item: dict):
     return max(40, min(98, base + min(used_count * 2, 6)))
 
 
+
+def bundle_context_text(context: dict):
+    request = context.get("request", {}) or {}
+    survey = request.get("site_survey", {}) or {}
+    parts = [
+        request.get("job_description", ""),
+        survey.get("summary", ""),
+        survey.get("transcript", ""),
+        survey.get("site_notes", ""),
+    ]
+    for component in survey.get("components", []) or []:
+        if isinstance(component, dict):
+            parts.extend([
+                component.get("name", ""),
+                component.get("finding", ""),
+                component.get("evidence", ""),
+                component.get("quote_action", ""),
+            ])
+    return normalise_ai_job_text(" ".join(str(part or "") for part in parts))
+
+
+def bundle_supply_responsibility(context: dict, job: dict):
+    stated = str(job.get("supply_responsibility", "") or "").lower()
+    if stated and stated != "unknown":
+        return stated
+    smart = context.get("smart_job_kit", {}) or {}
+    return str(smart.get("supply_responsibility", "unknown") or "unknown").lower()
+
+
+def bundle_survey_action(context: dict, aliases: list):
+    survey = ((context.get("request", {}) or {}).get("site_survey", {}) or {})
+    for action in survey.get("material_actions", []) or []:
+        action_name = action.get("material_name", "")
+        if material_name_matches(action_name, aliases):
+            return {
+                "action": action.get("action", "site_check"),
+                "reason": action.get("reason", ""),
+                "confidence": int(action.get("confidence", 0) or 0),
+            }
+    return None
+
+
+def bundle_recommendation_decision(rec: dict, context: dict, job: dict):
+    text = bundle_context_text(context)
+    requires_any = [normalise_ai_job_text(x) for x in rec.get("requires_any", []) if x]
+    excludes_any = [normalise_ai_job_text(x) for x in rec.get("excludes_any", []) if x]
+
+    if requires_any and not any(phrase in text for phrase in requires_any):
+        return {"include": False, "reason": "Not indicated by the current job description or site survey."}
+    if excludes_any and any(phrase in text for phrase in excludes_any):
+        return {"include": False, "reason": "Excluded by the current job description or site survey."}
+
+    responsibility = bundle_supply_responsibility(context, job)
+    if rec.get("supplier_sensitive"):
+        # A main product should not be silently included when the customer supplies it.
+        if responsibility in {"customer", "customer_supplied", "customer supplies", "customer-supplied"}:
+            return {"include": False, "reason": "Customer-supplied main product."}
+
+    optional = bool(rec.get("optional", False))
+    confidence = 94 if not optional else 76
+    reason = rec.get("reason", "")
+
+    survey_action = bundle_survey_action(context, rec.get("aliases", []) or [rec.get("name", "")])
+    if survey_action:
+        action = survey_action.get("action", "site_check")
+        confidence = max(confidence, survey_action.get("confidence", 0))
+        if survey_action.get("reason"):
+            reason = survey_action.get("reason")
+
+        if action == "include_required":
+            optional = False
+        elif action in {"keep_optional", "site_check", "reuse_existing", "existing_reusable"}:
+            optional = True
+        elif action in {"exclude", "not_required", "customer_supplied"}:
+            return {"include": False, "reason": reason or "Site survey says this item is not required."}
+
+    # Existing/reusable wording should keep replacement parts optional rather than required.
+    if rec.get("reuse_sensitive"):
+        reuse_terms = [
+            "existing working", "working fine", "can be reused", "reuse existing",
+            "existing valve present", "existing connection present", "serviceable",
+            "already fitted", "already there"
+        ]
+        if any(term in text for term in reuse_terms):
+            optional = True
+            confidence = max(confidence, 84)
+            if not survey_action:
+                reason = f"{reason} Existing components may be reusable; confirm before adding."
+
+    return {
+        "include": True,
+        "optional": optional,
+        "confidence": min(99, max(55, confidence)),
+        "reason": reason,
+        "survey_action": survey_action,
+    }
+
+
 def build_job_specific_bundles(draft: dict, context: dict):
     bundles = []
     jobs = (context.get("multi_job_estimate", {}) or {}).get("classified_jobs", []) or []
@@ -13924,34 +14355,69 @@ def build_job_specific_bundles(draft: dict, context: dict):
             }]
 
     seen_job_types = set()
+    current_materials = draft.get("materials", []) or []
+
     for job in jobs:
         job_type = job.get("job_type")
         if not job_type or job_type in seen_job_types:
             continue
         seen_job_types.add(job_type)
+
         rule = QUOTE_HEALTH_JOB_RULES.get(job_type, {})
         items = []
+        suppressed = []
+
         for rec in rule.get("recommended", []):
-            confidence = 94 if not rec.get("optional") else 76
+            decision = bundle_recommendation_decision(rec, context, job)
+            if not decision.get("include"):
+                suppressed.append({
+                    "name": rec.get("name", ""),
+                    "reason": decision.get("reason", ""),
+                })
+                continue
+
+            aliases = rec.get("aliases", []) or [rec.get("name", "")]
+            matched_material = next(
+                (
+                    material for material in current_materials
+                    if material_name_matches(material.get("name", ""), aliases)
+                ),
+                None,
+            )
+
+            quantity = safe_float(rec.get("quantity", 1), 1)
+            if matched_material:
+                quantity = max(quantity, safe_float(matched_material.get("quantity", 0), 0))
+
+            survey_action = decision.get("survey_action") or {}
             items.append({
                 "id": f"{job_type}:{rec.get('key')}",
                 "name": rec.get("name", ""),
-                "quantity": safe_float(rec.get("quantity", 1), 1),
-                "reason": rec.get("reason", ""),
-                "optional": bool(rec.get("optional", False)),
-                "confidence": confidence,
-                "already_in_quote": any(
-                    material_name_matches(material.get("name", ""), rec.get("aliases", []))
-                    for material in (draft.get("materials", []) or [])
-                ),
+                "quantity": quantity,
+                "reason": decision.get("reason", rec.get("reason", "")),
+                "optional": bool(decision.get("optional", rec.get("optional", False))),
+                "confidence": int(decision.get("confidence", 76)),
+                "already_in_quote": bool(matched_material),
+                "site_survey_action": survey_action.get("action", ""),
+                "site_survey_reason": survey_action.get("reason", ""),
+                "supply_responsibility": bundle_supply_responsibility(context, job),
             })
+
         if items:
+            required_count = sum(1 for item in items if not item.get("optional"))
+            optional_count = sum(1 for item in items if item.get("optional"))
             bundles.append({
                 "job_type": job_type,
                 "display_name": job.get("display_name") or job_type.replace("_", " ").title(),
                 "items": items,
+                "required_count": required_count,
+                "optional_count": optional_count,
+                "suppressed_items": suppressed,
+                "logic_version": "v15.4",
             })
+
     return bundles
+
 
 
 def build_quote_health(draft: dict, context: dict):
@@ -13963,7 +14429,17 @@ def build_quote_health(draft: dict, context: dict):
     # Missing items remain job-specific.
     for job_type, job_count in job_counts.items():
         rule = QUOTE_HEALTH_JOB_RULES.get(job_type, {})
+        job_context = {
+            "job_type": job_type,
+            "supply_responsibility": (
+                (context.get("smart_job_kit", {}) or {}).get("supply_responsibility", "unknown")
+            ),
+        }
         for recommended in rule.get("recommended", []):
+            decision = bundle_recommendation_decision(recommended, context, job_context)
+            if not decision.get("include"):
+                continue
+
             found = any(
                 material_name_matches(item.get("name", ""), recommended.get("aliases", []))
                 for item in materials
@@ -13977,12 +14453,12 @@ def build_quote_health(draft: dict, context: dict):
                         "job_type": job_type,
                         "name": recommended.get("name", ""),
                         "quantity": round(safe_float(recommended.get("quantity", 1), 1) * job_count, 2),
-                        "reason": recommended.get("reason", ""),
-                        "optional": bool(recommended.get("optional", False)),
+                        "reason": decision.get("reason", recommended.get("reason", "")),
+                        "optional": bool(decision.get("optional", recommended.get("optional", False))),
                         "supplier": "",
                         "url": "",
                         "manual_price": 0,
-                        "confidence": 94 if not recommended.get("optional") else 76,
+                        "confidence": int(decision.get("confidence", 76)),
                     })
 
     # Aggregate quantity limits across all relevant jobs to avoid duplicate warnings.
@@ -14285,7 +14761,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "live-quote-refresh-v15-3",
+        "estimator_version": "smarter-bundle-logic-v15-4",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -14951,7 +15427,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "live-quote-refresh-v15-3"),
+        "version": context.get("estimator_version", "smarter-bundle-logic-v15-4"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
