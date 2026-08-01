@@ -79,7 +79,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "16.2-complete-invoice-editor"
+APP_VERSION = "16.2.1-job-ref-modal-fix"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 INVOICE_PHOTO_DIR = Path("/var/data/invoice_photos")
@@ -5051,7 +5051,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Complete Invoice Editor V16.2</strong><br>
+        <strong>Job Ref Modal Fix V16.2.1</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -5456,7 +5456,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
     </div>
 
     <div id="invoiceEditPanel" class="hidden no-print"
-      style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);padding:18px;overflow:auto;">
+      style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);padding:18px;overflow:auto;">
       <div style="max-width:760px;margin:24px auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
       <div class="quote-section-title" style="margin-top:0;">Edit invoice</div>
       <label for="edit_invoice_customer_name">Customer name</label>
@@ -10556,10 +10556,23 @@ function populateInvoiceEditForm(item) {
 
 function showInvoiceEditPanel(item) {
   CURRENT_EDITING_INVOICE_ID = item.id;
-  populateInvoiceEditForm(item);
   const panel = document.getElementById("invoiceEditPanel");
+  if (!panel) {
+    alert("Invoice editor could not be found.");
+    return;
+  }
+
+  // The editor was originally inside a tab panel. Move it directly under
+  // document.body so it remains visible even while the Invoices tab is active.
+  if (panel.parentElement !== document.body) {
+    document.body.appendChild(panel);
+  }
+
+  populateInvoiceEditForm(item);
   panel.classList.remove("hidden");
+  panel.style.display = "block";
   document.body.style.overflow = "hidden";
+
   window.setTimeout(() => {
     const ref = document.getElementById("edit_invoice_job_reference");
     if (ref) {
@@ -10571,7 +10584,11 @@ function showInvoiceEditPanel(item) {
 
 function cancelInvoiceEdit() {
   CURRENT_EDITING_INVOICE_ID = null;
-  document.getElementById("invoiceEditPanel").classList.add("hidden");
+  const panel = document.getElementById("invoiceEditPanel");
+  if (panel) {
+    panel.classList.add("hidden");
+    panel.style.display = "none";
+  }
   document.body.style.overflow = "";
 }
 
@@ -10589,13 +10606,12 @@ async function openInvoice(id) {
 async function editInvoice(id) {
   try {
     const res = await fetch("/api/invoices/" + id);
-    if (!res.ok) throw new Error();
     const data = await res.json();
-    renderInvoiceCard(data);
+    if (!res.ok) throw new Error(data.detail || "Could not load invoice.");
     showInvoiceEditPanel(data);
     showNotice("Invoice loaded for editing.");
   } catch (e) {
-    alert("Could not load invoice for editing.");
+    alert(e.message || "Could not load invoice for editing.");
   }
 }
 
