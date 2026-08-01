@@ -18,6 +18,7 @@ import smtplib
 import mimetypes
 import subprocess
 import tempfile
+import textwrap
 import gc
 from html import escape
 from pathlib import Path
@@ -30,6 +31,7 @@ from email import encoders
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
+from PIL import Image, ImageOps
 
 app = FastAPI(title="Nigel Harvey Ltd Business App")
 
@@ -63,9 +65,10 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "15.5-bundle-health"
+APP_VERSION = "16.0-job-photo-reports"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
+INVOICE_PHOTO_DIR = Path("/var/data/invoice_photos")
 UK_TZ = ZoneInfo("Europe/London")
 
 COMPANY_NAME = "Nigel Harvey Ltd"
@@ -1922,6 +1925,18 @@ def init_db():
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS invoice_photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id INTEGER NOT NULL,
+            category TEXT NOT NULL DEFAULT 'after',
+            caption TEXT,
+            filename TEXT NOT NULL,
+            original_filename TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS leads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
@@ -2489,6 +2504,144 @@ def row_to_quote(row):
     }
 
 
+
+PHOTO_CATEGORIES = {
+    "before": "Before",
+    "during": "During",
+    "after": "Completed",
+    "hidden_pipework": "Hidden pipework",
+    "damage": "Damage found",
+    "parts_replaced": "Parts replaced",
+    "compliance": "Compliance",
+    "customer_supplied": "Customer supplied",
+    "other": "Other",
+}
+
+
+def normalise_photo_category(value: str) -> str:
+    value = (value or "after").strip().lower().replace(" ", "_")
+    return value if value in PHOTO_CATEGORIES else "other"
+
+
+def invoice_photo_folder(invoice_id: int) -> Path:
+    folder = INVOICE_PHOTO_DIR / str(int(invoice_id))
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def load_invoice_photos(invoice_id: int):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT * FROM invoice_photos
+        WHERE invoice_id = ?
+        ORDER BY
+          CASE category
+            WHEN 'before' THEN 1
+            WHEN 'during' THEN 2
+            WHEN 'hidden_pipework' THEN 3
+            WHEN 'damage' THEN 4
+            WHEN 'parts_replaced' THEN 5
+            WHEN 'compliance' THEN 6
+            WHEN 'customer_supplied' THEN 7
+            WHEN 'after' THEN 8
+            ELSE 9
+          END,
+          sort_order ASC,
+          id ASC
+    """, (invoice_id,)).fetchall()
+    conn.close()
+    return [{
+        "id": row["id"],
+        "invoice_id": row["invoice_id"],
+        "category": row["category"],
+        "category_label": PHOTO_CATEGORIES.get(row["category"], "Other"),
+        "caption": row["caption"] or "",
+        "filename": row["filename"],
+        "original_filename": row["original_filename"] or "",
+        "sort_order": row["sort_order"] or 0,
+        "created_at": row["created_at"],
+        "url": f"/api/invoices/{invoice_id}/photos/{row['id']}",
+    } for row in rows]
+
+
+def save_invoice_photo_record(invoice_id: int, category: str, caption: str,
+                              filename: str, original_filename: str):
+    conn = get_db()
+    next_order = conn.execute(
+        "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM invoice_photos WHERE invoice_id = ?",
+        (invoice_id,),
+    ).fetchone()[0]
+    conn.execute("""
+        INSERT INTO invoice_photos (
+            invoice_id, category, caption, filename, original_filename,
+            sort_order, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        invoice_id,
+        normalise_photo_category(category),
+        (caption or "").strip(),
+        filename,
+        original_filename or "",
+        int(next_order or 1),
+        now_uk().isoformat(),
+    ))
+    photo_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return photo_id
+
+
+def prepare_invoice_photo(source_path: Path, output_path: Path):
+    with Image.open(source_path) as image:
+        image = ImageOps.exif_transpose(image)
+        if image.mode not in ("RGB", "L"):
+            background = Image.new("RGB", image.size, "white")
+            if "A" in image.getbands():
+                background.paste(image, mask=image.getchannel("A"))
+            else:
+                background.paste(image)
+            image = background
+        elif image.mode == "L":
+            image = image.convert("RGB")
+        image.thumbnail((1800, 1800), Image.Resampling.LANCZOS)
+        image.save(output_path, format="JPEG", quality=82, optimize=True)
+
+
+def delete_invoice_photo_record(invoice_id: int, photo_id: int):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT filename FROM invoice_photos WHERE id = ? AND invoice_id = ?",
+        (photo_id, invoice_id),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return False
+    conn.execute(
+        "DELETE FROM invoice_photos WHERE id = ? AND invoice_id = ?",
+        (photo_id, invoice_id),
+    )
+    conn.commit()
+    conn.close()
+    try:
+        (invoice_photo_folder(invoice_id) / row["filename"]).unlink(missing_ok=True)
+    except Exception:
+        pass
+    return True
+
+
+def invoice_photo_path(invoice_id: int, photo_id: int):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT filename FROM invoice_photos WHERE id = ? AND invoice_id = ?",
+        (photo_id, invoice_id),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    path = invoice_photo_folder(invoice_id) / row["filename"]
+    return path if path.exists() else None
+
+
 def row_to_invoice(row):
     return {
         "id": row["id"],
@@ -2505,6 +2658,7 @@ def row_to_invoice(row):
         "created_at": row["created_at"],
         "quote_result": json.loads(row["quote_result_json"]),
         "invoice": json.loads(row["invoice_json"]),
+        "photos": load_invoice_photos(row["id"]),
     }
 
 
@@ -2892,10 +3046,13 @@ def load_invoices():
 
 def delete_invoice_by_id(invoice_id: int):
     conn = get_db()
+    conn.execute("DELETE FROM invoice_photos WHERE invoice_id = ?", (invoice_id,))
     cur = conn.execute("DELETE FROM invoices WHERE id = ?", (invoice_id,))
     conn.commit()
     deleted = cur.rowcount > 0
     conn.close()
+    if deleted:
+        shutil.rmtree(INVOICE_PHOTO_DIR / str(invoice_id), ignore_errors=True)
     return deleted
 
 
@@ -3339,6 +3496,65 @@ def _pdf_draw_materials_section(c, y, result):
     return y
 
 
+
+def _pdf_photo_page_header(c, continued=False):
+    c.showPage()
+    y = _pdf_header(c, "INVOICE JOB PHOTOS", "")
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "Job Photos" + (" (continued)" if continued else ""))
+    return y - 24
+
+
+def _pdf_draw_invoice_photos(c, item: dict):
+    photos = item.get("photos", []) or []
+    if not photos:
+        return
+
+    y = _pdf_photo_page_header(c, False)
+    usable_width = A4[0] - 80
+    image_width = (usable_width - 14) / 2
+    image_height = 165
+
+    for index, photo in enumerate(photos):
+        col = index % 2
+        if col == 0 and y < image_height + 80:
+            y = _pdf_photo_page_header(c, True)
+
+        x = 40 + col * (image_width + 14)
+        image_path = invoice_photo_path(item["id"], photo["id"])
+
+        if image_path:
+            try:
+                with Image.open(image_path) as im:
+                    width, height = im.size
+                ratio = min(image_width / max(width, 1), image_height / max(height, 1))
+                draw_width, draw_height = width * ratio, height * ratio
+                draw_x = x + (image_width - draw_width) / 2
+                draw_y = y - draw_height
+                c.drawImage(
+                    ImageReader(str(image_path)),
+                    draw_x, draw_y,
+                    width=draw_width, height=draw_height,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
+            except Exception:
+                c.rect(x, y - image_height, image_width, image_height)
+                c.drawString(x + 8, y - 20, "Photo unavailable")
+
+        caption_y = y - image_height - 12
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(x, caption_y, str(photo.get("category_label", "Job photo"))[:45])
+        caption = str(photo.get("caption", "") or "").strip()
+        if caption:
+            c.setFont("Helvetica", 8)
+            for line_number, line in enumerate(textwrap.wrap(caption, width=48)[:3]):
+                c.drawString(x, caption_y - 11 - (line_number * 10), line)
+
+        if col == 1 or index == len(photos) - 1:
+            y -= image_height + 58
+
+
 def generate_invoice_pdf_bytes(item: dict):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -3409,6 +3625,7 @@ def generate_invoice_pdf_bytes(item: dict):
         text_obj.textLine("")
         text_obj.textLine(f"Payment link: {item['payment_link']}")
     c.drawText(text_obj)
+    _pdf_draw_invoice_photos(c, item)
     c.showPage()
     c.save()
     buffer.seek(0)
@@ -4608,7 +4825,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Bundle Health V15.5</strong><br>
+        <strong>Job Photo Reports V16</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -4678,7 +4895,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Bundle Health & Quote Intelligence V15.5</strong><br>
+        <strong>Job Photo Reports & Quote Intelligence V16</strong><br>
         <span class="small">Combines the enquiry, audio walkthrough, optional visual evidence, material database, merchant search and labour intelligence in one quote workflow.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
@@ -5034,6 +5251,38 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
         <button type="button" class="btn-blue" onclick="saveInvoiceEdit()">Save Invoice Changes</button>
         <button type="button" class="btn-light" onclick="cancelInvoiceEdit()">Cancel</button>
       </div>
+    </div>
+
+    <div class="quote-box no-print" style="margin-top:16px;border-color:#2563eb;background:#eff6ff;">
+      <div class="quote-section-title" style="margin-top:0;">Job photos</div>
+      <span class="small">Take or upload before, during and completed photos. They are compressed and included at the end of the invoice PDF.</span>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+        <div>
+          <label for="invoicePhotoCategory">Category</label>
+          <select id="invoicePhotoCategory">
+            <option value="before">Before</option>
+            <option value="during">During</option>
+            <option value="after" selected>Completed</option>
+            <option value="hidden_pipework">Hidden pipework</option>
+            <option value="damage">Damage found</option>
+            <option value="parts_replaced">Parts replaced</option>
+            <option value="compliance">Compliance</option>
+            <option value="customer_supplied">Customer supplied</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label for="invoicePhotoFiles">Take or choose photos</label>
+          <input id="invoicePhotoFiles" type="file" accept="image/*" capture="environment" multiple>
+        </div>
+      </div>
+      <label for="invoicePhotoCaption">Photo note</label>
+      <input id="invoicePhotoCaption" placeholder="Example: New tap fitted, tested and left leak-free.">
+      <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
+        <button type="button" class="btn-blue" onclick="uploadInvoicePhotos()">Add Photos to Invoice</button>
+      </div>
+      <div id="invoicePhotoUploadStatus" class="small" style="margin-top:8px;"></div>
+      <div id="invoicePhotoGallery" style="margin-top:10px;"></div>
     </div>
 
     <div class="actions no-print">
@@ -6776,6 +7025,83 @@ function renderStatusBadge(status) {
   return '<span class="badge red">Unpaid</span>';
 }
 
+
+function renderInvoicePhotoGallery(photos) {
+  const box = document.getElementById("invoicePhotoGallery");
+  if (!box) return;
+  const items = photos || [];
+  if (!items.length) {
+    box.innerHTML = `<div class="small">No job photos attached yet.</div>`;
+    return;
+  }
+  box.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+      ${items.map(photo => `
+        <div style="border:1px solid #d1d5db;border-radius:10px;background:white;padding:8px;">
+          <img src="${escapeHtml(photo.url || "")}" alt="" loading="lazy"
+            style="width:100%;height:130px;object-fit:cover;border-radius:7px;background:#f3f4f6;">
+          <strong style="display:block;margin-top:7px;">${escapeHtml(photo.category_label || "Job photo")}</strong>
+          <span class="small">${escapeHtml(photo.caption || "")}</span>
+          <button type="button" class="btn-red" style="margin-top:8px;width:100%;"
+            onclick="deleteInvoicePhoto(${Number(photo.id || 0)})">Remove</button>
+        </div>
+      `).join("")}
+    </div>`;
+}
+
+async function uploadInvoicePhotos() {
+  if (!CURRENT_INVOICE_ID) {
+    alert("Open or create an invoice first.");
+    return;
+  }
+  const input = document.getElementById("invoicePhotoFiles");
+  const files = [...(input?.files || [])];
+  if (!files.length) {
+    alert("Take or choose at least one photo.");
+    return;
+  }
+
+  const status = document.getElementById("invoicePhotoUploadStatus");
+  const form = new FormData();
+  form.append("category", document.getElementById("invoicePhotoCategory")?.value || "after");
+  form.append("caption", document.getElementById("invoicePhotoCaption")?.value || "");
+  files.forEach(file => form.append("photos", file));
+
+  status.innerHTML = `Preparing and uploading ${files.length} photo${files.length === 1 ? "" : "s"}…`;
+  try {
+    const response = await fetch(`/api/invoices/${CURRENT_INVOICE_ID}/photos`, {
+      method: "POST",
+      body: form
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Photo upload failed.");
+    if (input) input.value = "";
+    const caption = document.getElementById("invoicePhotoCaption");
+    if (caption) caption.value = "";
+    renderInvoicePhotoGallery(data.photos || []);
+    status.innerHTML = `✓ ${Number(data.added || 0)} photo${Number(data.added || 0) === 1 ? "" : "s"} added to the invoice PDF.`;
+    showNotice("Job photos added to invoice.");
+  } catch (error) {
+    status.innerHTML = `<span style="color:#b91c1c;">${escapeHtml(error.message || "Photo upload failed.")}</span>`;
+  }
+}
+
+async function deleteInvoicePhoto(photoId) {
+  if (!CURRENT_INVOICE_ID || !confirm("Remove this photo from the invoice?")) return;
+  try {
+    const response = await fetch(
+      `/api/invoices/${CURRENT_INVOICE_ID}/photos/${photoId}`,
+      {method: "DELETE"}
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Could not remove photo.");
+    renderInvoicePhotoGallery(data.photos || []);
+    showNotice("Invoice photo removed.");
+  } catch (error) {
+    alert(error.message || "Could not remove photo.");
+  }
+}
+
 function renderInvoiceCard(item) {
   CURRENT_INVOICE_ID = item.id;
   document.getElementById("resultCard").style.display = "none";
@@ -6799,6 +7125,7 @@ function renderInvoiceCard(item) {
   document.getElementById("i_paid").innerText = pounds(item.amount_paid);
   document.getElementById("i_balance").innerText = pounds(item.balance_due);
   document.getElementById("i_balance_big").innerText = pounds(item.balance_due);
+  renderInvoicePhotoGallery(item.photos || []);
 
   const paymentBox = document.getElementById("i_payment_link_box");
   const isSmallJob = ((quoteResult.quote_type || "").toLowerCase() === "small");
@@ -14941,7 +15268,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "bundle-health-v15-5",
+        "estimator_version": "job-photo-reports-v16",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -15607,7 +15934,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "bundle-health-v15-5"),
+        "version": context.get("estimator_version", "job-photo-reports-v16"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
@@ -15695,6 +16022,18 @@ def public_invoice(invoice_id: int):
     terms = INVOICE_TERMS[:3] if is_small_job else INVOICE_TERMS
     logo_html = f'<img src="{escape(COMPANY_LOGO_URL)}" alt="Logo" class="logo">' if COMPANY_LOGO_URL else ""
     payment_html = f'<div class="pay-box"><strong>Payment link:</strong> <a href="{escape(item.get("payment_link") or "")}" target="_blank">Pay online</a></div>' if item.get("payment_link") else ""
+    photos = item.get("photos", []) or []
+    photos_html = ""
+    if photos:
+        cards = []
+        for photo in photos:
+            cards.append(
+                f'<div class="photo-card">'
+                f'<img src="{escape(photo.get("url", ""))}" alt="Job photo">'
+                f'<div class="photo-caption"><strong>{escape(photo.get("category_label", "Job photo"))}</strong>'
+                f'<br>{escape(photo.get("caption", "") or "")}</div></div>'
+            )
+        photos_html = '<div class="section-title">Job photos</div><div class="photo-grid">' + "".join(cards) + '</div>' 
 
     html = f"""
     <!doctype html>
@@ -15720,6 +16059,10 @@ def public_invoice(invoice_id: int):
         .total {{ font-size:30px; font-weight:900; }}
         .pay-box {{ margin-top:12px; padding:12px; background:#eef7ff; border:1px solid #cfe5f8; border-radius:12px; }}
         .actions {{ margin-top:20px; display:flex; gap:10px; flex-wrap:wrap; }}
+        .photo-grid {{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }}
+        .photo-card {{ border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fafafa; }}
+        .photo-card img {{ width:100%; height:230px; object-fit:cover; display:block; }}
+        .photo-caption {{ padding:10px; }}
         .btn {{ display:inline-block; padding:13px 16px; border-radius:12px; background:black; color:white; text-decoration:none; font-weight:700; }}
         .btn.light {{ background:#e5e7eb; color:#111; }}
         ul {{ margin:0; padding-left:18px; }}
@@ -15746,6 +16089,7 @@ def public_invoice(invoice_id: int):
         </div>
         <div class="section-title">Work</div>
         <div class="box">{escape(invoice.get('job', '-') or '-').replace(chr(10), '<br>')}</div>
+        {photos_html}
         <div class="section-title">Invoice totals</div>
         <div class="box">
           <div class="row"><span class="muted">Labour</span><span>{pounds_text(invoice.get('labour', 0))}</span></div>
@@ -15778,6 +16122,78 @@ def api_quote_pdf(quote_id: int, request: Request):
     disposition = "inline" if request.query_params.get("view") == "1" else "attachment"
     headers = {"Content-Disposition": f'{disposition}; filename="quote-{quote_id}.pdf"'}
     return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+
+
+@app.post("/api/invoices/{invoice_id}/photos")
+async def api_upload_invoice_photos(
+    invoice_id: int,
+    category: str = Form("after"),
+    caption: str = Form(""),
+    photos: list[UploadFile] = File(default=[]),
+):
+    if not get_invoice_by_id(invoice_id):
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if not photos:
+        raise HTTPException(status_code=400, detail="Choose at least one photo.")
+    if len(photos) > 12:
+        raise HTTPException(status_code=400, detail="Upload no more than 12 photos at a time.")
+
+    folder = invoice_photo_folder(invoice_id)
+    added = 0
+    errors = []
+
+    for upload in photos:
+        mime_type = upload.content_type or mimetypes.guess_type(upload.filename or "")[0] or ""
+        if not mime_type.startswith("image/"):
+            await upload.close()
+            errors.append(f"{upload.filename or 'A file'} is not an image.")
+            continue
+
+        safe_stem = re.sub(r"[^a-zA-Z0-9_-]+", "-", Path(upload.filename or "photo").stem).strip("-")[:40] or "photo"
+        stamp = now_uk().strftime("%Y%m%d%H%M%S%f")
+        temp_path = folder / f"{stamp}-{safe_stem}.upload"
+        final_name = f"{stamp}-{safe_stem}.jpg"
+        final_path = folder / final_name
+
+        try:
+            await _stream_upload_to_disk(upload, temp_path, max_bytes=15 * 1024 * 1024)
+            prepare_invoice_photo(temp_path, final_path)
+            save_invoice_photo_record(invoice_id, category, caption, final_name, upload.filename or "")
+            added += 1
+        except Exception:
+            errors.append(f"{upload.filename or 'A photo'} could not be prepared.")
+            final_path.unlink(missing_ok=True)
+        finally:
+            temp_path.unlink(missing_ok=True)
+            try:
+                await upload.close()
+            except Exception:
+                pass
+
+    if not added:
+        raise HTTPException(status_code=400, detail="No usable photos were uploaded.")
+
+    return {"ok": True, "added": added, "errors": errors, "photos": load_invoice_photos(invoice_id)}
+
+
+@app.get("/api/invoices/{invoice_id}/photos/{photo_id}")
+def api_invoice_photo(invoice_id: int, photo_id: int):
+    path = invoice_photo_path(invoice_id, photo_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    return Response(
+        content=path.read_bytes(),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+@app.delete("/api/invoices/{invoice_id}/photos/{photo_id}")
+def api_delete_invoice_photo(invoice_id: int, photo_id: int):
+    if not delete_invoice_photo_record(invoice_id, photo_id):
+        raise HTTPException(status_code=404, detail="Photo not found")
+    return {"ok": True, "photos": load_invoice_photos(invoice_id)}
 
 
 @app.get("/api/invoices/{invoice_id}/pdf")
