@@ -63,7 +63,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "15.2-optional-material-selector"
+APP_VERSION = "15.3-live-quote-refresh"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 UK_TZ = ZoneInfo("Europe/London")
@@ -4608,7 +4608,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Optional Material Selector V15.2</strong><br>
+        <strong>Live Quote Refresh V15.3</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -4678,7 +4678,7 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
       </div>
 
       <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Optional Material Selector & Quote Intelligence V15.2</strong><br>
+        <strong>Live Quote Refresh & Quote Intelligence V15.3</strong><br>
         <span class="small">Combines the enquiry, audio walkthrough, optional visual evidence, material database, merchant search and labour intelligence in one quote workflow.</span>
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
           <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
@@ -8635,21 +8635,151 @@ function mergeDuplicateMaterialRowsInForm() {
   });
 }
 
+
+let LIVE_QUOTE_REFRESH_TIMER = null;
+let LIVE_QUOTE_REFRESH_RUNNING = false;
+let LIVE_QUOTE_REFRESH_PENDING = false;
+
+function quotePreviewIsActive() {
+  const result = document.getElementById("result");
+  return Boolean(
+    CURRENT_QUOTE_ID &&
+    result &&
+    result.innerHTML.trim() &&
+    !result.querySelector(".live-refresh-placeholder")
+  );
+}
+
+function setLiveRefreshStatus(message, state = "working") {
+  let box = document.getElementById("liveQuoteRefreshStatus");
+  const result = document.getElementById("result");
+  if (!result) return;
+
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "liveQuoteRefreshStatus";
+    box.style.cssText = "margin:8px 0;padding:9px 11px;border-radius:10px;font-weight:700;font-size:13px;";
+    result.prepend(box);
+  }
+
+  const colours = {
+    working: ["#eff6ff", "#1d4ed8", "#93c5fd"],
+    saved: ["#f0fdf4", "#166534", "#86efac"],
+    waiting: ["#fffbeb", "#92400e", "#fcd34d"],
+    error: ["#fef2f2", "#991b1b", "#fca5a5"]
+  };
+  const selected = colours[state] || colours.working;
+  box.style.background = selected[0];
+  box.style.color = selected[1];
+  box.style.border = `1px solid ${selected[2]}`;
+  box.textContent = message;
+}
+
+function scheduleLiveQuoteRefresh(reason = "Quote details changed") {
+  clearTimeout(LIVE_QUOTE_REFRESH_TIMER);
+
+  if (!CURRENT_QUOTE_ID) {
+    // A draft has not yet been saved. The editable form still updates immediately.
+    return;
+  }
+
+  const result = document.getElementById("result");
+  if (!result || !result.innerHTML.trim()) return;
+
+  setLiveRefreshStatus(`${reason}. Updating totals…`, "waiting");
+
+  LIVE_QUOTE_REFRESH_TIMER = setTimeout(async () => {
+    if (LIVE_QUOTE_REFRESH_RUNNING) {
+      LIVE_QUOTE_REFRESH_PENDING = true;
+      return;
+    }
+
+    LIVE_QUOTE_REFRESH_RUNNING = true;
+    setLiveRefreshStatus("Updating quote totals and saved preview…", "working");
+
+    try {
+      await generateQuote({
+        silent: true,
+        autoRefresh: true,
+        skipDashboardReload: true
+      });
+      setLiveRefreshStatus("✓ Quote totals and preview updated automatically.", "saved");
+    } catch (error) {
+      console.error("Live quote refresh failed", error);
+      setLiveRefreshStatus("Automatic refresh failed. Use Update Quote to try again.", "error");
+    } finally {
+      LIVE_QUOTE_REFRESH_RUNNING = false;
+      if (LIVE_QUOTE_REFRESH_PENDING) {
+        LIVE_QUOTE_REFRESH_PENDING = false;
+        scheduleLiveQuoteRefresh("Further changes detected");
+      }
+    }
+  }, 850);
+}
+
+function installLiveQuoteRefreshListeners() {
+  const watchedIds = new Set([
+    "labour",
+    "include_materials_handling",
+    "materials_handling_percent",
+    "deposit_percent",
+    "job",
+    "quote_type",
+    "tiling",
+    "wall_tiling_m2",
+    "floor_tiling_m2",
+    "wall_height",
+    "customer_supplies_tiles"
+  ]);
+
+  document.addEventListener("input", event => {
+    const target = event.target;
+    if (!target) return;
+
+    if (
+      target.closest?.("#materials") &&
+      target.matches?.(".m-name, .m-qty, .m-url, .m-manual")
+    ) {
+      scheduleLiveQuoteRefresh("Material changed");
+      return;
+    }
+
+    if (watchedIds.has(target.id)) {
+      scheduleLiveQuoteRefresh("Quote detail changed");
+    }
+  });
+
+  document.addEventListener("change", event => {
+    const target = event.target;
+    if (!target) return;
+
+    if (
+      target.closest?.("#materials") &&
+      target.matches?.(".m-supplier, .m-qty, .m-manual")
+    ) {
+      scheduleLiveQuoteRefresh("Material changed");
+      return;
+    }
+
+    if (watchedIds.has(target.id)) {
+      scheduleLiveQuoteRefresh("Quote detail changed");
+    }
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installLiveQuoteRefreshListeners);
+} else {
+  installLiveQuoteRefreshListeners();
+}
+
 function refreshAfterBundleChange() {
   mergeDuplicateMaterialRowsInForm();
   scheduleQuoteLearning();
   scheduleLabourIntelligence();
   updateForgottenItemWarnings();
   updateSupplierPreferenceNotes();
-
-  // Refresh any already-generated quote preview so totals are not left stale.
-  const quoteResult = document.getElementById("result");
-  if (quoteResult && quoteResult.innerHTML.trim()) {
-    quoteResult.innerHTML = `
-      <div class="notice">
-        Materials changed. Press <strong>Update Quote</strong> to regenerate the saved/PDF preview with the new totals.
-      </div>`;
-  }
+  scheduleLiveQuoteRefresh("Materials changed");
 }
 
 function addV151JobBundle(bundleIndex, essentialOnly = false) {
@@ -9589,7 +9719,13 @@ function discardAIQuoteDraft() {
 }
 
 
-async function generateQuote() {
+async function generateQuote(options = {}) {
+  const {
+    silent = false,
+    autoRefresh = false,
+    skipDashboardReload = false
+  } = options || {};
+
   const errorBox = document.getElementById("error");
   errorBox.style.display = "none";
 
@@ -9620,13 +9756,22 @@ async function generateQuote() {
       errorBox.style.display = "none";
     }
 
-    await loadHistory();
-    await loadCustomers();
-    await loadDashboard();
-    showNotice(isEditing ? "Quote updated." : "Quote saved.");
+    if (!skipDashboardReload) {
+      await loadHistory();
+      await loadCustomers();
+      await loadDashboard();
+    }
+    if (!silent) {
+      showNotice(isEditing ? "Quote updated." : "Quote saved.");
+    }
+    return data;
   } catch (err) {
-    errorBox.innerText = isEditing ? "Something went wrong updating the quote." : "Something went wrong generating the quote.";
-    errorBox.style.display = "block";
+    if (!silent) {
+      errorBox.innerText = isEditing ? "Something went wrong updating the quote." : "Something went wrong generating the quote.";
+      errorBox.style.display = "block";
+    }
+    if (autoRefresh || silent) throw err;
+    return null;
   }
 }
 
@@ -14140,7 +14285,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "optional-material-selector-v15-2",
+        "estimator_version": "live-quote-refresh-v15-3",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
@@ -14806,7 +14951,7 @@ def api_ai_quote_draft(data: AIQuoteDraftRequest):
     context = build_ai_quote_context(data)
     result = call_openai_quote_builder(context)
     result["context_summary"] = {
-        "version": context.get("estimator_version", "optional-material-selector-v15-2"),
+        "version": context.get("estimator_version", "live-quote-refresh-v15-3"),
         "similar_quotes": context.get("historical_learning", {}).get("similar_count", 0),
         "trade_templates": len(context.get("matching_trade_templates", [])),
         "fallback_matches": len(context.get("controlled_fallback_trade_knowledge", [])),
