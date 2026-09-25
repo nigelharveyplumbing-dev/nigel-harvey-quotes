@@ -79,7 +79,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "16.3.4-website-refined-preview"
+APP_VERSION = "16.3.5-live-homepage"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 INVOICE_PHOTO_DIR = Path("/var/data/invoice_photos")
@@ -11109,7 +11109,7 @@ NEW_HOMEPAGE_PREVIEW_HTML = r"""
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--text);line-height:1.55;background:#fff}a{text-decoration:none;color:inherit}
 .wrap{width:min(1120px,92%);margin:auto}.top{background:var(--navy);color:#fff;font-size:14px}.top .wrap{padding:9px 0;display:flex;justify-content:space-between;gap:20px}
 header{background:#fff;position:sticky;top:0;z-index:20;box-shadow:0 2px 18px #00000012}.nav{display:flex;align-items:center;justify-content:space-between;padding:15px 0}
-.brand{font-size:23px;font-weight:800;letter-spacing:-.5px;display:flex;align-items:center}.brand img{max-width:215px;max-height:54px;object-fit:contain}.brand-fallback{display:none}.brand small{display:block;color:var(--blue);font-size:11px;letter-spacing:2.5px}.navlinks{display:flex;align-items:center;gap:24px;font-weight:700;font-size:14px}
+.brand{font-size:23px;font-weight:800;letter-spacing:-.5px;display:flex;align-items:center}.brand small{display:block;color:var(--blue);font-size:11px;letter-spacing:2.5px}.navlinks{display:flex;align-items:center;gap:24px;font-weight:700;font-size:14px}
 .btn{display:inline-block;background:var(--blue);color:#fff;padding:13px 21px;border-radius:7px;font-weight:800}.btn.white{background:#fff;color:var(--navy)}
 .hero{min-height:620px;display:grid;align-items:center;color:#fff;background:linear-gradient(90deg,#071827f2 0%,#071827cf 45%,#0718274d 78%),url('https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=1800&q=85') center/cover}
 .hero-copy{max-width:700px;padding:90px 0}.eyebrow{color:#f0c66e;text-transform:uppercase;letter-spacing:2px;font-size:13px;font-weight:800}
@@ -11129,7 +11129,7 @@ footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{disp
 </style></head>
 <body>
 <div class="top"><div class="wrap"><span>Local plumber serving Guildford & Surrey</span><span>Call Nigel: __COMPANY_PHONE__ &nbsp; · &nbsp; __COMPANY_EMAIL__</span></div></div>
-<header><div class="wrap nav"><div class="brand"><img src="/logo.png" alt="Nigel Harvey Ltd" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="brand-fallback">Nigel Harvey <small>PLUMBING</small></span></div><div class="navlinks"><a href="#services">Services</a><a href="#about">About</a><a href="#work">How It Works</a><a href="#areas">Areas</a><a class="btn" href="/request-quote">Get a Quote</a></div></div></header>
+<header><div class="wrap nav"><div class="brand"><span>Nigel Harvey <small>PLUMBING</small></span></div><div class="navlinks"><a href="#services">Services</a><a href="#about">About</a><a href="#work">How It Works</a><a href="#areas">Areas</a><a class="btn" href="/request-quote">Get a Quote</a></div></div></header>
 <section class="hero"><div class="wrap"><div class="hero-copy"><div class="eyebrow">Nigel Harvey Plumbing · Guildford</div><h1>Local plumbing.<br>Done properly.</h1><p>Reliable plumbing repairs, bathrooms, showers and heating work across Guildford and Surrey. From first enquiry to finished job, you deal directly with Nigel.</p><div class="actions"><a class="btn" href="/request-quote">Get a Quote</a><a class="btn white" href="tel:__COMPANY_PHONE_TEL__">Call __COMPANY_PHONE__</a></div></div></div></section>
 <div class="trust"><div class="wrap trustgrid"><div><strong>Local & independent</strong><span>Based in Guildford</span></div><div><strong>Clear communication</strong><span>Before, during & after</span></div><div><strong>Clear quotes</strong><span>Labour & materials explained</span></div><div><strong>Direct contact</strong><span>Deal with Nigel throughout</span></div></div></div>
 <section id="services"><div class="wrap"><div class="intro"><h2>Plumbing services without the fuss</h2><p>From a leaking fitting to a bathroom project, get straightforward advice, clear pricing and tidy workmanship.</p></div><div class="cards">
@@ -11144,7 +11144,7 @@ footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{disp
 <section class="area" id="areas"><div class="wrap split"><div><h2>Serving Guildford and surrounding Surrey areas</h2><p class="muted">Guildford, Godalming, Woking, Farnham, Camberley and surrounding areas. Your existing location pages remain in place for local search visibility.</p></div><div><h3>Not sure if I cover your area?</h3><p class="muted">Send your postcode and a short description of the work. For jobs further away, any travel charge can be made clear before you book.</p><a class="btn" href="/request-quote">Check your area</a></div></div></section>
 <section class="cta"><div class="wrap"><div><h2>Need a plumber?</h2><p>Tell me what you need doing and I'll come back to you with the next step.</p></div><a class="btn white" href="/request-quote">Get a Quote</a></div></section>
 <footer><div class="wrap foot"><div><strong>Nigel Harvey Plumbing</strong><br>Nigel Harvey Ltd · Guildford, Surrey</div><div>__COMPANY_PHONE__<br>__COMPANY_EMAIL__</div></div></footer>
-<a class="mobile-call" href="tel:__COMPANY_PHONE_TEL__">Call Nigel · __COMPANY_PHONE__</a><div class="preview">NEW HOMEPAGE PREVIEW</div>
+<a class="mobile-call" href="tel:__COMPANY_PHONE_TEL__">Call Nigel · __COMPANY_PHONE__</a>
 </body></html>
 """
 
@@ -11161,18 +11161,11 @@ def new_homepage_preview(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 def landing_home(request: Request):
-    logo_value = get_company_logo_value()
-    logo_html = get_company_logo_html(logo_value)
-    canonical_home = absolute_url("/", request)
-    html = LANDING_PAGE_HTML.replace("__COMPANY_LOGO_HTML__", logo_html)
+    html = NEW_HOMEPAGE_PREVIEW_HTML
     html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
     html = html.replace("__COMPANY_PHONE_TEL__", COMPANY_PHONE_TEL)
     html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
-    html = html.replace("__CANONICAL_HOME__", canonical_home)
-    html = html.replace("__BUSINESS_SCHEMA_JSON__", build_homepage_business_schema(canonical_home))
-    html = html.replace("__FAQ_SCHEMA_JSON__", build_homepage_faq_schema())
-    html = html.replace("__REVIEWS_BADGE_HTML__", build_reviews_badge_html())
-    html = html.replace("__REVIEWS_SECTION_HTML__", build_reviews_section_html())
+    html = html.replace("__GOOGLE_REVIEWS_URL__", GOOGLE_REVIEWS_URL)
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
