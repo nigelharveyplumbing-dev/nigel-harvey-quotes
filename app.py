@@ -79,7 +79,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "16.2.2-matching-invoice-pdf"
+APP_VERSION = "16.3.3-website-preview"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 INVOICE_PHOTO_DIR = Path("/var/data/invoice_photos")
@@ -1760,6 +1760,10 @@ class QuoteRequest(BaseModel):
     customer_phone: str = ""
     job_description: str = ""
     labour_cost: float = 0
+    include_callout_charge: bool = False
+    callout_charge: float = 200
+    include_travel_charge: bool = False
+    travel_charge: float = 0
     include_materials_handling: bool = True
     materials_handling_percent: float = 25
     materials: list[MaterialItem] = Field(default_factory=list)
@@ -1818,6 +1822,8 @@ class InvoiceEditRequest(BaseModel):
     job: str = ""
     job_reference: str = ""
     labour: float = 0
+    callout_charge: float = 0
+    travel_charge: float = 0
     materials: float = 0
     due_date: str = ""
     payment_link: str = ""
@@ -2442,7 +2448,9 @@ def calculate_quote(data: QuoteRequest):
 
     quoted_materials = materials_after_job_markup * handling_multiplier
     labour_total = data.labour_cost
-    total_price = labour_total + quoted_materials
+    callout_charge = max(0.0, safe_float(data.callout_charge, 0.0)) if data.include_callout_charge else 0.0
+    travel_charge = max(0.0, safe_float(data.travel_charge, 0.0)) if data.include_travel_charge else 0.0
+    total_price = labour_total + callout_charge + travel_charge + quoted_materials
 
     deposit_percent = max(0.0, min(100.0, data.deposit_percent or 0))
     deposit_amount = total_price * (deposit_percent / 100.0)
@@ -2452,7 +2460,7 @@ def calculate_quote(data: QuoteRequest):
         job_text = f"{job_text} + Tiling" if job_text else "Bathroom works + Tiling"
 
     hidden_uplift = quoted_materials - raw_materials_with_tiling
-    gross_profit = (quoted_materials - raw_materials_with_tiling) + labour_total
+    gross_profit = (quoted_materials - raw_materials_with_tiling) + labour_total + callout_charge + travel_charge
     margin_percent = (gross_profit / total_price * 100.0) if total_price > 0 else 0.0
 
     labour_hint = find_labour_suggestion(data.quote_type, data.job_description)
@@ -2465,6 +2473,10 @@ def calculate_quote(data: QuoteRequest):
         "customer_phone": data.customer_phone,
         "job": job_text,
         "labour": round(labour_total, 2),
+        "include_callout_charge": bool(data.include_callout_charge),
+        "callout_charge": round(callout_charge, 2),
+        "include_travel_charge": bool(data.include_travel_charge),
+        "travel_charge": round(travel_charge, 2),
         "materials": round(quoted_materials, 2),
         "materials_base": round(materials_after_job_markup, 2),
         "materials_procurement_percent": round(handling_percent, 2),
@@ -3156,6 +3168,8 @@ def create_invoice_from_quote(quote_id: int):
         "customer_phone": result.get("customer_phone", ""),
         "job": result.get("job", ""),
         "labour": result.get("labour", 0),
+        "callout_charge": result.get("callout_charge", 0),
+        "travel_charge": result.get("travel_charge", 0),
         "materials": result.get("materials", 0),
         "total_price": result.get("total_price", 0),
         "deposit_percent": result.get("deposit_percent", 0),
@@ -3325,8 +3339,10 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     reminders_enabled = bool(data.reminders_enabled)
 
     labour = max(0.0, safe_float(data.labour, 0.0))
+    callout_charge = max(0.0, safe_float(data.callout_charge, 0.0))
+    travel_charge = max(0.0, safe_float(data.travel_charge, 0.0))
     materials = max(0.0, safe_float(data.materials, 0.0))
-    total_price = round(labour + materials, 2)
+    total_price = round(labour + callout_charge + travel_charge + materials, 2)
     amount_paid = max(0.0, min(total_price, safe_float(data.amount_paid, 0.0)))
     balance_due = max(0.0, round(total_price - amount_paid, 2))
 
@@ -3345,6 +3361,10 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     quote_result["customer_phone"] = customer_phone
     quote_result["job"] = job
     quote_result["labour"] = round(labour, 2)
+    quote_result["callout_charge"] = round(callout_charge, 2)
+    quote_result["include_callout_charge"] = callout_charge > 0
+    quote_result["travel_charge"] = round(travel_charge, 2)
+    quote_result["include_travel_charge"] = travel_charge > 0
     quote_result["materials"] = round(materials, 2)
     quote_result["materials_base"] = round(quote_result.get("materials_base", materials), 2)
     quote_result["materials_procurement_amount"] = round(quote_result.get("materials_procurement_amount", 0), 2)
@@ -3363,6 +3383,8 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
         "customer_phone": customer_phone,
         "job": job,
         "labour": round(labour, 2),
+        "callout_charge": round(callout_charge, 2),
+        "travel_charge": round(travel_charge, 2),
         "materials": round(materials, 2),
         "total_price": round(total_price, 2),
         "due_date": due_date,
@@ -3857,8 +3879,14 @@ def generate_invoice_pdf_bytes(item: dict):
 
     total_rows = [
         ("Labour", pounds_text(invoice.get("labour", 0)), False),
-        ("Materials", pounds_text(materials_base), False),
     ]
+    invoice_callout = safe_float(invoice.get("callout_charge", quote_result.get("callout_charge", 0)), 0)
+    if invoice_callout > 0:
+        total_rows.append(("Call-out charge", pounds_text(invoice_callout), False))
+    invoice_travel = safe_float(invoice.get("travel_charge", quote_result.get("travel_charge", 0)), 0)
+    if invoice_travel > 0:
+        total_rows.append(("Travel charge", pounds_text(invoice_travel), False))
+    total_rows.append(("Materials", pounds_text(materials_base), False))
     if safe_float(procurement_amount, 0) > 0:
         total_rows.append((
             f"Materials procurement & handling ({safe_float(procurement_percent, 0):.0f}%)",
@@ -4014,6 +4042,10 @@ def generate_quote_pdf_bytes(item: dict):
     procurement_percent = result.get("materials_procurement_percent", 0)
 
     y = _pdf_row(c, y, "Labour", pounds_text(result.get("labour", 0)))
+    if safe_float(result.get("callout_charge", 0), 0) > 0:
+        y = _pdf_row(c, y, "Call-out charge", pounds_text(result.get("callout_charge", 0)))
+    if safe_float(result.get("travel_charge", 0), 0) > 0:
+        y = _pdf_row(c, y, "Travel charge", pounds_text(result.get("travel_charge", 0)))
     y = _pdf_row(c, y, "Materials supplied", pounds_text(materials_base))
 
     if safe_float(procurement_amount, 0) > 0:
@@ -5184,7 +5216,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
 
       <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
-        <strong>Matching Invoice PDF V16.2.2</strong><br>
+        <strong>Workflow Fixes + Travel V16.3.2</strong><br>
         <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
 
         <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
@@ -5245,20 +5277,12 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
 
         <div id="siteCaptureSummary" class="small" style="margin-top:8px;">No site information added yet.</div>
 
-        <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
-          <button type="button" class="btn-green" onclick="analyseSiteSurvey()">Analyse Site Visit</button>
-          <button type="button" class="btn-light" onclick="clearSiteSurvey()">Clear Site Visit</button>
+        <div class="history-actions" style="grid-template-columns:2fr 1fr;gap:8px;margin-top:10px;">
+          <button type="button" id="aiQuoteButton" class="btn-green" onclick="analyseAndBuildQuote()">✨ Analyse Site & Build Quote</button>
+          <button type="button" class="btn-light" onclick="clearSiteSurvey()">Clear</button>
         </div>
         <div id="siteSurveyStatus" class="small" style="margin-top:8px;"></div>
         <div id="siteSurveyResult" style="margin-top:8px;"></div>
-      </div>
-
-      <div class="quote-box small" style="margin-top:10px;border-color:#7c3aed;background:#faf5ff;">
-        <strong>Payment & Invoice Automation V16.1</strong><br>
-        <span class="small">Combines the enquiry, audio walkthrough, optional visual evidence, material database, merchant search and labour intelligence in one quote workflow.</span>
-        <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
-          <button type="button" id="aiQuoteButton" class="btn-green" onclick="generateAIQuoteDraft()">Build Quote with AI</button>
-        </div>
         <div id="aiQuoteStatus" class="small" style="margin-top:8px;"></div>
         <div id="aiQuoteResult" style="margin-top:8px;"></div>
       </div>
@@ -5301,7 +5325,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
 
       <div id="manualMaterialSearchPanel" class="quote-box small no-print" style="margin-top:8px;display:none;">
         <strong>Find a material</strong><br>
-        <span class="small">Search your saved material database. Smart quantity suggestions remain active.</span>
+        <span class="small">Search saved materials, then use Update price on a material row to look for a current merchant match. Smart quantities remain active.</span>
         <input id="materialSearch" placeholder="e.g. 15mm elbow, basin waste, kitchen tap" oninput="searchMaterials()" style="margin-top:8px;">
         <div id="searchResults" class="search-results hidden"></div>
       </div>
@@ -5309,6 +5333,27 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
       <h3>Pricing</h3>
       <label for="labour">Labour cost (£)</label>
       <input id="labour" type="number" step="0.01" placeholder="180" oninput="scheduleLabourIntelligence()">
+
+      <div class="quote-box" style="margin-top:12px;border-color:#f59e0b;background:#fffbeb;">
+        <div class="check-row" style="margin-top:0;">
+          <input type="checkbox" id="include_callout_charge">
+          <span><strong>Include call-out charge</strong></span>
+        </div>
+        <label for="callout_charge">Call-out charge (£)</label>
+        <input id="callout_charge" type="number" step="0.01" min="0" value="200" placeholder="200">
+        <div class="small">Use this for an emergency, evening or out-of-hours call-out. You can change the amount for each job.</div>
+      </div>
+
+      <div class="quote-box" style="margin-top:12px;border-color:#0ea5e9;background:#f0f9ff;">
+        <div class="check-row" style="margin-top:0;">
+          <input type="checkbox" id="include_travel_charge">
+          <span><strong>Include travel charge</strong></span>
+        </div>
+        <label for="travel_charge">Travel charge (£)</label>
+        <input id="travel_charge" type="number" step="0.01" min="0" value="0" placeholder="0">
+        <div class="small">Optional charge for jobs outside your normal working area. Shown separately from labour and call-out charges.</div>
+      </div>
+
       <div class="small" id="labourSuggestion" style="margin-top:8px;"></div>
       <div id="learningInsights" class="quote-box small" style="margin-top:10px; display:none;"></div>
       <div id="labourIntelligence" class="quote-box small" style="margin-top:10px; display:none;"></div>
@@ -5497,6 +5542,8 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
       <div class="doc-panel doc-summary">
         <div class="doc-panel-title">Pricing summary</div>
         <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
+        <div class="row" id="r_callout_row" style="display:none;"><span class="muted">Call-out charge</span><span id="r_callout"></span></div>
+        <div class="row" id="r_travel_row" style="display:none;"><span class="muted">Travel charge</span><span id="r_travel"></span></div>
         <div class="row"><span class="muted">Materials supplied</span><span id="r_materials_base"></span></div>
         <div class="row" id="r_procurement_row"><span class="muted">Materials procurement &amp; handling <span id="r_procurement_percent"></span></span><span id="r_procurement_amount"></span></div>
         <div class="row"><span class="muted">Materials total</span><span id="r_materials"></span></div>
@@ -5577,6 +5624,8 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
       <div class="doc-panel doc-summary">
         <div class="doc-panel-title">Invoice totals</div>
         <div class="row"><span class="muted">Labour</span><span id="i_labour"></span></div>
+        <div class="row" id="i_callout_row" style="display:none;"><span class="muted">Call-out charge</span><span id="i_callout"></span></div>
+        <div class="row" id="i_travel_row" style="display:none;"><span class="muted">Travel charge</span><span id="i_travel"></span></div>
         <div class="row"><span class="muted">Materials</span><span id="i_materials"></span></div>
         <div class="row"><span class="muted">Total</span><span id="i_total"></span></div>
         <div class="row"><span class="muted">Amount paid</span><span id="i_paid"></span></div>
@@ -5609,6 +5658,10 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
       </div>
       <label for="edit_invoice_labour">Labour (£)</label>
       <input id="edit_invoice_labour" type="number" step="0.01" placeholder="0">
+      <label for="edit_invoice_callout_charge">Call-out charge (£)</label>
+      <input id="edit_invoice_callout_charge" type="number" step="0.01" min="0" placeholder="0">
+      <label for="edit_invoice_travel_charge">Travel charge (£)</label>
+      <input id="edit_invoice_travel_charge" type="number" step="0.01" min="0" placeholder="0">
       <label for="edit_invoice_materials">Materials (£)</label>
       <input id="edit_invoice_materials" type="number" step="0.01" placeholder="0">
       <label for="edit_invoice_due_date">Due date</label>
@@ -6807,6 +6860,17 @@ function clearMaterials() {
   updateForgottenItemWarnings();
 }
 
+function changeMaterialQty(button, delta) {
+  const row = button.closest(".material-row");
+  const input = row?.querySelector(".m-qty");
+  if (!input) return;
+  const current = Number(input.value || 0);
+  const smallStep = current > 0 && current < 1;
+  const step = smallStep ? 0.1 : 1;
+  input.value = Math.max(0, Math.round((current + delta * step) * 100) / 100);
+  input.dispatchEvent(new Event("input", {bubbles:true}));
+}
+
 function addMaterial(prefill = null) {
   const emptyMessage = document.getElementById("emptyMaterialsMessage");
   if (emptyMessage) emptyMessage.remove();
@@ -6844,7 +6908,11 @@ function addMaterial(prefill = null) {
     <input class="m-name" placeholder="e.g. kitchen tap" value="${prefill ? escapeHtml(prefill.name) : ""}">
 
     <label>Quantity</label>
-    <input class="m-qty" type="number" step="0.01" placeholder="1" value="${qty}">
+    <div style="display:grid;grid-template-columns:52px 1fr 52px;gap:8px;align-items:center;">
+      <button type="button" class="btn-light" style="padding:10px 6px;" onclick="changeMaterialQty(this,-1)">−</button>
+      <input class="m-qty" type="number" step="0.01" min="0" placeholder="1" value="${qty}" style="text-align:center;margin:0;">
+      <button type="button" class="btn-light" style="padding:10px 6px;" onclick="changeMaterialQty(this,1)">+</button>
+    </div>
 
     <label>Supplier</label>
     <select class="m-supplier">
@@ -6897,7 +6965,7 @@ function renderMaterialSearchResults(results) {
     const status = item.last_status ? " · " + escapeHtml(item.last_status) : "";
     const used = item.times_used ? " · used " + item.times_used + "x" : "";
     return `
-      <div class="search-item" onclick='addMaterialFromLibrary(${JSON.stringify(item)})'>
+      <div class="search-item" style="touch-action:manipulation;cursor:pointer;" onpointerdown='event.preventDefault(); addMaterialFromLibrary(${JSON.stringify(item)})'>
         <strong>${escapeHtml(item.name)}</strong><br>
         <span class="small">${escapeHtml(item.supplier || "")} · ${pounds(item.default_price || 0)} · ${source}${status}${used}</span>
       </div>
@@ -7283,6 +7351,10 @@ function collectFormPayload() {
     customer_phone: document.getElementById("customer_phone").value,
     job_description: document.getElementById("job").value,
     labour_cost: parseFloat(document.getElementById("labour").value || 0),
+    include_callout_charge: document.getElementById("include_callout_charge").checked,
+    callout_charge: parseFloat(document.getElementById("callout_charge").value || 0),
+    include_travel_charge: document.getElementById("include_travel_charge").checked,
+    travel_charge: parseFloat(document.getElementById("travel_charge").value || 0),
     include_materials_handling: document.getElementById("include_materials_handling").checked,
     materials_handling_percent: parseFloat(document.getElementById("materials_handling_percent").value || 25),
     materials: materials,
@@ -7346,6 +7418,12 @@ function renderQuoteResult(data) {
   document.getElementById("r_address").innerText = data.customer_address || "-";
   document.getElementById("r_job").innerText = data.job || "-";
   document.getElementById("r_labour").innerText = pounds(data.labour);
+  const calloutCharge = Number(data.callout_charge || 0);
+  document.getElementById("r_callout").innerText = pounds(calloutCharge);
+  document.getElementById("r_callout_row").style.display = calloutCharge > 0 ? "flex" : "none";
+  const travelCharge = Number(data.travel_charge || 0);
+  document.getElementById("r_travel").innerText = pounds(travelCharge);
+  document.getElementById("r_travel_row").style.display = travelCharge > 0 ? "flex" : "none";
   document.getElementById("r_materials").innerText = pounds(data.materials);
 
   const materialsBase = data.materials_base != null ? Number(data.materials_base) : Number(data.materials || 0);
@@ -7655,6 +7733,10 @@ function fillFormFromRequest(requestData, quoteId = null) {
   document.getElementById("customer_phone").value = requestData.customer_phone || "";
   document.getElementById("job").value = requestData.job_description || "";
   document.getElementById("labour").value = requestData.labour_cost || "";
+  document.getElementById("include_callout_charge").checked = !!requestData.include_callout_charge;
+  document.getElementById("callout_charge").value = requestData.callout_charge != null ? requestData.callout_charge : 200;
+  document.getElementById("include_travel_charge").checked = !!requestData.include_travel_charge;
+  document.getElementById("travel_charge").value = requestData.travel_charge != null ? requestData.travel_charge : 0;
   document.getElementById("include_materials_handling").checked = !!requestData.include_materials_handling;
   document.getElementById("materials_handling_percent").value = String(requestData.materials_handling_percent || 25);
   document.getElementById("tiling").checked = !!requestData.tiling;
@@ -8801,12 +8883,36 @@ async function analyseSiteSurvey() {
     renderSiteSurvey(data);
     status.innerHTML =
       `✓ Site visit analysed and attached · ${(data.input_modes || []).join(", ") || "notes"} used.`;
-    showNotice("Site visit complete and attached to the next quote.");
+    showNotice("Site visit analysed. Building the quote next…");
+    return true;
   } catch (error) {
     CURRENT_SITE_SURVEY = null;
     SITE_SURVEY_ATTACHED = false;
     status.innerHTML =
       `<span style="color:#b91c1c;">${escapeHtml(error.message || "Site survey failed.")}</span>`;
+    return false;
+  }
+}
+
+async function analyseAndBuildQuote() {
+  const button = document.getElementById("aiQuoteButton");
+  const hasSiteInfo = Boolean(
+    CAPTURED_SITE_PHOTOS.length || RECORDED_SITE_VIDEO || RECORDED_SITE_AUDIO ||
+    document.getElementById("siteSurveyPhotos")?.files?.length ||
+    document.getElementById("siteSurveyVideo")?.files?.length ||
+    document.getElementById("siteSurveyAudio")?.files?.length ||
+    document.getElementById("sitePlans")?.files?.length ||
+    document.getElementById("siteVisitNotes")?.value?.trim()
+  );
+  if (button) { button.disabled = true; button.innerText = "Working…"; }
+  try {
+    if (hasSiteInfo) {
+      const ok = await analyseSiteSurvey();
+      if (!ok) return;
+    }
+    await generateAIQuoteDraft();
+  } finally {
+    if (button) { button.disabled = false; button.innerText = "✨ Analyse Site & Build Quote"; }
   }
 }
 
@@ -9006,7 +9112,7 @@ async function generateAIQuoteDraft() {
 
   if (button) {
     button.disabled = true;
-    button.innerText = "Generating AI draft…";
+    button.innerText = "Building quote…";
   }
   if (status) {
     status.innerHTML = CURRENT_SITE_SURVEY
@@ -9028,7 +9134,7 @@ async function generateAIQuoteDraft() {
     if (!continueWithoutSurvey) {
       if (button) {
         button.disabled = false;
-        button.innerText = "Build Quote with AI";
+        button.innerText = "✨ Analyse Site & Build Quote";
       }
       return;
     }
@@ -9076,7 +9182,7 @@ async function generateAIQuoteDraft() {
   } finally {
     if (button) {
       button.disabled = false;
-      button.innerText = "Generate quote draft with AI";
+      button.innerText = "✨ Analyse Site & Build Quote";
     }
   }
 }
@@ -9475,6 +9581,10 @@ function scheduleLiveQuoteRefresh(reason = "Quote details changed") {
 function installLiveQuoteRefreshListeners() {
   const watchedIds = new Set([
     "labour",
+    "include_callout_charge",
+    "callout_charge",
+    "include_travel_charge",
+    "travel_charge",
     "include_materials_handling",
     "materials_handling_percent",
     "deposit_percent",
@@ -10616,6 +10726,10 @@ function normaliseQuoteDataForEditing(data) {
     customer_phone: q.customer_phone || q.phone || "",
     job_description: q.job_description || q.job || "",
     labour_cost: q.labour_cost || q.labour || 0,
+    include_callout_charge: !!q.include_callout_charge || Number(q.callout_charge || 0) > 0,
+    callout_charge: q.callout_charge || 0,
+    include_travel_charge: !!q.include_travel_charge || Number(q.travel_charge || 0) > 0,
+    travel_charge: q.travel_charge || 0,
     include_materials_handling: q.include_materials_handling !== false,
     materials_handling_percent: q.materials_handling_percent || 25,
     deposit_percent: q.deposit_percent || 0,
@@ -10638,6 +10752,10 @@ function normaliseQuoteDataForEditing(data) {
     customer_phone: request.customer_phone || result.customer_phone || quote.customer_phone || root.customer_phone || "",
     job_description: request.job_description || result.job || result.job_description || quote.job_description || root.job_description || root.job || "",
     labour_cost: request.labour_cost || result.labour || quote.labour_cost || root.labour_cost || root.labour || 0,
+    include_callout_charge: request.include_callout_charge !== undefined ? request.include_callout_charge : Number(result.callout_charge || 0) > 0,
+    callout_charge: request.callout_charge || result.callout_charge || quote.callout_charge || root.callout_charge || 0,
+    include_travel_charge: request.include_travel_charge !== undefined ? request.include_travel_charge : Number(result.travel_charge || 0) > 0,
+    travel_charge: request.travel_charge || result.travel_charge || quote.travel_charge || root.travel_charge || 0,
     include_materials_handling: request.include_materials_handling !== undefined ? request.include_materials_handling : true,
     materials_handling_percent: request.materials_handling_percent || result.materials_handling_percent || quote.materials_handling_percent || root.materials_handling_percent || 25,
     deposit_percent: request.deposit_percent || result.deposit_percent || quote.deposit_percent || root.deposit_percent || 0,
@@ -10679,6 +10797,8 @@ function populateInvoiceEditForm(item) {
   document.getElementById("edit_invoice_job").value = invoice.job || "";
   document.getElementById("edit_invoice_job_reference").value = item.job_reference || invoice.job_reference || "";
   document.getElementById("edit_invoice_labour").value = invoice.labour || 0;
+  document.getElementById("edit_invoice_callout_charge").value = invoice.callout_charge || item.quote_result?.callout_charge || 0;
+  document.getElementById("edit_invoice_travel_charge").value = invoice.travel_charge || item.quote_result?.travel_charge || 0;
   document.getElementById("edit_invoice_materials").value = invoice.materials || 0;
   document.getElementById("edit_invoice_due_date").value = item.due_date || "";
   document.getElementById("edit_invoice_payment_link").value = item.payment_link || "";
@@ -10786,6 +10906,8 @@ async function saveInvoiceEdit() {
       job: document.getElementById("edit_invoice_job").value || "",
       job_reference: document.getElementById("edit_invoice_job_reference").value || "",
       labour: parseFloat(document.getElementById("edit_invoice_labour").value || 0),
+      callout_charge: parseFloat(document.getElementById("edit_invoice_callout_charge").value || 0),
+      travel_charge: parseFloat(document.getElementById("edit_invoice_travel_charge").value || 0),
       materials: parseFloat(document.getElementById("edit_invoice_materials").value || 0),
       due_date: document.getElementById("edit_invoice_due_date").value || "",
       payment_link: document.getElementById("edit_invoice_payment_link").value || "",
@@ -10972,6 +11094,68 @@ def home_app():
     logo_value = get_company_logo_value()
     logo_html = f'<img src="{logo_value}" alt="Logo">' if logo_value else ""
     html = html.replace("__COMPANY_LOGO_HTML__", logo_html)
+    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
+
+
+
+NEW_HOMEPAGE_PREVIEW_HTML = r"""
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nigel Harvey Plumbing | New Homepage Preview</title>
+<style>
+:root{--navy:#0b2032;--blue:#1263a5;--pale:#f3f7fa;--gold:#e2b353;--text:#142b3e;--muted:#60717e}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--text);line-height:1.55;background:#fff}a{text-decoration:none;color:inherit}
+.wrap{width:min(1120px,92%);margin:auto}.top{background:var(--navy);color:#fff;font-size:14px}.top .wrap{padding:9px 0;display:flex;justify-content:space-between;gap:20px}
+header{background:#fff;position:sticky;top:0;z-index:20;box-shadow:0 2px 18px #00000012}.nav{display:flex;align-items:center;justify-content:space-between;padding:15px 0}
+.brand{font-size:23px;font-weight:800;letter-spacing:-.5px}.brand small{display:block;color:var(--blue);font-size:11px;letter-spacing:2.5px}.navlinks{display:flex;align-items:center;gap:24px;font-weight:700;font-size:14px}
+.btn{display:inline-block;background:var(--blue);color:#fff;padding:13px 21px;border-radius:7px;font-weight:800}.btn.white{background:#fff;color:var(--navy)}
+.hero{min-height:620px;display:grid;align-items:center;color:#fff;background:linear-gradient(90deg,#071827f2 0%,#071827cf 45%,#0718274d 78%),url('https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=1800&q=85') center/cover}
+.hero-copy{max-width:700px;padding:90px 0}.eyebrow{color:#f0c66e;text-transform:uppercase;letter-spacing:2px;font-size:13px;font-weight:800}
+h1{font-size:clamp(43px,6vw,69px);line-height:1.02;letter-spacing:-2px;margin:14px 0 20px}.hero p{font-size:20px;max-width:620px;color:#e5edf3}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}.trust{box-shadow:0 10px 30px #0000000c}.trustgrid{display:grid;grid-template-columns:repeat(4,1fr);text-align:center}
+.trustgrid div{padding:23px 10px;border-right:1px solid #e3e9ed}.trustgrid div:last-child{border:0}.trustgrid strong{display:block;font-size:17px}.trustgrid span{color:var(--muted);font-size:13px}
+section{padding:78px 0}.intro{text-align:center;max-width:760px;margin:0 auto 42px}h2{font-size:39px;line-height:1.12;letter-spacing:-1px;margin:0 0 14px}.intro p,p.muted{color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}.card{background:var(--pale);border-radius:13px;padding:28px;min-height:260px;display:flex;flex-direction:column;box-shadow:0 8px 25px #0b20320c}.icon{font-size:29px;margin-bottom:auto}.card h3{margin:22px 0 8px}.card p{font-size:14px;color:var(--muted);margin:0}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}.photo{min-height:480px;border-radius:15px;background:url('https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?auto=format&fit=crop&w=1200&q=85') center/cover}
+.ticks{display:grid;gap:12px;margin:25px 0}.tick:before{content:"✓";color:var(--blue);font-weight:900;margin-right:10px}.dark{background:var(--navy);color:#fff}.dark .intro p{color:#cbd7df}
+.jobs{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.job{background:#fff;color:var(--text);padding:29px;border-radius:13px}.job small{color:var(--blue);font-weight:900;text-transform:uppercase}.job p{color:var(--muted)}
+.review{background:#f5f8fa}.reviewbox{max-width:830px;margin:auto;text-align:center;background:#fff;padding:46px;border-radius:15px;box-shadow:0 12px 35px #0000000c}.stars{color:#e3a923;font-size:25px;letter-spacing:3px}
+.area{background:#fff}.cta{background:var(--blue);color:#fff}.cta .wrap{display:flex;justify-content:space-between;align-items:center;gap:30px}.cta h2{margin:0}.cta p{margin:7px 0 0;color:#e8f2f8}
+footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{display:flex;justify-content:space-between;gap:30px}.foot strong{color:#fff}.mobile-call{display:none}
+.preview{position:fixed;right:15px;bottom:15px;background:#e2b353;color:#152536;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:900;z-index:30}
+@media(max-width:800px){.navlinks a:not(.btn){display:none}.top .wrap{justify-content:center}.top span:last-child{display:none}.hero{min-height:570px;background:linear-gradient(#071827c9,#071827e6),url('https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=1000&q=80') center/cover}.hero-copy{padding:65px 0}h1{font-size:44px}.hero p{font-size:18px}.trustgrid{grid-template-columns:1fr 1fr}.trustgrid div:nth-child(2){border-right:0}.cards,.jobs,.split{grid-template-columns:1fr}.card{min-height:205px}.photo{min-height:350px;order:-1}.cta .wrap,.foot{display:block}.cta .btn{margin-top:20px}.mobile-call{display:block;position:fixed;bottom:14px;left:4%;right:4%;z-index:25;background:var(--blue);color:#fff;padding:15px;border-radius:10px;text-align:center;font-weight:900;box-shadow:0 5px 22px #0005}.preview{bottom:76px}section{padding:58px 0}h2{font-size:33px}}
+</style></head>
+<body>
+<div class="top"><div class="wrap"><span>Local plumber serving Guildford & Surrey</span><span>Call Nigel: __COMPANY_PHONE__ &nbsp; · &nbsp; __COMPANY_EMAIL__</span></div></div>
+<header><div class="wrap nav"><div class="brand">Nigel Harvey <small>PLUMBING</small></div><div class="navlinks"><a href="#services">Services</a><a href="#about">About</a><a href="#work">Recent Work</a><a href="#areas">Areas</a><a class="btn" href="/request-quote">Get a Quote</a></div></div></header>
+<section class="hero"><div class="wrap"><div class="hero-copy"><div class="eyebrow">Nigel Harvey Plumbing · Guildford</div><h1>Local plumbing.<br>Done properly.</h1><p>Reliable plumbing repairs, bathrooms, showers and heating work across Guildford and Surrey. From first enquiry to finished job, you deal directly with Nigel.</p><div class="actions"><a class="btn" href="/request-quote">Get a Quote</a><a class="btn white" href="tel:__COMPANY_PHONE_TEL__">Call __COMPANY_PHONE__</a></div></div></div></section>
+<div class="trust"><div class="wrap trustgrid"><div><strong>Local & independent</strong><span>Based in Guildford</span></div><div><strong>20+ years</strong><span>Practical trade experience</span></div><div><strong>Clear quotes</strong><span>Labour & materials explained</span></div><div><strong>Direct contact</strong><span>Deal with Nigel throughout</span></div></div></div>
+<section id="services"><div class="wrap"><div class="intro"><h2>Plumbing services without the fuss</h2><p>From a leaking fitting to a bathroom project, get straightforward advice, clear pricing and tidy workmanship.</p></div><div class="cards">
+<div class="card"><div class="icon">🔧</div><h3>Plumbing Repairs</h3><p>Leaks, taps, wastes, toilets, pipework and everyday plumbing problems.</p></div>
+<div class="card"><div class="icon">🚿</div><h3>Bathrooms & Showers</h3><p>Bathroom plumbing, shower replacements, trays, screens and associated pipework.</p></div>
+<div class="card"><div class="icon">♨️</div><h3>Radiators & Heating</h3><p>Radiators, valves, system improvements and heating pipework.</p></div>
+<div class="card"><div class="icon">💧</div><h3>Installations</h3><p>Outside taps, appliances, sinks and practical plumbing upgrades around the home.</p></div>
+</div></div></section>
+<section id="about" style="background:#f3f7fa"><div class="wrap split"><div><h2>A local tradesman you can actually speak to</h2><p class="muted">When you contact Nigel Harvey Plumbing, you deal directly with Nigel — not a call centre or salesperson.</p><div class="ticks"><div class="tick">Straightforward communication before the job</div><div class="tick">Clear, itemised quotations</div><div class="tick">Care taken in your home</div><div class="tick">One point of contact from enquiry to completion</div></div><a class="btn" href="/request-quote">Ask Nigel about your job</a></div><div class="photo"></div></div></section>
+<section class="dark" id="work"><div class="wrap"><div class="intro"><h2>Recent work</h2><p>This section is designed for your own job photographs. Real completed work will make the finished site feel much stronger than stock photography.</p></div><div class="jobs"><div class="job"><small>Bathroom</small><h3>Bath-to-shower conversion</h3><p>New shower tray, enclosure, waste and altered hot and cold pipework.</p></div><div class="job"><small>Heating</small><h3>Radiator installation</h3><p>New radiator and valve installation with pipework alterations and testing.</p></div><div class="job"><small>Plumbing</small><h3>Outside tap & pipework</h3><p>New supply pipework, isolation and outside tap installation.</p></div></div></div></section>
+<section class="review"><div class="wrap"><div class="reviewbox"><div class="stars">★★★★★</div><h2>Recommended by local customers</h2><p class="muted">Your genuine Google review rating and selected customer reviews can be shown here using the review information already supported by your website.</p><a class="btn" href="__GOOGLE_REVIEWS_URL__">Read Google Reviews</a></div></div></section>
+<section class="area" id="areas"><div class="wrap split"><div><h2>Serving Guildford and surrounding Surrey areas</h2><p class="muted">Guildford, Godalming, Woking, Farnham, Camberley and surrounding areas. Your existing location pages remain in place for local search visibility.</p></div><div><h3>Not sure if I cover your area?</h3><p class="muted">Send your postcode and a short description of the work. For jobs further away, any travel charge can be made clear before you book.</p><a class="btn" href="/request-quote">Check your area</a></div></div></section>
+<section class="cta"><div class="wrap"><div><h2>Need a plumber?</h2><p>Tell me what you need doing and I'll come back to you with the next step.</p></div><a class="btn white" href="/request-quote">Get a Quote</a></div></section>
+<footer><div class="wrap foot"><div><strong>Nigel Harvey Plumbing</strong><br>Nigel Harvey Ltd · Guildford, Surrey</div><div>__COMPANY_PHONE__<br>__COMPANY_EMAIL__</div></div></footer>
+<a class="mobile-call" href="tel:__COMPANY_PHONE_TEL__">Call Nigel · __COMPANY_PHONE__</a><div class="preview">NEW HOMEPAGE PREVIEW</div>
+</body></html>
+"""
+
+
+@app.get("/new-home", response_class=HTMLResponse)
+def new_homepage_preview(request: Request):
+    html = NEW_HOMEPAGE_PREVIEW_HTML
+    html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
+    html = html.replace("__COMPANY_PHONE_TEL__", COMPANY_PHONE_TEL)
+    html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
+    html = html.replace("__GOOGLE_REVIEWS_URL__", GOOGLE_REVIEWS_URL)
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -13410,6 +13594,41 @@ SMART_JOB_MATERIAL_KITS = [
         ]
     },
     {
+        "job_type": "bath_to_shower_conversion",
+        "display_name": "Bath removal and shower tray/enclosure installation",
+        "keywords": [
+            "replace bath with shower", "remove bath and fit shower", "remove bath fit shower",
+            "bath to shower", "shower tray and screen", "shower tray and enclosure",
+            "remove the bath", "replace the bath"
+        ],
+        "exclude_keywords": [],
+        "labour_range": [900, 1800],
+        "materials": [
+            {"name": "Shower tray", "quantity": 1, "required": True, "reason": "Main shower base; confirm dimensions and handing before ordering."},
+            {"name": "Shower screen / enclosure", "quantity": 1, "required": True, "reason": "Confirm opening, handing and tray compatibility before ordering."},
+            {"name": "90mm shower waste", "quantity": 1, "required": True, "reason": "Waste fitting for the shower tray."},
+            {"name": "40mm waste pipe", "quantity": 2, "required": False, "reason": "Provisional allowance for adapting the shower waste run."},
+            {"name": "40mm waste bend", "quantity": 2, "required": False, "reason": "Provisional fittings for the waste route."},
+            {"name": "15mm copper pipe", "quantity": 3, "required": False, "reason": "Provisional allowance for hot/cold pipe alterations."},
+            {"name": "15mm copper elbow", "quantity": 4, "required": False, "reason": "Quick-adjust fitting allowance; set the quantity after checking the route."},
+            {"name": "15mm copper tee", "quantity": 2, "required": False, "reason": "Quick-adjust fitting allowance where branches are required."},
+            {"name": "15mm copper coupler", "quantity": 2, "required": False, "reason": "Quick-adjust fitting allowance for pipe alterations."},
+            {"name": "15mm isolating valve", "quantity": 2, "required": False, "reason": "Use where suitable service isolation is required."},
+            {"name": "Sanitary silicone", "quantity": 1, "required": True, "reason": "Seal tray/screen junctions and disturbed sanitary edges."},
+            {"name": "18mm plywood", "quantity": 1, "required": False, "reason": "Include when a rigid tray base is required."},
+            {"name": "3x2 treated timber", "quantity": 4, "required": False, "reason": "Include when building a raised/supporting tray base."},
+            {"name": "Waterproof tile backer board", "quantity": 2, "required": False, "reason": "Use where the shower area needs rebuilding or waterproof backing."},
+            {"name": "Waterproofing tape / tanking", "quantity": 1, "required": False, "reason": "Use where disturbed shower walls require waterproofing."}
+        ],
+        "questions": [
+            "What are the exact shower tray dimensions and waste position?",
+            "Is the enclosure a pivot, sliding, quadrant or fixed screen, and what handing is required?",
+            "Is Nigel supplying the tray and enclosure?",
+            "How much 15mm copper and 40mm waste pipe is actually required?",
+            "Does the tray need a raised timber/ply base?"
+        ]
+    },
+    {
         "job_type": "shower_replacement",
         "display_name": "Shower replacement",
         "keywords": ["replace shower", "remove old shower", "fit new shower", "replacement shower"],
@@ -15729,7 +15948,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
     multi_job_estimate = build_multi_job_estimate(original_job, quote_type)
 
     return {
-        "estimator_version": "manual-job-reference-v16-2",
+        "estimator_version": "workflow-fixes-v16-3-1",
         "business": {
             "name": "Nigel Harvey Ltd",
             "location": "Guildford, Surrey, UK",
