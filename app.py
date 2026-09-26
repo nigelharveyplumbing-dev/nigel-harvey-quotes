@@ -88,7 +88,7 @@ def check_basic_auth(request: Request):
         decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
         user, pwd = decoded.split(":", 1)
         return hmac.compare_digest(user, APP_USERNAME) & hmac.compare_digest(pwd, APP_PASSWORD)
-    except (ValueError, UnicodeError, binascii.Error):
+    except (ValueError, TypeError, UnicodeError, binascii.Error):
         return False
 
 
