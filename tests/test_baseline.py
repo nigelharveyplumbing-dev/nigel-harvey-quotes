@@ -108,6 +108,57 @@ class BaselineTests(unittest.TestCase):
         self.assertTrue(conn.execute("SELECT name FROM sqlite_master WHERE name='quotes'").fetchone())
         conn.close()
 
+    def test_quote_save_load_update_and_conversion(self):
+        m = self.module
+        request = m.QuoteRequest(
+            quote_type="small", customer_name="Before Customer",
+            customer_address="1 Test Street", customer_phone="07000000000",
+            job_description="Replace basin tap", labour_cost=101.235,
+            materials=[m.MaterialItem(name="Basin tap", quantity=2, manual_price=12.345)],
+            deposit_percent=50,
+        )
+        result = m.calculate_quote(request)
+        self.assertEqual(result["labour"], 101.23)
+        self.assertEqual(result["materials"], 30.86)
+        self.assertEqual(result["total_price"], 132.1)
+        self.assertEqual(result["deposit_amount"], 66.05)
+        quote_id = m.save_quote(request.model_dump(), result)
+        saved = m.get_quote_by_id(quote_id)
+        self.assertEqual(saved["request"], request.model_dump())
+        self.assertEqual(saved["result"], result)
+        self.assertIn(saved, m.load_quotes())
+        self.assertEqual(saved["id"], quote_id)
+        self.assertEqual(saved["customer_name"], "Before Customer")
+
+        edited = request.model_copy(update={
+            "customer_name": "After Customer", "labour_cost": 202.25,
+            "job_description": "Replace kitchen tap"})
+        edited_result = m.calculate_quote(edited)
+        updated = m.update_quote_by_id(quote_id, edited.model_dump(), edited_result)
+        self.assertEqual(updated["id"], quote_id)
+        self.assertEqual(updated["result"], edited_result)
+        self.assertEqual(updated["request"], edited.model_dump())
+        self.assertEqual(updated["customer_name"], "After Customer")
+        self.assertIsNone(m.update_quote_by_id(-1, edited.model_dump(), edited_result))
+
+        expected_number = m.next_invoice_number()
+        invoice = m.create_invoice_from_quote(quote_id)
+        self.assertEqual(invoice["invoice_number"], expected_number)
+        self.assertEqual(invoice["quote_id"], quote_id)
+        self.assertEqual(invoice["customer_id"], updated["customer_id"])
+        self.assertEqual(invoice["quote_result"], edited_result)
+        self.assertEqual(invoice["invoice"]["customer_name"], "After Customer")
+        self.assertEqual(invoice["invoice"]["customer_address"], "1 Test Street")
+        self.assertEqual(invoice["invoice"]["job"], "Replace kitchen tap")
+        for key in ("labour", "materials", "total_price", "deposit_amount"):
+            self.assertEqual(invoice["invoice"][key], edited_result[key])
+        self.assertEqual(invoice["status"], "unpaid")
+        self.assertEqual(invoice["balance_due"], edited_result["total_price"])
+        self.assertEqual(m.get_invoice_by_id(invoice["id"]), invoice)
+        self.assertIsNone(m.create_invoice_from_quote(-1))
+        self.assertEqual(m.next_invoice_number(),
+                         f"INV-{m.now_uk().year}-{int(expected_number[-4:]) + 1:04d}")
+
 
 if __name__ == "__main__":
     unittest.main()
