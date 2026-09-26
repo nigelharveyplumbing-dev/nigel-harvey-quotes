@@ -196,6 +196,9 @@ class BaselineTests(unittest.TestCase):
                 f"{self.test_username}:{secrets.token_urlsafe(24)}".encode()).decode()
             self.assertEqual(client.get("/api/quotes", headers={"Authorization": wrong}).status_code, 401)
             self.assertEqual(client.get("/api/quotes", headers={"Authorization": "Basic invalid"}).status_code, 401)
+            malformed_unicode = "Basic " + base64.b64encode(
+                f"{chr(233)}:{secrets.token_urlsafe(8)}".encode()).decode()
+            self.assertEqual(client.get("/api/quotes", headers={"Authorization": malformed_unicode}).status_code, 401)
             with patch.object(m, "APP_USERNAME", ""), patch.object(m, "APP_PASSWORD", ""):
                 self.assertEqual(client.get("/app", headers=self.auth_headers).status_code, 401)
                 self.assertEqual(client.get("/api/quotes", headers=self.auth_headers).status_code, 401)
