@@ -117,7 +117,7 @@ class BaselineTests(unittest.TestCase):
         self.assertIsNotNone(config)
         masked = m.HTML.replace(config.group(1), "__PAYMENT_CONFIG__", 1)
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
-                         "61a9c180c830ac253b685139ee2d1007c10172489f520e510f3e6768dbdc0da7")
+                         "d53623c3edaa4221ef138f636254bc0e455610309338f3797e018165ae9dd34c")
         self.assertEqual(m.HTML.count("<style>"), 1)
         self.assertEqual(m.HTML.count("<script>"), 1)
         self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {

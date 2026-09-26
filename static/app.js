@@ -1988,11 +1988,13 @@ function setQuoteButtonMode(isEditing = false) {
 
 function resetQuoteFormState() {
   CURRENT_QUOTE_ID = null;
+  clearAIQuoteDraftState();
   setEditingStatus("", false);
   setQuoteButtonMode(false);
 }
 
 function fillFormFromRequest(requestData, quoteId = null) {
+  clearAIQuoteDraftState();
   document.getElementById("quote_type").value = requestData.quote_type || "small";
   document.getElementById("customer_name").value = requestData.customer_name || "";
   document.getElementById("customer_address").value = requestData.customer_address || "";
@@ -2760,6 +2762,14 @@ async function deleteSavedQuote(id) {
 
 
 let LAST_AI_QUOTE_DRAFT = null;
+let AI_QUOTE_DRAFT_PENDING = false;
+
+function clearAIQuoteDraftState() {
+  LAST_AI_QUOTE_DRAFT = null;
+  AI_QUOTE_DRAFT_PENDING = false;
+  const box = document.getElementById("aiQuoteResult");
+  if (box) box.innerHTML = "";
+}
 
 async function checkAIQuoteStatus() {
   const status = document.getElementById("aiQuoteStatus");
@@ -3434,6 +3444,7 @@ async function generateAIQuoteDraft() {
     }
 
     LAST_AI_QUOTE_DRAFT = data.draft;
+    AI_QUOTE_DRAFT_PENDING = true;
     renderAIQuoteDraft(data);
     if (status) {
       const context = data.context_summary || {};
@@ -4882,6 +4893,7 @@ function applyAIQuoteDraft() {
       });
     });
   mergeDuplicateMaterialRowsInForm();
+  AI_QUOTE_DRAFT_PENDING = false;
 
   scheduleQuoteLearning();
   scheduleLabourIntelligence();
@@ -4896,9 +4908,7 @@ function applyAIQuoteDraft() {
 }
 
 function discardAIQuoteDraft() {
-  LAST_AI_QUOTE_DRAFT = null;
-  const box = document.getElementById("aiQuoteResult");
-  if (box) box.innerHTML = "";
+  clearAIQuoteDraftState();
   showNotice("AI draft discarded.");
 }
 
@@ -4912,6 +4922,21 @@ async function generateQuote(options = {}) {
 
   const errorBox = document.getElementById("error");
   errorBox.style.display = "none";
+
+  if (AI_QUOTE_DRAFT_PENDING && LAST_AI_QUOTE_DRAFT) {
+    if (silent) {
+      throw new Error("A pending AI quote draft must be reviewed before saving.");
+    }
+    const applyDraft = confirm(
+      "An AI quote draft is ready but has not been applied. Apply its scope, labour and selected materials before generating the quote?"
+    );
+    if (!applyDraft) {
+      errorBox.innerText = "Quote not generated. Apply or discard the pending AI draft first.";
+      errorBox.style.display = "block";
+      return null;
+    }
+    applyAIQuoteDraft();
+  }
 
   const payload = collectFormPayload();
   const isEditing = !!CURRENT_QUOTE_ID;

@@ -3,6 +3,7 @@
 import base64
 from email import message_from_string
 import hashlib
+from html.parser import HTMLParser
 import io
 import json
 import os
@@ -23,6 +24,34 @@ from PIL import Image
 import requests
 
 from local_browser_server import disposable_app
+
+
+class _DivTreeParser(HTMLParser):
+    """Track explicit div nesting without needing a browser or HTML dependency."""
+
+    def __init__(self):
+        super().__init__()
+        self.stack = []
+        self.nodes = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag != "div":
+            return
+        attributes = dict(attrs)
+        node = {
+            "id": attributes.get("id", ""),
+            "classes": set(attributes.get("class", "").split()),
+            "parent": self.stack[-1] if self.stack else None,
+            "children": [],
+        }
+        if node["parent"] is not None:
+            node["parent"]["children"].append(node)
+        self.nodes.append(node)
+        self.stack.append(node)
+
+    def handle_endtag(self, tag):
+        if tag == "div" and self.stack:
+            self.stack.pop()
 
 
 class LocalIntegrationTests(unittest.TestCase):
@@ -149,6 +178,201 @@ vm.runInNewContext(source.slice(start, end) + '\ncopyInvoiceBankDetails()', cont
             input=match.group(1), text=True, capture_output=True, check=False,
         )
         self.assertEqual(result.returncode, 0, "Copy action ignored staging payment configuration")
+
+    @unittest.skipUnless(shutil.which("node"), "Node is required to execute browser JavaScript")
+    def test_ai_draft_values_reach_generate_quote_payload_without_extra_manual_entry(self):
+        """The AI build -> Generate Quote workflow must not silently submit empty fields."""
+        script = r"""
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const section = (start, end) => {
+  const first = source.indexOf(start);
+  const last = source.indexOf(end, first);
+  if (first < 0 || last < 0) throw new Error(`Could not extract ${start}`);
+  return source.slice(first, last);
+};
+
+const generateAI = section(
+  'async function generateAIQuoteDraft() {',
+  '\n\nfunction addQuoteHealthSuggestion('
+);
+const collectPayload = section(
+  'function collectFormPayload() {',
+  '\n\nfunction buildQuoteMaterialsWhatsappText('
+);
+const generateQuote = section(
+  'async function generateQuote(options = {}) {',
+  '\n\nasync function convertQuoteToInvoice('
+);
+const applyDraft = section(
+  'function applyAIQuoteDraft() {',
+  '\n\nfunction discardAIQuoteDraft('
+);
+
+const nodes = new Map();
+const defaults = {
+  quote_type: 'small', customer_name: 'Staging Test Customer',
+  customer_address: '1 Test Street', customer_phone: '07000000000',
+  job: 'Replace bath tap', labour: '', materials_handling_percent: '25',
+  callout_charge: '200', travel_charge: '0', wall_tiling_m2: '0',
+  floor_tiling_m2: '0', wall_height: 'half', deposit_percent: '0',
+};
+function element(id) {
+  if (!nodes.has(id)) {
+    nodes.set(id, {
+      id, value: defaults[id] || '', checked: false, files: [], innerHTML: '',
+      innerText: '', style: {}, classList: {add() {}, remove() {}},
+    });
+  }
+  return nodes.get(id);
+}
+
+let materialRows = [];
+let savedPayload = null;
+let quoteRequests = 0;
+const confirmations = [false, true];
+const aiDraft = {
+  scope_of_work: 'Replace bath tap and test for leaks.',
+  labour_suggestion: 180,
+  materials: [{
+    name: 'Bath tap connectors', quantity: 2, supplier: 'Synthetic Supplier',
+    manual_price: 12.5, required: true, display_status: 'required',
+  }, {
+    name: 'Optional decorative cover', quantity: 1, manual_price: 5,
+    required: false, display_status: 'optional', include_in_quote: false,
+  }, {
+    name: 'Selected silicone', quantity: 1, manual_price: 3,
+    required: false, display_status: 'optional', include_in_quote: true,
+    optional_selected: true,
+  }],
+};
+
+function materialRow(material) {
+  return {
+    querySelector(selector) {
+      const fields = {
+        '.m-name': material.name || '', '.m-qty': material.quantity || 1,
+        '.m-supplier': material.supplier || '', '.m-url': material.url || '',
+        '.m-manual': material.manual_price || 0,
+      };
+      return {value: fields[selector]};
+    },
+  };
+}
+
+const context = {
+  console,
+  document: {
+    getElementById: element,
+    querySelectorAll(selector) {
+      return selector === '.material-row' ? materialRows : [];
+    },
+  },
+  fetch: async (url, options = {}) => {
+    if (url === '/api/ai-quote-draft') {
+      return {ok: true, json: async () => ({draft: aiDraft, context_summary: {}})};
+    }
+    if (url === '/api/quote') {
+      quoteRequests += 1;
+      savedPayload = JSON.parse(options.body);
+      return {ok: true, json: async () => ({id: 1, result: {}})};
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  },
+  quoteRequestCount: () => quoteRequests,
+  currentMaterialsForAI: () => [],
+  renderAIQuoteDraft: () => {},
+  prepareDraftForV125: draft => draft,
+  clearMaterials: () => { materialRows = []; },
+  addMaterial: material => { materialRows.push(materialRow(material)); },
+  isOptionalDraftMaterial: material => !material.required && material.display_status !== 'required',
+  optionalMaterialIsSelected: material => material.include_in_quote === true || material.optional_selected === true,
+  mergeDuplicateMaterialRowsInForm: () => {}, scheduleQuoteLearning: () => {},
+  scheduleLabourIntelligence: () => {}, updateForgottenItemWarnings: () => {},
+  updateSupplierPreferenceNotes: () => {},
+  applyChargingRuleToMaterial: material => material,
+  setEditingStatus: () => {}, setQuoteButtonMode: () => {},
+  renderQuoteResult: () => {}, loadHistory: async () => {},
+  loadCustomers: async () => {}, loadDashboard: async () => {},
+  showNotice: () => {}, alert: () => {}, confirm: () => confirmations.shift(),
+  escapeHtml: value => String(value || ''),
+};
+vm.createContext(context);
+vm.runInContext(`
+let SAVED_MATERIAL_DB = [{}];
+let CURRENT_SITE_SURVEY = null;
+let CAPTURED_SITE_PHOTOS = [];
+let RECORDED_SITE_VIDEO = null;
+let LAST_AI_QUOTE_DRAFT = null;
+let AI_QUOTE_DRAFT_PENDING = false;
+let CURRENT_QUOTE_ID = null;
+
+${generateAI}
+${collectPayload}
+${applyDraft}
+${generateQuote}
+
+globalThis.runWorkflow = async () => {
+  await generateAIQuoteDraft();
+  await generateQuote({skipDashboardReload: true});
+  if (quoteRequestCount() !== 0) {
+    throw new Error('Generate Quote submitted after the pending AI draft was declined');
+  }
+  await generateQuote({skipDashboardReload: true});
+};
+`, context);
+
+context.runWorkflow().then(() => {
+  if (!savedPayload) throw new Error('Generate Quote did not submit a payload');
+  if (savedPayload.labour_cost !== 180) {
+    throw new Error(`AI labour was lost: ${savedPayload.labour_cost}`);
+  }
+  if (savedPayload.materials.length !== 2 || savedPayload.materials[0].manual_price !== 12.5 ||
+      savedPayload.materials[1].name !== 'Selected silicone') {
+    throw new Error(`AI materials were lost: ${JSON.stringify(savedPayload.materials)}`);
+  }
+}).catch(error => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
+"""
+        result = subprocess.run(
+            ["node", "-e", script, str(self.root / "static" / "app.js")],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(
+            result.returncode, 0,
+            "AI draft values did not reach Generate Quote: " + (result.stderr or result.stdout),
+        )
+
+    def test_quote_and_invoice_cards_are_not_nested_inside_flex_headers(self):
+        """Malformed div nesting makes the document cards collapse into narrow columns."""
+        parser = _DivTreeParser()
+        parser.feed((self.root / "templates" / "app.html").read_text())
+        by_id = {node["id"]: node for node in parser.nodes if node["id"]}
+
+        quote = by_id["resultCard"]
+        invoice = by_id["invoiceCard"]
+        quote_header = next(node for node in quote["children"] if "quote-header" in node["classes"])
+        invoice_header = next(node for node in invoice["children"] if "quote-header" in node["classes"])
+
+        self.assertTrue(
+            any("doc-grid-two" in node["classes"] for node in quote["children"]),
+            "Quote details grid is trapped inside the horizontal flex header",
+        )
+        self.assertIsNot(
+            invoice["parent"], quote,
+            "Invoice card is incorrectly nested inside the quote card",
+        )
+        self.assertFalse(
+            any("doc-grid-two" in node["classes"] for node in quote_header["children"]),
+            "Quote content is rendered as flex-header columns",
+        )
+        self.assertFalse(
+            any("doc-grid-two" in node["classes"] for node in invoice_header["children"]),
+            "Invoice content is rendered as flex-header columns",
+        )
 
     def test_quote_invoice_customer_documents_and_deletion(self):
         c = self.client
