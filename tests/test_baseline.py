@@ -6,9 +6,11 @@ path before import. No test opens production /var/data.
 
 import importlib.util
 import base64
+from email import message_from_string
 import json
 import io
 import os
+import subprocess
 import shutil
 import sqlite3
 import sys
@@ -68,6 +70,118 @@ class BaselineTests(unittest.TestCase):
                       ("GET", "/invoice/{invoice_id}"),
                       ("POST", "/api/invoices/{invoice_id}/send-email")]:
             self.assertIn(route, routes)
+
+    def test_invoice_email_sharing_baseline(self):
+        m = self.module
+        invoice = {
+            "id": 47, "invoice_number": "INV-TEST-47", "job_reference": "JOB-47",
+            "invoice": {"customer_name": "Pat & Co"}, "status": "part paid",
+            "balance_due": 125.5, "payment_link": "https://example.test/pay/47",
+        }
+        logo = "data:image/png;base64," + base64.b64encode(b"test-logo").decode()
+        with patch.object(m, "EMAIL_ENABLED", True), patch.object(m, "EMAIL_USER", "sender@example.test"), \
+             patch.object(m, "EMAIL_PASS", "test-only"), patch.object(m, "EMAIL_FROM_NAME", "Test Sender"), \
+             patch.object(m, "EMAIL_HOST", "smtp.example.test"), patch.object(m, "EMAIL_PORT", 465), \
+             patch.object(m, "build_invoice_public_url", return_value="https://example.test/invoice/47") as url, \
+             patch.object(m, "generate_invoice_pdf_bytes", return_value=b"%PDF-test-attachment") as pdf, \
+             patch.object(m, "get_company_logo_value", return_value=logo), \
+             patch.object(m.smtplib, "SMTP_SSL") as smtp:
+            m.send_invoice_email_now(invoice, "  pat@example.test  ", " Please review <today>. ")
+            smtp.assert_called_once()
+            self.assertEqual(smtp.call_args.args, ("smtp.example.test", 465))
+            server = smtp.return_value.__enter__.return_value
+            server.login.assert_called_once_with("sender@example.test", "test-only")
+            sender, recipients, raw = server.sendmail.call_args.args
+            self.assertEqual((sender, recipients), ("sender@example.test", ["pat@example.test"]))
+            url.assert_called_once_with(47)
+            pdf.assert_called_once_with(invoice)
+        msg = message_from_string(raw)
+        self.assertEqual(msg["Subject"], "Invoice INV-TEST-47 - Job Ref JOB-47 - Nigel Harvey Ltd")
+        self.assertEqual(msg["From"], "Test Sender <sender@example.test>")
+        self.assertEqual(msg["To"], "pat@example.test")
+        parts = list(msg.walk())
+        plain = next(p for p in parts if p.get_content_type() == "text/plain").get_payload(decode=True).decode()
+        html = next(p for p in parts if p.get_content_type() == "text/html").get_payload(decode=True).decode()
+        self.assertIn("Hello Pat & Co,\n\nPlease review <today>.\n\nInvoice number: INV-TEST-47", plain)
+        self.assertIn("Job Ref: JOB-47\nBalance due: £125.50\nInvoice link: https://example.test/invoice/47", plain)
+        self.assertIn("Please review &lt;today&gt;.", html)
+        self.assertIn('href="https://example.test/invoice/47"', html)
+        self.assertIn("Hello Pat & Co,", html)
+        attachment = next(p for p in parts if p.get_content_type() == "application/pdf")
+        self.assertEqual(attachment.get_filename(), "INV-TEST-47.pdf")
+        self.assertEqual(attachment.get_content_disposition(), "attachment")
+        self.assertEqual(attachment.get_payload(decode=True), b"%PDF-test-attachment")
+        image = next(p for p in parts if p.get_content_type() == "image/png")
+        self.assertEqual((image.get("Content-ID"), image.get_filename()), ("<companylogo>", "logo.png"))
+
+        with patch.object(m, "EMAIL_ENABLED", True), patch.object(m, "EMAIL_USER", "sender@example.test"), \
+             patch.object(m, "EMAIL_PASS", "test-only"), patch.object(m, "get_company_logo_value", return_value=""), \
+             patch.object(m, "generate_invoice_pdf_bytes", return_value=b"%PDF-default"), \
+             patch.object(m.smtplib, "SMTP_SSL") as smtp:
+            m.send_invoice_email_now({**invoice, "job_reference": ""}, "pat@example.test")
+            raw_default = smtp.return_value.__enter__.return_value.sendmail.call_args.args[2]
+        default_msg = message_from_string(raw_default)
+        self.assertEqual(default_msg["Subject"], "Invoice INV-TEST-47 - Nigel Harvey Ltd")
+        default_plain = next(p for p in default_msg.walk() if p.get_content_type() == "text/plain")
+        self.assertIn("Please find your invoice attached as a PDF.\n\nInvoice number:",
+                      default_plain.get_payload(decode=True).decode())
+        self.assertIn("Job Ref: -", default_plain.get_payload(decode=True).decode())
+
+    def test_invoice_email_route_responses_without_sending(self):
+        m = self.module
+        invoice = {"id": 47, "invoice_number": "INV-TEST-47", "invoice": {"customer_name": "Pat"},
+                   "status": "unpaid", "balance_due": 50}
+        with TestClient(m.app) as client, patch.object(m.smtplib, "SMTP_SSL") as smtp:
+            payload = {"to_email": "pat@example.test", "message": "Please review"}
+            missing = client.post("/api/invoices/-1/send-email", json=payload)
+            self.assertEqual((missing.status_code, missing.json()), (404, {"detail": "Invoice not found"}))
+            with patch.object(m, "get_invoice_by_id", return_value=invoice):
+                unconfigured = client.post("/api/invoices/47/send-email", json=payload)
+                self.assertEqual((unconfigured.status_code, unconfigured.json()),
+                                 (400, {"detail": "Email sending is not configured yet. Set EMAIL_ENABLED=1, EMAIL_USER and EMAIL_PASS."}))
+                with patch.object(m, "EMAIL_ENABLED", True), patch.object(m, "EMAIL_USER", "sender@example.test"), \
+                     patch.object(m, "EMAIL_PASS", "test-only"), patch.object(m, "get_company_logo_value", return_value=""), \
+                     patch.object(m, "generate_invoice_pdf_bytes", return_value=b"%PDF-route"):
+                    sent = client.post("/api/invoices/47/send-email", json=payload)
+                    self.assertEqual((sent.status_code, sent.json()), (200, {"ok": True}))
+                    smtp.side_effect = OSError("mock SMTP failure")
+                    failed = client.post("/api/invoices/47/send-email", json=payload)
+                    self.assertEqual((failed.status_code, failed.json()),
+                                     (500, {"detail": "Email send failed: mock SMTP failure"}))
+            self.assertEqual(smtp.call_count, 2)
+
+    def test_browser_sharing_messages_and_phone_baseline(self):
+        """Execute only pure browser snippets; never open a WhatsApp URL."""
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node is required to execute the existing browser sharing snippets")
+        html = self.module.HTML
+        normalise = html[html.index("function normalisePhone(phone) {"):html.index("function setEditingStatus(")]
+        quote = html[html.index("function buildQuoteWhatsappMessage(data) {"):html.index("function renderQuoteResult(data) {")]
+        invoice = html[html.index("  const invoiceUrl = window.location.origin + \"/invoice/\" + item.id;"):
+                       html.index("  document.getElementById(\"invoiceOpenBtn\").href = invoiceUrl;")]
+        script = f"""
+const assert = require('node:assert/strict');
+const window = {{location: {{origin: 'https://example.test'}}}};
+const CURRENT_QUOTE_ID = 12;
+const pounds = n => String.fromCharCode(163) + Number(n || 0).toFixed(2);
+const document = {{nodes: {{}}, getElementById(id) {{return this.nodes[id] ||= {{href: ''}};}}}};
+{normalise}
+{quote}
+assert.equal(normalisePhone('07595 725547'), '447595725547');
+assert.equal(normalisePhone('+44 (7595) 725547'), '447595725547');
+assert.equal(normalisePhone('not supplied'), '');
+assert.equal(buildQuoteWhatsappMessage({{customer_name:'Pat', total_price:125.5}}),
+  'Hi Pat,\\n\\nPlease find your quote below.\\n\\nQuote total: £125.50\\n\\nView/download your quote PDF:\\nhttps://example.test/api/quotes/12/pdf\\n\\nIf you have any questions, just let me know.\\n\\nNigel Harvey Ltd\\n07595 725547');
+const item = {{id:47, invoice_number:'INV-TEST-47', balance_due:125.5}};
+const invoice = {{customer_name:'Pat', customer_phone:'07595 725547'}};
+const quoteResult = {{customer_phone:''}};
+{invoice}
+assert.equal(document.getElementById('invoiceWhatsappBtn').href,
+ 'https://wa.me/447595725547?text=' + encodeURIComponent('Nigel Harvey Ltd Invoice\\n\\nInvoice: INV-TEST-47\\nCustomer: Pat\\nBalance due: £125.50\\n\\nView your invoice:\\nhttps://example.test/invoice/47'));
+"""
+        result = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_http_app_access_and_public_site(self):
         m = self.module
