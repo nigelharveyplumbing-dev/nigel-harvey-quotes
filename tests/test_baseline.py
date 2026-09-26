@@ -5,6 +5,8 @@ path before import. No test opens production /var/data.
 """
 
 import importlib.util
+import base64
+import json
 import shutil
 import sqlite3
 import sys
@@ -181,6 +183,82 @@ class BaselineTests(unittest.TestCase):
         self.assertIsNone(m.get_invoice_by_id(invoice["id"]))
         self.assertFalse(m.delete_invoice_by_id(invoice["id"]))
         self.assertEqual(m.next_invoice_number(), number)  # COUNT-based numbering after deletion
+
+    def test_material_cache_routes_lookup_and_fallback(self):
+        m = self.module
+        credential = base64.b64encode(f"{m.APP_USERNAME}:{m.APP_PASSWORD}".encode()).decode()
+        request = m.Request({"type": "http", "method": "GET", "path": "/api/material-prices",
+                             "headers": [(b"authorization", f"Basic {credential}".encode())]})
+        url = "https://example.test/material/valve"
+        m.upsert_material_price_cache(url, "Valve", "Test Supplier", price=12.345,
+                                      manual_price=10.25, status="live")
+        cached = m.get_cached_material_price(url)
+        self.assertEqual(cached["name"], "Valve")
+        self.assertEqual(cached["supplier"], "Test Supplier")
+        self.assertEqual(cached["last_price"], 12.345)
+        self.assertEqual(cached["last_live_price"], 12.345)
+        self.assertEqual(cached["last_manual_price"], 10.25)
+        self.assertEqual(cached["times_used"], 1)
+        self.assertEqual(cached["last_status"], "live")
+        m.upsert_material_price_cache(url, "", "", price=11.5, status="cached")
+        cached = m.get_cached_material_price(url)
+        self.assertEqual(cached["name"], "Valve")
+        self.assertEqual(cached["last_price"], 11.5)
+        self.assertEqual(cached["last_live_price"], 12.345)
+        self.assertEqual(cached["last_manual_price"], 10.25)
+        self.assertEqual(cached["times_used"], 2)
+        self.assertEqual(cached["last_status"], "cached")
+        self.assertIsNone(m.get_cached_material_price(""))
+        self.assertEqual(m.normalize_material_url(f" {url} "), url)
+
+        listed = json.loads(m.api_material_prices(request).body)
+        self.assertEqual(next(row for row in listed if row["id"] == cached["id"])["last_price"], 11.5)
+        library = m.get_material_search_library()
+        self.assertTrue(any(item.get("url") == url for item in library))
+        searched = json.loads(m.api_material_search("Valve", request).body)
+        self.assertTrue(any(item.get("url") == url for item in searched))
+        resolved = json.loads(m.api_material_resolve("Valve", request).body)
+        self.assertTrue(resolved["matched"])
+        self.assertEqual(resolved["requested_name"], "Valve")
+
+        old_scraper = m.scrape_live_price
+        try:
+            m.scrape_live_price = lambda _url: None
+            self.assertEqual(m.fetch_tracked_price(url, "Valve", "Test Supplier", 10.25), (12.345, "cached"))
+        finally:
+            m.scrape_live_price = old_scraper
+        self.assertEqual(m.get_cached_material_price(url)["last_status"], "cached")
+        payload = m.MaterialCacheUpdateRequest(name="Changed Valve", supplier="Other",
+                                                url=url, manual_price=9.75)
+        self.assertEqual(m.api_update_material_price(cached["id"], payload, request), {"ok": True})
+        changed = m.get_cached_material_price(url)
+        self.assertEqual((changed["name"], changed["supplier"], changed["last_manual_price"]),
+                         ("Changed Valve", "Other", 9.75))
+        self.assertEqual(m.api_delete_material_price(cached["id"], request), {"ok": True})
+        self.assertIsNone(m.get_cached_material_price(url))
+
+    def test_material_charging_and_quote_totals(self):
+        m = self.module
+        self.assertEqual(m.MaterialItem().model_dump()["charge_method"], "full")
+        self.assertEqual(m.MaterialItem().model_dump()["manual_price"], 0)
+        self.assertEqual(m.get_material_charging_rule("ptfe tape")["default_charge"], 0.5)
+        self.assertEqual(m.material_quote_unit_price("ptfe tape", 8), 0.5)
+        self.assertEqual(m.material_quote_unit_price("ptfe tape", 8, 1.25), 1.25)
+        self.assertEqual(m.material_quote_unit_price("valve", 8), 8)
+        data = m.QuoteRequest(labour_cost=100, materials=[
+            m.MaterialItem(name="ptfe tape", quantity=2, manual_price=8),
+            m.MaterialItem(name="valve", quantity=1, manual_price=20)])
+        result = m.calculate_quote(data)
+        self.assertEqual(result["internal_raw_materials"], 21)
+        self.assertEqual(result["materials_base"], 21)
+        self.assertEqual(result["materials_procurement_amount"], 5.25)
+        self.assertEqual(result["materials"], 26.25)
+        self.assertEqual(result["total_price"], 126.25)
+        self.assertEqual(result["material_lines"][0]["full_unit_price"], 8)
+        self.assertEqual(result["material_lines"][0]["unit_price_used"], 0.5)
+        no_handling = m.calculate_quote(data.model_copy(update={"include_materials_handling": False}))
+        self.assertEqual(no_handling["materials"], 21)
+        self.assertEqual(no_handling["total_price"], 121)
 
     def test_quote_save_load_update_and_conversion(self):
         m = self.module
