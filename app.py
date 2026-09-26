@@ -79,7 +79,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "16.3.5-live-homepage"
+APP_VERSION = "16.3.6-google-reviews"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 INVOICE_PHOTO_DIR = Path("/var/data/invoice_photos")
@@ -110,6 +110,110 @@ GOOGLE_REVIEW_2_TEXT = os.getenv("GOOGLE_REVIEW_2_TEXT", "").strip()
 GOOGLE_REVIEW_2_AUTHOR = os.getenv("GOOGLE_REVIEW_2_AUTHOR", "").strip()
 GOOGLE_REVIEW_3_TEXT = os.getenv("GOOGLE_REVIEW_3_TEXT", "").strip()
 GOOGLE_REVIEW_3_AUTHOR = os.getenv("GOOGLE_REVIEW_3_AUTHOR", "").strip()
+GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY", "").strip()
+GOOGLE_PLACE_ID = os.getenv("GOOGLE_PLACE_ID", "").strip()
+_GOOGLE_PLACE_ID_RUNTIME = ""
+
+
+def _google_place_id():
+    """Resolve the Google Place ID. Place IDs may be stored; review content is not cached."""
+    global _GOOGLE_PLACE_ID_RUNTIME
+    if GOOGLE_PLACE_ID:
+        return GOOGLE_PLACE_ID
+    if _GOOGLE_PLACE_ID_RUNTIME:
+        return _GOOGLE_PLACE_ID_RUNTIME
+    if not GOOGLE_PLACES_API_KEY:
+        return ""
+    try:
+        response = requests.post(
+            "https://places.googleapis.com/v1/places:searchText",
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": GOOGLE_PLACES_API_KEY,
+                "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress",
+            },
+            json={
+                "textQuery": "Nigel Harvey Plumbing Guildford Surrey",
+                "regionCode": "GB",
+                "languageCode": "en",
+                "maxResultCount": 1,
+            },
+            timeout=8,
+        )
+        response.raise_for_status()
+        places = response.json().get("places") or []
+        if places:
+            _GOOGLE_PLACE_ID_RUNTIME = (places[0].get("id") or "").strip()
+    except Exception as exc:
+        print(f"Google Places lookup failed: {exc}")
+    return _GOOGLE_PLACE_ID_RUNTIME
+
+
+def _google_reviews_html():
+    """Build the live Google rating/review section. Falls back cleanly if Google is unavailable."""
+    fallback = (
+        '<div class="stars">★★★★★</div>'
+        '<h2>Customer reviews</h2>'
+        '<p class="muted">See feedback from customers on Google, or leave a review after Nigel has completed your plumbing work.</p>'
+        f'<a class="btn" href="{escape(GOOGLE_REVIEWS_URL, quote=True)}" target="_blank" rel="noopener">Read Google Reviews</a>'
+    )
+    if not GOOGLE_PLACES_API_KEY:
+        return fallback
+    place_id = _google_place_id()
+    if not place_id:
+        return fallback
+    try:
+        response = requests.get(
+            f"https://places.googleapis.com/v1/places/{quote_plus(place_id)}",
+            headers={
+                "X-Goog-Api-Key": GOOGLE_PLACES_API_KEY,
+                "X-Goog-FieldMask": "displayName,rating,userRatingCount,reviews,googleMapsLinks.reviewsUri",
+            },
+            params={"languageCode": "en", "regionCode": "GB"},
+            timeout=8,
+        )
+        response.raise_for_status()
+        data = response.json()
+        rating = data.get("rating")
+        count = data.get("userRatingCount")
+        reviews = data.get("reviews") or []
+        reviews_url = ((data.get("googleMapsLinks") or {}).get("reviewsUri") or GOOGLE_REVIEWS_URL).strip()
+        if rating is None and not reviews:
+            return fallback
+
+        rating_text = f"{float(rating):.1f}" if rating is not None else ""
+        count_text = f"{int(count):,} Google review" + ("" if int(count) == 1 else "s") if count is not None else "Google reviews"
+        cards = []
+        for review in reviews[:3]:
+            author = review.get("authorAttribution") or {}
+            author_name = escape(author.get("displayName") or "Google customer")
+            author_uri = escape(author.get("uri") or review.get("googleMapsUri") or reviews_url, quote=True)
+            photo_uri = escape(author.get("photoUri") or "", quote=True)
+            review_uri = escape(review.get("googleMapsUri") or reviews_url, quote=True)
+            review_text = escape(((review.get("text") or {}).get("text") or "").strip())
+            relative_time = escape(review.get("relativePublishTimeDescription") or "")
+            stars = max(0, min(5, int(round(float(review.get("rating") or 0)))))
+            avatar = (f'<a href="{author_uri}" target="_blank" rel="noopener"><img class="review-avatar" src="{photo_uri}" alt="{author_name}"></a>' if photo_uri else '<div class="review-avatar review-avatar-fallback">G</div>')
+            body = f'<p class="review-text">{review_text}</p>' if review_text else ""
+            cards.append(
+                '<article class="google-review-card">'
+                f'<div class="review-author">{avatar}<div><a href="{author_uri}" target="_blank" rel="noopener"><strong>{author_name}</strong></a><div class="review-meta"><span class="mini-stars">{"★" * stars}{"☆" * (5-stars)}</span> {relative_time}</div></div></div>'
+                f'{body}<a class="review-source" href="{review_uri}" target="_blank" rel="noopener">View on Google</a>'
+                '</article>'
+            )
+
+        cards_html = '<div class="google-review-grid">' + ''.join(cards) + '</div>' if cards else ''
+        summary = f'<div class="google-rating"><strong>{rating_text}</strong><span class="stars">★★★★★</span><span>{escape(count_text)}</span></div>' if rating_text else ''
+        return (
+            '<div class="google-brand"><img src="https://www.gstatic.com/images/branding/googlelogo/1x/googlelogo_color_74x24dp.png" alt="Google"></div>'
+            '<h2>Customer reviews</h2>'
+            f'{summary}{cards_html}'
+            "<p class=\"review-note\">Reviews supplied by Google and shown in Google’s relevance order.</p>"
+            f'<a class="btn" href="{escape(reviews_url, quote=True)}" target="_blank" rel="noopener">Read all Google Reviews</a>'
+        )
+    except Exception as exc:
+        print(f"Google Places reviews failed: {exc}")
+        return fallback
 
 PAYMENT_LINK_BASE = ""
 
@@ -11121,11 +11225,11 @@ section{padding:78px 0}.intro{text-align:center;max-width:760px;margin:0 auto 42
 .split{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}.photo{min-height:480px;border-radius:15px;background:url('https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?auto=format&fit=crop&w=1200&q=85') center/cover}
 .ticks{display:grid;gap:12px;margin:25px 0}.tick:before{content:"✓";color:var(--blue);font-weight:900;margin-right:10px}.dark{background:var(--navy);color:#fff}.dark .intro p{color:#cbd7df}
 .jobs{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.job{background:#fff;color:var(--text);padding:29px;border-radius:13px}.job small{color:var(--blue);font-weight:900;text-transform:uppercase}.job p{color:var(--muted)}
-.review{background:#f5f8fa}.reviewbox{max-width:830px;margin:auto;text-align:center;background:#fff;padding:46px;border-radius:15px;box-shadow:0 12px 35px #0000000c}.stars{color:#e3a923;font-size:25px;letter-spacing:3px}
+.review{background:#f5f8fa}.reviewbox{max-width:1040px;margin:auto;text-align:center;background:#fff;padding:46px;border-radius:15px;box-shadow:0 12px 35px #0000000c}.stars{color:#e3a923;font-size:25px;letter-spacing:3px}.google-brand img{height:24px;width:auto;margin-bottom:12px}.google-rating{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 28px;color:var(--muted)}.google-rating strong{font-size:30px;color:var(--text)}.google-rating .stars{font-size:22px}.google-review-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;text-align:left;margin:0 0 24px}.google-review-card{border:1px solid #e3e9ed;border-radius:12px;padding:20px;background:#fff}.review-author{display:flex;gap:11px;align-items:center}.review-author a{color:var(--text);text-decoration:none}.review-avatar{width:42px;height:42px;border-radius:50%;object-fit:cover}.review-avatar-fallback{display:flex;align-items:center;justify-content:center;background:#eef3f6;color:var(--blue);font-weight:900}.review-meta{font-size:12px;color:var(--muted);margin-top:3px}.mini-stars{color:#e3a923;letter-spacing:1px}.review-text{font-size:14px;line-height:1.55;color:#46545f;margin:15px 0}.review-source{font-size:12px;font-weight:800;color:var(--blue);text-decoration:none}.review-note{font-size:12px;color:var(--muted);margin:0 0 20px}
 .area{background:#fff}.cta{background:var(--blue);color:#fff}.cta .wrap{display:flex;justify-content:space-between;align-items:center;gap:30px}.cta h2{margin:0}.cta p{margin:7px 0 0;color:#e8f2f8}
 footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{display:flex;justify-content:space-between;gap:30px}.foot strong{color:#fff}.mobile-call{display:none}
 .preview{position:fixed;right:15px;bottom:15px;background:#e2b353;color:#152536;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:900;z-index:30}
-@media(max-width:800px){.navlinks a:not(.btn){display:none}.top .wrap{justify-content:center}.top span:last-child{display:none}.hero{min-height:570px;background:linear-gradient(#071827c9,#071827e6),url('https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=1000&q=80') center/cover}.hero-copy{padding:65px 0}h1{font-size:44px}.hero p{font-size:18px}.trustgrid{grid-template-columns:1fr 1fr}.trustgrid div:nth-child(2){border-right:0}.cards,.jobs,.split{grid-template-columns:1fr}.card{min-height:205px}.photo{min-height:350px;order:-1}.cta .wrap,.foot{display:block}.cta .btn{margin-top:20px}.mobile-call{display:block;position:fixed;bottom:14px;left:4%;right:4%;z-index:25;background:var(--blue);color:#fff;padding:15px;border-radius:10px;text-align:center;font-weight:900;box-shadow:0 5px 22px #0005}.preview{bottom:76px}section{padding:58px 0}h2{font-size:33px}}
+@media(max-width:800px){.navlinks a:not(.btn){display:none}.top .wrap{justify-content:center}.top span:last-child{display:none}.hero{min-height:570px;background:linear-gradient(#071827c9,#071827e6),url('https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=1000&q=80') center/cover}.hero-copy{padding:65px 0}h1{font-size:44px}.hero p{font-size:18px}.trustgrid{grid-template-columns:1fr 1fr}.trustgrid div:nth-child(2){border-right:0}.cards,.jobs,.split,.google-review-grid{grid-template-columns:1fr}.card{min-height:205px}.photo{min-height:350px;order:-1}.cta .wrap,.foot{display:block}.cta .btn{margin-top:20px}.mobile-call{display:block;position:fixed;bottom:14px;left:4%;right:4%;z-index:25;background:var(--blue);color:#fff;padding:15px;border-radius:10px;text-align:center;font-weight:900;box-shadow:0 5px 22px #0005}.preview{bottom:76px}section{padding:58px 0}h2{font-size:33px}}
 </style></head>
 <body>
 <div class="top"><div class="wrap"><span>Local plumber serving Guildford & Surrey</span><span>Call Nigel: __COMPANY_PHONE__ &nbsp; · &nbsp; __COMPANY_EMAIL__</span></div></div>
@@ -11140,7 +11244,7 @@ footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{disp
 </div></div></section>
 <section id="about" style="background:#f3f7fa"><div class="wrap split"><div><h2>A local tradesman you can actually speak to</h2><p class="muted">When you contact Nigel Harvey Plumbing, you deal directly with Nigel — not a call centre or salesperson.</p><div class="ticks"><div class="tick">Straightforward communication before the job</div><div class="tick">Clear, itemised quotations</div><div class="tick">Care taken in your home</div><div class="tick">One point of contact from enquiry to completion</div></div><a class="btn" href="/request-quote">Ask Nigel about your job</a></div><div class="photo"></div></div></section>
 <section class="dark" id="work"><div class="wrap"><div class="intro"><h2>Simple, straightforward service</h2><p>No confusing process. Tell Nigel what needs doing, receive a clear quote, and arrange a suitable time for the work.</p></div><div class="jobs"><div class="job"><small>01 · Enquire</small><h3>Tell me about the job</h3><p>Send the details online or call. Photos and a short description can help establish what is required.</p></div><div class="job"><small>02 · Quote</small><h3>Clear pricing</h3><p>Receive a straightforward quote with the work and relevant charges made clear before you proceed.</p></div><div class="job"><small>03 · Complete</small><h3>Get the job sorted</h3><p>Arrange a suitable date and deal directly with Nigel through to completion.</p></div></div></div></section>
-<section class="review"><div class="wrap"><div class="reviewbox"><div class="stars">★★★★★</div><h2>Customer reviews</h2><p class="muted">See feedback from customers on Google, or leave a review after Nigel has completed your plumbing work.</p><a class="btn" href="__GOOGLE_REVIEWS_URL__">Read Google Reviews</a></div></div></section>
+<section class="review"><div class="wrap"><div class="reviewbox">__GOOGLE_REVIEWS_HTML__</div></div></section>
 <section class="area" id="areas"><div class="wrap split"><div><h2>Serving Guildford and surrounding Surrey areas</h2><p class="muted">Guildford, Godalming, Woking, Farnham, Camberley and surrounding areas. Your existing location pages remain in place for local search visibility.</p></div><div><h3>Not sure if I cover your area?</h3><p class="muted">Send your postcode and a short description of the work. For jobs further away, any travel charge can be made clear before you book.</p><a class="btn" href="/request-quote">Check your area</a></div></div></section>
 <section class="cta"><div class="wrap"><div><h2>Need a plumber?</h2><p>Tell me what you need doing and I'll come back to you with the next step.</p></div><a class="btn white" href="/request-quote">Get a Quote</a></div></section>
 <footer><div class="wrap foot"><div><strong>Nigel Harvey Plumbing</strong><br>Nigel Harvey Ltd · Guildford, Surrey</div><div>__COMPANY_PHONE__<br>__COMPANY_EMAIL__</div></div></footer>
@@ -11156,6 +11260,7 @@ def new_homepage_preview(request: Request):
     html = html.replace("__COMPANY_PHONE_TEL__", COMPANY_PHONE_TEL)
     html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
     html = html.replace("__GOOGLE_REVIEWS_URL__", GOOGLE_REVIEWS_URL)
+    html = html.replace("__GOOGLE_REVIEWS_HTML__", _google_reviews_html())
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -11166,6 +11271,7 @@ def landing_home(request: Request):
     html = html.replace("__COMPANY_PHONE_TEL__", COMPANY_PHONE_TEL)
     html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
     html = html.replace("__GOOGLE_REVIEWS_URL__", GOOGLE_REVIEWS_URL)
+    html = html.replace("__GOOGLE_REVIEWS_HTML__", _google_reviews_html())
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
