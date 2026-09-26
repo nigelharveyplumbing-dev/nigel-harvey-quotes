@@ -7,6 +7,7 @@ path before import. No test opens production /var/data.
 import importlib.util
 import base64
 import json
+import io
 import os
 import shutil
 import sqlite3
@@ -17,6 +18,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from PIL import Image
+from pypdf import PdfReader
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -222,6 +225,70 @@ class BaselineTests(unittest.TestCase):
         invoice = m.create_invoice_from_quote(quote_id)
         self.assertTrue(m.generate_invoice_pdf_bytes(invoice).startswith(b"%PDF"))
         self.assertIn("/invoice/", m.build_invoice_public_url(invoice["id"]))
+
+    def test_pdf_visible_content_and_photo(self):
+        m = self.module
+        request = m.QuoteRequest(
+            customer_name="PDF Customer", customer_address="5 Sample Street",
+            customer_phone="07444444444", job_description="Replace bathroom tap and valve",
+            labour_cost=120, include_callout_charge=True, callout_charge=30,
+            include_travel_charge=True, travel_charge=15,
+            materials=[m.MaterialItem(name="valve", quantity=2, manual_price=10)],
+            deposit_percent=50,
+        )
+        result = m.calculate_quote(request)
+        quote_id = m.save_quote(request.model_dump(), result)
+        quote = m.get_quote_by_id(quote_id)
+        quote_pdf = m.generate_quote_pdf_bytes(quote)
+        quote_reader = PdfReader(io.BytesIO(quote_pdf))
+        quote_text = "\n".join(page.extract_text() or "" for page in quote_reader.pages)
+        for visible in ("PDF Customer", "5 Sample Street", "07444444444",
+                        "Replace bathroom tap and valve", "Materials Used", "valve (manual)",
+                        "Labour", "Call-out charge", "Travel charge", "Materials supplied",
+                        "Materials procurement & handling (25%)", "Deposit", "Total Price",
+                        "£120.00", "£30.00", "£15.00", "£25.00", "£190.00"):
+            self.assertIn(visible, quote_text)
+        self.assertIn(f"Quote #{quote_id}", quote_text)
+
+        invoice = m.create_invoice_from_quote(quote_id)
+        edit = m.InvoiceEditRequest(
+            customer_name="PDF Customer", customer_address="5 Sample Street",
+            customer_phone="07444444444", job="Replace bathroom tap and valve",
+            job_reference="PDF-JOB-7", labour=120, materials=25,
+            callout_charge=30, travel_charge=15, due_date=invoice["due_date"],
+            payment_link="https://example.test/pay/pdf-7", amount_paid=20,
+        )
+        invoice = m.update_invoice_by_id(invoice["id"], edit)
+        photo_path = m.invoice_photo_folder(invoice["id"]) / "sample.jpg"
+        Image.new("RGB", (90, 60), "blue").save(photo_path)
+        m.save_invoice_photo_record(invoice["id"], "after", "Completed sample work",
+                                    photo_path.name, "sample.jpg")
+        invoice = m.get_invoice_by_id(invoice["id"])
+        invoice_pdf = m.generate_invoice_pdf_bytes(invoice)
+        invoice_reader = PdfReader(io.BytesIO(invoice_pdf))
+        invoice_text = "\n".join(page.extract_text() or "" for page in invoice_reader.pages)
+        for visible in (invoice["invoice_number"], "PDF Customer", "5 Sample Street",
+                        "PDF-JOB-7", "Replace bathroom tap and valve", "Materials Used",
+                        "Labour", "Call-out charge", "Travel charge", "Invoice totals",
+                        "£190.00", "£20.00", "£170.00", "Payment details", "Bank transfer",
+                        m.BANK_NAME, m.BANK_ACCOUNT_NAME, m.BANK_SORT_CODE,
+                        m.BANK_ACCOUNT_NUMBER, "Reference", "Amount due",
+                        "https://example.test/pay/pdf-7", "Job Photos", "Completed sample work"):
+            self.assertIn(visible, invoice_text)
+        self.assertGreaterEqual(len(invoice_reader.pages), 2)
+        self.assertEqual(m.bank_payment_reference(invoice), invoice["invoice_number"])
+        self.assertTrue(m.bank_payment_qr_png(invoice).startswith(b"\x89PNG"))
+        with TestClient(m.app) as client:
+            quote_route = client.get(f"/api/quotes/{quote_id}/pdf")
+            invoice_route = client.get(f"/api/invoices/{invoice['id']}/pdf")
+            self.assertEqual(quote_route.headers["content-disposition"],
+                             f'attachment; filename="quote-{quote_id}.pdf"')
+            self.assertEqual(invoice_route.headers["content-disposition"],
+                             f'attachment; filename="{invoice["invoice_number"]}.pdf"')
+            self.assertEqual(client.get(f"/api/quotes/{quote_id}/pdf?view=1").headers["content-disposition"],
+                             f'inline; filename="quote-{quote_id}.pdf"')
+            self.assertEqual(client.get(f"/api/invoices/{invoice["id"]}/pdf?view=1").headers["content-disposition"],
+                             f'inline; filename="{invoice["invoice_number"]}.pdf"')
 
     def test_database_schema_connection_and_counts(self):
         m = self.module
