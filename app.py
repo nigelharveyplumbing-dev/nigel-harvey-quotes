@@ -79,7 +79,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "16.3.8-homepage-local-seo"
+APP_VERSION = "16.3.9-guildford-local-page"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 INVOICE_PHOTO_DIR = Path("/var/data/invoice_photos")
@@ -4862,6 +4862,19 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
     )
     slug = location_name.lower()
     canonical = absolute_url(f"/plumber-{slug}", request)
+    is_guildford = slug == "guildford"
+
+    title = (
+        "Plumber in Guildford | Local Plumbing Services | Nigel Harvey Plumbing"
+        if is_guildford else
+        f"Plumber in {location_name} | Reliable Local Plumbing Services | Nigel Harvey Ltd"
+    )
+    meta_description = (
+        "Local plumber in Guildford for leaks, toilets, taps, radiators, bathroom plumbing and general plumbing repairs. Deal directly with Nigel Harvey Plumbing and request a clear quote online."
+        if is_guildford else
+        f"Looking for a plumber in {location_name}? Nigel Harvey Ltd provides leaks, bathroom plumbing and general plumbing services in {location_name} and surrounding Surrey areas."
+    )
+
     breadcrumb_schema = json.dumps({
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
@@ -4873,25 +4886,86 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
     local_schema = json.dumps({
         "@context": "https://schema.org",
         "@type": "Plumber",
-        "name": COMPANY_NAME,
+        "name": "Nigel Harvey Plumbing",
         "url": canonical,
         "telephone": COMPANY_PHONE,
         "email": COMPANY_EMAIL,
-        "areaServed": [location_name, "Surrey"],
-        "serviceType": ["Emergency plumbing", "General plumbing", "Bathroom plumbing", "Leaks and pipework repairs"],
-        "description": f"Reliable plumber in {location_name} for emergency plumbing, leaks, bathroom plumbing, taps, toilets and general plumbing work.",
+        "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "125 Bushy Hill Drive",
+            "addressLocality": "Guildford",
+            "postalCode": "GU1 2UG",
+            "addressCountry": "GB",
+        },
+        "areaServed": [location_name, "Guildford", "Surrey"],
+        "serviceType": ["General plumbing", "Bathroom plumbing", "Leak repairs", "Toilet repairs", "Radiator and valve plumbing"],
+        "description": f"Local plumber serving {location_name} and surrounding Surrey areas for domestic plumbing repairs and installations.",
     }, ensure_ascii=False)
+
+    if is_guildford:
+        faq_items = [
+            ("What plumbing work do you cover in Guildford?", "Nigel Harvey Plumbing covers domestic plumbing including leaks, taps, toilets, sinks, wastes, radiators and valves, bathroom plumbing, pipework changes and other general plumbing repairs."),
+            ("Can I request a plumbing quote online?", "Yes. Send the job details through the online quote form, including photos where useful, and Nigel can review what is required before arranging the next step."),
+            ("Do you cover areas around Guildford as well?", "Yes. The business is based in Guildford and also covers nearby Surrey areas including Godalming, Woking, Farnham, Fairlands, Worplesdon, Merrow, Burpham and Shalford."),
+        ]
+        faq_schema = json.dumps({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": [
+                {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}}
+                for q, a in faq_items
+            ],
+        }, ensure_ascii=False)
+        faq_html = ''.join(
+            f'<div class="card faq"><h3>{escape(q)}</h3><p>{escape(a)}</p></div>'
+            for q, a in faq_items
+        )
+        local_service_links = ''.join([
+            '<a href="/leak-repair-guildford">Leak Repair in Guildford</a>',
+            '<a href="/toilet-repair-guildford">Toilet Repairs in Guildford</a>',
+            '<a href="/bathroom-plumbing-guildford">Bathroom Plumbing in Guildford</a>',
+            '<a href="/emergency-plumber-guildford">Urgent Plumbing in Guildford</a>',
+        ])
+        reviews_html = _google_reviews_html()
+        return f"""<!doctype html>
+<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{escape(title)}</title>
+<meta name="description" content="{escape(meta_description)}">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="canonical" href="{escape(canonical)}">
+<meta property="og:type" content="website"><meta property="og:title" content="{escape(title)}"><meta property="og:description" content="{escape(meta_description)}"><meta property="og:url" content="{escape(canonical)}">
+<script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{local_schema}</script><script type="application/ld+json">{faq_schema}</script>
+<style>{SEO_CSS}</style></head>
+<body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Plumbing<small>Local plumber in Guildford, Surrey</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel</a><a class="btn btn-primary" href="/request-quote">Get a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
+<main>
+<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Guildford-based local plumber</div><h1>Plumber in Guildford</h1><p class="lead">Nigel Harvey Plumbing provides domestic plumbing services across Guildford and nearby Surrey areas. Deal directly with Nigel for leaks, toilets, taps, radiators and valves, bathroom plumbing, pipework changes and everyday plumbing repairs.</p><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a></div></div></div>
+
+<div class="wrap section"><h2>Plumbing services in Guildford</h2><p>Whether you have a leaking fitting, a toilet that is not working properly, a radiator or valve problem, or planned bathroom plumbing, you can send the details directly to Nigel. Photos and a short description are useful for establishing what may be required before the visit.</p><div class="pill-links">{local_service_links}</div></div>
+
+<div class="wrap section"><h2>Domestic plumbing work I can help with</h2><div class="grid3"><div class="card item"><h3>Leaks, taps &amp; toilets</h3><p>Repairs to leaking pipework and fittings, taps, toilet mechanisms, wastes, traps and other everyday plumbing problems.</p></div><div class="card item"><h3>Bathrooms &amp; showers</h3><p>Bathroom plumbing, sanitaryware connections, shower pipework, first and second fix work and practical plumbing alterations.</p></div><div class="card item"><h3>Radiators &amp; pipework</h3><p>Radiators, TRVs and valves, towel radiators, pipework alterations and plumbing-related heating work.</p></div></div></div>
+
+<div class="wrap section"><h2>A local Guildford plumber you deal with directly</h2><p>Nigel Harvey Plumbing is based in Guildford. When you enquire, you deal directly with Nigel rather than a call centre or salesperson. The aim is straightforward communication, a clear quotation and a practical plan for getting the work completed.</p><div class="grid3"><div class="card item"><h3>Direct contact</h3><p>Speak directly with the person who will be carrying out the plumbing work.</p></div><div class="card item"><h3>Clear quotations</h3><p>Work and relevant charges can be set out before you decide whether to proceed.</p></div><div class="card item"><h3>Local coverage</h3><p>Based in Guildford and covering surrounding towns and villages across Surrey.</p></div></div></div>
+
+<div class="wrap section"><h2>Google customer reviews</h2><p>Recent Google feedback from customers is shown below so you can see independent comments about the service.</p><div class="hero-card" style="padding:24px">{reviews_html}</div></div>
+
+<div class="wrap section"><h2>Areas near Guildford</h2><p>As well as Guildford itself, plumbing work is available across nearby Surrey areas. Use the local pages below for more information.</p><div class="pill-links">{related}</div></div>
+
+<div class="wrap section"><h2>Frequently asked questions</h2><div class="faq-grid">{faq_html}</div></div>
+
+<div class="wrap"><div class="hero-card cta"><div><h2 style="margin:0 0 8px">Need a plumber in Guildford?</h2><div style="color:var(--muted)">Send your postcode, a short description and photos if useful, or call Nigel directly.</div></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel</a><a class="btn btn-primary" href="/request-quote">Get a Quote</a></div></div></div>
+</main>
+<div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Plumbing</strong><br>Nigel Harvey Ltd · Guildford, Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></div><a href="tel:{escape(COMPANY_PHONE_TEL)}" class="sticky-call">📞 Call Nigel: {escape(COMPANY_PHONE)}</a></body></html>"""
+
     return f"""<!doctype html>
-<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Plumber in {escape(location_name)} | Reliable Local Plumbing Services | Nigel Harvey Ltd</title><meta name="description" content="Looking for a plumber in {escape(location_name)}? Nigel Harvey Ltd provides emergency plumbing, leaks, bathroom plumbing and general plumbing services in {escape(location_name)} and surrounding Surrey areas."><meta name="keywords" content="plumber {escape(location_name)}, emergency plumber {escape(location_name)}, plumbing {escape(location_name)}, plumber Surrey"><link rel="canonical" href="{escape(canonical)}"><script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{local_schema}</script><style>{SEO_CSS}</style></head>
+<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(title)}</title><meta name="description" content="{escape(meta_description)}"><link rel="canonical" href="{escape(canonical)}"><script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{local_schema}</script><style>{SEO_CSS}</style></head>
 <body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>Plumber in {escape(location_name)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
 <main>
-<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Local plumber in {escape(location_name)}</div><h1>Plumber in {escape(location_name)} - Reliable Local Plumbing Services</h1><p class="lead">Looking for a reliable plumber in {escape(location_name)}? Nigel Harvey Ltd provides fast, professional plumbing services for homes and landlords across {escape(location_name)} and surrounding Surrey areas. From leaks and repairs to bathroom plumbing, the focus is on a straightforward service you can trust.</p><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a></div></div></div>
-<div class="wrap section"><h2>Our {escape(location_name)} plumbing services</h2><p>Customers in {escape(location_name)} contact Nigel Harvey Ltd for urgent plumbing issues, everyday repairs and planned bathroom plumbing work. We cover domestic plumbing jobs such as leaks, taps, toilets, sinks, wastes, first fix and second fix plumbing, pipework changes and practical general plumbing work.</p><div class="pill-links"><a href="/emergency-plumber-surrey">Emergency Plumber Surrey</a><a href="/general-plumbing-surrey">General Plumbing Surrey</a><a href="/bathroom-plumbing-surrey">Bathroom Plumbing Surrey</a></div></div>
-<div class="wrap section"><h2>Why choose Nigel Harvey Ltd in {escape(location_name)}?</h2><div class="grid3"><div class="card item"><h3>Fast local response</h3><p>We focus on Surrey and nearby areas, helping customers in {escape(location_name)} get a quicker and more reliable response.</p></div><div class="card item"><h3>Clear communication</h3><p>From first contact to final visit, the process is straightforward, practical and easy to deal with.</p></div><div class="card item"><h3>Tidy workmanship</h3><p>We aim to deliver neat, professional plumbing work with a focus on quality and long-term results.</p></div></div></div>
-<div class="wrap section"><h2>Areas nearby</h2><p>We also cover nearby areas across Surrey, helping strengthen local coverage for customers searching for a plumber near {escape(location_name)}.</p><div class="pill-links">{related}</div></div>
-<div class="wrap section"><h2>Frequently asked questions</h2><div class="faq-grid"><div class="card faq"><h3>How quickly can you attend a plumbing job in {escape(location_name)}?</h3><p>Response times depend on the job and the day, but we aim to help customers in {escape(location_name)} as quickly as possible, especially for urgent plumbing issues.</p></div><div class="card faq"><h3>What plumbing work do you cover in {escape(location_name)}?</h3><p>We cover emergency plumbing, leaks, taps, toilets, sinks, pipework changes, bathroom plumbing and practical domestic plumbing repairs.</p></div><div class="card faq"><h3>Can I request a quote online?</h3><p>Yes. Use the online quote form to send your job details and request a fast quote for plumbing work in {escape(location_name)}.</p></div></div></div>
-<div class="wrap"><div class="hero-card cta"><div><h2 style="margin:0 0 8px">Need a plumber in {escape(location_name)}?</h2><div style="color:var(--muted)">Call now or send your job details online for a fast response.</div></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a></div></div></div>
-<div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services</div><div>{escape(location_name)}, Surrey and surrounding areas<br>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></div><a href="tel:{escape(COMPANY_PHONE_TEL)}" class="sticky-call">📞 Call Now: {escape(COMPANY_PHONE)}</a></body></html>"""
+<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Local plumber in {escape(location_name)}</div><h1>Plumber in {escape(location_name)} - Reliable Local Plumbing Services</h1><p class="lead">Looking for a reliable plumber in {escape(location_name)}? Nigel Harvey Ltd provides professional plumbing services for homes and landlords across {escape(location_name)} and surrounding Surrey areas. From leaks and repairs to bathroom plumbing, the focus is on a straightforward service you can trust.</p><div class="nav-actions"><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a></div></div></div>
+<div class="wrap section"><h2>Our {escape(location_name)} plumbing services</h2><p>Customers in {escape(location_name)} contact Nigel Harvey Ltd for everyday repairs and planned bathroom plumbing work. We cover domestic plumbing jobs such as leaks, taps, toilets, sinks, wastes, first fix and second fix plumbing, pipework changes and practical general plumbing work.</p><div class="pill-links"><a href="/general-plumbing-surrey">General Plumbing Surrey</a><a href="/bathroom-plumbing-surrey">Bathroom Plumbing Surrey</a><a href="/heating-repairs-surrey">Heating Repairs Surrey</a></div></div>
+<div class="wrap section"><h2>Why choose Nigel Harvey Ltd in {escape(location_name)}?</h2><div class="grid3"><div class="card item"><h3>Local coverage</h3><p>We focus on Surrey and nearby areas, helping customers in {escape(location_name)} with domestic plumbing work.</p></div><div class="card item"><h3>Clear communication</h3><p>From first contact to final visit, the process is straightforward, practical and easy to deal with.</p></div><div class="card item"><h3>Tidy workmanship</h3><p>We aim to deliver neat, professional plumbing work with a focus on quality and long-term results.</p></div></div></div>
+<div class="wrap section"><h2>Areas nearby</h2><p>We also cover nearby areas across Surrey.</p><div class="pill-links">{related}</div></div>
+<div class="wrap"><div class="hero-card cta"><div><h2 style="margin:0 0 8px">Need a plumber in {escape(location_name)}?</h2><div style="color:var(--muted)">Call now or send your job details online.</div></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Quote</a></div></div></div>
+</main><div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services</div><div>{escape(location_name)}, Surrey and surrounding areas<br>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></div><a href="tel:{escape(COMPANY_PHONE_TEL)}" class="sticky-call">📞 Call Now: {escape(COMPANY_PHONE)}</a></body></html>"""
 
 def render_service_page(service: dict, logo_html: str, request: Request | None = None) -> str:
     service_links = ''.join(f'<a href="/{escape(item["slug"])}">{escape(item["title"])}</a>' for item in SERVICE_PAGES if item['slug'] != service['slug'])
