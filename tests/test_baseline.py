@@ -108,6 +108,80 @@ class BaselineTests(unittest.TestCase):
         self.assertTrue(conn.execute("SELECT name FROM sqlite_master WHERE name='quotes'").fetchone())
         conn.close()
 
+    def test_invoice_lifecycle_and_missing_ids(self):
+        m = self.module
+        request = m.QuoteRequest(
+            customer_name="Invoice Customer", customer_address="2 Test Road",
+            customer_phone="07111111111", job_description="Heating and tap work",
+            labour_cost=100.10, include_callout_charge=True, callout_charge=20.20,
+            include_travel_charge=True, travel_charge=10.30,
+            materials=[m.MaterialItem(name="Valve", quantity=2, manual_price=5.55)],
+            deposit_percent=25,
+        )
+        result = m.calculate_quote(request)
+        quote_id = m.save_quote(request.model_dump(), result)
+        number = m.next_invoice_number()
+        invoice = m.create_invoice_from_quote(quote_id)
+        self.assertEqual(invoice["invoice_number"], number)
+        self.assertEqual(invoice["customer_name"], "Invoice Customer")
+        self.assertEqual(invoice["customer_id"], m.get_quote_by_id(quote_id)["customer_id"])
+        self.assertEqual(invoice["quote_result"], result)
+        self.assertEqual(invoice["invoice"]["job"], "Heating and tap work")
+        for field in ("labour", "materials", "callout_charge", "travel_charge",
+                      "total_price", "deposit_amount", "deposit_percent"):
+            self.assertEqual(invoice["invoice"][field], result[field])
+        self.assertEqual(invoice["payment_link"], "")
+        self.assertEqual(invoice["job_reference"], "")
+        self.assertEqual(invoice["amount_paid"], 0)
+        self.assertEqual(invoice["balance_due"], result["total_price"])
+        self.assertEqual(invoice["status"], "unpaid")
+        self.assertEqual(invoice["invoice"]["due_date"], invoice["due_date"])
+        self.assertEqual(m.build_invoice_public_url(invoice["id"]),
+                         f"https://www.nigelharveyplumbing.co.uk/invoice/{invoice['id']}")
+        self.assertEqual(m.get_invoice_by_id(invoice["id"]), invoice)
+        self.assertIn(invoice, m.load_invoices())
+
+        edited = m.InvoiceEditRequest(
+            customer_name="Edited Customer", customer_address="3 Test Road",
+            customer_phone="07222222222", job="Updated work", job_reference="JOB-42",
+            labour=111.125, materials=22.235, callout_charge=33.345,
+            travel_charge=44.455, due_date="20/10/2026",
+            payment_link="https://example.test/pay/42", amount_paid=50.01,
+            reminder_email="customer@example.test", reminders_enabled=True,
+        )
+        updated = m.update_invoice_by_id(invoice["id"], edited)
+        self.assertEqual(updated["id"], invoice["id"])
+        self.assertEqual(updated["invoice_number"], number)
+        self.assertEqual(updated["customer_name"], "Edited Customer")
+        self.assertEqual(updated["invoice"]["customer_address"], "3 Test Road")
+        self.assertEqual(updated["invoice"]["job"], "Updated work")
+        self.assertEqual(updated["job_reference"], "JOB-42")
+        self.assertEqual(updated["payment_link"], "https://example.test/pay/42")
+        self.assertEqual(updated["due_date"], "20/10/2026")
+        self.assertEqual(updated["reminder_email"], "customer@example.test")
+        self.assertTrue(updated["reminders_enabled"])
+        self.assertEqual(updated["invoice"]["labour"], 111.12)
+        self.assertEqual(updated["invoice"]["materials"], 22.23)
+        self.assertEqual(updated["invoice"]["callout_charge"], 33.34)
+        self.assertEqual(updated["invoice"]["travel_charge"], 44.45)
+        self.assertEqual(updated["total_price"], 211.16)
+        self.assertEqual(updated["amount_paid"], 50.01)
+        self.assertEqual(updated["balance_due"], 161.15)
+        self.assertEqual(updated["status"], "part paid")
+        paid = m.update_invoice_status(invoice["id"], "unpaid", 9999)
+        self.assertEqual(paid["status"], "paid")
+        self.assertEqual(paid["amount_paid"], paid["total_price"])
+        self.assertEqual(paid["balance_due"], 0)
+
+        self.assertIsNone(m.get_invoice_by_id(-1))
+        self.assertIsNone(m.update_invoice_by_id(-1, edited))
+        self.assertIsNone(m.update_invoice_status(-1, "paid", 1))
+        self.assertFalse(m.delete_invoice_by_id(-1))
+        self.assertTrue(m.delete_invoice_by_id(invoice["id"]))
+        self.assertIsNone(m.get_invoice_by_id(invoice["id"]))
+        self.assertFalse(m.delete_invoice_by_id(invoice["id"]))
+        self.assertEqual(m.next_invoice_number(), number)  # COUNT-based numbering after deletion
+
     def test_quote_save_load_update_and_conversion(self):
         m = self.module
         request = m.QuoteRequest(
