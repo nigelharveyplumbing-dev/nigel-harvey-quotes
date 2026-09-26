@@ -79,7 +79,7 @@ async def protect_app_routes(request: Request, call_next):
     return await call_next(request)
 
 
-APP_VERSION = "16.3.6-google-reviews"
+APP_VERSION = "16.3.7-google-reviews-debug"
 DB_PATH = Path("/var/data/quotes.db")
 DB_BACKUP_DIR = Path("/var/data/backups")
 INVOICE_PHOTO_DIR = Path("/var/data/invoice_photos")
@@ -123,8 +123,10 @@ def _google_place_id():
     if _GOOGLE_PLACE_ID_RUNTIME:
         return _GOOGLE_PLACE_ID_RUNTIME
     if not GOOGLE_PLACES_API_KEY:
+        print("Google Places lookup skipped: GOOGLE_PLACES_API_KEY is not set", flush=True)
         return ""
     try:
+        print("Google Places lookup: searching for Nigel Harvey Plumbing Guildford Surrey", flush=True)
         response = requests.post(
             "https://places.googleapis.com/v1/places:searchText",
             headers={
@@ -140,12 +142,18 @@ def _google_place_id():
             },
             timeout=8,
         )
-        response.raise_for_status()
-        places = response.json().get("places") or []
+        if not response.ok:
+            print(f"Google Places lookup HTTP {response.status_code}: {response.text[:1000]}", flush=True)
+            response.raise_for_status()
+        payload = response.json()
+        places = payload.get("places") or []
         if places:
             _GOOGLE_PLACE_ID_RUNTIME = (places[0].get("id") or "").strip()
+            print(f"Google Places lookup succeeded: found place ID ending ...{_GOOGLE_PLACE_ID_RUNTIME[-8:] if _GOOGLE_PLACE_ID_RUNTIME else 'EMPTY'}", flush=True)
+        else:
+            print(f"Google Places lookup returned no places. Response: {str(payload)[:1000]}", flush=True)
     except Exception as exc:
-        print(f"Google Places lookup failed: {exc}")
+        print(f"Google Places lookup failed: {type(exc).__name__}: {exc}", flush=True)
     return _GOOGLE_PLACE_ID_RUNTIME
 
 
@@ -158,11 +166,14 @@ def _google_reviews_html():
         f'<a class="btn" href="{escape(GOOGLE_REVIEWS_URL, quote=True)}" target="_blank" rel="noopener">Read Google Reviews</a>'
     )
     if not GOOGLE_PLACES_API_KEY:
+        print("Google reviews fallback: GOOGLE_PLACES_API_KEY is not set", flush=True)
         return fallback
     place_id = _google_place_id()
     if not place_id:
+        print("Google reviews fallback: no Google Place ID could be resolved", flush=True)
         return fallback
     try:
+        print(f"Google reviews: requesting Place Details for place ID ending ...{place_id[-8:]}", flush=True)
         response = requests.get(
             f"https://places.googleapis.com/v1/places/{quote_plus(place_id)}",
             headers={
@@ -172,13 +183,17 @@ def _google_reviews_html():
             params={"languageCode": "en", "regionCode": "GB"},
             timeout=8,
         )
-        response.raise_for_status()
+        if not response.ok:
+            print(f"Google reviews HTTP {response.status_code}: {response.text[:1500]}", flush=True)
+            response.raise_for_status()
         data = response.json()
         rating = data.get("rating")
         count = data.get("userRatingCount")
         reviews = data.get("reviews") or []
         reviews_url = ((data.get("googleMapsLinks") or {}).get("reviewsUri") or GOOGLE_REVIEWS_URL).strip()
+        print(f"Google reviews response: rating={rating!r}, userRatingCount={count!r}, reviews={len(reviews)}", flush=True)
         if rating is None and not reviews:
+            print(f"Google reviews fallback: response contained no rating/reviews. Keys: {list(data.keys())}", flush=True)
             return fallback
 
         rating_text = f"{float(rating):.1f}" if rating is not None else ""
@@ -212,7 +227,7 @@ def _google_reviews_html():
             f'<a class="btn" href="{escape(reviews_url, quote=True)}" target="_blank" rel="noopener">Read all Google Reviews</a>'
         )
     except Exception as exc:
-        print(f"Google Places reviews failed: {exc}")
+        print(f"Google Places reviews failed: {type(exc).__name__}: {exc}", flush=True)
         return fallback
 
 PAYMENT_LINK_BASE = ""
