@@ -6,6 +6,7 @@ path before import. No test opens production /var/data.
 
 import importlib.util
 import shutil
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -74,6 +75,38 @@ class BaselineTests(unittest.TestCase):
         invoice = m.create_invoice_from_quote(quote_id)
         self.assertTrue(m.generate_invoice_pdf_bytes(invoice).startswith(b"%PDF"))
         self.assertIn("/invoice/", m.build_invoice_public_url(invoice["id"]))
+
+    def test_database_schema_connection_and_counts(self):
+        m = self.module
+        conn = m.get_db()
+        self.assertIsInstance(conn.row_factory, type(sqlite3.Row))
+        tables = {row[0] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        self.assertTrue({"customers", "quotes", "invoices", "invoice_photos", "leads",
+                         "material_price_cache", "material_price_history",
+                         "quote_intelligence", "app_backups"} <= tables)
+        invoice_columns = {row["name"]: row for row in conn.execute("PRAGMA table_info(invoices)")}
+        self.assertEqual(invoice_columns["reminders_enabled"]["dflt_value"], "0")
+        self.assertEqual(invoice_columns["status"]["notnull"], 1)
+        cache_columns = {row["name"]: row for row in conn.execute("PRAGMA table_info(material_price_cache)")}
+        self.assertEqual(cache_columns["times_used"]["dflt_value"], "0")
+        conn.close()
+        before = m.database_counts()
+        self.assertEqual(set(before), {"customers", "quotes", "invoices", "leads", "material_price_cache"})
+        m.init_db()
+        self.assertEqual(m.database_counts(), before)
+
+    def test_invoice_number_and_database_backup(self):
+        m = self.module
+        first = m.next_invoice_number()
+        self.assertTrue(first)
+        backup = m.create_db_backup("baseline test")
+        self.assertEqual(backup["reason"], "baseline test")
+        self.assertTrue(Path(backup["path"]).exists())
+        self.assertTrue(any(item["filename"] == backup["filename"] for item in m.list_db_backups()))
+        conn = sqlite3.connect(backup["path"])
+        self.assertTrue(conn.execute("SELECT name FROM sqlite_master WHERE name='quotes'").fetchone())
+        conn.close()
 
 
 if __name__ == "__main__":
