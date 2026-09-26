@@ -36,7 +36,6 @@ from email import encoders
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
-from PIL import Image, ImageOps
 
 try:
     import qrcode
@@ -140,7 +139,6 @@ from business.config import (
     APP_VERSION,
     DB_PATH,
     DB_BACKUP_DIR,
-    INVOICE_PHOTO_DIR,
     UK_TZ,
     COMPANY_NAME,
     COMPANY_ADDRESS,
@@ -1976,6 +1974,7 @@ def month_labels(count=6):
 
 from business.db import get_db, init_db, database_counts
 from business import quote_store, invoice_store, material_store
+from business import customer_store, lead_store, invoice_photo_store
 from business.material_store import normalize_material_url, get_cached_material_price
 from business.quote_store import row_to_quote, load_quotes, get_quote_by_id, delete_quote_by_id, build_payment_link
 
@@ -2317,184 +2316,41 @@ def calculate_quote(data: QuoteRequest):
     }
 
 def upsert_customer(name: str, address: str, phone: str):
-    name = (name or "").strip()
-    address = (address or "").strip()
-    phone = (phone or "").strip()
-
-    conn = get_db()
-    now = now_uk().isoformat()
-
-    if phone:
-        row = conn.execute("SELECT * FROM customers WHERE phone = ? LIMIT 1", (phone,)).fetchone()
-        if row:
-            conn.execute(
-                "UPDATE customers SET name = ?, address = ?, updated_at = ? WHERE id = ?",
-                (name or row["name"], address or row["address"], now, row["id"])
-            )
-            conn.commit()
-            conn.close()
-            return row["id"]
-
-    if name and address:
-        row = conn.execute(
-            "SELECT * FROM customers WHERE name = ? AND address = ? LIMIT 1",
-            (name, address)
-        ).fetchone()
-        if row:
-            conn.execute(
-                "UPDATE customers SET phone = ?, updated_at = ? WHERE id = ?",
-                (phone or row["phone"], now, row["id"])
-            )
-            conn.commit()
-            conn.close()
-            return row["id"]
-
-    conn.execute(
-        "INSERT INTO customers (name, address, phone, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (name, address, phone, now, now)
-    )
-    customer_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    conn.commit()
-    conn.close()
-    return customer_id
+    return customer_store.upsert_customer(name, address, phone, now_uk)
 
 
 
-PHOTO_CATEGORIES = {
-    "before": "Before",
-    "during": "During",
-    "after": "Completed",
-    "hidden_pipework": "Hidden pipework",
-    "damage": "Damage found",
-    "parts_replaced": "Parts replaced",
-    "compliance": "Compliance",
-    "customer_supplied": "Customer supplied",
-    "other": "Other",
-}
+PHOTO_CATEGORIES = invoice_photo_store.PHOTO_CATEGORIES
 
 
 def normalise_photo_category(value: str) -> str:
-    value = (value or "after").strip().lower().replace(" ", "_")
-    return value if value in PHOTO_CATEGORIES else "other"
+    return invoice_photo_store.normalise_photo_category(value)
 
 
 def invoice_photo_folder(invoice_id: int) -> Path:
-    folder = INVOICE_PHOTO_DIR / str(int(invoice_id))
-    folder.mkdir(parents=True, exist_ok=True)
-    return folder
+    return invoice_photo_store.invoice_photo_folder(invoice_id)
 
 
 def load_invoice_photos(invoice_id: int):
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT * FROM invoice_photos
-        WHERE invoice_id = ?
-        ORDER BY
-          CASE category
-            WHEN 'before' THEN 1
-            WHEN 'during' THEN 2
-            WHEN 'hidden_pipework' THEN 3
-            WHEN 'damage' THEN 4
-            WHEN 'parts_replaced' THEN 5
-            WHEN 'compliance' THEN 6
-            WHEN 'customer_supplied' THEN 7
-            WHEN 'after' THEN 8
-            ELSE 9
-          END,
-          sort_order ASC,
-          id ASC
-    """, (invoice_id,)).fetchall()
-    conn.close()
-    return [{
-        "id": row["id"],
-        "invoice_id": row["invoice_id"],
-        "category": row["category"],
-        "category_label": PHOTO_CATEGORIES.get(row["category"], "Other"),
-        "caption": row["caption"] or "",
-        "filename": row["filename"],
-        "original_filename": row["original_filename"] or "",
-        "sort_order": row["sort_order"] or 0,
-        "created_at": row["created_at"],
-        "url": f"/api/invoices/{invoice_id}/photos/{row['id']}",
-    } for row in rows]
+    return invoice_photo_store.load_invoice_photos(invoice_id)
 
 
 def save_invoice_photo_record(invoice_id: int, category: str, caption: str,
                               filename: str, original_filename: str):
-    conn = get_db()
-    next_order = conn.execute(
-        "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM invoice_photos WHERE invoice_id = ?",
-        (invoice_id,),
-    ).fetchone()[0]
-    conn.execute("""
-        INSERT INTO invoice_photos (
-            invoice_id, category, caption, filename, original_filename,
-            sort_order, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        invoice_id,
-        normalise_photo_category(category),
-        (caption or "").strip(),
-        filename,
-        original_filename or "",
-        int(next_order or 1),
-        now_uk().isoformat(),
-    ))
-    photo_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    conn.commit()
-    conn.close()
-    return photo_id
+    return invoice_photo_store.save_invoice_photo_record(
+        invoice_id, category, caption, filename, original_filename, now_uk)
 
 
 def prepare_invoice_photo(source_path: Path, output_path: Path):
-    with Image.open(source_path) as image:
-        image = ImageOps.exif_transpose(image)
-        if image.mode not in ("RGB", "L"):
-            background = Image.new("RGB", image.size, "white")
-            if "A" in image.getbands():
-                background.paste(image, mask=image.getchannel("A"))
-            else:
-                background.paste(image)
-            image = background
-        elif image.mode == "L":
-            image = image.convert("RGB")
-        image.thumbnail((1800, 1800), Image.Resampling.LANCZOS)
-        image.save(output_path, format="JPEG", quality=82, optimize=True)
+    return invoice_photo_store.prepare_invoice_photo(source_path, output_path)
 
 
 def delete_invoice_photo_record(invoice_id: int, photo_id: int):
-    conn = get_db()
-    row = conn.execute(
-        "SELECT filename FROM invoice_photos WHERE id = ? AND invoice_id = ?",
-        (photo_id, invoice_id),
-    ).fetchone()
-    if not row:
-        conn.close()
-        return False
-    conn.execute(
-        "DELETE FROM invoice_photos WHERE id = ? AND invoice_id = ?",
-        (photo_id, invoice_id),
-    )
-    conn.commit()
-    conn.close()
-    try:
-        (invoice_photo_folder(invoice_id) / row["filename"]).unlink(missing_ok=True)
-    except Exception:
-        pass
-    return True
+    return invoice_photo_store.delete_invoice_photo_record(invoice_id, photo_id)
 
 
 def invoice_photo_path(invoice_id: int, photo_id: int):
-    conn = get_db()
-    row = conn.execute(
-        "SELECT filename FROM invoice_photos WHERE id = ? AND invoice_id = ?",
-        (photo_id, invoice_id),
-    ).fetchone()
-    conn.close()
-    if not row:
-        return None
-    path = invoice_photo_folder(invoice_id) / row["filename"]
-    return path if path.exists() else None
+    return invoice_photo_store.invoice_photo_path(invoice_id, photo_id)
 
 
 
@@ -2947,59 +2803,11 @@ def get_monthly_profit_series(month_count: int = 6):
 
 
 def get_customers():
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT *
-        FROM customers
-        ORDER BY updated_at DESC, id DESC
-        LIMIT 200
-    """).fetchall()
-    conn.close()
-
-    out = []
-    for row in rows:
-        out.append({
-            "id": row["id"],
-            "name": row["name"] or "",
-            "address": row["address"] or "",
-            "phone": row["phone"] or "",
-            "updated_at": row["updated_at"],
-        })
-    return out
+    return customer_store.get_customers()
 
 
 def get_customer_history(customer_id: int):
-    conn = get_db()
-    customer = conn.execute("SELECT * FROM customers WHERE id = ?", (customer_id,)).fetchone()
-    if not customer:
-        conn.close()
-        return None
-
-    quotes = conn.execute("""
-        SELECT * FROM quotes
-        WHERE customer_id = ?
-        ORDER BY created_at_sort DESC, id DESC
-        LIMIT 50
-    """, (customer_id,)).fetchall()
-
-    invoices = conn.execute("""
-        SELECT * FROM invoices
-        WHERE customer_id = ?
-        ORDER BY created_at_sort DESC, id DESC
-        LIMIT 50
-    """, (customer_id,)).fetchall()
-    conn.close()
-
-    return {
-        "customer": {
-            "id": customer["id"],
-            "name": customer["name"] or "",
-            "address": customer["address"] or "",
-            "phone": customer["phone"] or "",
-        },
-        "quotes": [row_to_quote(r) for r in quotes],
-        "invoices": [row_to_invoice(r) for r in invoices],
-    }
+    return customer_store.get_customer_history(customer_id, row_to_quote, row_to_invoice)
 
 
 
@@ -3091,92 +2899,27 @@ def send_invoice_email_now(item: dict, to_email: str, extra_message: str = ""):
         server.sendmail(EMAIL_USER, [to_email.strip()], msg.as_string())
 
 def row_to_lead(row):
-    return {
-        "id": row["id"],
-        "name": row["name"] or "",
-        "phone": row["phone"] or "",
-        "email": row["email"] or "",
-        "address": row["address"] or "",
-        "job_type": row["job_type"] or "small",
-        "description": row["description"] or "",
-        "status": row["status"] or "new",
-        "source": row["source"] or "website",
-        "created_at": row["created_at"],
-        "updated_at": row["updated_at"],
-    }
+    return lead_store.row_to_lead(row)
 
 
 def save_lead(data: LeadRequest):
-    now = now_uk()
-    conn = get_db()
-    conn.execute(
-        """
-        INSERT INTO leads (name, phone, email, address, job_type, description, status, source, created_at, created_at_sort, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            (data.name or "").strip(),
-            (data.phone or "").strip(),
-            (data.email or "").strip(),
-            (data.address or "").strip(),
-            (data.job_type or "small").strip() or "small",
-            (data.description or "").strip(),
-            "new",
-            (data.source or "website").strip() or "website",
-            format_dt(now),
-            now.isoformat(),
-            now.isoformat(),
-        ),
-    )
-    lead_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    conn.commit()
-    conn.close()
-    return get_lead_by_id(lead_id)
+    return lead_store.save_lead(data, now_uk, format_dt)
 
 
 def get_lead_by_id(lead_id: int):
-    conn = get_db()
-    row = conn.execute("SELECT * FROM leads WHERE id = ?", (lead_id,)).fetchone()
-    conn.close()
-    return row_to_lead(row) if row else None
+    return lead_store.get_lead_by_id(lead_id)
 
 
 def load_leads():
-    conn = get_db()
-    rows = conn.execute(
-        """
-        SELECT * FROM leads
-        ORDER BY created_at_sort DESC, id DESC
-        LIMIT 300
-        """
-    ).fetchall()
-    conn.close()
-    return [row_to_lead(r) for r in rows]
+    return lead_store.load_leads()
 
 
 def update_lead_status(lead_id: int, status: str):
-    status = (status or "new").strip().lower()
-    if status not in {"new", "contacted", "quoted", "won", "lost"}:
-        status = "new"
-    conn = get_db()
-    cur = conn.execute(
-        "UPDATE leads SET status = ?, updated_at = ? WHERE id = ?",
-        (status, now_uk().isoformat(), lead_id),
-    )
-    conn.commit()
-    conn.close()
-    if cur.rowcount <= 0:
-        return None
-    return get_lead_by_id(lead_id)
+    return lead_store.update_lead_status(lead_id, status, now_uk)
 
 
 def delete_lead_by_id(lead_id: int):
-    conn = get_db()
-    cur = conn.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
-    conn.commit()
-    deleted = cur.rowcount > 0
-    conn.close()
-    return deleted
+    return lead_store.delete_lead_by_id(lead_id)
 
 
 def send_lead_notification_email(lead: dict):
@@ -10040,35 +9783,10 @@ def api_customers():
 
 @app.delete("/api/customers/{customer_id}")
 def api_delete_customer(customer_id: int):
-    conn = get_db()
-
-    customer = conn.execute(
-        "SELECT id FROM customers WHERE id = ?", (customer_id,)
-    ).fetchone()
-
-    if not customer:
-        conn.close()
+    result = customer_store.delete_customer_by_id(customer_id)
+    if result is None:
         raise HTTPException(status_code=404, detail="Customer not found")
-
-    deleted_invoices = conn.execute(
-        "DELETE FROM invoices WHERE customer_id = ?", (customer_id,)
-    ).rowcount
-    deleted_quotes = conn.execute(
-        "DELETE FROM quotes WHERE customer_id = ?", (customer_id,)
-    ).rowcount
-    deleted_customers = conn.execute(
-        "DELETE FROM customers WHERE id = ?", (customer_id,)
-    ).rowcount
-
-    conn.commit()
-    conn.close()
-
-    return {
-        "ok": True,
-        "deleted_customers": deleted_customers,
-        "deleted_quotes": deleted_quotes,
-        "deleted_invoices": deleted_invoices,
-    }
+    return result
 
 
 @app.get("/api/customers/{customer_id}/history")

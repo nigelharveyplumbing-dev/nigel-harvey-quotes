@@ -525,6 +525,174 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             self.assertEqual((deleted.status_code, deleted.json()), (200, {"ok": True}))
             self.assertEqual(client.delete("/api/material-prices/-1", headers=headers).status_code, 404)
 
+    def test_customer_lookup_history_and_delete_order_baseline(self):
+        m = self.module
+        suffix = secrets.token_hex(5)
+        phone = "07" + suffix
+        customer_id = m.upsert_customer("  First " + suffix + "  ", " 1 Test Road ", phone)
+        self.assertEqual(m.upsert_customer(" Updated " + suffix, " 2 Test Road ", phone), customer_id)
+        conn = m.get_db()
+        row = conn.execute("SELECT * FROM customers WHERE id = ?", (customer_id,)).fetchone()
+        self.assertEqual((row["name"], row["address"], row["phone"]),
+                         ("Updated " + suffix, "2 Test Road", phone))
+        conn.close()
+        self.assertEqual(m.upsert_customer("Updated " + suffix, "2 Test Road", ""), customer_id)
+        self.assertEqual(set(next(c for c in m.get_customers() if c["id"] == customer_id)),
+                         {"id", "name", "address", "phone", "updated_at"})
+        self.assertIsNone(m.get_customer_history(-1))
+
+        request = m.QuoteRequest(customer_name="Updated " + suffix,
+                                 customer_address="2 Test Road", customer_phone=phone,
+                                 job_description="Test customer history", labour_cost=12)
+        quote_id = m.save_quote(request.model_dump(), m.calculate_quote(request))
+        invoice = m.create_invoice_from_quote(quote_id)
+        self.assertEqual(m.get_quote_by_id(quote_id)["customer_id"], customer_id)
+        self.assertEqual(invoice["customer_id"], customer_id)
+        history = m.get_customer_history(customer_id)
+        self.assertEqual(set(history), {"customer", "quotes", "invoices"})
+        self.assertEqual(history["customer"], {
+            "id": customer_id, "name": "Updated " + suffix,
+            "address": "2 Test Road", "phone": phone,
+        })
+        self.assertIn(quote_id, [q["id"] for q in history["quotes"]])
+        self.assertIn(invoice["id"], [i["id"] for i in history["invoices"]])
+        photo_file = m.invoice_photo_folder(invoice["id"]) / "cascade-existing.jpg"
+        photo_file.write_bytes(b"fixture")
+        photo_id = m.save_invoice_photo_record(invoice["id"], "after", "Cascade fixture",
+                                                photo_file.name, photo_file.name)
+
+        # Temporary-database triggers record the existing child-before-customer delete order.
+        conn = m.get_db()
+        conn.execute("CREATE TABLE customer_delete_order (seq INTEGER PRIMARY KEY, item TEXT)")
+        for table in ("invoices", "quotes", "customers"):
+            conn.execute(f"CREATE TRIGGER watch_{table}_delete AFTER DELETE ON {table} "
+                         f"BEGIN INSERT INTO customer_delete_order(item) VALUES ('{table}'); END")
+        conn.commit()
+        conn.close()
+        with TestClient(m.app) as client:
+            self.assertEqual(client.delete("/api/customers/-1", headers=self.auth_headers).status_code, 404)
+            deleted = client.delete(f"/api/customers/{customer_id}", headers=self.auth_headers)
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(deleted.json(), {"ok": True, "deleted_customers": 1,
+                                          "deleted_quotes": 1, "deleted_invoices": 1})
+        conn = m.get_db()
+        order = [r["item"] for r in conn.execute("SELECT item FROM customer_delete_order ORDER BY seq")]
+        self.assertEqual(order, ["invoices", "quotes", "customers"])
+        for table in ("customers", "quotes", "invoices"):
+            conn.execute(f"DROP TRIGGER watch_{table}_delete")
+        conn.execute("DROP TABLE customer_delete_order")
+        conn.commit()
+        conn.close()
+        self.assertIsNone(m.get_customer_history(customer_id))
+        self.assertIsNone(m.get_invoice_by_id(invoice["id"]))
+        # The existing customer cascade leaves photo metadata/files orphaned.
+        self.assertEqual(m.load_invoice_photos(invoice["id"])[0]["id"], photo_id)
+        self.assertTrue(photo_file.exists())
+        self.assertTrue(m.delete_invoice_photo_record(invoice["id"], photo_id))
+
+    def test_lead_fields_status_notification_and_missing_ids_baseline(self):
+        m = self.module
+        seen = []
+        def committed_before_notification(lead):
+            seen.append(m.get_lead_by_id(lead["id"]))
+
+        with TestClient(m.app) as client, patch.object(
+            m, "send_lead_notification_email", side_effect=committed_before_notification
+        ):
+            created = client.post("/api/leads", json={
+                "name": "  Test Lead  ", "phone": " 07123456789 ",
+                "email": " lead@example.test ", "address": " 5 Example Road ",
+                "job_type": " bathroom ", "description": "  Replace tap  ", "source": " referral ",
+            })
+            self.assertEqual(created.status_code, 200)
+            lead = created.json()
+            self.assertEqual(set(lead), {"id", "name", "phone", "email", "address",
+                                         "job_type", "description", "status", "source",
+                                         "created_at", "updated_at"})
+            self.assertEqual((lead["name"], lead["phone"], lead["email"], lead["address"],
+                              lead["job_type"], lead["description"], lead["status"], lead["source"]),
+                             ("Test Lead", "07123456789", "lead@example.test", "5 Example Road",
+                              "bathroom", "Replace tap", "new", "referral"))
+            self.assertEqual(seen, [lead])
+            self.assertEqual(m.get_lead_by_id(lead["id"]), lead)
+            self.assertIn(lead, client.get("/api/leads", headers=self.auth_headers).json())
+            changed = client.put(f"/api/leads/{lead['id']}/status", headers=self.auth_headers,
+                                 json={"status": " WON "})
+            self.assertEqual(changed.status_code, 200)
+            self.assertEqual(changed.json()["status"], "won")
+            self.assertEqual(changed.json()["name"], lead["name"])
+            self.assertEqual(m.update_lead_status(lead["id"], "invalid")["status"], "new")
+            self.assertIsNone(m.get_lead_by_id(-1))
+            self.assertIsNone(m.update_lead_status(-1, "won"))
+            self.assertFalse(m.delete_lead_by_id(-1))
+            self.assertEqual(client.put("/api/leads/-1/status", headers=self.auth_headers,
+                                        json={"status": "won"}).status_code, 404)
+            self.assertEqual(client.delete("/api/leads/-1", headers=self.auth_headers).status_code, 404)
+            self.assertEqual(client.delete(f"/api/leads/{lead['id']}", headers=self.auth_headers).json(),
+                             {"ok": True})
+            self.assertIsNone(m.get_lead_by_id(lead["id"]))
+
+    def test_invoice_photo_metadata_file_and_commit_order_baseline(self):
+        m = self.module
+        request = m.QuoteRequest(customer_name="Photo Baseline " + secrets.token_hex(4),
+                                 job_description="Photo fixture", labour_cost=10)
+        invoice = m.create_invoice_from_quote(
+            m.save_quote(request.model_dump(), m.calculate_quote(request)))
+        invoice_id = invoice["id"]
+        self.assertEqual(m.load_invoice_photos(invoice_id), [])
+        self.assertIsNone(m.invoice_photo_path(invoice_id, -1))
+        self.assertFalse(m.delete_invoice_photo_record(invoice_id, -1))
+        self.assertEqual(m.normalise_photo_category(" Hidden pipework "), "hidden_pipework")
+        self.assertEqual(m.normalise_photo_category("unknown"), "other")
+        image = io.BytesIO()
+        Image.new("RGBA", (20, 15), (200, 100, 40, 128)).save(image, format="PNG")
+        image_bytes = image.getvalue()
+        persisted_before_record = []
+        save_record = m.save_invoice_photo_record
+        def inspect_save(*args):
+            persisted_before_record.append((m.invoice_photo_folder(invoice_id) / args[3]).is_file())
+            return save_record(*args)
+
+        with TestClient(m.app) as client, patch.object(m, "save_invoice_photo_record", side_effect=inspect_save):
+            uploaded = client.post(f"/api/invoices/{invoice_id}/photos", headers=self.auth_headers,
+                                   data={"category": "before", "caption": "  First visit  "},
+                                   files=[("photos", ("visit.png", image_bytes, "image/png"))])
+            self.assertEqual(client.post("/api/invoices/-1/photos", headers=self.auth_headers,
+                                         files=[("photos", ("visit.png", image_bytes, "image/png"))]).status_code, 404)
+        self.assertEqual(uploaded.status_code, 200)
+        self.assertEqual(persisted_before_record, [True])
+        result = uploaded.json()
+        self.assertEqual((result["ok"], result["added"], result["errors"]), (True, 1, []))
+        photo = result["photos"][0]
+        self.assertEqual(set(photo), {"id", "invoice_id", "category", "category_label",
+                                      "caption", "filename", "original_filename", "sort_order",
+                                      "created_at", "url"})
+        self.assertEqual((photo["category"], photo["category_label"], photo["caption"],
+                          photo["original_filename"], photo["sort_order"]),
+                         ("before", "Before", "First visit", "visit.png", 1))
+        self.assertEqual(photo["url"], f"/api/invoices/{invoice_id}/photos/{photo['id']}")
+        path = m.invoice_photo_path(invoice_id, photo["id"])
+        self.assertEqual(path.parent, m.invoice_photo_folder(invoice_id))
+        self.assertTrue(path.exists())
+        with Image.open(path) as stored:
+            self.assertEqual((stored.format, stored.mode), ("JPEG", "RGB"))
+        self.assertEqual(m.get_invoice_by_id(invoice_id)["photos"], [photo])
+
+        original_unlink = Path.unlink
+        rows_at_unlink = []
+        def inspect_unlink(path, *args, **kwargs):
+            rows_at_unlink.append(m.load_invoice_photos(invoice_id))
+            return original_unlink(path, *args, **kwargs)
+        with patch.object(Path, "unlink", inspect_unlink), TestClient(m.app) as client:
+            self.assertEqual(client.get(photo["url"]).content, path.read_bytes())
+            deleted = client.delete(photo["url"], headers=self.auth_headers)
+            self.assertEqual(deleted.json(), {"ok": True, "photos": []})
+            self.assertEqual(client.get(photo["url"]).status_code, 404)
+            self.assertEqual(client.delete(photo["url"], headers=self.auth_headers).status_code, 404)
+        self.assertEqual(rows_at_unlink, [[]])
+        self.assertFalse(path.exists())
+        self.assertIsNone(m.invoice_photo_path(invoice_id, photo["id"]))
+
     def test_model_defaults_and_quote_calculation(self):
         request = self.module.QuoteRequest(customer_name="Test Customer", labour_cost=200,
             materials=[self.module.MaterialItem(name="Tap", quantity=2, manual_price=10)])
