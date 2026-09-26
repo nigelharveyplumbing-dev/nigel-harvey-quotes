@@ -21,6 +21,11 @@ def main():
         restore()
     if not outcome.wasSuccessful():
         return 1
+    if sys.argv[1:] == ["--python-only"]:
+        print("Browser checks deferred to isolated staging", flush=True)
+        return 0
+    if sys.argv[1:]:
+        raise SystemExit("Usage: run_stage6_local.py [--python-only]")
     print("Running offline Playwright browser workflows", flush=True)
     environment = dict(os.environ)
     environment.setdefault("STAGE6_TEST_PYTHON", sys.executable)

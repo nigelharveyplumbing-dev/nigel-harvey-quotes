@@ -81,6 +81,7 @@ class BaselineTests(unittest.TestCase):
         cls.test_password = secrets.token_urlsafe(36)
         with patch.dict(os.environ, {
             "GOOGLE_PLACES_API_KEY": "", "EMAIL_ENABLED": "0", "OPENAI_API_KEY": "",
+            "PUBLIC_BASE_URL": "", "APP_ENVIRONMENT": "",
             "APP_USERNAME": cls.test_username, "APP_PASSWORD": cls.test_password,
         }):
             spec.loader.exec_module(cls.module)

@@ -27,7 +27,7 @@ import time
 import gc
 from html import escape
 from pathlib import Path
-from urllib.parse import quote_plus, urljoin, urlparse, urlencode
+from urllib.parse import quote_plus, urljoin, urlparse, urlsplit, urlencode
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -1428,7 +1428,33 @@ def pounds_text(value):
 
 
 def get_public_base_url(request: Request | None = None) -> str:
-    return "https://www.nigelharveyplumbing.co.uk"
+    production_origin = "https://www.nigelharveyplumbing.co.uk"
+    configured = (os.getenv("PUBLIC_BASE_URL") or "").strip()
+    staging = (os.getenv("APP_ENVIRONMENT") or "").strip().lower() == "staging"
+    if not configured:
+        if staging:
+            raise ValueError("PUBLIC_BASE_URL is required in staging")
+        return production_origin
+    origin = configured.rstrip("/")
+    parts = urlsplit(origin)
+    try:
+        _ = parts.port
+    except ValueError as exc:
+        raise ValueError("PUBLIC_BASE_URL has an invalid port") from exc
+    if (parts.scheme not in {"http", "https"} or not parts.hostname or
+            parts.username is not None or parts.password is not None or
+            parts.path or parts.query or
+            parts.fragment or any(ch.isspace() or ch in {"<", ">", '"', "'", "`", "\\"}
+                                  for ch in parts.netloc)):
+        raise ValueError("PUBLIC_BASE_URL must be an HTTP(S) origin without a path")
+    if staging and parts.hostname.lower() in {
+            "www.nigelharveyplumbing.co.uk", "nigelharveyplumbing.co.uk"}:
+        raise ValueError("Staging PUBLIC_BASE_URL cannot be the live website")
+    return origin
+
+
+# Fail startup before generating customer links with an invalid staging origin.
+get_public_base_url()
 
 
 def absolute_url(path: str, request: Request | None = None) -> str:
@@ -1541,7 +1567,7 @@ def send_lead_notification_email(lead: dict):
         msg["Subject"] = f"New quote request - {lead.get('name') or 'Website lead'}"
         msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_USER}>"
         msg["To"] = EMAIL_USER
-        public_url = os.getenv("PUBLIC_BASE_URL", "").strip()
+        public_url = get_public_base_url() if (os.getenv("PUBLIC_BASE_URL") or "").strip() else ""
         plain = (
             f"New website lead\n\n"
             f"Name: {lead.get('name','')}\n"
@@ -2498,12 +2524,12 @@ NEW_HOMEPAGE_PREVIEW_HTML = r"""
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Plumber in Guildford & Surrey | Nigel Harvey Plumbing</title>
 <meta name="description" content="Local plumber in Guildford serving Surrey for leaks, bathrooms, radiators, toilets, taps, pipework and general plumbing. Clear quotes and direct contact with Nigel Harvey Plumbing.">
-<link rel="canonical" href="https://www.nigelharveyplumbing.co.uk/">
+<link rel="canonical" href="__PUBLIC_HOME_URL__">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <meta property="og:title" content="Plumber in Guildford & Surrey | Nigel Harvey Plumbing">
 <meta property="og:description" content="Local Guildford plumber serving Surrey for general plumbing, leaks, bathrooms, radiators, toilets, taps and pipework.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://www.nigelharveyplumbing.co.uk/">
+<meta property="og:url" content="__PUBLIC_HOME_URL__">
 <style>
 :root{--navy:#0b2032;--blue:#1263a5;--pale:#f3f7fa;--gold:#e2b353;--text:#142b3e;--muted:#60717e}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--text);line-height:1.55;background:#fff}a{text-decoration:none;color:inherit}
@@ -2551,7 +2577,7 @@ footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{disp
 
 @app.get("/new-home", response_class=HTMLResponse)
 def new_homepage_preview(request: Request):
-    html = NEW_HOMEPAGE_PREVIEW_HTML
+    html = NEW_HOMEPAGE_PREVIEW_HTML.replace("__PUBLIC_HOME_URL__", escape(absolute_url("/", request), quote=True))
     html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
     html = html.replace("__COMPANY_PHONE_TEL__", COMPANY_PHONE_TEL)
     html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
@@ -2562,7 +2588,7 @@ def new_homepage_preview(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 def landing_home(request: Request):
-    html = NEW_HOMEPAGE_PREVIEW_HTML
+    html = NEW_HOMEPAGE_PREVIEW_HTML.replace("__PUBLIC_HOME_URL__", escape(absolute_url("/", request), quote=True))
     html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
     html = html.replace("__COMPANY_PHONE_TEL__", COMPANY_PHONE_TEL)
     html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
@@ -2573,7 +2599,7 @@ def landing_home(request: Request):
 
 @app.get("/robots.txt")
 def robots_txt(request: Request):
-    sitemap_url = "https://www.nigelharveyplumbing.co.uk/sitemap.xml"
+    sitemap_url = absolute_url("/sitemap.xml", request)
     content = f"User-agent: *\nAllow: /\nSitemap: {sitemap_url}\n"
     return Response(content=content, media_type="text/plain; charset=utf-8")
 
@@ -2588,8 +2614,7 @@ def sitemap_xml(request: Request):
         for service in LOCAL_SERVICE_PAGES
         for location in LOCATION_PAGES
     )
-    BASE_URL = "https://www.nigelharveyplumbing.co.uk"
-    body = "".join(f"<url><loc>{BASE_URL + url}</loc></url>" for url in urls)
+    body = "".join(f"<url><loc>{absolute_url(url, request)}</loc></url>" for url in urls)
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
     return Response(content=xml, media_type="application/xml; charset=utf-8")
 

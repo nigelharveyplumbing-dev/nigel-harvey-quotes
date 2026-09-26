@@ -72,7 +72,8 @@ def block_external_connections():
 
 
 @contextmanager
-def disposable_app(username: str, password: str):
+def disposable_app(username: str, password: str,
+                   public_base_url: str = "", environment: str = ""):
     if not username or not password:
         raise ValueError("Test-only Basic Auth credentials are required")
     with tempfile.TemporaryDirectory(prefix="stage6-local-") as temporary:
@@ -121,6 +122,8 @@ def disposable_app(username: str, password: str):
             "GOOGLE_PLACES_API_KEY": "",
             "GOOGLE_PLACE_ID": "",
             "OPENAI_API_KEY": "",
+            "PUBLIC_BASE_URL": public_base_url,
+            "APP_ENVIRONMENT": environment,
             "BANK_NAME": "Test Bank",
             "BANK_ACCOUNT_NAME": "Synthetic Test Account",
             "BANK_SORT_CODE": "00-00-00",

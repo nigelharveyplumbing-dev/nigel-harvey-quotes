@@ -7,6 +7,9 @@ local executable path. `STAGE6_TEST_PYTHON` can select the Python interpreter
 used for the disposable loopback server. The runner performs no installation
 or browser download.
 
+Run `python -B tests/run_stage6_local.py --python-only` for the accepted
+automated checks while Chromium remains outstanding for isolated staging.
+
 The server copies `app.py`, `business/`, `templates/` and `static/` into a
 temporary directory. It replaces the three `/var/data` paths **before** the
 first app import, checks the imported paths, replaces literal payment details
@@ -21,6 +24,8 @@ records console errors and failed requests, and inspects WhatsApp links without
 opening them. A missing local browser is an **incomplete run**, even if the
 Python suite passes. No real email, merchant, Google or OpenAI calls are made.
 
-Known baseline: server-generated public invoice links still use the live
-domain. The harness checks this without opening such a link. Correcting it
-belongs to Stage 6 Step 3.
+Staging URL checks use a synthetic origin and never open a generated link on
+the live website.
+The future staging service must set both `APP_ENVIRONMENT` to `staging` and
+`PUBLIC_BASE_URL` to its own origin before startup. A missing or live-domain
+origin then prevents startup.

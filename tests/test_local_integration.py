@@ -1,11 +1,16 @@
 """Stage 6 local HTTP workflows against the same isolated app used by the browser."""
 
 import base64
+from email import message_from_string
 import io
+import os
 import secrets
 import socket
 import smtplib
 import unittest
+from types import SimpleNamespace
+from urllib.parse import urljoin
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -142,10 +147,157 @@ class LocalIntegrationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "SMTP blocked"):
             smtplib.SMTP_SSL("example.test")
 
-    def test_known_server_generated_link_still_uses_live_domain(self):
-        # Read-only characterization for Stage 6 Step 3; never open this URL.
-        self.assertEqual(self.app_module.build_invoice_public_url(1),
-                         "https://www.nigelharveyplumbing.co.uk/invoice/1")
+    def test_default_invoice_link_still_uses_live_domain(self):
+        with patch.dict(os.environ, {"PUBLIC_BASE_URL": "", "APP_ENVIRONMENT": ""}):
+            self.assertEqual(self.app_module.build_invoice_public_url(1),
+                             "https://www.nigelharveyplumbing.co.uk/invoice/1")
+
+    def test_default_absolute_document_and_website_urls(self):
+        m = self.app_module
+        base = "https://www.nigelharveyplumbing.co.uk"
+        with patch.dict(os.environ, {"PUBLIC_BASE_URL": "", "APP_ENVIRONMENT": ""}):
+            self.assertEqual(m.get_public_base_url(), base)
+            for path in ("/invoice/47", "/api/invoices/47/pdf",
+                         "/api/quotes/12/pdf", "/api/invoices/47/payment-qr"):
+                self.assertEqual(m.absolute_url(path), base + path)
+            self.assertEqual(m.build_invoice_public_url(47), base + "/invoice/47")
+            home = self.client.get("/").text
+            self.assertIn(f'<link rel="canonical" href="{base}/">', home)
+            self.assertIn(f'<meta property="og:url" content="{base}/">', home)
+            # This page currently has no canonical placeholder; preserve it.
+            self.assertNotIn('rel="canonical"', self.client.get("/request-quote").text)
+            self.assertIn(base + "/plumber-guildford", self.client.get("/plumber-guildford").text)
+            self.assertIn(base + "/sitemap.xml", self.client.get("/robots.txt").text)
+            self.assertIn(base + "/plumber-guildford", self.client.get("/sitemap.xml").text)
+
+    def test_default_invoice_and_lead_email_url(self):
+        m = self.app_module
+        item = {
+            "id": 47, "invoice_number": "INV-TEST-47", "job_reference": "JOB-47",
+            "invoice": {"customer_name": "Synthetic Customer"}, "status": "unpaid",
+            "balance_due": 12.5,
+        }
+        context = SimpleNamespace(
+            build_invoice_public_url=m.build_invoice_public_url,
+            company_name="Test company", company_phone="000", company_email="test@example.test",
+            pounds_text=m.pounds_text, get_company_logo_value=lambda: "",
+            generate_invoice_pdf_bytes=lambda _: b"%PDF-synthetic",
+            from_header="Test sender <sender@example.test>",
+        )
+        with patch.dict(os.environ, {"PUBLIC_BASE_URL": "", "APP_ENVIRONMENT": ""}):
+            invoice_msg = m.document_sharing.prepare_invoice_email(
+                item, "recipient@example.test", "", context)
+            plain = next(p for p in invoice_msg.walk() if p.get_content_type() == "text/plain")
+            self.assertIn("Invoice link: https://www.nigelharveyplumbing.co.uk/invoice/47",
+                          plain.get_payload(decode=True).decode())
+            with patch.object(m, "EMAIL_ENABLED", True), \
+                 patch.object(m, "EMAIL_USER", "sender@example.test"), \
+                 patch.object(m, "EMAIL_PASS", "test-only"), \
+                 patch.object(m.smtplib, "SMTP_SSL") as smtp:
+                m.send_lead_notification_email({"name": "Synthetic Lead"})
+                raw = smtp.return_value.__enter__.return_value.sendmail.call_args.args[2]
+            lead_msg = message_from_string(raw)
+            lead_plain = next(p for p in lead_msg.walk() if p.get_content_type() == "text/plain")
+            self.assertIn("Open app: \n", lead_plain.get_payload(decode=True).decode())
+
+    def test_staging_document_and_website_urls_stay_on_staging_origin(self):
+        m = self.app_module
+        stage = "https://quotes-stage.example.test"
+        production = "https://www.nigelharveyplumbing.co.uk"
+        with patch.dict(os.environ, {"PUBLIC_BASE_URL": f"  {stage}///  ",
+                                     "APP_ENVIRONMENT": "staging"}):
+            self.assertEqual(m.get_public_base_url(), stage)
+            paths = ("/invoice/47", "/api/invoices/47/pdf", "/api/quotes/12/pdf",
+                     "/api/invoices/47/payment-qr", "/api/invoices/47/photos/3")
+            for path in paths:
+                with self.subTest(path=path):
+                    self.assertEqual(m.absolute_url(path), stage + path)
+                    self.assertNotIn(production, m.absolute_url(path))
+            self.assertEqual(m.absolute_url("invoice/47"), stage + "/invoice/47")
+            self.assertEqual(m.build_invoice_public_url(47), stage + "/invoice/47")
+
+            for page in ("/", "/new-home", "/plumber-guildford", "/emergency-plumber-guildford",
+                         "/request-quote", "/robots.txt", "/sitemap.xml"):
+                response = self.client.get(page)
+                self.assertEqual(response.status_code, 200, page)
+                self.assertNotIn(production, response.text, page)
+            home = self.client.get("/").text
+            self.assertIn(f'<link rel="canonical" href="{stage}/">', home)
+            self.assertIn(f'<meta property="og:url" content="{stage}/">', home)
+            self.assertIn(stage + "/sitemap.xml", self.client.get("/robots.txt").text)
+            self.assertIn(stage + "/plumber-guildford", self.client.get("/sitemap.xml").text)
+            self.assertIn(stage + "/emergency-plumber-surrey",
+                          m.render_service_page(m.SERVICE_PAGES[0], ""))
+
+            payload = m.QuoteRequest(customer_name="Stage Link Customer", labour_cost=10).model_dump()
+            quote = self.client.post("/api/quote", headers=self.auth, json=payload).json()
+            invoice = self.client.post(f"/api/quotes/{quote['id']}/to-invoice",
+                                       headers=self.auth).json()
+            invoice_page = self.client.get(f"/invoice/{invoice['id']}").text
+            for relative in (f"/api/invoices/{invoice['id']}/pdf",
+                             f"/api/invoices/{invoice['id']}/payment-qr"):
+                self.assertIn(relative, invoice_page)
+                self.assertEqual(urljoin(stage + "/", relative), stage + relative)
+            self.assertNotIn(production, invoice_page)
+
+    def test_staging_invoice_email_and_lead_notification_urls(self):
+        m = self.app_module
+        stage = "https://quotes-stage.example.test"
+        item = {"id": 47, "invoice_number": "INV-STAGE-47", "job_reference": "JOB-47",
+                "invoice": {"customer_name": "Synthetic Customer"}, "status": "unpaid",
+                "balance_due": 12.5}
+        context = SimpleNamespace(
+            build_invoice_public_url=m.build_invoice_public_url,
+            company_name="Test company", company_phone="000", company_email="test@example.test",
+            pounds_text=m.pounds_text, get_company_logo_value=lambda: "",
+            generate_invoice_pdf_bytes=lambda _: b"%PDF-synthetic",
+            from_header="Test sender <sender@example.test>",
+        )
+        with patch.dict(os.environ, {"PUBLIC_BASE_URL": stage + "/",
+                                     "APP_ENVIRONMENT": "staging"}):
+            invoice_msg = m.document_sharing.prepare_invoice_email(
+                item, "recipient@example.test", "", context)
+            plain = next(p for p in invoice_msg.walk() if p.get_content_type() == "text/plain")
+            html = next(p for p in invoice_msg.walk() if p.get_content_type() == "text/html")
+            self.assertIn("Invoice link: " + stage + "/invoice/47",
+                          plain.get_payload(decode=True).decode())
+            self.assertIn('href="' + stage + '/invoice/47"', html.get_payload(decode=True).decode())
+            with patch.object(m, "EMAIL_ENABLED", True), \
+                 patch.object(m, "EMAIL_USER", "sender@example.test"), \
+                 patch.object(m, "EMAIL_PASS", "test-only"), \
+                 patch.object(m.smtplib, "SMTP_SSL") as smtp:
+                m.send_lead_notification_email({"name": "Synthetic Lead"})
+                raw = smtp.return_value.__enter__.return_value.sendmail.call_args.args[2]
+            lead_msg = message_from_string(raw)
+            lead_plain = next(p for p in lead_msg.walk() if p.get_content_type() == "text/plain")
+            self.assertIn("Open app: " + stage + "\n", lead_plain.get_payload(decode=True).decode())
+
+    def test_staging_origin_configuration_fails_closed(self):
+        m = self.app_module
+        for configured in ("", "https://www.nigelharveyplumbing.co.uk/",
+                           "https://nigelharveyplumbing.co.uk", "not-a-url",
+                           "https://quotes-stage.example.test/path",
+                           "https://quotes-stage.example.test?redirect=live",
+                           "https://quotes-stage.example.test:badport"):
+            with self.subTest(origin=configured), \
+                 patch.dict(os.environ, {"APP_ENVIRONMENT": "staging",
+                                          "PUBLIC_BASE_URL": configured}):
+                with self.assertRaises(ValueError):
+                    m.get_public_base_url()
+
+    def test_staging_startup_rejects_missing_origin(self):
+        with self.assertRaisesRegex(ValueError, "required in staging"):
+            with disposable_app(self.username, self.password, environment="staging"):
+                self.fail("Staging app started without PUBLIC_BASE_URL")
+
+    def test_explicit_production_origin_matches_default(self):
+        production = "https://www.nigelharveyplumbing.co.uk"
+        with patch.dict(os.environ, {"PUBLIC_BASE_URL": production + "/",
+                                     "APP_ENVIRONMENT": "production"}):
+            self.assertEqual(self.app_module.get_public_base_url(), production)
+            self.assertEqual(self.app_module.build_invoice_public_url(47),
+                             production + "/invoice/47")
+            self.assertIn(f'href="{production}/"', self.client.get("/").text)
 
 
 if __name__ == "__main__":
