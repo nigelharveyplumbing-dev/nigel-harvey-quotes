@@ -26,6 +26,7 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
+from bs4 import BeautifulSoup
 from PIL import Image
 from pypdf import PdfReader
 
@@ -326,15 +327,15 @@ class BaselineTests(unittest.TestCase):
             "SEO_CSS": "a22e53ee58ed48079fc147e3b604c75a2dfca3478da0ca9591cd9632f47cba0f",
             "LEAD_FORM_HTML": "16bec9032f8177d7cccdd0b438807305c44a6c2051109556e78a827cd21e8366",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "831b1222d36b698884d263fae8eb0929151de4ec1253cec900c14ba5b81820ec",
+                "54df0755a08b6a473e0a97f675a15aa9685ad42c92d87f6a1b92f2aa081779a4",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
         page_hashes = {
-            "/": "6a0b233e99ee29c93ab0000d144ee6a20005b6b634cd5e095f950403d394fa95",
-            "/new-home": "6a0b233e99ee29c93ab0000d144ee6a20005b6b634cd5e095f950403d394fa95",
+            "/": "40975e54d0a2eae9b6aeb4eeeda43139f4cb0ea9a4b8ef8064a9937495f99b6d",
+            "/new-home": "40975e54d0a2eae9b6aeb4eeeda43139f4cb0ea9a4b8ef8064a9937495f99b6d",
             "/request-quote": "0a77e0a22b92373ef504b97f9d2a95ef03b123c52cf489a30d214308bb1c629c",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
@@ -349,6 +350,28 @@ class BaselineTests(unittest.TestCase):
                         response = client.get(path)
                         self.assertEqual(response.status_code, 200)
                         self.assertEqual(hashlib.sha256(response.content).hexdigest(), digest)
+
+    def test_active_homepage_open_app_navigation(self):
+        m = self.module
+        with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
+                                     "PUBLIC_BASE_URL": "https://stage6.invalid",
+                                     "GOOGLE_PLACES_API_KEY": ""}), \
+                patch.object(m, "_google_reviews_html", return_value="<div>Synthetic reviews</div>"):
+            with TestClient(m.app) as client:
+                for path in ("/", "/new-home"):
+                    with self.subTest(path=path):
+                        response = client.get(path)
+                        self.assertEqual(response.status_code, 200)
+                        page = BeautifulSoup(response.text, "html.parser")
+                        nav = page.select_one("header .navlinks")
+                        self.assertIsNotNone(nav)
+                        self.assertEqual([(a.get_text(strip=True), a.get("href"))
+                                          for a in nav.select("a.btn")],
+                                         [("Get a Quote", "/request-quote"),
+                                          ("Open App", "/app")])
+                        self.assertIn(".navlinks a:not(.btn){display:none}", response.text)
+                self.assertEqual(client.get("/app").status_code, 401)
+                self.assertEqual(client.get("/app", headers=self.auth_headers).status_code, 200)
 
     def test_customer_document_routes_remain_public(self):
         m = self.module
