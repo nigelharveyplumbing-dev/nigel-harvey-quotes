@@ -7,12 +7,16 @@ path before import. No test opens production /var/data.
 import importlib.util
 import base64
 import json
+import os
 import shutil
 import sqlite3
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,17 +48,158 @@ class BaselineTests(unittest.TestCase):
         path.write_text(source)
         spec = importlib.util.spec_from_file_location("app_under_test", path)
         cls.module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(cls.module)
+        with patch.dict(os.environ, {"GOOGLE_PLACES_API_KEY": "", "EMAIL_ENABLED": "0", "OPENAI_API_KEY": ""}):
+            spec.loader.exec_module(cls.module)
         cls.module.init_db()
 
     def test_route_inventory(self):
-        routes = {(method, route.path) for route in self.module.app.routes
-                  for method in getattr(route, "methods", [])}
+        routes_list = [(method, route.path) for route in self.module.app.routes
+                       if route.path not in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
+                       for method in getattr(route, "methods", [])]
+        routes = set(routes_list)
+        expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
+        self.assertEqual(routes, expected)
+        self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
         for route in [("GET", "/app"), ("GET", "/"), ("POST", "/api/quote"),
                       ("GET", "/api/quotes/{quote_id}/pdf"),
                       ("GET", "/invoice/{invoice_id}"),
                       ("POST", "/api/invoices/{invoice_id}/send-email")]:
             self.assertIn(route, routes)
+
+    def test_http_app_access_and_public_site(self):
+        m = self.module
+        credentials = base64.b64encode(f"{m.APP_USERNAME}:{m.APP_PASSWORD}".encode()).decode()
+        with TestClient(m.app) as client:
+            blocked = client.get("/app")
+            self.assertEqual(blocked.status_code, 401)
+            self.assertEqual(blocked.headers["www-authenticate"], "Basic")
+            self.assertEqual(client.get("/app", headers={"Authorization": "Basic invalid"}).status_code, 401)
+            app_page = client.get("/app", headers={"Authorization": f"Basic {credentials}"})
+            self.assertEqual(app_page.status_code, 200)
+            self.assertIn("text/html", app_page.headers["content-type"])
+            # Existing access behaviour, including the known unprotected admin API.
+            self.assertEqual(client.get("/api/quotes").status_code, 200)
+            for path in ("/", "/new-home", "/request-quote", "/plumber-guildford", "/plumber-woking"):
+                response = client.get(path)
+                self.assertEqual(response.status_code, 200, path)
+                self.assertIn("text/html", response.headers["content-type"])
+            home = client.get("/").text
+            self.assertIn("Plumber in Guildford", home)
+            self.assertIn('rel="canonical"', home)
+            # Existing route precedence sends this service slug to the location handler.
+            self.assertEqual(client.get("/emergency-plumber-surrey").status_code, 404)
+            self.assertEqual(client.get("/plumber-not-a-real-place").status_code, 404)
+            sitemap = client.get("/sitemap.xml")
+            self.assertEqual(sitemap.status_code, 200)
+            self.assertIn("<urlset", sitemap.text)
+            self.assertIn("plumber-guildford", sitemap.text)
+            robots = client.get("/robots.txt")
+            self.assertEqual(robots.status_code, 200)
+            self.assertIn("Sitemap:", robots.text)
+
+    def test_http_quote_invoice_pdf_customer_routes(self):
+        m = self.module
+        with TestClient(m.app) as client:
+            payload = m.QuoteRequest(customer_name="Route Customer", customer_address="4 Test Lane",
+                                     customer_phone="07333333333", job_description="Install valve",
+                                     labour_cost=100.10,
+                                     materials=[m.MaterialItem(name="valve", quantity=2, manual_price=10)]).model_dump()
+            created = client.post("/api/quote", json=payload)
+            self.assertEqual(created.status_code, 200)
+            quote = created.json()
+            self.assertTrue({"id", "customer_id", "request", "result", "total_price"} <= quote.keys())
+            self.assertEqual(quote["result"]["materials"], 25)
+            self.assertEqual(quote["result"]["total_price"], 125.10)
+            quote_id = quote["id"]
+            self.assertEqual(client.get(f"/api/quotes/{quote_id}").json()["result"], quote["result"])
+            self.assertTrue(any(q["id"] == quote_id for q in client.get("/api/quotes").json()))
+            payload["labour_cost"] = 120.20
+            updated = client.put(f"/api/quotes/{quote_id}", json=payload)
+            self.assertEqual(updated.status_code, 200)
+            self.assertEqual(updated.json()["result"]["total_price"], 145.20)
+            pdf = client.get(f"/api/quotes/{quote_id}/pdf")
+            self.assertEqual(pdf.status_code, 200)
+            self.assertEqual(pdf.headers["content-type"], "application/pdf")
+            self.assertTrue(pdf.content.startswith(b"%PDF"))
+
+            converted = client.post(f"/api/quotes/{quote_id}/to-invoice")
+            self.assertEqual(converted.status_code, 200)
+            invoice = converted.json()
+            self.assertTrue({"id", "invoice_number", "quote_id", "invoice", "quote_result",
+                             "balance_due", "status", "photos"} <= invoice.keys())
+            self.assertEqual(invoice["quote_id"], quote_id)
+            self.assertEqual(invoice["invoice"]["job"], "Install valve")
+            self.assertEqual(invoice["total_price"], 145.20)
+            invoice_id = invoice["id"]
+            self.assertEqual(client.get(f"/api/invoices/{invoice_id}").json(), invoice)
+            self.assertTrue(any(i["id"] == invoice_id for i in client.get("/api/invoices").json()))
+            public = client.get(f"/invoice/{invoice_id}")
+            self.assertEqual(public.status_code, 200)
+            self.assertIn(invoice["invoice_number"], public.text)
+            self.assertIn("Route Customer", public.text)
+            self.assertIn(f"/api/invoices/{invoice_id}/pdf", public.text)
+            invoice_pdf = client.get(f"/api/invoices/{invoice_id}/pdf")
+            self.assertEqual(invoice_pdf.status_code, 200)
+            self.assertTrue(invoice_pdf.content.startswith(b"%PDF"))
+            self.assertEqual(client.get(f"/api/invoices/{invoice_id}/payment-qr").status_code, 200)
+            edit = m.InvoiceEditRequest(customer_name="Route Customer", customer_address="4 Test Lane",
+                                        customer_phone="07333333333", job="Install valve",
+                                        job_reference="ROUTE-1", labour=120.20, materials=25,
+                                        due_date=invoice["due_date"],
+                                        payment_link="https://example.test/pay", amount_paid=0).model_dump()
+            edited = client.put(f"/api/invoices/{invoice_id}", json=edit)
+            self.assertEqual(edited.status_code, 200)
+            self.assertEqual(edited.json()["job_reference"], "ROUTE-1")
+            self.assertEqual(edited.json()["payment_link"], "https://example.test/pay")
+            status = client.post(f"/api/invoices/{invoice_id}/status",
+                                 json={"status": "part paid", "amount_paid": 20})
+            self.assertEqual(status.status_code, 200)
+            self.assertEqual(status.json()["amount_paid"], 20)
+            self.assertEqual(status.json()["balance_due"], 125.20)
+            self.assertEqual(client.put("/api/invoices/-1", json=edit).status_code, 404)
+
+            customers = client.get("/api/customers")
+            self.assertEqual(customers.status_code, 200)
+            customer_id = quote["customer_id"]
+            self.assertTrue(any(c["id"] == customer_id for c in customers.json()))
+            history = client.get(f"/api/customers/{customer_id}/history")
+            self.assertEqual(history.status_code, 200)
+            self.assertIn("quotes", history.json())
+            self.assertIn("invoices", history.json())
+            self.assertEqual(client.get("/api/customers/-1/history").status_code, 404)
+            self.assertEqual(client.get("/invoice/-1").status_code, 404)
+            self.assertEqual(client.get("/api/quotes/-1/pdf").status_code, 404)
+            self.assertEqual(client.get("/api/invoices/-1/pdf").status_code, 404)
+            self.assertEqual(client.delete(f"/api/invoices/{invoice_id}").status_code, 200)
+            self.assertEqual(client.delete(f"/api/quotes/{quote_id}").status_code, 200)
+            self.assertEqual(client.delete(f"/api/customers/{customer_id}").status_code, 200)
+
+    def test_http_material_routes_without_network(self):
+        m = self.module
+        credentials = base64.b64encode(f"{m.APP_USERNAME}:{m.APP_PASSWORD}".encode()).decode()
+        headers = {"Authorization": f"Basic {credentials}"}
+        with TestClient(m.app) as client:
+            self.assertEqual(client.get("/api/material-prices").status_code, 401)
+            self.assertEqual(client.get("/api/material-search?q=ptfe").status_code, 401)
+            lookup = client.get("/api/material-search?q=ptfe", headers=headers)
+            self.assertEqual(lookup.status_code, 200)
+            self.assertIsInstance(lookup.json(), list)
+            resolved = client.get("/api/material-resolve?name=ptfe%20tape", headers=headers)
+            self.assertEqual(resolved.status_code, 200)
+            self.assertEqual(set(resolved.json()), {"requested_name", "matched", "best", "alternatives"})
+            self.assertEqual(client.get("/api/material-resolve", headers=headers).status_code, 400)
+            self.assertEqual(client.get("/api/material-alias?q=ptfe").status_code, 200)
+            self.assertEqual(client.get("/api/material-charging?q=ptfe").status_code, 200)
+            url = "https://example.test/route-material"
+            m.upsert_material_price_cache(url, "Route valve", "Test", price=5, status="live")
+            rows = client.get("/api/material-prices", headers=headers).json()
+            item = next(row for row in rows if row["url"] == url)
+            changed = client.put(f"/api/material-prices/{item['id']}", headers=headers,
+                                 json={"name": "Changed", "supplier": "Test", "url": url, "manual_price": 7.25})
+            self.assertEqual((changed.status_code, changed.json()), (200, {"ok": True}))
+            deleted = client.delete(f"/api/material-prices/{item['id']}", headers=headers)
+            self.assertEqual((deleted.status_code, deleted.json()), (200, {"ok": True}))
+            self.assertEqual(client.delete("/api/material-prices/-1", headers=headers).status_code, 404)
 
     def test_model_defaults_and_quote_calculation(self):
         request = self.module.QuoteRequest(customer_name="Test Customer", labour_cost=200,
