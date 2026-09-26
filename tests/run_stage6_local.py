@@ -1,0 +1,33 @@
+"""Run both the regression suite and offline browser checks. No downloads."""
+
+import os
+import subprocess
+import sys
+import unittest
+from pathlib import Path
+
+from local_browser_server import block_external_connections
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def main():
+    restore = block_external_connections()
+    try:
+        suite = unittest.TestLoader().discover(str(ROOT / "tests"), pattern="test_*.py")
+        outcome = unittest.TextTestRunner(verbosity=1).run(suite)
+    finally:
+        restore()
+    if not outcome.wasSuccessful():
+        return 1
+    print("Running offline Playwright browser workflows", flush=True)
+    environment = dict(os.environ)
+    environment.setdefault("STAGE6_TEST_PYTHON", sys.executable)
+    result = subprocess.run(["node", str(ROOT / "tests" / "run_local_browser.mjs")],
+                            cwd=ROOT, env=environment, check=False)
+    return result.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
