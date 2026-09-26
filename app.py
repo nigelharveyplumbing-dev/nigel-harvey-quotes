@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from fastapi import FastAPI, HTTPException, Response, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.routing import Match
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -13,6 +14,8 @@ import os
 import shutil
 import io
 import base64
+import binascii
+import hmac
 import ssl
 import smtplib
 import mimetypes
@@ -52,30 +55,84 @@ def start_optional_overdue_reminder_worker():
 from fastapi import Request
 import base64
 
-APP_USERNAME = "nigel"
-APP_PASSWORD = "Hmhair0310"
+APP_USERNAME = os.getenv("APP_USERNAME", "").strip()
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+
+# Only these exact method/route-template pairs bypass staff authentication.
+PUBLIC_ROUTE_KEYS = frozenset({
+    ("GET", "/"),
+    ("GET", "/new-home"),
+    ("GET", "/request-quote"),
+    ("GET", "/robots.txt"),
+    ("GET", "/sitemap.xml"),
+    ("GET", "/plumber-{area_slug}"),
+    ("GET", "/{service_slug}-{area_slug}"),
+    ("GET", "/{service_slug}"),
+    ("POST", "/api/leads"),
+    ("GET", "/invoice/{invoice_id}"),
+    ("GET", "/api/invoices/{invoice_id}/pdf"),
+    ("GET", "/api/invoices/{invoice_id}/payment-qr"),
+    ("GET", "/api/invoices/{invoice_id}/photos/{photo_id}"),
+    ("GET", "/api/quotes/{quote_id}/pdf"),
+})
+
 
 def check_basic_auth(request: Request):
-    auth = request.headers.get("authorization")
-    if not auth or not auth.startswith("Basic "):
+    if not APP_USERNAME or not APP_PASSWORD:
         return False
+    auth = request.headers.get("authorization", "")
     try:
-        encoded = auth.split(" ")[1]
-        decoded = base64.b64decode(encoded).decode("utf-8")
-        user, pwd = decoded.split(":")
-        return user == APP_USERNAME and pwd == APP_PASSWORD
-    except:
+        scheme, encoded = auth.split(" ", 1)
+        if scheme.lower() != "basic":
+            return False
+        decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+        user, pwd = decoded.split(":", 1)
+        return hmac.compare_digest(user, APP_USERNAME) & hmac.compare_digest(pwd, APP_PASSWORD)
+    except (ValueError, UnicodeError, binascii.Error):
         return False
+
+
+def is_public_route(request: Request):
+    # Resolve the route before deciding. This preserves public dynamic SEO 404s
+    # without treating an entire URL prefix as public.
+    for route in app.router.routes:
+        match, _ = route.matches(request.scope)
+        if match == Match.FULL:
+            return (request.method, route.path) in PUBLIC_ROUTE_KEYS
+    return False
+
+
+def is_cross_site_write(request: Request):
+    # This GET currently refreshes cached prices, so treat it like a write.
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"} and not (
+        request.method == "GET" and request.url.path == "/api/live-product-refresh"
+    ):
+        return False
+    origin = request.headers.get("origin")
+    if origin:
+        parsed = urlparse(origin)
+        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != request.headers.get("host", "").lower():
+            return True
+    fetch_site = request.headers.get("sec-fetch-site")
+    return bool(fetch_site and fetch_site not in {"same-origin", "none"})
+
 
 @app.middleware("http")
 async def protect_app_routes(request: Request, call_next):
-    if request.url.path.startswith("/app"):
-        if not check_basic_auth(request):
-            return Response(
-                status_code=401,
-                headers={"WWW-Authenticate": "Basic"},
-                content="Authentication required"
+    if is_public_route(request):
+        return await call_next(request)
+    if not check_basic_auth(request):
+        headers = {"WWW-Authenticate": "Basic"}
+        if request.url.path.startswith("/api/"):
+            return JSONResponse(
+                status_code=401, headers=headers,
+                content={"detail": "Authentication required"},
             )
+        return Response(status_code=401, headers=headers, content="Authentication required")
+    if is_cross_site_write(request):
+        if request.url.path.startswith("/api/"):
+            return JSONResponse(status_code=403, content={"detail": "Cross-site request blocked"})
+        return Response(status_code=403, content="Cross-site request blocked")
     return await call_next(request)
 
 
