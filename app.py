@@ -91,6 +91,10 @@ def check_basic_auth(request: Request):
         return False
 
 
+def is_staging_environment():
+    return (os.getenv("APP_ENVIRONMENT") or "").strip().lower() == "staging"
+
+
 def is_public_route(request: Request):
     # Resolve the route before deciding. This preserves public dynamic SEO 404s
     # without treating an entire URL prefix as public.
@@ -118,7 +122,7 @@ def is_cross_site_write(request: Request):
 
 @app.middleware("http")
 async def protect_app_routes(request: Request, call_next):
-    if is_public_route(request):
+    if not is_staging_environment() and is_public_route(request):
         return await call_next(request)
     if not check_basic_auth(request):
         headers = {"WWW-Authenticate": "Basic"}
@@ -1430,7 +1434,7 @@ def pounds_text(value):
 def get_public_base_url(request: Request | None = None) -> str:
     production_origin = "https://www.nigelharveyplumbing.co.uk"
     configured = (os.getenv("PUBLIC_BASE_URL") or "").strip()
-    staging = (os.getenv("APP_ENVIRONMENT") or "").strip().lower() == "staging"
+    staging = is_staging_environment()
     if not configured:
         if staging:
             raise ValueError("PUBLIC_BASE_URL is required in staging")
@@ -2606,6 +2610,9 @@ def landing_home(request: Request):
 
 @app.get("/robots.txt")
 def robots_txt(request: Request):
+    if is_staging_environment():
+        return Response(content="User-agent: *\nDisallow: /\n",
+                        media_type="text/plain; charset=utf-8")
     sitemap_url = absolute_url("/sitemap.xml", request)
     content = f"User-agent: *\nAllow: /\nSitemap: {sitemap_url}\n"
     return Response(content=content, media_type="text/plain; charset=utf-8")

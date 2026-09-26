@@ -2,6 +2,7 @@
 
 import base64
 from email import message_from_string
+import hashlib
 import io
 import json
 import os
@@ -318,14 +319,15 @@ vm.runInNewContext(source.slice(start, end) + '\ncopyInvoiceBankDetails()', cont
 
             for page in ("/", "/new-home", "/plumber-guildford", "/emergency-plumber-guildford",
                          "/request-quote", "/robots.txt", "/sitemap.xml"):
-                response = self.client.get(page)
+                response = self.client.get(page, headers=self.auth)
                 self.assertEqual(response.status_code, 200, page)
                 self.assertNotIn(production, response.text, page)
-            home = self.client.get("/").text
+            home = self.client.get("/", headers=self.auth).text
             self.assertIn(f'<link rel="canonical" href="{stage}/">', home)
             self.assertIn(f'<meta property="og:url" content="{stage}/">', home)
-            self.assertIn(stage + "/sitemap.xml", self.client.get("/robots.txt").text)
-            self.assertIn(stage + "/plumber-guildford", self.client.get("/sitemap.xml").text)
+            self.assertIn("Disallow: /", self.client.get("/robots.txt", headers=self.auth).text)
+            self.assertIn(stage + "/plumber-guildford",
+                          self.client.get("/sitemap.xml", headers=self.auth).text)
             self.assertIn(stage + "/emergency-plumber-surrey",
                           m.render_service_page(m.SERVICE_PAGES[0], ""))
 
@@ -333,7 +335,7 @@ vm.runInNewContext(source.slice(start, end) + '\ncopyInvoiceBankDetails()', cont
             quote = self.client.post("/api/quote", headers=self.auth, json=payload).json()
             invoice = self.client.post(f"/api/quotes/{quote['id']}/to-invoice",
                                        headers=self.auth).json()
-            invoice_page = self.client.get(f"/invoice/{invoice['id']}").text
+            invoice_page = self.client.get(f"/invoice/{invoice['id']}", headers=self.auth).text
             for relative in (f"/api/invoices/{invoice['id']}/pdf",
                              f"/api/invoices/{invoice['id']}/payment-qr"):
                 self.assertIn(relative, invoice_page)
@@ -398,6 +400,100 @@ vm.runInNewContext(source.slice(start, end) + '\ncopyInvoiceBankDetails()', cont
             self.assertEqual(self.app_module.build_invoice_public_url(47),
                              production + "/invoice/47")
             self.assertIn(f'href="{production}/"', self.client.get("/").text)
+
+
+class StagingAccessTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.username = secrets.token_urlsafe(16)
+        cls.password = secrets.token_urlsafe(24)
+        cls.sandbox = disposable_app(
+            cls.username, cls.password, environment="staging",
+            public_base_url="https://synthetic-stage.example.test",
+        )
+        cls.app_module, cls.root = cls.sandbox.__enter__()
+        cls.addClassCleanup(cls.sandbox.__exit__, None, None, None)
+        cls.client = TestClient(cls.app_module.app)
+        cls.client.__enter__()
+        cls.addClassCleanup(cls.client.__exit__, None, None, None)
+        def header(password):
+            encoded = base64.b64encode(f"{cls.username}:{password}".encode()).decode()
+            return {"Authorization": "Basic " + encoded}
+        cls.auth = header(cls.password)
+        cls.wrong_auth = header(cls.password + "-wrong")
+
+    def test_all_66_routes_and_framework_pages_reject_before_side_effects(self):
+        m = self.app_module
+        routes = [(method, route) for route in m.app.routes
+                  if route.path not in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
+                  for method in getattr(route, "methods", [])]
+        self.assertEqual(len(routes), 66)
+        parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
+                      "lead_id": "1", "material_id": "1", "photo_id": "1", "filename": "sample.db",
+                      "area_slug": "guildford", "service_slug": "plumber"}
+
+        def file_state():
+            return {str(p.relative_to(self.root)): hashlib.sha256(p.read_bytes()).hexdigest()
+                    for p in self.root.rglob("*") if p.is_file()}
+
+        with patch.object(m, "get_db", side_effect=AssertionError("database reached")), \
+             patch.object(m.smtplib, "SMTP_SSL", side_effect=AssertionError("SMTP reached")), \
+             patch.object(m.requests, "get", side_effect=AssertionError("external GET reached")), \
+             patch.object(m.requests, "post", side_effect=AssertionError("external POST reached")):
+            before = file_state()
+            for method, route in routes:
+                path = route.path.format(**parameters)
+                with self.subTest(method=method, path=route.path), patch.object(
+                    route.dependant, "call", side_effect=AssertionError("handler reached")
+                ):
+                    for headers in ({}, self.wrong_auth):
+                        response = self.client.request(method, path, headers=headers)
+                        self.assertEqual(response.status_code, 401)
+                        self.assertEqual(response.headers.get("www-authenticate"), "Basic")
+            for path in ("/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"):
+                self.assertEqual(self.client.get(path).status_code, 401)
+            self.assertEqual(file_state(), before)
+
+    def test_authenticated_staging_website_enquiry_and_documents(self):
+        c = self.client
+        for path in ("/", "/request-quote", "/plumber-guildford", "/sitemap.xml", "/app"):
+            self.assertEqual(c.get(path, headers=self.auth).status_code, 200, path)
+            self.assertEqual(c.get(path).status_code, 401, path)
+        robots = c.get("/robots.txt", headers=self.auth)
+        self.assertEqual(robots.status_code, 200)
+        self.assertIn("Disallow: /", robots.text)
+        self.assertNotIn("Allow: /", robots.text)
+        self.assertEqual(c.get("/robots.txt").status_code, 401)
+        self.assertEqual(c.get("/api/dashboard", headers=self.auth).status_code, 200)
+        lead_data = {"name": "Synthetic Stage Lead", "phone": "07000000000",
+                     "description": "Test tap"}
+        self.assertEqual(c.post("/api/leads", json=lead_data).status_code, 401)
+        self.assertEqual(c.post("/api/leads", headers=self.wrong_auth,
+                                json=lead_data).status_code, 401)
+        self.assertEqual(c.post("/api/leads", headers=self.auth, json=lead_data).status_code, 200)
+        payload = self.app_module.QuoteRequest(customer_name="Synthetic Stage Customer",
+                                               labour_cost=10).model_dump()
+        quote = c.post("/api/quote", headers=self.auth, json=payload).json()
+        invoice = c.post(f"/api/quotes/{quote['id']}/to-invoice", headers=self.auth).json()
+        for path in (f"/invoice/{invoice['id']}",
+                     f"/api/invoices/{invoice['id']}/pdf",
+                     f"/api/invoices/{invoice['id']}/payment-qr",
+                     f"/api/quotes/{quote['id']}/pdf"):
+            self.assertEqual(c.get(path).status_code, 401, path)
+            self.assertEqual(c.get(path, headers=self.wrong_auth).status_code, 401, path)
+            self.assertEqual(c.get(path, headers=self.auth).status_code, 200, path)
+
+    def test_explicit_production_mode_keeps_public_routes(self):
+        with disposable_app(self.username, self.password, environment="production") as (m, _):
+            with TestClient(m.app) as c:
+                for path in ("/", "/request-quote", "/robots.txt", "/sitemap.xml"):
+                    self.assertEqual(c.get(path).status_code, 200, path)
+                self.assertIn("Allow: /", c.get("/robots.txt").text)
+                self.assertEqual(c.post("/api/leads", json={
+                    "name": "Synthetic Public Lead", "description": "Test enquiry",
+                }).status_code, 200)
+                self.assertEqual(c.get("/app").status_code, 401)
+                self.assertEqual(c.get("/api/quotes").status_code, 401)
 
 
 if __name__ == "__main__":
