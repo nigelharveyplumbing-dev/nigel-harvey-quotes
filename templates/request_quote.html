@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request a Quote - Nigel Harvey Ltd</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f5f5f5;margin:0;color:#111;padding:14px;}
+.wrap{max-width:760px;margin:0 auto;}
+.card{background:#fff;border-radius:18px;padding:22px;box-shadow:0 8px 24px rgba(0,0,0,.08);margin-bottom:14px;}
+h1{margin:0 0 8px 0;font-size:30px;}
+.sub{color:#666;margin-bottom:18px;}
+label{display:block;font-weight:700;margin:14px 0 6px;}
+input,textarea,select{width:100%;box-sizing:border-box;padding:14px;border:1px solid #d1d5db;border-radius:12px;font-size:16px;background:#fff;}
+textarea{min-height:120px;resize:vertical;}
+button{width:100%;padding:15px;border:none;border-radius:12px;background:#111;color:#fff;font-size:17px;font-weight:700;cursor:pointer;margin-top:18px;}
+.small{font-size:14px;color:#666;}
+.ok{display:none;margin-top:14px;background:#edf9ed;border:1px solid #b7ddb7;color:#14532d;padding:12px;border-radius:12px;}
+.err{display:none;margin-top:14px;background:#fff4f4;border:1px solid #e8bcbc;color:#9b1c1c;padding:12px;border-radius:12px;}
+.logo{max-height:76px;max-width:220px;display:block;margin:0 0 12px auto;}
+.quick-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.quick-btn{padding:12px;border-radius:12px;border:1px solid #d1d5db;background:#fafafa;text-align:center;font-weight:700;cursor:pointer;}
+@media (max-width:640px){.quick-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<main>
+<div class="wrap">
+  <div class="card">
+    <div style="text-align:right;">__COMPANY_LOGO_HTML__</div>
+    <h1>Request a Quote</h1>
+    <div class="sub">Send Nigel Harvey Ltd your job details and get a callback or quote.</div>
+    <div class="small" style="margin-bottom:12px;">Phone: __COMPANY_PHONE__ · Email: __COMPANY_EMAIL__</div>
+    <div class="quick-grid" style="margin-bottom:10px;">
+      <div class="quick-btn" onclick="setJobType('small','Tap / toilet / leak / waste repair')">Small plumbing job</div>
+      <div class="quick-btn" onclick="setJobType('bathroom','Bathroom install / refurb')">Bathroom</div>
+      <div class="quick-btn" onclick="setJobType('heating','Heating / radiator / system work')">Heating</div>
+      <div class="quick-btn" onclick="setJobType('small','Outside tap / general plumbing')">Outside tap / general</div>
+    </div>
+    <label>Name</label><input id="lead_name" placeholder="Your name">
+    <label>Phone</label><input id="lead_phone" placeholder="Your phone">
+    <label>Email (optional)</label><input id="lead_email" placeholder="Your email">
+    <label>Address</label><textarea id="lead_address" placeholder="Job address"></textarea>
+    <label>Job type</label>
+    <select id="lead_job_type">
+      <option value="small">Small plumbing job</option>
+      <option value="bathroom">Bathroom</option>
+      <option value="heating">Heating</option>
+    </select>
+    <label>Describe the job</label><textarea id="lead_description" placeholder="Tell us what needs doing"></textarea>
+    <button type="button" onclick="submitLead()">Send quote request</button>
+    <div id="lead_ok" class="ok">Thanks — your quote request has been sent. Nigel Harvey Ltd will get back to you shortly.</div>
+    <div id="lead_err" class="err"></div>
+  </div>
+</div>
+</main>
+<script>
+
+if (typeof updateQuantityLearningNotes !== "function") {
+  function updateQuantityLearningNotes() {
+    // Safe fallback. Quantity learning display should never break edit/delete actions.
+  }
+}
+window.addEventListener("error", function(event) {
+  if (event && event.message && event.message.includes("updateQuantityLearningNotes")) {
+    event.preventDefault();
+    return false;
+  }
+});
+
+function setJobType(type, text){document.getElementById('lead_job_type').value=type; if(!document.getElementById('lead_description').value.trim()){document.getElementById('lead_description').value=text;}}
+async function submitLead(){
+  const err=document.getElementById('lead_err'); const ok=document.getElementById('lead_ok');
+  err.style.display='none'; ok.style.display='none';
+  const payload={
+    name:document.getElementById('lead_name').value,
+    phone:document.getElementById('lead_phone').value,
+    email:document.getElementById('lead_email').value,
+    address:document.getElementById('lead_address').value,
+    job_type:document.getElementById('lead_job_type').value,
+    description:document.getElementById('lead_description').value,
+    source:'website'
+  };
+  if(!payload.name.trim() || !payload.phone.trim() || !payload.description.trim()){
+    err.textContent='Please add your name, phone number and a short job description.'; err.style.display='block'; return;
+  }
+  try{
+    const res=await fetch('/api/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.detail || 'Could not send quote request.');
+    ok.style.display='block';
+    ['lead_name','lead_phone','lead_email','lead_address','lead_description'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('lead_job_type').value='small';
+  }catch(e){err.textContent=String(e); err.style.display='block';}
+}
+</script>
+</body>
+</html>

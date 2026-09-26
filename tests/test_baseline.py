@@ -7,6 +7,7 @@ path before import. No test opens production /var/data.
 import importlib.util
 import base64
 import hashlib
+from contextlib import contextmanager
 from datetime import datetime
 from email import message_from_string
 import json
@@ -46,6 +47,36 @@ PUBLIC_CUSTOMER_ROUTES = {
         "/api/quotes/{quote_id}/pdf",
     )
 }
+
+
+@contextmanager
+def dashboard_database(quote_rows=(), invoice_rows=(), customer_count=0):
+    """Only the columns read by the reporting queries, in a disposable SQLite file."""
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "dashboard.db"
+        conn = sqlite3.connect(path)
+        try:
+            conn.executescript("""
+                CREATE TABLE quotes (total_price REAL, gross_profit REAL, created_at_sort TEXT);
+                CREATE TABLE invoices (
+                    total_price REAL, amount_paid REAL, balance_due REAL, created_at_sort TEXT
+                );
+                CREATE TABLE customers (id INTEGER);
+            """)
+            conn.executemany("INSERT INTO quotes VALUES (?, ?, ?)", quote_rows)
+            conn.executemany("INSERT INTO invoices VALUES (?, ?, ?, ?)", invoice_rows)
+            conn.executemany("INSERT INTO customers VALUES (?)",
+                             [(i,) for i in range(customer_count)])
+            conn.commit()
+        finally:
+            conn.close()
+
+        def get_connection():
+            conn = sqlite3.connect(path)
+            conn.row_factory = sqlite3.Row
+            return conn
+
+        yield get_connection
 
 
 class BaselineTests(unittest.TestCase):
@@ -109,6 +140,82 @@ class BaselineTests(unittest.TestCase):
                       ("GET", "/invoice/{invoice_id}"),
                       ("POST", "/api/invoices/{invoice_id}/send-email")]:
             self.assertIn(route, routes)
+
+    def test_dashboard_empty_database_and_uk_month_boundaries(self):
+        m = self.module
+        january = datetime(2026, 1, 1, 0, 30, tzinfo=ZoneInfo("Europe/London"))
+        empty = {
+            "month_label": "January 2026", "quote_count": 0, "quoted_total": 0,
+            "gross_profit_total": 0, "invoice_count": 0, "invoiced_total": 0,
+            "paid_total": 0, "balance_total": 0, "avg_quote": 0,
+            "customer_count": 0,
+        }
+        labels = ["2025-08", "2025-09", "2025-10", "2025-11", "2025-12", "2026-01"]
+        expected_series = [{
+            "month_key": month, "label": label, "revenue": 0, "profit": 0,
+        } for month, label in zip(labels, (
+            "Aug 2025", "Sep 2025", "Oct 2025", "Nov 2025", "Dec 2025", "Jan 2026",
+        ))]
+        with dashboard_database() as get_connection, \
+                patch.object(m, "get_db", get_connection), patch.object(m, "now_uk", return_value=january):
+            self.assertEqual(m.get_dashboard(), empty)
+            self.assertEqual(m.get_monthly_profit_series(), expected_series)
+            self.assertEqual(m.get_monthly_profit_series(0), [])
+            with TestClient(m.app) as client:
+                for path, expected in (("/api/dashboard", empty),
+                                       ("/api/dashboard/monthly-profit", expected_series)):
+                    with self.subTest(path=path):
+                        unauthenticated = client.get(path)
+                        self.assertEqual(unauthenticated.status_code, 401)
+                        self.assertEqual(unauthenticated.headers.get("www-authenticate"), "Basic")
+                        response = client.get(path, headers=self.auth_headers)
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(response.json(), expected)
+
+            april_uk = datetime(2026, 4, 1, 0, 30, tzinfo=ZoneInfo("Europe/London"))
+            with patch.object(m, "now_uk", return_value=april_uk):
+                self.assertEqual(m.get_dashboard()["month_label"], "April 2026")
+                self.assertEqual([item["month_key"] for item in m.get_monthly_profit_series(2)],
+                                 ["2026-03", "2026-04"])
+
+    def test_dashboard_totals_rounding_nulls_and_quote_based_monthly_series(self):
+        m = self.module
+        january = datetime(2026, 1, 31, 23, 59, tzinfo=ZoneInfo("Europe/London"))
+        quotes = [
+            (100.125, 30.125, "2026-01-02T09:00:00"),
+            (50.125, None, "2026-01-31T23:59:00"),
+            (None, None, "2026-01-15T12:00:00"),
+            (900.5, 90.5, "2025-12-20T12:00:00"),
+            (999, 999, "2026-02-01T00:00:00"),
+        ]
+        invoices = [
+            (60.125, 10.125, 50.0, "2026-01-04T09:00:00"),
+            (None, None, None, "2026-01-10T09:00:00"),
+            (700, 700, 0, "2025-12-12T09:00:00"),
+        ]
+        expected = {
+            "month_label": "January 2026", "quote_count": 3, "quoted_total": 150.25,
+            "gross_profit_total": 30.12, "invoice_count": 2, "invoiced_total": 60.12,
+            "paid_total": 10.12, "balance_total": 50.0, "avg_quote": 75.12,
+            "customer_count": 3,
+        }
+        with dashboard_database(quotes, invoices, 3) as get_connection, \
+                patch.object(m, "get_db", get_connection), patch.object(m, "now_uk", return_value=january):
+            self.assertEqual(m.get_dashboard(), expected)
+            series = m.get_monthly_profit_series()
+            self.assertEqual(series[-2:], [
+                {"month_key": "2025-12", "label": "Dec 2025", "revenue": 900.5, "profit": 90.5},
+                {"month_key": "2026-01", "label": "Jan 2026", "revenue": 150.25, "profit": 30.12},
+            ])
+            self.assertEqual(series[:-2], [
+                {"month_key": month, "label": label, "revenue": 0, "profit": 0}
+                for month, label in zip(("2025-08", "2025-09", "2025-10", "2025-11"),
+                                        ("Aug 2025", "Sep 2025", "Oct 2025", "Nov 2025"))
+            ])
+            with TestClient(m.app) as client:
+                self.assertEqual(client.get("/api/dashboard", headers=self.auth_headers).json(), expected)
+                self.assertEqual(client.get("/api/dashboard/monthly-profit",
+                                            headers=self.auth_headers).json(), series)
 
     def test_internal_app_markup_and_injected_data_baseline(self):
         """Freeze the inline UI, payment settings and five route-time substitutions."""
@@ -211,6 +318,37 @@ class BaselineTests(unittest.TestCase):
             self.assertEqual(detailed.status_code, 200)
             self.assertTrue({"ok", "db_path", "db_size_bytes", "counts", "backup_count"} <= detailed.json().keys())
             self.assertEqual(client.get("/emergency-plumber-surrey").status_code, 404)
+
+    def test_public_page_literals_and_rendered_html_are_byte_identical(self):
+        m = self.module
+        literals = {
+            "LANDING_PAGE_HTML": "0557ccac52285b3f8400972513c71c58c822defd224200f3bace562811472bb5",
+            "SEO_CSS": "a22e53ee58ed48079fc147e3b604c75a2dfca3478da0ca9591cd9632f47cba0f",
+            "LEAD_FORM_HTML": "16bec9032f8177d7cccdd0b438807305c44a6c2051109556e78a827cd21e8366",
+            "NEW_HOMEPAGE_PREVIEW_HTML":
+                "831b1222d36b698884d263fae8eb0929151de4ec1253cec900c14ba5b81820ec",
+        }
+        for name, digest in literals.items():
+            with self.subTest(literal=name):
+                self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
+
+        page_hashes = {
+            "/": "6a0b233e99ee29c93ab0000d144ee6a20005b6b634cd5e095f950403d394fa95",
+            "/new-home": "6a0b233e99ee29c93ab0000d144ee6a20005b6b634cd5e095f950403d394fa95",
+            "/request-quote": "0a77e0a22b92373ef504b97f9d2a95ef03b123c52cf489a30d214308bb1c629c",
+        }
+        with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
+                                     "PUBLIC_BASE_URL": "https://stage6.invalid",
+                                     "GOOGLE_PLACES_API_KEY": ""}), \
+                patch.object(m, "_google_reviews_html", return_value="<div>Synthetic reviews</div>"), \
+                patch.object(m, "get_company_logo_value",
+                             return_value="data:image/png;base64,dGVzdA=="):
+            with TestClient(m.app) as client:
+                for path, digest in page_hashes.items():
+                    with self.subTest(path=path):
+                        response = client.get(path)
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(hashlib.sha256(response.content).hexdigest(), digest)
 
     def test_customer_document_routes_remain_public(self):
         m = self.module
