@@ -228,5 +228,3 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict, ups
     conn.commit()
     conn.close()
     return get_quote_by_id(quote_id)
-
-
