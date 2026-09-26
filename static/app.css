@@ -1,0 +1,94 @@
+
+body { font-family: Arial, sans-serif; background:#f5f5f5; margin:0; padding:12px; color:#111; }
+.wrap { max-width:1100px; margin:0 auto; }
+.card { background:white; padding:18px; border-radius:18px; margin-bottom:14px; box-shadow:0 2px 14px rgba(0,0,0,0.06); }
+h1 { margin:0 0 6px 0; font-size:30px; }
+h2 { margin:0 0 12px 0; font-size:22px; }
+h3 { margin:18px 0 8px 0; }
+.sub { color:#666; margin-bottom:16px; }
+label { display:block; font-weight:700; margin:12px 0 6px; }
+input, textarea, select { width:100%; box-sizing:border-box; padding:12px; border:1px solid #ccc; border-radius:10px; font-size:16px; background:white; }
+textarea { min-height:100px; resize:vertical; }
+button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; background:black; color:white; font-size:17px; font-weight:700; text-align:center; text-decoration:none; display:inline-block; box-sizing:border-box; cursor:pointer; min-height:52px; }
+.btn-secondary { background:#1f7a1f; }
+.btn-light { background:#ececec; color:#111; }
+.btn-red { background:#b62323; color:white; }
+.btn-blue { background:#1e5fbf; color:white; }
+.btn-template { background:#333; font-size:15px; padding:10px; }
+.templates, .favourites { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
+.favourites .btn-template { background:#5a4a00; }
+.material-row { border:1px solid #ddd; padding:12px; border-radius:10px; margin-bottom:10px; background:#fafafa; }
+.row { display:flex; justify-content:space-between; gap:10px; margin:8px 0; }
+.muted { color:#666; }
+.result { display:none; background:#f3faf3; border:1px solid #b7d7b7; }
+.error { display:none; background:#fff3f3; border:1px solid #e0b7b7; color:#a33; padding:12px; border-radius:10px; margin-top:12px; }
+.actions { display:grid; gap:10px; margin-top:14px; }
+.notice { display:none; background:#eef7ff; border:1px solid #c7def5; color:#124a7a; padding:12px; border-radius:12px; margin-top:12px; font-weight:700; }
+.print-head { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.logo-box img { max-height:70px; max-width:170px; object-fit:contain; }
+.history-item { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
+.history-actions { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-top:10px; }
+.history-actions button, .history-actions a { font-size:15px; padding:10px; }
+.small { font-size:14px; color:#666; }
+.hidden { display:none; }
+.check-row { display:flex; align-items:center; gap:10px; margin:12px 0 6px; font-weight:700; }
+.check-row input[type="checkbox"] { width:auto; transform:scale(1.2); }
+.quote-sheet, .invoice-sheet { background:white; }
+.quote-header { border-bottom:2px solid #111; padding-bottom:12px; margin-bottom:14px; }
+.quote-company { font-size:28px; font-weight:800; }
+.quote-meta { color:#444; margin-top:6px; line-height:1.5; }
+.quote-section-title { font-size:18px; font-weight:800; margin-top:18px; margin-bottom:8px; }
+.quote-box { border:1px solid #ddd; border-radius:10px; padding:12px; background:#fafafa; }
+.quote-total { font-size:32px; font-weight:900; }
+.doc-grid-two { display:grid; grid-template-columns:1.15fr 0.85fr; gap:14px; margin-top:14px; }
+.doc-grid-bottom { display:grid; grid-template-columns:1fr 0.95fr; gap:14px; margin-top:14px; align-items:start; }
+.doc-panel { border:1px solid #ddd; border-radius:12px; background:#fafafa; padding:14px; }
+.doc-panel-title { font-size:17px; font-weight:800; margin-bottom:10px; }
+.doc-summary .row { margin:10px 0; }
+.doc-total-box { border-top:1px solid #ddd; margin-top:12px; padding-top:12px; }
+.doc-total-box .quote-total { font-size:40px; line-height:1.05; }
+.doc-notes { margin-top:14px; }
+.doc-notes-content { line-height:1.6; }
+.doc-work-text { line-height:1.6; white-space:pre-wrap; }
+.internal-box { margin-top:16px; border:1px dashed #999; background:#fffdf3; }
+.search-results { border:1px solid #ddd; border-radius:10px; max-height:220px; overflow:auto; background:#fff; margin-top:8px; }
+.search-item { padding:10px; border-bottom:1px solid #eee; cursor:pointer; }
+.search-item:last-child { border-bottom:none; }
+.search-item:hover { background:#f2f2f2; }
+.no-print { display:block; }
+.status-bar { font-size:14px; color:#1f7a1f; margin-top:8px; font-weight:700; }
+.dashboard-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
+.dashboard-item { border:1px solid #ddd; border-radius:10px; padding:12px; background:#fafafa; }
+.dashboard-item .num { font-size:26px; font-weight:800; margin-top:4px; }
+.tabs { display:grid; grid-template-columns:repeat(7, 1fr); gap:8px; margin-bottom:14px; }
+.tabs button { padding:12px; }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+.material-lines { margin-top:10px; }
+.material-lines div { font-size:14px; margin-bottom:6px; }
+.badge { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; background:#ececec; color:#111; }
+.badge.green { background:#dff5df; color:#0c5d0c; }
+.badge.red { background:#ffe3e3; color:#8e1414; }
+.badge.orange { background:#fff0d9; color:#8a5500; }
+.invoice-note { margin-top:10px; font-size:14px; }
+.notice { display:none; padding:12px; border-radius:10px; margin-top:12px; font-weight:700; }
+.notice.success { background:#eef8ee; border:1px solid #b7d7b7; color:#1f7a1f; }
+.notice.error { background:#fff3f3; border:1px solid #e0b7b7; color:#a33; }
+.dashboard-summary { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-top:10px; }
+@media print {
+  .no-print { display:none !important; }
+  body { background:white; padding:0; }
+  .card { box-shadow:none; border:none; padding:0; margin:0 0 12px 0; }
+  .wrap { max-width:100%; }
+  .quote-sheet, .invoice-sheet { page-break-inside: avoid; }
+}
+@media (max-width: 768px) {
+  body { padding:10px; }
+  h1 { font-size:26px; }
+  h2 { font-size:21px; }
+  .tabs { grid-template-columns:repeat(2, 1fr); }
+  .templates, .favourites, .dashboard-grid, .history-actions, .doc-grid-two, .doc-grid-bottom, .dashboard-summary { grid-template-columns:1fr; }
+  .row { flex-direction:column; gap:4px; }
+  .actions { position:sticky; bottom:8px; z-index:5; }
+  .doc-total-box .quote-total { font-size:34px; }
+}

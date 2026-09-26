@@ -1,0 +1,601 @@
+
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nigel Harvey Ltd Business App</title>
+<style>__APP_CSS__</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="appNotice" class="notice" style="display:none;"></div>
+
+  <div class="card">
+    <h1>Nigel Harvey Ltd</h1>
+    <div class="sub">Quotes, invoices, customers, profit tracking</div>
+    <div id="appNotice" class="notice success"></div>
+
+    <div class="tabs no-print">
+      <button class="btn-light" onclick="showTab('dashboardTab')">Dashboard</button>
+      <button class="btn-light" onclick="showTab('quotesTab')">Quotes</button>
+      <button class="btn-light" onclick="showTab('invoicesTab')">Invoices</button>
+      <button class="btn-light" onclick="showTab('customersTab')">Customers</button>
+      <button class="btn-light" onclick="showTab('leadsTab')">Leads</button>
+      <button class="btn-light" onclick="showTab('safetyTab')">Safety</button>
+      <button class="btn-light" onclick="showTab('materialsDbTab')">Material Database</button>
+      <button class="btn-light" onclick="showTab('intelligenceTab')">Intelligence</button>
+    </div>
+
+    <div id="dashboardTab" class="tab-panel active">
+      <h2>Dashboard</h2>
+      <div class="small" id="dashboardMonth"></div>
+      <div id="dashboardGrid" class="dashboard-grid"></div>
+      <h3>Monthly profit</h3>
+      <div id="profitChart" class="quote-box small">Loading chart...</div>
+      <div id="dashboardSummary" class="dashboard-summary"></div>
+    </div>
+
+    <div id="quotesTab" class="tab-panel">
+      <h2>AI Quote Builder</h2>
+      <p class="small">Enter the customer and describe the work. AI will build the scope, labour and materials for you. Review and adjust before generating the final quote.</p>
+      <div id="editingStatus" class="status-bar hidden"></div>
+      <button type="button" class="btn-light no-print" style="margin-bottom:12px;" onclick="startNewQuote()">Start Fresh Quote</button>
+
+      <div class="quote-box small no-print" style="margin-bottom:12px;background:#f8fafc;">
+        <strong>Simple workflow</strong><br>
+        <span class="small">1. Add customer details &nbsp; 2. Describe the work &nbsp; 3. Build with AI &nbsp; 4. Review materials and labour &nbsp; 5. Generate quote</span>
+      </div>
+
+      <label for="quote_type">Quote type</label>
+      <select id="quote_type" onchange="document.addEventListener("click", function(event) {
+  const panel = document.getElementById("invoiceEditPanel");
+  if (panel && event.target === panel) cancelInvoiceEdit();
+});
+
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Escape") {
+    const panel = document.getElementById("invoiceEditPanel");
+    if (panel && !panel.classList.contains("hidden")) cancelInvoiceEdit();
+  }
+});
+
+toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence();">
+        <option value="small">Small Job</option>
+        <option value="bathroom">Bathroom</option>
+        <option value="heating">Heating</option>
+      </select>
+
+      <label for="customer_name">Customer name</label>
+      <input id="customer_name" placeholder="John Smith">
+
+      <label for="customer_address">Customer address</label>
+      <textarea id="customer_address" placeholder="125 Bushy Hill Drive, Guildford, GU1 2UG"></textarea>
+
+      <label for="customer_phone">Customer phone</label>
+      <input id="customer_phone" placeholder="07123 456789">
+
+      <label for="job">Job description</label>
+      <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
+
+      <div class="quote-box small no-print" style="margin-top:10px;border-color:#2563eb;background:#eff6ff;">
+        <strong>Workflow Fixes + Travel V16.3.2</strong><br>
+        <span class="small">Describe the job by voice, or add video, photos, plans and notes. Audio-only is recommended for most site visits.</span>
+
+        <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
+          <button type="button" class="btn-green" onclick="toggleSiteInformationPanel()">➕ Add Site Information</button>
+        </div>
+
+        <div id="siteInformationPanel" class="hidden" style="margin-top:10px;padding:10px;border:1px solid #93c5fd;border-radius:10px;background:white;">
+          <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;">
+            <button type="button" id="recordSiteAudioButton" class="btn-green" onclick="startSiteAudioRecording()">🎙️ Record Job Walkthrough</button>
+            <button type="button" id="recordSiteVideoButton" class="btn-light" onclick="startSiteVideoRecording()">📹 Record Video Walkthrough</button>
+            <button type="button" class="btn-light" onclick="takeSitePhoto()">📷 Add Photos</button>
+            <button type="button" class="btn-light" onclick="document.getElementById('sitePlans')?.click()">📄 Add Plans / Drawings</button>
+          </div>
+
+          <div id="siteAudioRecorder" class="hidden" style="margin-top:10px;padding:10px;border:1px solid #86efac;border-radius:10px;background:#f0fdf4;">
+            <strong>Recording job walkthrough</strong><br>
+            <span class="small">Say what is being fitted, measurements, pipe/fitting quantities, what can stay, who supplies the main product, access and making-good.</span>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+              <strong id="siteAudioTimer">00:00</strong>
+              <span id="siteAudioSize" class="small">Recording…</span>
+            </div>
+            <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+              <button type="button" class="btn-red" onclick="stopSiteAudioRecording()">Stop & use audio</button>
+              <button type="button" class="btn-light" onclick="cancelSiteAudioRecording()">Cancel</button>
+            </div>
+          </div>
+
+          <div id="siteVideoRecorder" class="hidden" style="margin-top:10px;padding:10px;border:1px solid #93c5fd;border-radius:10px;background:white;">
+            <video id="siteVideoPreview" autoplay muted playsinline style="width:100%;max-height:360px;border-radius:8px;background:#111;"></video>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+              <strong id="siteVideoTimer">00:00</strong>
+              <span id="siteVideoSize" class="small">Preparing camera…</span>
+            </div>
+            <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+              <button type="button" class="btn-red" onclick="stopSiteVideoRecording()">Stop & use video</button>
+              <button type="button" class="btn-light" onclick="cancelSiteVideoRecording()">Cancel</button>
+            </div>
+          </div>
+
+          <input id="siteCameraPhoto" type="file" accept="image/*" capture="environment" multiple hidden>
+          <input id="siteCameraVideoFallback" type="file" accept="video/*" capture="environment" hidden>
+          <input id="siteAudioFallback" type="file" accept="audio/*" capture hidden>
+          <input id="sitePlans" type="file" accept="image/*,application/pdf" multiple hidden>
+
+          <details style="margin-top:10px;">
+            <summary><strong>Choose existing files</strong></summary>
+            <label for="siteSurveyPhotos" style="margin-top:8px;">Existing photos</label>
+            <input id="siteSurveyPhotos" type="file" accept="image/*" multiple>
+            <label for="siteSurveyVideo" style="margin-top:8px;">Existing video</label>
+            <input id="siteSurveyVideo" type="file" accept="video/*">
+            <label for="siteSurveyAudio" style="margin-top:8px;">Existing audio</label>
+            <input id="siteSurveyAudio" type="file" accept="audio/*">
+          </details>
+
+          <label for="siteVisitNotes" style="margin-top:10px;">Site notes</label>
+          <textarea id="siteVisitNotes" placeholder="Optional notes, measurements, customer choices or anything not said in the recording."></textarea>
+        </div>
+
+        <div id="siteCaptureSummary" class="small" style="margin-top:8px;">No site information added yet.</div>
+
+        <div class="history-actions" style="grid-template-columns:2fr 1fr;gap:8px;margin-top:10px;">
+          <button type="button" id="aiQuoteButton" class="btn-green" onclick="analyseAndBuildQuote()">✨ Analyse Site & Build Quote</button>
+          <button type="button" class="btn-light" onclick="clearSiteSurvey()">Clear</button>
+        </div>
+        <div id="siteSurveyStatus" class="small" style="margin-top:8px;"></div>
+        <div id="siteSurveyResult" style="margin-top:8px;"></div>
+        <div id="aiQuoteStatus" class="small" style="margin-top:8px;"></div>
+        <div id="aiQuoteResult" style="margin-top:8px;"></div>
+      </div>
+
+
+      <div id="bathroomFields" class="hidden">
+        <h3>Bathroom / tiling</h3>
+
+        <div class="check-row">
+          <input type="checkbox" id="tiling">
+          <span>Include tiling</span>
+        </div>
+
+        <label for="wall_tiling_m2">Wall tiling (m²)</label>
+        <input id="wall_tiling_m2" type="number" step="0.1" placeholder="0">
+
+        <label for="floor_tiling_m2">Floor tiling (m²)</label>
+        <input id="floor_tiling_m2" type="number" step="0.1" placeholder="0">
+
+        <label for="wall_height">Wall height</label>
+        <select id="wall_height">
+          <option value="half">Half height</option>
+          <option value="full">Full height</option>
+        </select>
+
+        <div class="check-row">
+          <input type="checkbox" id="customer_supplies_tiles">
+          <span>Customer supplies tiles</span>
+        </div>
+      </div>
+
+      <h3>Materials</h3>
+      <p class="small">AI-added materials appear here. You can edit quantities, suppliers and prices before producing the quote.</p>
+      <div id="materials"></div>
+
+      <div class="history-actions no-print" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <button type="button" class="btn-light" onclick="toggleManualMaterialSearch()">+ Add Material</button>
+        <button type="button" class="btn-light" onclick="addMaterial()">+ Blank Material Row</button>
+      </div>
+
+      <div id="manualMaterialSearchPanel" class="quote-box small no-print" style="margin-top:8px;display:none;">
+        <strong>Find a material</strong><br>
+        <span class="small">Search saved materials, then use Update price on a material row to look for a current merchant match. Smart quantities remain active.</span>
+        <input id="materialSearch" placeholder="e.g. 15mm elbow, basin waste, kitchen tap" oninput="searchMaterials()" style="margin-top:8px;">
+        <div id="searchResults" class="search-results hidden"></div>
+      </div>
+
+      <h3>Pricing</h3>
+      <label for="labour">Labour cost (£)</label>
+      <input id="labour" type="number" step="0.01" placeholder="180" oninput="scheduleLabourIntelligence()">
+
+      <div class="quote-box" style="margin-top:12px;border-color:#f59e0b;background:#fffbeb;">
+        <div class="check-row" style="margin-top:0;">
+          <input type="checkbox" id="include_callout_charge">
+          <span><strong>Include call-out charge</strong></span>
+        </div>
+        <label for="callout_charge">Call-out charge (£)</label>
+        <input id="callout_charge" type="number" step="0.01" min="0" value="200" placeholder="200">
+        <div class="small">Use this for an emergency, evening or out-of-hours call-out. You can change the amount for each job.</div>
+      </div>
+
+      <div class="quote-box" style="margin-top:12px;border-color:#0ea5e9;background:#f0f9ff;">
+        <div class="check-row" style="margin-top:0;">
+          <input type="checkbox" id="include_travel_charge">
+          <span><strong>Include travel charge</strong></span>
+        </div>
+        <label for="travel_charge">Travel charge (£)</label>
+        <input id="travel_charge" type="number" step="0.01" min="0" value="0" placeholder="0">
+        <div class="small">Optional charge for jobs outside your normal working area. Shown separately from labour and call-out charges.</div>
+      </div>
+
+      <div class="small" id="labourSuggestion" style="margin-top:8px;"></div>
+      <div id="learningInsights" class="quote-box small" style="margin-top:10px; display:none;"></div>
+      <div id="labourIntelligence" class="quote-box small" style="margin-top:10px; display:none;"></div>
+      <div id="forgottenItemWarnings" class="quote-box small" style="margin-top:10px; display:none; border-color:#f59e0b; background:#fffbeb;"></div>
+
+      <div class="check-row">
+        <input type="checkbox" id="include_materials_handling" checked>
+        <span>Include materials procurement & handling</span>
+      </div>
+
+      <label for="materials_handling_percent">Materials procurement & handling %</label>
+      <select id="materials_handling_percent">
+        <option value="20">20%</option>
+        <option value="25" selected>25%</option>
+        <option value="30">30%</option>
+      </select>
+
+      <label for="deposit_percent">Deposit % (optional)</label>
+      <select id="deposit_percent">
+        <option value="0" selected>0%</option>
+        <option value="10">10%</option>
+        <option value="25">25%</option>
+        <option value="50">50%</option>
+      </select>
+
+      <details class="quote-box small no-print" style="margin-top:14px;">
+        <summary style="cursor:pointer;font-weight:700;">Advanced quote tools</summary>
+        <p class="small" style="margin-top:8px;">Templates, favourites and the master material library are still available when you need to manually override or maintain the AI-generated quote.</p>
+
+        <div class="check-row">
+          <input type="checkbox" id="internal_mode">
+          <span>Internal mode</span>
+        </div>
+
+        <h3>Saved templates</h3>
+        <div class="quote-box small">
+          <label for="templateSearch">Search job template</label>
+          <input id="templateSearch" placeholder="e.g. outside tap, leak, bath taps, fridge feed" oninput="renderTemplateSearch()">
+          <div id="templateSearchResults" class="search-results hidden"></div>
+          <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+            <button type="button" class="btn-light" onclick="clearQuoteMaterials()">Clear Materials</button>
+            <button type="button" class="btn-light" onclick="duplicateLastMaterial()">Duplicate Last Material</button>
+          </div>
+        </div>
+
+        <div id="templateButtons" class="templates"></div>
+
+        <h3>Favourite materials</h3>
+        <div id="favouriteButtons" class="favourites"></div>
+
+        <h3>Master material library</h3>
+        <div class="quote-box small" style="margin-top:10px;">
+          <strong>Supplier Preference Engine</strong><br>
+          <span class="small">Learns your most-used supplier per material from quote history.</span>
+          <div class="history-actions" style="grid-template-columns:1fr;margin-top:8px;">
+            <button type="button" class="btn-light" onclick="loadSupplierPreferencesPanel()">Load supplier preferences</button>
+          </div>
+          <div id="supplierPreferencesPanel" style="margin-top:8px;"></div>
+        </div>
+        <div class="quote-box small">
+          <p class="small">Core plumbing fittings grouped by proper material names. This remains the material brain used by quote learning and AI matching.</p>
+          <div id="masterMaterialSearchBox" style="margin-bottom:10px;">
+            <label for="masterMaterialSearch">Search master materials</label>
+            <input id="masterMaterialSearch" placeholder="e.g. copper, elbow, valve, waste, pan connector" oninput="renderMasterMaterialSuggestions()">
+          </div>
+          <div id="master-material-library" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;"></div>
+        </div>
+      </details>
+
+      <button type="button" class="no-print" onclick="generateQuote()">Generate Quote</button>
+      <div id="error" class="error"></div>
+      <div id="notice" class="notice"></div>
+    </div>
+
+    <div id="invoicesTab" class="tab-panel">
+      <h2>Invoices</h2>
+      <div id="invoiceList" class="small">No invoices yet.</div>
+    </div>
+
+    <div id="customersTab" class="tab-panel">
+      <h2>Customers</h2>
+      <input id="customerSearch" placeholder="Search customer by name, phone or address" oninput="loadCustomers()">
+      <div id="customerList" class="small" style="margin-top:10px;">No customers yet.</div>
+    </div>
+
+    <div id="leadsTab" class="tab-panel">
+      <h2>Lead Generator</h2>
+      <div class="small">Public quote request page: <a href="/request-quote" target="_blank">/request-quote</a></div>
+      <div class="lead-filter-row">
+        <input id="leadSearch" placeholder="Search leads by name, phone, email, address or job" oninput="loadLeads()">
+        <select id="leadStatusFilter" onchange="loadLeads()">
+          <option value="all">All statuses</option>
+          <option value="new">New</option>
+          <option value="contacted">Contacted</option>
+          <option value="quoted">Quoted</option>
+          <option value="won">Won</option>
+          <option value="lost">Lost</option>
+        </select>
+      </div>
+      <div id="leadList" class="small" style="margin-top:10px;">No leads yet.</div>
+    </div>
+    <div id="materialsDbTab" class="tab-panel">
+      <h2>Material Price Database</h2>
+      <p class="small">These are materials saved from product URLs you use in quotes. Live prices are refreshed from the supplier where possible, otherwise the app keeps the last saved live price.</p>
+
+      <div class="grid2">
+        <div>
+          <label for="materialDbSearch">Search materials</label>
+          <input id="materialDbSearch" placeholder="Search name, supplier or URL" oninput="renderMaterialDbList()">
+        </div>
+        <div>
+          <label for="materialDbSupplier">Supplier filter</label>
+          <select id="materialDbSupplier" onchange="renderMaterialDbList()">
+            <option value="">All suppliers</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:10px;margin:12px 0;">
+        <button type="button" class="btn-primary" onclick="loadMaterialDb()">Reload Database</button>
+        <button type="button" class="btn-green" onclick="refreshMaterialDbPrices()">Refresh Live Prices</button>
+      </div>
+
+      <div class="small" id="materialDbSummary" style="margin:8px 0;"></div>
+      <div id="materialDbList" class="history-list">No saved materials yet.</div>
+    </div>
+
+  </div>
+
+    <div id="intelligenceTab" class="tab-panel">
+      <h2>Business Intelligence</h2>
+      <p class="small">This is where the app starts learning from your quotes and material prices.</p>
+      <button type="button" class="btn-primary" onclick="loadIntelligence()">Refresh Intelligence</button>
+      <h3>Job averages</h3>
+      <div id="jobIntelligenceList" class="small">No intelligence yet.</div>
+      <h3>Material price history</h3>
+      <div id="materialIntelligenceList" class="small">No price history yet.</div>
+    </div>
+
+
+    <div id="safetyTab" class="tab-panel">
+      <h2>Safety & Backups</h2>
+      <p class="small">Use this before big changes. It protects your customers, quotes, invoices and material database.</p>
+
+      <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <button type="button" class="btn-primary" onclick="createBackupNow()">Create Backup Now</button>
+        <button type="button" class="btn-light" onclick="loadSafety()">Reload Status</button>
+      </div>
+
+      <div id="safetyStatus" class="quote-box small" style="margin-top:12px;">Click Reload Status to check backups.</div>
+      <h3 style="margin-top:16px;">Backups</h3>
+      <div id="backupList" class="history-list small" style="margin-top:12px;">No backups loaded.</div>
+    </div>
+
+  <div id="resultCard" class="card result quote-sheet">
+    <div class="quote-header print-head">
+      <div><div class="quote-company">Nigel Harvey Ltd</div>
+      <div class="quote-meta">
+        125 Bushy Hill Drive, Guildford, GU1 2UG<br>
+        07595 725547<br>
+        Nigelharveyplumbing@gmail.com
+      </div>
+      <div class="logo-box">__COMPANY_LOGO_HTML__</div>
+    </div>
+
+    <div class="doc-grid-two">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Works</div>
+        <div id="r_job" class="doc-work-text"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Quote details</div>
+        <div class="row"><span class="muted">Date</span><span id="r_date"></span></div>
+        <div class="row"><span class="muted">Type</span><span id="r_type"></span></div>
+        <div class="row"><span class="muted">Customer</span><span id="r_customer"></span></div>
+        <div class="row"><span class="muted">Phone</span><span id="r_phone"></span></div>
+        <div class="row"><span class="muted">Address</span><span id="r_address"></span></div>
+      </div>
+    </div>
+
+    <div class="doc-grid-bottom">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Materials used</div>
+        <div id="r_material_lines" class="material-lines"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Pricing summary</div>
+        <div class="row"><span class="muted">Labour</span><span id="r_labour"></span></div>
+        <div class="row" id="r_callout_row" style="display:none;"><span class="muted">Call-out charge</span><span id="r_callout"></span></div>
+        <div class="row" id="r_travel_row" style="display:none;"><span class="muted">Travel charge</span><span id="r_travel"></span></div>
+        <div class="row"><span class="muted">Materials supplied</span><span id="r_materials_base"></span></div>
+        <div class="row" id="r_procurement_row"><span class="muted">Materials procurement &amp; handling <span id="r_procurement_percent"></span></span><span id="r_procurement_amount"></span></div>
+        <div class="row"><span class="muted">Materials total</span><span id="r_materials"></span></div>
+        <div class="row"><span class="muted">Deposit</span><span id="r_deposit"></span></div>
+        <div class="doc-total-box">
+          <div class="muted">Total price</div>
+          <div class="quote-total" id="r_total"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="internalBox" class="quote-box internal-box hidden">
+      <div class="quote-section-title" style="margin-top:0;">Internal only</div>
+      <div class="row"><span class="muted">Raw materials</span><span id="r_internal_raw"></span></div>
+      <div class="row"><span class="muted">Job multiplier</span><span id="r_internal_job_multiplier"></span></div>
+      <div class="row"><span class="muted">After job markup</span><span id="r_internal_after_job"></span></div>
+      <div class="row"><span class="muted">Handling %</span><span id="r_internal_handling_percent"></span></div>
+      <div class="row"><span class="muted">After handling</span><span id="r_internal_after_handling"></span></div>
+      <div class="row"><span class="muted">Hidden uplift</span><span id="r_internal_hidden_uplift"></span></div>
+      <div class="row"><span class="muted">Gross profit</span><span id="r_internal_profit"></span></div>
+      <div class="row"><span class="muted">Margin %</span><span id="r_internal_margin"></span></div>
+    </div>
+
+    <div class="doc-panel doc-notes">
+      <div class="doc-panel-title">Notes</div>
+      <div class="doc-notes-content">
+        Includes labour, supplied materials and materials procurement where selected.<br>
+        Materials procurement covers sourcing, collection, transportation, supplier coordination and warranty handling.<br>
+        Payment due as agreed.<br>
+        Late payment fee may be applied after 14 days.<br>
+        Materials remain the property of Nigel Harvey Ltd until paid in full.<br>
+        Deposit required before works begin where applicable.<br>
+        Quote subject to site conditions and any unforeseen issues.
+      </div>
+    </div>
+
+    <div class="actions no-print">
+      <a id="whatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Quote to WhatsApp</a>
+      <button class="btn-blue" onclick="convertCurrentQuoteToInvoice()">Convert to Invoice</button>
+      <button class="btn-light" type="button" onclick="downloadCurrentQuotePdf()">Download Quote PDF</button>
+    </div>
+  </div>
+
+  <div id="invoiceCard" class="card result invoice-sheet" style="position:relative;">
+    <div id="invoicePaidWatermark" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:96px;font-weight:900;color:rgba(22,163,74,.13);transform:rotate(-24deg);pointer-events:none;z-index:2;">PAID</div>
+    <div class="quote-header print-head">
+      <div><div class="quote-company">Nigel Harvey Ltd</div>
+      <div class="quote-meta">
+        125 Bushy Hill Drive, Guildford, GU1 2UG<br>
+        07595 725547<br>
+        Nigelharveyplumbing@gmail.com
+      </div>
+    </div>
+
+    <div class="doc-grid-two">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Work</div>
+        <div id="i_job" class="doc-work-text"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Invoice details</div>
+        <div class="row"><span class="muted">Invoice number</span><span id="i_number"></span></div>
+        <div class="row"><span class="muted">Job Ref</span><span id="i_job_reference">-</span></div>
+        <div class="row"><span class="muted">Date</span><span id="i_date"></span></div>
+        <div class="row"><span class="muted">Due date</span><span id="i_due_date"></span></div>
+        <div class="row"><span class="muted">Status</span><span id="i_status"></span></div>
+        <div class="row"><span class="muted">Customer</span><span id="i_customer"></span></div>
+        <div class="row"><span class="muted">Phone</span><span id="i_phone"></span></div>
+        <div class="row"><span class="muted">Address</span><span id="i_address"></span></div>
+      </div>
+    </div>
+
+    <div class="doc-grid-bottom">
+      <div class="doc-panel">
+        <div class="doc-panel-title">Payment</div>
+        <div id="i_payment_link_box"></div>
+      </div>
+      <div class="doc-panel doc-summary">
+        <div class="doc-panel-title">Invoice totals</div>
+        <div class="row"><span class="muted">Labour</span><span id="i_labour"></span></div>
+        <div class="row" id="i_callout_row" style="display:none;"><span class="muted">Call-out charge</span><span id="i_callout"></span></div>
+        <div class="row" id="i_travel_row" style="display:none;"><span class="muted">Travel charge</span><span id="i_travel"></span></div>
+        <div class="row"><span class="muted">Materials</span><span id="i_materials"></span></div>
+        <div class="row"><span class="muted">Total</span><span id="i_total"></span></div>
+        <div class="row"><span class="muted">Amount paid</span><span id="i_paid"></span></div>
+        <div class="row"><span class="muted">Outstanding</span><span id="i_balance"></span></div>
+        <div class="doc-total-box">
+          <div class="muted">Balance due</div>
+          <div class="quote-total" id="i_balance_big"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="invoiceEditPanel" class="hidden no-print"
+      style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);padding:18px;overflow:auto;">
+      <div style="max-width:760px;margin:24px auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <div class="quote-section-title" style="margin-top:0;">Edit invoice</div>
+      <label for="edit_invoice_customer_name">Customer name</label>
+      <input id="edit_invoice_customer_name" placeholder="Customer name">
+      <label for="edit_invoice_customer_address">Customer address</label>
+      <textarea id="edit_invoice_customer_address" placeholder="Customer address"></textarea>
+      <label for="edit_invoice_customer_phone">Customer phone</label>
+      <input id="edit_invoice_customer_phone" placeholder="Customer phone">
+      <label for="edit_invoice_job">Job</label>
+      <textarea id="edit_invoice_job" placeholder="Job details"></textarea>
+      <div style="margin:14px 0;padding:14px;border:2px solid #2563eb;border-radius:12px;background:#eff6ff;">
+        <label for="edit_invoice_job_reference" style="margin-top:0;font-size:18px;">Job Ref</label>
+        <input id="edit_invoice_job_reference"
+               placeholder="Type the company's job reference"
+               style="font-size:18px;font-weight:700;background:white;">
+        <div class="small" style="margin-top:6px;">This is the reference supplied by the company for the job you are invoicing.</div>
+      </div>
+      <label for="edit_invoice_labour">Labour (£)</label>
+      <input id="edit_invoice_labour" type="number" step="0.01" placeholder="0">
+      <label for="edit_invoice_callout_charge">Call-out charge (£)</label>
+      <input id="edit_invoice_callout_charge" type="number" step="0.01" min="0" placeholder="0">
+      <label for="edit_invoice_travel_charge">Travel charge (£)</label>
+      <input id="edit_invoice_travel_charge" type="number" step="0.01" min="0" placeholder="0">
+      <label for="edit_invoice_materials">Materials (£)</label>
+      <input id="edit_invoice_materials" type="number" step="0.01" placeholder="0">
+      <label for="edit_invoice_due_date">Due date</label>
+      <input id="edit_invoice_due_date" placeholder="dd/mm/yyyy">
+      <label for="edit_invoice_payment_link">Payment link</label>
+      <input id="edit_invoice_payment_link" placeholder="https://...">
+      <label for="edit_invoice_amount_paid">Amount paid (£)</label>
+      <input id="edit_invoice_amount_paid" type="number" step="0.01" placeholder="0">
+      <label for="edit_invoice_reminder_email">Reminder email</label>
+      <input id="edit_invoice_reminder_email" type="email" placeholder="accounts@customer.co.uk">
+      <div class="check-row">
+        <input id="edit_invoice_reminders_enabled" type="checkbox">
+        <span>Enable optional overdue email reminders</span>
+      </div>
+      <div class="history-actions" style="grid-template-columns:1fr 1fr; margin-top:12px;">
+        <button type="button" class="btn-blue" onclick="saveInvoiceEdit()">Save Invoice Changes</button>
+        <button type="button" class="btn-light" onclick="cancelInvoiceEdit()">Cancel</button>
+      </div>
+      </div>
+    </div>
+
+    <div class="quote-box no-print" style="margin-top:16px;border-color:#2563eb;background:#eff6ff;">
+      <div class="quote-section-title" style="margin-top:0;">Job photos</div>
+      <span class="small">Take or upload before, during and completed photos. They are compressed and included at the end of the invoice PDF.</span>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+        <div>
+          <label for="invoicePhotoCategory">Category</label>
+          <select id="invoicePhotoCategory">
+            <option value="before">Before</option>
+            <option value="during">During</option>
+            <option value="after" selected>Completed</option>
+            <option value="hidden_pipework">Hidden pipework</option>
+            <option value="damage">Damage found</option>
+            <option value="parts_replaced">Parts replaced</option>
+            <option value="compliance">Compliance</option>
+            <option value="customer_supplied">Customer supplied</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label for="invoicePhotoFiles">Take or choose photos</label>
+          <input id="invoicePhotoFiles" type="file" accept="image/*" capture="environment" multiple>
+        </div>
+      </div>
+      <label for="invoicePhotoCaption">Photo note</label>
+      <input id="invoicePhotoCaption" placeholder="Example: New tap fitted, tested and left leak-free.">
+      <div class="history-actions" style="grid-template-columns:1fr;margin-top:10px;">
+        <button type="button" class="btn-blue" onclick="uploadInvoicePhotos()">Add Photos to Invoice</button>
+      </div>
+      <div id="invoicePhotoUploadStatus" class="small" style="margin-top:8px;"></div>
+      <div id="invoicePhotoGallery" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="actions no-print">
+      <a id="invoiceWhatsappBtn" class="btn-link btn-secondary" href="#" target="_blank">Send Invoice to WhatsApp</a>
+      <button id="invoiceEmailBtn" class="btn-blue" type="button" onclick="sendInvoiceEmail()">Email Invoice PDF</button>
+      <button class="btn-light" type="button" onclick="copyInvoiceBankDetails()">Copy Bank Details</button>
+      <button class="btn-light" type="button" onclick="sendCurrentOverdueReminder()">Send Overdue Reminder</button>
+      <a id="invoiceOpenBtn" class="btn-link btn-light" href="#" target="_blank">Open Invoice Page</a>
+      <button class="btn-light" type="button" onclick="downloadCurrentInvoicePdf()">Download Invoice PDF</button>
+    </div>
+  </div>
+
+  <div class="card no-print">
+    <h2>Saved Quotes</h2>
+    <div id="historyList" class="small">No saved quotes yet.</div>
+  </div>
+
+</div>
+
+<script>__APP_JS__</script>
+</body>
+</html>

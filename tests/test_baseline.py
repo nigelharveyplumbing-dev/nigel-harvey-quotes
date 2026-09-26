@@ -11,6 +11,7 @@ from email import message_from_string
 import json
 import io
 import os
+import re
 import secrets
 import subprocess
 import shutil
@@ -51,6 +52,9 @@ class BaselineTests(unittest.TestCase):
         cls.temp = tempfile.TemporaryDirectory()
         cls.addClassCleanup(cls.temp.cleanup)
         root = Path(cls.temp.name)
+        for asset_dir in ("templates", "static"):
+            if (ROOT / asset_dir).exists():
+                shutil.copytree(ROOT / asset_dir, root / asset_dir)
         if (ROOT / "business").exists():
             shutil.copytree(ROOT / "business", root / "business")
             config = root / "business" / "config.py"
@@ -102,6 +106,46 @@ class BaselineTests(unittest.TestCase):
                       ("GET", "/invoice/{invoice_id}"),
                       ("POST", "/api/invoices/{invoice_id}/send-email")]:
             self.assertIn(route, routes)
+
+    def test_internal_app_markup_and_injected_data_baseline(self):
+        """Freeze the existing inline UI and its five Python substitutions."""
+        m = self.module
+        self.assertEqual(hashlib.sha256(m.HTML.encode()).hexdigest(),
+                         "c6281a71a618dc262b9d91de81027981d1a76c0541fe7b82051531966e2ba8d5")
+        self.assertEqual(m.HTML.count("<style>"), 1)
+        self.assertEqual(m.HTML.count("<script>"), 1)
+        self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {
+            "__MATERIAL_LIBRARY__", "__FAVOURITE_MATERIALS__", "__JOB_TEMPLATES__",
+            "__MATERIAL_ALIAS_RULES__", "__COMPANY_LOGO_HTML__",
+        })
+        self.assertEqual(set(re.findall(r"/api/[A-Za-z0-9_/-]+", m.HTML)), {
+            "/api/ai-quote-draft", "/api/ai-quote-status", "/api/backups", "/api/backups/",
+            "/api/customers", "/api/customers/", "/api/dashboard",
+            "/api/dashboard/monthly-profit", "/api/intelligence", "/api/invoices",
+            "/api/invoices/", "/api/labour-intelligence", "/api/leads", "/api/leads/",
+            "/api/live-product-refresh", "/api/live-product-search", "/api/material-prices",
+            "/api/material-prices/", "/api/material-prices/refresh", "/api/material-search",
+            "/api/quote", "/api/quote-learning", "/api/quotes", "/api/quotes/",
+            "/api/site-survey", "/api/supplier-preference", "/api/supplier-preferences",
+        })
+        with patch.object(m, "get_material_search_library", return_value=[{"name": "Test valve"}]), \
+                patch.object(m, "get_all_job_templates", return_value=[{"name": "Test job"}]), \
+                patch.object(m, "get_company_logo_value", return_value="data:image/png;base64,test"), \
+                patch.object(m, "FAVOURITE_MATERIALS", [{"name": "Test fitting"}]), \
+                patch.object(m, "MATERIAL_ALIAS_RULES", [{"alias": "test"}]):
+            with TestClient(m.app) as client:
+                self.assertEqual(client.get("/app").status_code, 401)
+                self.assertEqual(client.get("/api/quotes").status_code, 401)
+                page = client.get("/app", headers=self.auth_headers)
+            self.assertEqual(page.status_code, 200)
+            self.assertIn("text/html", page.headers["content-type"])
+            expected = m.HTML.replace("__MATERIAL_LIBRARY__", json.dumps([{"name": "Test valve"}]))
+            expected = expected.replace("__FAVOURITE_MATERIALS__", json.dumps([{"name": "Test fitting"}]))
+            expected = expected.replace("__JOB_TEMPLATES__", json.dumps([{"name": "Test job"}]))
+            expected = expected.replace("__MATERIAL_ALIAS_RULES__", json.dumps([{"alias": "test"}]))
+            expected = expected.replace("__COMPANY_LOGO_HTML__",
+                                        '<img src="data:image/png;base64,test" alt="Logo">')
+            self.assertEqual(page.text, expected)
 
     def test_all_private_routes_reject_before_handler(self):
         """A patched endpoint would fail if any private request reached its handler."""
