@@ -7,6 +7,7 @@ path before import. No test opens production /var/data.
 import importlib.util
 import base64
 import hashlib
+from datetime import datetime
 from email import message_from_string
 import json
 import io
@@ -21,6 +22,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -960,6 +962,54 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         no_handling = m.calculate_quote(data.model_copy(update={"include_materials_handling": False}))
         self.assertEqual(no_handling["materials"], 21)
         self.assertEqual(no_handling["total_price"], 121)
+
+    def test_quote_calculation_golden_cases_without_live_pricing(self):
+        """Full output snapshots from the pre-extraction calculation, including raw rounding."""
+        m = self.module
+        golden = json.loads((ROOT / "tests/quote_calculation_golden.json").read_text())
+        fixed = datetime.fromisoformat(golden["fixed_time"])
+        self.assertEqual(fixed.utcoffset(), ZoneInfo("Europe/London").utcoffset(fixed))
+        prices = {url: tuple(result) for url, result in golden["mock_prices"].items()}
+        requested_urls = []
+        def mocked_price(url, *args):
+            requested_urls.append(url)
+            if url not in prices:
+                raise AssertionError("A live merchant lookup was attempted")
+            return prices[url]
+
+        with patch.object(m, "now_uk", return_value=fixed), \
+                patch.object(m, "fetch_tracked_price", side_effect=mocked_price):
+            for case in golden["cases"]:
+                with self.subTest(case=case["name"]):
+                    result = m.calculate_quote(m.QuoteRequest.model_validate(case["request"]))
+                    self.assertEqual(result, case["expected"])
+                    self.assertEqual(set(result), set(case["expected"]))
+                    self.assertNotIn("vat", result)
+                    self.assertNotIn("discount", result)
+            self.assertEqual(requested_urls, list(prices))
+
+        unusual = next(c["expected"] for c in golden["cases"]
+                       if c["name"] == "consumables_quantities")
+        # Current raw-float arithmetic can differ from a sum of displayed rounded parts.
+        self.assertEqual(unusual["materials"], 30.02)
+        self.assertEqual(unusual["materials_base"] + unusual["materials_procurement_amount"], 30.01)
+
+    def test_local_quote_rule_snapshots_and_matching(self):
+        m = self.module
+        golden = json.loads((ROOT / "tests/quote_calculation_golden.json").read_text())
+        for name, expected in golden["rule_hashes"].items():
+            value = m.get_all_job_templates() if name == "assembled_templates" else getattr(m, name)
+            digest = hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+            self.assertEqual(digest, expected, name)
+        self.assertEqual(len(m.get_all_job_templates()), 36)
+        self.assertEqual(m.canonical_material_name("Plumbright PTFE tape"), "ptfe tape")
+        self.assertEqual(m.get_material_charging_rule("ptfe tape")["default_charge"], 0.50)
+        self.assertEqual(m.material_quote_unit_price("ptfe tape", 8), 0.50)
+        self.assertEqual(m.material_quote_unit_price("ptfe tape", 8, 0), 0)
+        self.assertEqual(m.canonical_material_name("15mm copper olive"), "15mm copper pipe")
+        self.assertEqual(m.material_quote_unit_price("15mm copper olive", 5), 5)
+        self.assertEqual(m.suggest_material_quantity("15mm pipe clips", "outside tap"), 6)
+        self.assertEqual(m.find_labour_suggestion("small", "replace tap")["suggestion"], 120)
 
     def test_quote_save_load_update_and_conversion(self):
         m = self.module

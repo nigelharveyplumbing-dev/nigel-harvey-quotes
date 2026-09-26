@@ -1,0 +1,639 @@
+{
+  "fixed_time": "2026-01-02T03:04:05.678901+00:00",
+  "mock_prices": {
+    "https://example.test/cached": [
+      12.345,
+      "cached"
+    ],
+    "https://example.test/unavailable": [
+      null,
+      "manual"
+    ]
+  },
+  "cases": [
+    {
+      "name": "empty_defaults",
+      "request": {},
+      "expected": {
+        "quote_type": "small",
+        "customer_name": "",
+        "customer_address": "",
+        "customer_phone": "",
+        "job": "",
+        "labour": 0,
+        "include_callout_charge": false,
+        "callout_charge": 0.0,
+        "include_travel_charge": false,
+        "travel_charge": 0.0,
+        "materials": 0.0,
+        "materials_base": 0.0,
+        "materials_procurement_percent": 25,
+        "materials_procurement_amount": 0.0,
+        "total_price": 0.0,
+        "deposit_percent": 0.0,
+        "deposit_amount": 0.0,
+        "created_at": "02/01/2026 03:04",
+        "created_at_sort": "2026-01-02T03:04:05.678901+00:00",
+        "material_lines": [],
+        "internal_raw_materials": 0.0,
+        "internal_job_multiplier": 1.0,
+        "internal_after_job_markup": 0.0,
+        "internal_handling_percent": 25,
+        "internal_after_handling": 0.0,
+        "internal_hidden_uplift": 0.0,
+        "gross_profit": 0.0,
+        "margin_percent": 0.0,
+        "labour_suggestion": 120,
+        "labour_range_hint": "£90 - £180"
+      }
+    },
+    {
+      "name": "labour_charges_clamps",
+      "request": {
+        "customer_name": "Rounding Test",
+        "job_description": "tap repair",
+        "labour_cost": 100.005,
+        "include_callout_charge": true,
+        "callout_charge": -5.5,
+        "include_travel_charge": true,
+        "travel_charge": 12.345,
+        "deposit_percent": 105
+      },
+      "expected": {
+        "quote_type": "small",
+        "customer_name": "Rounding Test",
+        "customer_address": "",
+        "customer_phone": "",
+        "job": "tap repair",
+        "labour": 100.0,
+        "include_callout_charge": true,
+        "callout_charge": 0.0,
+        "include_travel_charge": true,
+        "travel_charge": 12.35,
+        "materials": 0.0,
+        "materials_base": 0.0,
+        "materials_procurement_percent": 25,
+        "materials_procurement_amount": 0.0,
+        "total_price": 112.35,
+        "deposit_percent": 100.0,
+        "deposit_amount": 112.35,
+        "created_at": "02/01/2026 03:04",
+        "created_at_sort": "2026-01-02T03:04:05.678901+00:00",
+        "material_lines": [],
+        "internal_raw_materials": 0.0,
+        "internal_job_multiplier": 1.0,
+        "internal_after_job_markup": 0.0,
+        "internal_handling_percent": 25,
+        "internal_after_handling": 0.0,
+        "internal_hidden_uplift": 0.0,
+        "gross_profit": 112.35,
+        "margin_percent": 100.0,
+        "labour_suggestion": 120,
+        "labour_range_hint": "£100 - £140"
+      }
+    },
+    {
+      "name": "consumables_quantities",
+      "request": {
+        "labour_cost": 0.1,
+        "materials": [
+          {
+            "name": "ptfe tape",
+            "manual_price": 8,
+            "quantity": 2
+          },
+          {
+            "name": "silicone",
+            "manual_price": 9,
+            "quantity": 0
+          },
+          {
+            "name": "15mm copper olive",
+            "manual_price": 5,
+            "quantity": 3
+          },
+          {
+            "name": "valve",
+            "manual_price": 2.005,
+            "quantity": 2.5
+          }
+        ]
+      },
+      "expected": {
+        "quote_type": "small",
+        "customer_name": "",
+        "customer_address": "",
+        "customer_phone": "",
+        "job": "",
+        "labour": 0.1,
+        "include_callout_charge": false,
+        "callout_charge": 0.0,
+        "include_travel_charge": false,
+        "travel_charge": 0.0,
+        "materials": 30.02,
+        "materials_base": 24.01,
+        "materials_procurement_percent": 25,
+        "materials_procurement_amount": 6.0,
+        "total_price": 30.12,
+        "deposit_percent": 0.0,
+        "deposit_amount": 0.0,
+        "created_at": "02/01/2026 03:04",
+        "created_at_sort": "2026-01-02T03:04:05.678901+00:00",
+        "material_lines": [
+          {
+            "name": "ptfe tape",
+            "quantity": 2.0,
+            "supplier": "",
+            "url": "",
+            "manual_price": 8.0,
+            "full_unit_price": 8.0,
+            "unit_price_used": 0.5,
+            "line_total": 1.0,
+            "live_price_used": false,
+            "price_source": "manual",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          },
+          {
+            "name": "silicone",
+            "quantity": 1,
+            "supplier": "",
+            "url": "",
+            "manual_price": 9.0,
+            "full_unit_price": 9.0,
+            "unit_price_used": 3.0,
+            "line_total": 3.0,
+            "live_price_used": false,
+            "price_source": "manual",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          },
+          {
+            "name": "15mm copper olive",
+            "quantity": 3.0,
+            "supplier": "",
+            "url": "",
+            "manual_price": 5.0,
+            "full_unit_price": 5.0,
+            "unit_price_used": 5.0,
+            "line_total": 15.0,
+            "live_price_used": false,
+            "price_source": "manual",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          },
+          {
+            "name": "valve",
+            "quantity": 2.5,
+            "supplier": "",
+            "url": "",
+            "manual_price": 2.0,
+            "full_unit_price": 2.0,
+            "unit_price_used": 2.0,
+            "line_total": 5.01,
+            "live_price_used": false,
+            "price_source": "manual",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          }
+        ],
+        "internal_raw_materials": 24.01,
+        "internal_job_multiplier": 1.0,
+        "internal_after_job_markup": 24.01,
+        "internal_handling_percent": 25,
+        "internal_after_handling": 30.02,
+        "internal_hidden_uplift": 6.0,
+        "gross_profit": 6.1,
+        "margin_percent": 20.27,
+        "labour_suggestion": 120,
+        "labour_range_hint": "£90 - £180"
+      }
+    },
+    {
+      "name": "bathroom_tiling_full",
+      "request": {
+        "quote_type": "bathroom",
+        "job_description": "Bathroom install",
+        "labour_cost": 1500.005,
+        "tiling": true,
+        "wall_height": "full",
+        "wall_tiling_m2": 3.3,
+        "floor_tiling_m2": 2.2,
+        "materials": [
+          {
+            "name": "Basin waste",
+            "manual_price": 12.345,
+            "quantity": 1.5
+          }
+        ],
+        "materials_handling_percent": 12.5,
+        "include_callout_charge": true,
+        "callout_charge": 200.005,
+        "include_travel_charge": true,
+        "travel_charge": 19.995,
+        "deposit_percent": 33.335
+      },
+      "expected": {
+        "quote_type": "bathroom",
+        "customer_name": "",
+        "customer_address": "",
+        "customer_phone": "",
+        "job": "Bathroom install + Tiling",
+        "labour": 1500.01,
+        "include_callout_charge": true,
+        "callout_charge": 200.0,
+        "include_travel_charge": true,
+        "travel_charge": 20.0,
+        "materials": 220.59,
+        "materials_base": 196.08,
+        "materials_procurement_percent": 12.5,
+        "materials_procurement_amount": 24.51,
+        "total_price": 1940.59,
+        "deposit_percent": 33.34,
+        "deposit_amount": 646.9,
+        "created_at": "02/01/2026 03:04",
+        "created_at_sort": "2026-01-02T03:04:05.678901+00:00",
+        "material_lines": [
+          {
+            "name": "Basin waste",
+            "quantity": 1.5,
+            "supplier": "",
+            "url": "",
+            "manual_price": 12.35,
+            "full_unit_price": 12.35,
+            "unit_price_used": 12.35,
+            "line_total": 18.52,
+            "live_price_used": false,
+            "price_source": "manual",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          }
+        ],
+        "internal_raw_materials": 130.72,
+        "internal_job_multiplier": 1.5,
+        "internal_after_job_markup": 196.08,
+        "internal_handling_percent": 12.5,
+        "internal_after_handling": 220.59,
+        "internal_hidden_uplift": 89.87,
+        "gross_profit": 1809.87,
+        "margin_percent": 93.26,
+        "labour_suggestion": 1800,
+        "labour_range_hint": "£1,600 - £2,200"
+      }
+    },
+    {
+      "name": "bathroom_customer_tiles",
+      "request": {
+        "quote_type": "bathroom",
+        "tiling": true,
+        "customer_supplies_tiles": true,
+        "wall_tiling_m2": 3.3,
+        "floor_tiling_m2": 2.2,
+        "include_materials_handling": false,
+        "materials": [
+          {
+            "name": "ptfe tape",
+            "manual_price": 8
+          }
+        ]
+      },
+      "expected": {
+        "quote_type": "bathroom",
+        "customer_name": "",
+        "customer_address": "",
+        "customer_phone": "",
+        "job": "Bathroom works + Tiling",
+        "labour": 0,
+        "include_callout_charge": false,
+        "callout_charge": 0.0,
+        "include_travel_charge": false,
+        "travel_charge": 0.0,
+        "materials": 0.75,
+        "materials_base": 0.75,
+        "materials_procurement_percent": 0.0,
+        "materials_procurement_amount": 0.0,
+        "total_price": 0.75,
+        "deposit_percent": 0.0,
+        "deposit_amount": 0.0,
+        "created_at": "02/01/2026 03:04",
+        "created_at_sort": "2026-01-02T03:04:05.678901+00:00",
+        "material_lines": [
+          {
+            "name": "ptfe tape",
+            "quantity": 1.0,
+            "supplier": "",
+            "url": "",
+            "manual_price": 8.0,
+            "full_unit_price": 8.0,
+            "unit_price_used": 0.5,
+            "line_total": 0.5,
+            "live_price_used": false,
+            "price_source": "manual",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          }
+        ],
+        "internal_raw_materials": 0.5,
+        "internal_job_multiplier": 1.5,
+        "internal_after_job_markup": 0.75,
+        "internal_handling_percent": 0.0,
+        "internal_after_handling": 0.75,
+        "internal_hidden_uplift": 0.25,
+        "gross_profit": 0.25,
+        "margin_percent": 33.33,
+        "labour_suggestion": 2000,
+        "labour_range_hint": "£1,600 - £2,800"
+      }
+    },
+    {
+      "name": "heating_override_negative_handling",
+      "request": {
+        "quote_type": "heating",
+        "job_description": "Radiator repair",
+        "labour_cost": -0.5,
+        "materials_handling_percent": -10,
+        "deposit_percent": -5,
+        "materials": [
+          {
+            "name": "valve",
+            "manual_price": 11,
+            "quote_charge_override": 0.333,
+            "quantity": 3
+          },
+          {
+            "name": "washer",
+            "manual_price": 0.335,
+            "quantity": -2
+          }
+        ]
+      },
+      "expected": {
+        "quote_type": "heating",
+        "customer_name": "",
+        "customer_address": "",
+        "customer_phone": "",
+        "job": "Radiator repair",
+        "labour": -0.5,
+        "include_callout_charge": false,
+        "callout_charge": 0.0,
+        "include_travel_charge": false,
+        "travel_charge": 0.0,
+        "materials": 1.56,
+        "materials_base": 1.73,
+        "materials_procurement_percent": -10.0,
+        "materials_procurement_amount": -0.17,
+        "total_price": 1.06,
+        "deposit_percent": 0.0,
+        "deposit_amount": 0.0,
+        "created_at": "02/01/2026 03:04",
+        "created_at_sort": "2026-01-02T03:04:05.678901+00:00",
+        "material_lines": [
+          {
+            "name": "valve",
+            "quantity": 3.0,
+            "supplier": "",
+            "url": "",
+            "manual_price": 11.0,
+            "full_unit_price": 11.0,
+            "unit_price_used": 0.33,
+            "line_total": 1.0,
+            "live_price_used": false,
+            "price_source": "manual",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          },
+          {
+            "name": "washer",
+            "quantity": 1,
+            "supplier": "",
+            "url": "",
+            "manual_price": 0.34,
+            "full_unit_price": 0.34,
+            "unit_price_used": 0.34,
+            "line_total": 0.34,
+            "live_price_used": false,
+            "price_source": "manual",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          }
+        ],
+        "internal_raw_materials": 1.33,
+        "internal_job_multiplier": 1.3,
+        "internal_after_job_markup": 1.73,
+        "internal_handling_percent": -10.0,
+        "internal_after_handling": 1.56,
+        "internal_hidden_uplift": 0.23,
+        "gross_profit": -0.27,
+        "margin_percent": -25.76,
+        "labour_suggestion": 180,
+        "labour_range_hint": "£160 - £220"
+      }
+    },
+    {
+      "name": "url_price_sources_mocked",
+      "request": {
+        "materials": [
+          {
+            "name": "valve",
+            "url": "https://example.test/cached",
+            "manual_price": 10.01,
+            "quantity": 1.5
+          },
+          {
+            "name": "tap",
+            "url": "https://example.test/unavailable",
+            "manual_price": 7.77,
+            "quantity": 2
+          }
+        ]
+      },
+      "expected": {
+        "quote_type": "small",
+        "customer_name": "",
+        "customer_address": "",
+        "customer_phone": "",
+        "job": "",
+        "labour": 0,
+        "include_callout_charge": false,
+        "callout_charge": 0.0,
+        "include_travel_charge": false,
+        "travel_charge": 0.0,
+        "materials": 42.57,
+        "materials_base": 34.06,
+        "materials_procurement_percent": 25,
+        "materials_procurement_amount": 8.51,
+        "total_price": 42.57,
+        "deposit_percent": 0.0,
+        "deposit_amount": 0.0,
+        "created_at": "02/01/2026 03:04",
+        "created_at_sort": "2026-01-02T03:04:05.678901+00:00",
+        "material_lines": [
+          {
+            "name": "valve",
+            "quantity": 1.5,
+            "supplier": "",
+            "url": "https://example.test/cached",
+            "manual_price": 10.01,
+            "full_unit_price": 12.35,
+            "unit_price_used": 12.35,
+            "line_total": 18.52,
+            "live_price_used": true,
+            "price_source": "cached",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          },
+          {
+            "name": "tap",
+            "quantity": 2.0,
+            "supplier": "",
+            "url": "https://example.test/unavailable",
+            "manual_price": 7.77,
+            "full_unit_price": 7.77,
+            "unit_price_used": 7.77,
+            "line_total": 15.54,
+            "live_price_used": false,
+            "price_source": "manual",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          }
+        ],
+        "internal_raw_materials": 34.06,
+        "internal_job_multiplier": 1.0,
+        "internal_after_job_markup": 34.06,
+        "internal_handling_percent": 25,
+        "internal_after_handling": 42.57,
+        "internal_hidden_uplift": 8.51,
+        "gross_profit": 8.51,
+        "margin_percent": 20.0,
+        "labour_suggestion": 120,
+        "labour_range_hint": "£90 - £180"
+      }
+    },
+    {
+      "name": "job_template_replace_tap",
+      "request": {
+        "quote_type": "small",
+        "job_description": "Remove existing tap and fit new tap including testing for leaks.",
+        "labour_cost": 120,
+        "materials": [
+          {
+            "name": "Flexible Tap Connector",
+            "quantity": 2,
+            "manual_price": 6.5
+          },
+          {
+            "name": "15mm Isolating Valve",
+            "quantity": 2,
+            "manual_price": 3.5
+          }
+        ]
+      },
+      "expected": {
+        "quote_type": "small",
+        "customer_name": "",
+        "customer_address": "",
+        "customer_phone": "",
+        "job": "Remove existing tap and fit new tap including testing for leaks.",
+        "labour": 120.0,
+        "include_callout_charge": false,
+        "callout_charge": 0.0,
+        "include_travel_charge": false,
+        "travel_charge": 0.0,
+        "materials": 25.0,
+        "materials_base": 20.0,
+        "materials_procurement_percent": 25,
+        "materials_procurement_amount": 5.0,
+        "total_price": 145.0,
+        "deposit_percent": 0.0,
+        "deposit_amount": 0.0,
+        "created_at": "02/01/2026 03:04",
+        "created_at_sort": "2026-01-02T03:04:05.678901+00:00",
+        "material_lines": [
+          {
+            "name": "Flexible Tap Connector",
+            "quantity": 2.0,
+            "supplier": "",
+            "url": "",
+            "manual_price": 6.5,
+            "full_unit_price": 6.5,
+            "unit_price_used": 6.5,
+            "line_total": 13.0,
+            "live_price_used": false,
+            "price_source": "manual",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          },
+          {
+            "name": "15mm Isolating Valve",
+            "quantity": 2.0,
+            "supplier": "",
+            "url": "",
+            "manual_price": 3.5,
+            "full_unit_price": 3.5,
+            "unit_price_used": 3.5,
+            "line_total": 7.0,
+            "live_price_used": false,
+            "price_source": "manual",
+            "material_type": "chargeable",
+            "charge_method": "full",
+            "quantity_source": "rule",
+            "learned_average_quantity": null,
+            "learned_used_count": null
+          }
+        ],
+        "internal_raw_materials": 20.0,
+        "internal_job_multiplier": 1.0,
+        "internal_after_job_markup": 20.0,
+        "internal_handling_percent": 25,
+        "internal_after_handling": 25.0,
+        "internal_hidden_uplift": 5.0,
+        "gross_profit": 125.0,
+        "margin_percent": 86.21,
+        "labour_suggestion": 120,
+        "labour_range_hint": "£100 - £140"
+      }
+    }
+  ],
+  "rule_hashes": {
+    "JOB_TEMPLATES": "a781e3ed8cfda4159d3ebdfffaaf432b0a5d83de7bde03e1aa22fc779ce91ff4",
+    "TRADE_JOB_LIBRARY": "f32e9fd085b443a556631328aeba9b21851bd2455659d1f1b2aaf64cce185155",
+    "LABOUR_HINTS": "be8a6bba9204cfd49c3db5c84ed5e65846f938a9734eeda9cab344e16f12de23",
+    "MATERIAL_ALIAS_RULES": "941fe5ea22d59eaf6f97039145e6deda05543c9640d84642b38bdf68f37efb71",
+    "MATERIAL_CHARGING_RULES": "fc1d6c7fafb2dcb1277b6c91d7efffd4ebdf8cf66ce8b3d07056c9952124da87",
+    "SMART_QUANTITY_RULES": "05cb23234668e4377edeb20dcbf1d847b088682e5bc538934e70fda56f93aa30",
+    "assembled_templates": "3be3acdb6556ac7259f8093d60bd8b8203b72cc0ed389dccf72a421d458be207"
+  }
+}
