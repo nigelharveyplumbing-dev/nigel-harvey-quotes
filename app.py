@@ -3012,104 +3012,21 @@ def generate_quote_pdf_bytes(item: dict):
 
 
 
+from business import document_sharing
+
+
 def send_invoice_email_now(item: dict, to_email: str, extra_message: str = ""):
     if not EMAIL_ENABLED or not EMAIL_USER or not EMAIL_PASS:
         raise RuntimeError("Email sending is not configured yet. Set EMAIL_ENABLED=1, EMAIL_USER and EMAIL_PASS.")
 
-    invoice = item["invoice"]
-    public_url = build_invoice_public_url(item["id"])
-    subject = (
-        f"Invoice {item['invoice_number']}"
-        + (f" - Job Ref {item['job_reference']}" if item.get("job_reference") else "")
-        + f" - {COMPANY_NAME}"
-    )
-
-    greeting = f"Hello {invoice.get('customer_name') or ''},".strip()
-    plain_lines = [
-        greeting,
-        "",
-        extra_message.strip() if extra_message else "Please find your invoice attached as a PDF.",
-        "",
-        f"Invoice number: {item['invoice_number']}",
-        f"Job Ref: {item.get('job_reference') or '-'}",
-        f"Balance due: {pounds_text(item.get('balance_due', 0))}",
-        f"Invoice link: {public_url}",
-        "",
-        COMPANY_NAME,
-        COMPANY_PHONE,
-        COMPANY_EMAIL,
-    ]
-    plain_body = "\n".join([line for line in plain_lines if line is not None])
-
-    msg = MIMEMultipart("mixed")
-    msg["Subject"] = subject
-    msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_USER}>"
-    msg["To"] = to_email.strip()
-
-    alt = MIMEMultipart("alternative")
-    alt.attach(MIMEText(plain_body, "plain", "utf-8"))
-
-    logo_value = get_company_logo_value()
-    html_logo = ""
-    logo_bytes = None
-    if logo_value:
-        try:
-            if logo_value.startswith("data:image"):
-                _, encoded = logo_value.split(",", 1)
-                logo_bytes = base64.b64decode(encoded)
-                html_logo = '<img src="cid:companylogo" alt="Nigel Harvey Ltd logo" style="max-height:72px; max-width:220px; display:block; margin:0 0 14px auto;">'
-            else:
-                html_logo = f'<img src="{escape(logo_value)}" alt="Nigel Harvey Ltd logo" style="max-height:72px; max-width:220px; display:block; margin:0 0 14px auto;">'
-        except Exception:
-            html_logo = ""
-
-    message_text = escape(extra_message.strip()) if extra_message else "Please find your invoice attached as a PDF."
-    customer_name = escape(invoice.get("customer_name") or "")
-    html_body = f"""
-    <html>
-      <body style="margin:0; padding:0; background:#f4f4f4; font-family:Arial, sans-serif; color:#111;">
-        <div style="max-width:680px; margin:0 auto; padding:24px 14px;">
-          <div style="background:#ffffff; border-radius:16px; padding:28px; box-shadow:0 2px 12px rgba(0,0,0,0.06);">
-            <div style="text-align:right;">{html_logo}</div>
-            <div style="font-size:18px; font-weight:700; margin-bottom:14px;">{greeting}</div>
-            <div style="font-size:16px; line-height:1.6; margin-bottom:18px;">{message_text}</div>
-            <div style="border:1px solid #e5e7eb; border-radius:14px; padding:18px; background:#fafafa; margin-bottom:18px;">
-              <div style="font-size:13px; letter-spacing:.5px; color:#666; text-transform:uppercase; margin-bottom:10px;">Invoice summary</div>
-              <div style="display:flex; justify-content:space-between; gap:12px; margin:8px 0;"><span>Invoice number</span><strong>{escape(item['invoice_number'])}</strong></div>
-              <div style="display:flex; justify-content:space-between; gap:12px; margin:8px 0;"><span>Status</span><strong>{escape(item['status'].title())}</strong></div>
-              <div style="display:flex; justify-content:space-between; gap:12px; margin:8px 0;"><span>Balance due</span><strong>{escape(pounds_text(item.get('balance_due', 0)))}</strong></div>
-            </div>
-            <div style="margin-bottom:18px;">
-              <a href="{escape(public_url)}" style="display:inline-block; background:#111; color:#fff; text-decoration:none; padding:12px 18px; border-radius:12px; font-weight:700;">Open invoice online</a>
-            </div>
-            <div style="font-size:14px; line-height:1.6; color:#444;">
-              {escape(COMPANY_NAME)}<br>
-              {escape(COMPANY_PHONE)}<br>
-              {escape(COMPANY_EMAIL)}
-            </div>
-          </div>
-        </div>
-      </body>
-    </html>
-    """
-
-    related = MIMEMultipart("related")
-    related.attach(MIMEText(html_body, "html", "utf-8"))
-
-    if logo_bytes:
-        image_part = MIMEImage(logo_bytes, _subtype="png")
-        image_part.add_header("Content-ID", "<companylogo>")
-        image_part.add_header("Content-Disposition", "inline", filename="logo.png")
-        related.attach(image_part)
-
-    alt.attach(related)
-    msg.attach(alt)
-
-    pdf_part = MIMEBase("application", "pdf")
-    pdf_part.set_payload(generate_invoice_pdf_bytes(item))
-    encoders.encode_base64(pdf_part)
-    pdf_part.add_header("Content-Disposition", "attachment", filename=f"{item['invoice_number']}.pdf")
-    msg.attach(pdf_part)
+    from types import SimpleNamespace
+    msg = document_sharing.prepare_invoice_email(item, to_email, extra_message, SimpleNamespace(
+        build_invoice_public_url=build_invoice_public_url,
+        company_name=COMPANY_NAME, company_phone=COMPANY_PHONE, company_email=COMPANY_EMAIL,
+        pounds_text=pounds_text, get_company_logo_value=get_company_logo_value,
+        generate_invoice_pdf_bytes=generate_invoice_pdf_bytes,
+        from_header=f"{EMAIL_FROM_NAME} <{EMAIL_USER}>",
+    ))
 
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, context=context) as server:
