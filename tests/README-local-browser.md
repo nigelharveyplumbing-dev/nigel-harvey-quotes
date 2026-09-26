@@ -12,8 +12,8 @@ automated checks while Chromium remains outstanding for isolated staging.
 
 The server copies `app.py`, `business/`, `templates/` and `static/` into a
 temporary directory. It replaces the three `/var/data` paths **before** the
-first app import, checks the imported paths, replaces literal payment details
-in the disposable JavaScript copy, generates only synthetic records, and
+first app import, checks the imported paths, supplies synthetic payment details
+through the same environment configuration as staging, generates only synthetic records, and
 blocks external DNS, HTTP, sockets and SMTP. Browser requests to origins
 other than the loopback test server are aborted. Test credentials are generated
 per run. The copy and its database/photos are removed when the server exits.

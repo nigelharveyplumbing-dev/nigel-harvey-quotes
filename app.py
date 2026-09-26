@@ -2462,6 +2462,13 @@ async function submitLead(){
 APP_UI_ROOT = Path(__file__).resolve().parent
 HTML = (APP_UI_ROOT / "templates" / "app.html").read_text(encoding="utf-8")
 HTML = HTML.replace("__APP_CSS__", (APP_UI_ROOT / "static" / "app.css").read_text(encoding="utf-8"))
+payment_config = json.dumps({
+    "bank": BANK_NAME,
+    "accountName": BANK_ACCOUNT_NAME,
+    "sortCode": BANK_SORT_CODE,
+    "accountNumber": BANK_ACCOUNT_NUMBER,
+}).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+HTML = HTML.replace("__APP_PAYMENT_CONFIG__", payment_config)
 HTML = HTML.replace("__APP_JS__", (APP_UI_ROOT / "static" / "app.js").read_text(encoding="utf-8"))
 
 

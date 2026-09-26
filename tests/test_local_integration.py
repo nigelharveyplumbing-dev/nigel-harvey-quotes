@@ -3,10 +3,15 @@
 import base64
 from email import message_from_string
 import io
+import json
 import os
+from pathlib import Path
+import re
 import secrets
+import shutil
 import socket
 import smtplib
+import subprocess
 import unittest
 from types import SimpleNamespace
 from urllib.parse import urljoin
@@ -48,6 +53,101 @@ class LocalIntegrationTests(unittest.TestCase):
         for path in ("/", "/plumber-guildford", "/request-quote", "/robots.txt", "/sitemap.xml"):
             self.assertEqual(c.get(path).status_code, 200, path)
         self.assertEqual(c.get("/emergency-plumber-surrey").status_code, 404)
+
+    def test_invoice_card_payment_defaults_and_client_assets(self):
+        """The default display matches server config without shipping payment literals."""
+        source = Path(__file__).resolve().parents[1]
+        settings = (source / "business" / "config.py").read_text()
+        script = (source / "static" / "app.js").read_text()
+        template = (source / "templates" / "app.html").read_text()
+        defaults = {}
+        for field, client_key in (
+            ("BANK_NAME", "bank"),
+            ("BANK_ACCOUNT_NAME", "accountName"),
+            ("BANK_SORT_CODE", "sortCode"),
+            ("BANK_ACCOUNT_NUMBER", "accountNumber"),
+        ):
+            server = re.search(rf'(?m)^{field} = .*? or "([^"]+)"', settings)
+            self.assertIsNotNone(server, f"Missing default for {field}")
+            defaults[client_key] = server.group(1)
+            self.assertNotIn(server.group(1), script, f"Payment literal in JS: {field}")
+            self.assertNotIn(server.group(1), template, f"Payment literal in HTML: {field}")
+            self.assertIn(f"{client_key}: APP_PAYMENT_CONFIG.{client_key}", script)
+        self.assertIn("window.CURRENT_INVOICE_PAYMENT_DETAILS = bankDetails", script)
+        with disposable_app(self.username, self.password, bank_settings={}) as (m, _):
+            with TestClient(m.app) as client:
+                page = client.get("/app", headers=self.auth)
+                self.assertEqual(page.status_code, 200)
+                config = re.search(r'const APP_PAYMENT_CONFIG = (\{.*?\});', page.text)
+                self.assertIsNotNone(config)
+                self.assertTrue(json.loads(config.group(1)) == defaults,
+                                "Default invoice display differs from server configuration")
+                self.assertTrue(all(getattr(m, field) == defaults[key] for field, key in (
+                    ("BANK_NAME", "bank"), ("BANK_ACCOUNT_NAME", "accountName"),
+                    ("BANK_SORT_CODE", "sortCode"),
+                    ("BANK_ACCOUNT_NUMBER", "accountNumber"))),
+                    "Default configuration differs from invoice display")
+
+    def test_synthetic_staging_payment_config_and_safe_embedding(self):
+        page = self.client.get("/app", headers=self.auth)
+        self.assertEqual(page.status_code, 200)
+        config = re.search(r'const APP_PAYMENT_CONFIG = (\{.*?\});', page.text)
+        self.assertIsNotNone(config)
+        self.assertTrue(json.loads(config.group(1)) == {
+            "bank": self.app_module.BANK_NAME,
+            "accountName": self.app_module.BANK_ACCOUNT_NAME,
+            "sortCode": self.app_module.BANK_SORT_CODE,
+            "accountNumber": self.app_module.BANK_ACCOUNT_NUMBER,
+        }, "Staging invoice display differs from configured payment data")
+        self.assertEqual(self.client.get("/app").status_code, 401)
+        injection = {'BANK_NAME': '</script><script>window.bad=1</script>'}
+        with disposable_app(self.username, self.password, bank_settings=injection) as (m, _):
+            with TestClient(m.app) as client:
+                html = client.get("/app", headers=self.auth).text
+                self.assertNotIn(injection["BANK_NAME"], html)
+                config = re.search(r'const APP_PAYMENT_CONFIG = (\{.*?\});', html)
+                self.assertIsNotNone(config)
+                self.assertTrue(json.loads(config.group(1))["bank"] == injection["BANK_NAME"],
+                                "Escaped payment configuration was altered")
+
+    @unittest.skipUnless(shutil.which("node"), "Node is required to execute browser JavaScript")
+    def test_copy_bank_details_uses_configured_staging_values(self):
+        page = self.client.get("/app", headers=self.auth).text
+        match = re.search(r'const APP_PAYMENT_CONFIG = (\{.*?\});', page)
+        self.assertIsNotNone(match)
+        script = r"""
+const fs = require('node:fs');
+const vm = require('node:vm');
+const data = JSON.parse(fs.readFileSync(0, 'utf8'));
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const start = source.indexOf('async function copyInvoiceBankDetails() {');
+const end = source.indexOf('\nasync function sendCurrentOverdueReminder()', start);
+if (start < 0 || end < 0) process.exit(2);
+let copied = null;
+const context = {
+  window: { CURRENT_INVOICE_PAYMENT_DETAILS: {
+    ...data, reference: 'INV-STAGING', amount: 12.5,
+  } },
+  navigator: { clipboard: { writeText: async value => { copied = value; } } },
+  pounds: value => `£${Number(value).toFixed(2)}`,
+  showNotice: () => {},
+  prompt: () => { throw new Error('Unexpected clipboard fallback'); },
+};
+vm.runInNewContext(source.slice(start, end) + '\ncopyInvoiceBankDetails()', context)
+  .then(() => {
+    const expected = [
+      `Bank: ${data.bank}`, `Account name: ${data.accountName}`,
+      `Sort code: ${data.sortCode}`, `Account number: ${data.accountNumber}`,
+      'Amount due: £12.50', 'Reference: INV-STAGING',
+    ].join('\n');
+    if (copied !== expected) process.exitCode = 1;
+  }).catch(() => { process.exitCode = 1; });
+"""
+        result = subprocess.run(
+            ["node", "-e", script, str(self.root / "static" / "app.js")],
+            input=match.group(1), text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, "Copy action ignored staging payment configuration")
 
     def test_quote_invoice_customer_documents_and_deletion(self):
         c = self.client
@@ -138,7 +238,7 @@ class LocalIntegrationTests(unittest.TestCase):
     def test_network_and_smtp_are_blocked(self):
         self.assertTrue(self.app_module.DB_PATH.is_relative_to(self.root))
         self.assertNotEqual(str(self.app_module.DB_PATH), "/var/data/quotes.db")
-        self.assertIn('accountName: "Synthetic Test Account"',
+        self.assertIn("accountName: APP_PAYMENT_CONFIG.accountName",
                       (self.root / "static" / "app.js").read_text())
         with self.assertRaisesRegex(RuntimeError, "External HTTP blocked"):
             requests.get("https://example.test")

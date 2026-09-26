@@ -8,7 +8,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import smtplib
 import socket
@@ -73,7 +72,8 @@ def block_external_connections():
 
 @contextmanager
 def disposable_app(username: str, password: str,
-                   public_base_url: str = "", environment: str = ""):
+                   public_base_url: str = "", environment: str = "",
+                   bank_settings: dict | None = None):
     if not username or not password:
         raise ValueError("Test-only Basic Auth credentials are required")
     with tempfile.TemporaryDirectory(prefix="stage6-local-") as temporary:
@@ -95,19 +95,6 @@ def disposable_app(username: str, password: str,
         if 'Path("/var/data/' in settings:
             raise RuntimeError("Default storage path survived isolation")
         config.write_text(settings)
-        # The pre-existing invoice UI has separate literal bank details. Replace
-        # values in the disposable copy only; leave its JS logic unchanged.
-        script_path = root / "static" / "app.js"
-        script = script_path.read_text()
-        for name, synthetic in (
-            ("bank", "Test Bank"), ("accountName", "Synthetic Test Account"),
-            ("sortCode", "00-00-00"), ("accountNumber", "00000000"),
-        ):
-            pattern = rf'(?m)^(\s*{name}: )"[^"]*"(,)$'
-            script, count = re.subn(pattern, lambda m: f'{m[1]}"{synthetic}"{m[2]}', script)
-            if count != 1:
-                raise RuntimeError("Test payment display isolation failed before app import")
-        script_path.write_text(script)
         shutil.copy2(ROOT / "app.py", root / "app_under_test.py")
 
         # Explicitly neutralize any inherited production integration settings.
@@ -130,6 +117,12 @@ def disposable_app(username: str, password: str,
             "BANK_ACCOUNT_NUMBER": "00000000",
             "SHOW_BANK_DETAILS_ON_QUOTES": "0",
         }
+        if bank_settings is not None:
+            for key in ("BANK_NAME", "BANK_ACCOUNT_NAME", "BANK_SORT_CODE",
+                        "BANK_ACCOUNT_NUMBER"):
+                overrides[key] = bank_settings.get(key, "")
+            overrides["SHOW_BANK_DETAILS_ON_QUOTES"] = bank_settings.get(
+                "SHOW_BANK_DETAILS_ON_QUOTES", "1")
         previous = {key: os.environ.get(key) for key in overrides}
         os.environ.update(overrides)
         sys.path.insert(0, str(root))

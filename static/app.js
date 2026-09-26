@@ -1887,10 +1887,10 @@ function renderInvoiceCard(item) {
   const paymentBox = document.getElementById("i_payment_link_box");
   const isSmallJob = ((quoteResult.quote_type || "").toLowerCase() === "small");
   const bankDetails = {
-    bank: "Monzo",
-    accountName: "NIGEL HARVEY LTD",
-    sortCode: "04-00-04",
-    accountNumber: "23669594",
+    bank: APP_PAYMENT_CONFIG.bank,
+    accountName: APP_PAYMENT_CONFIG.accountName,
+    sortCode: APP_PAYMENT_CONFIG.sortCode,
+    accountNumber: APP_PAYMENT_CONFIG.accountNumber,
     reference: item.invoice_number || "",
     amount: Number(item.balance_due || 0)
   };

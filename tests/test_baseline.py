@@ -111,10 +111,13 @@ class BaselineTests(unittest.TestCase):
             self.assertIn(route, routes)
 
     def test_internal_app_markup_and_injected_data_baseline(self):
-        """Freeze the existing inline UI and its five Python substitutions."""
+        """Freeze the inline UI, payment settings and five route-time substitutions."""
         m = self.module
-        self.assertEqual(hashlib.sha256(m.HTML.encode()).hexdigest(),
-                         "c6281a71a618dc262b9d91de81027981d1a76c0541fe7b82051531966e2ba8d5")
+        config = re.search(r'const APP_PAYMENT_CONFIG = (\{.*?\});', m.HTML)
+        self.assertIsNotNone(config)
+        masked = m.HTML.replace(config.group(1), "__PAYMENT_CONFIG__", 1)
+        self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
+                         "61a9c180c830ac253b685139ee2d1007c10172489f520e510f3e6768dbdc0da7")
         self.assertEqual(m.HTML.count("<style>"), 1)
         self.assertEqual(m.HTML.count("<script>"), 1)
         self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {

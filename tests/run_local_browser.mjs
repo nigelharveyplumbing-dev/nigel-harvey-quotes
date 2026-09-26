@@ -185,6 +185,18 @@ try {
 
   // A synthetic image goes through the browser file input and normal upload UI.
   await invoiceRow.getByRole('button', { name: 'Open', exact: true }).click();
+  const paymentDisplay = await page.locator('#i_payment_link_box').innerText();
+  assert.ok(paymentDisplay.includes('Test Bank'));
+  assert.ok(paymentDisplay.includes('Synthetic Test Account'));
+  assert.deepEqual(await page.evaluate(() => ({
+    bank: window.CURRENT_INVOICE_PAYMENT_DETAILS.bank,
+    accountName: window.CURRENT_INVOICE_PAYMENT_DETAILS.accountName,
+    sortCode: window.CURRENT_INVOICE_PAYMENT_DETAILS.sortCode,
+    accountNumber: window.CURRENT_INVOICE_PAYMENT_DETAILS.accountNumber,
+  })), {
+    bank: 'Test Bank', accountName: 'Synthetic Test Account',
+    sortCode: '00-00-00', accountNumber: '00000000',
+  });
   await page.locator('#invoicePhotoFiles').setInputFiles({
     name: 'synthetic.png', mimeType: 'image/png',
     buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2X6a8AAAAASUVORK5CYII=', 'base64'),
