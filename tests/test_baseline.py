@@ -6,10 +6,12 @@ path before import. No test opens production /var/data.
 
 import importlib.util
 import base64
+import hashlib
 from email import message_from_string
 import json
 import io
 import os
+import secrets
 import subprocess
 import shutil
 import sqlite3
@@ -25,6 +27,22 @@ from pypdf import PdfReader
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Explicit policy for the 66 application method/path routes. All others are private.
+PUBLIC_WEBSITE_ROUTES = {
+    ("GET", path) for path in (
+        "/", "/new-home", "/request-quote", "/robots.txt", "/sitemap.xml",
+        "/plumber-{area_slug}", "/{service_slug}-{area_slug}", "/{service_slug}",
+    )
+} | {("POST", "/api/leads")}
+PUBLIC_CUSTOMER_ROUTES = {
+    ("GET", path) for path in (
+        "/invoice/{invoice_id}", "/api/invoices/{invoice_id}/pdf",
+        "/api/invoices/{invoice_id}/payment-qr",
+        "/api/invoices/{invoice_id}/photos/{photo_id}",
+        "/api/quotes/{quote_id}/pdf",
+    )
+}
 
 
 class BaselineTests(unittest.TestCase):
@@ -53,9 +71,16 @@ class BaselineTests(unittest.TestCase):
         path.write_text(source)
         spec = importlib.util.spec_from_file_location("app_under_test", path)
         cls.module = importlib.util.module_from_spec(spec)
-        with patch.dict(os.environ, {"GOOGLE_PLACES_API_KEY": "", "EMAIL_ENABLED": "0", "OPENAI_API_KEY": ""}):
+        cls.test_username = secrets.token_urlsafe(18)
+        cls.test_password = secrets.token_urlsafe(36)
+        with patch.dict(os.environ, {
+            "GOOGLE_PLACES_API_KEY": "", "EMAIL_ENABLED": "0", "OPENAI_API_KEY": "",
+            "APP_USERNAME": cls.test_username, "APP_PASSWORD": cls.test_password,
+        }):
             spec.loader.exec_module(cls.module)
         cls.module.init_db()
+        cls.auth_headers = {"Authorization": "Basic " + base64.b64encode(
+            f"{cls.test_username}:{cls.test_password}".encode()).decode()}
 
     def test_route_inventory(self):
         routes_list = [(method, route.path) for route in self.module.app.routes
@@ -65,11 +90,145 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
+        self.assertEqual(len(routes), 66)
+        self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 9)
+        self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
+        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 52)
+        self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
+        self.assertEqual(self.module.PUBLIC_ROUTE_KEYS,
+                         PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES)
         for route in [("GET", "/app"), ("GET", "/"), ("POST", "/api/quote"),
                       ("GET", "/api/quotes/{quote_id}/pdf"),
                       ("GET", "/invoice/{invoice_id}"),
                       ("POST", "/api/invoices/{invoice_id}/send-email")]:
             self.assertIn(route, routes)
+
+    def test_all_private_routes_reject_before_handler(self):
+        """A patched endpoint would fail if any private request reached its handler."""
+        m = self.module
+        private = {tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())}
+        private -= PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES
+        self.assertEqual(len(private), 52)
+        parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
+                      "lead_id": "1", "material_id": "1", "photo_id": "1", "filename": "sample.db"}
+        def file_state():
+            return {
+                str(path.relative_to(self.temp.name)): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in Path(self.temp.name).rglob("*") if path.is_file()
+            }
+
+        with TestClient(m.app) as client, \
+             patch.object(m, "get_db", side_effect=AssertionError("database accessed")), \
+             patch.object(m.smtplib, "SMTP_SSL", side_effect=AssertionError("email sent")), \
+             patch.object(m.requests, "get", side_effect=AssertionError("external GET")), \
+             patch.object(m.requests, "post", side_effect=AssertionError("external POST")):
+            before = file_state()
+            for method, template in sorted(private):
+                route = next(r for r in m.app.routes if r.path == template and method in r.methods)
+                path = template.format(**parameters)
+                with self.subTest(method=method, path=template), patch.object(
+                    route.dependant, "call", side_effect=AssertionError("private handler invoked")):
+                    response = client.request(method, path)
+                    self.assertEqual(response.status_code, 401)
+                    self.assertEqual(response.headers.get("www-authenticate"), "Basic")
+            for path in ("/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"):
+                with self.subTest(framework_path=path):
+                    self.assertEqual(client.get(path).status_code, 401)
+            self.assertEqual(client.get("/api/future-internal-route").status_code, 401)
+            self.assertEqual(file_state(), before)
+
+    def test_public_routes_and_health_policy(self):
+        m = self.module
+        paths = {
+            "/plumber-{area_slug}": f"/plumber-{m.LOCATION_PAGES[0]['slug']}",
+            "/{service_slug}-{area_slug}":
+                f"/{m.LOCAL_SERVICE_PAGES[0]['slug']}-{m.LOCATION_PAGES[0]['slug']}",
+            "/{service_slug}": f"/{m.SERVICE_PAGES[0]['slug']}",
+        }
+        with TestClient(m.app) as client, patch.object(m, "send_lead_notification_email") as notify:
+            for method, template in sorted(PUBLIC_WEBSITE_ROUTES):
+                if method == "GET":
+                    with self.subTest(path=template):
+                        expected = 404 if template == "/{service_slug}" else 200
+                        self.assertEqual(client.get(paths.get(template, template)).status_code, expected)
+            lead = client.post("/api/leads", json={
+                "name": "Public Test", "phone": "07000000000", "description": "Enquiry",
+            })
+            self.assertEqual(lead.status_code, 200)
+            notify.assert_called_once()
+            self.assertEqual(client.get("/api/health").status_code, 401)
+            detailed = client.get("/api/health", headers=self.auth_headers)
+            self.assertEqual(detailed.status_code, 200)
+            self.assertTrue({"ok", "db_path", "db_size_bytes", "counts", "backup_count"} <= detailed.json().keys())
+            self.assertEqual(client.get("/emergency-plumber-surrey").status_code, 404)
+
+    def test_customer_document_routes_remain_public(self):
+        m = self.module
+        request = m.QuoteRequest(customer_name="Document Test", labour_cost=10)
+        result = m.calculate_quote(request)
+        quote_id = m.save_quote(request.model_dump(), result)
+        invoice = m.create_invoice_from_quote(quote_id)
+        photo = m.invoice_photo_folder(invoice["id"]) / "public-test.jpg"
+        Image.new("RGB", (12, 12), "blue").save(photo)
+        photo_id = m.save_invoice_photo_record(invoice["id"], "after", "Test", photo.name, photo.name)
+        urls = {
+            "/invoice/{invoice_id}": f"/invoice/{invoice['id']}",
+            "/api/quotes/{quote_id}/pdf": f"/api/quotes/{quote_id}/pdf",
+            "/api/invoices/{invoice_id}/pdf": f"/api/invoices/{invoice['id']}/pdf",
+            "/api/invoices/{invoice_id}/payment-qr": f"/api/invoices/{invoice['id']}/payment-qr",
+            "/api/invoices/{invoice_id}/photos/{photo_id}":
+                f"/api/invoices/{invoice['id']}/photos/{photo_id}",
+        }
+        self.assertEqual({("GET", key) for key in urls}, PUBLIC_CUSTOMER_ROUTES)
+        with TestClient(m.app) as client:
+            for template, url in urls.items():
+                with self.subTest(path=template):
+                    self.assertEqual(client.get(url).status_code, 200)
+            self.assertEqual(client.get(f"/api/invoices/{invoice['id']}").status_code, 401)
+            self.assertEqual(client.get(f"/api/quotes/{quote_id}").status_code, 401)
+
+    def test_basic_auth_is_environment_backed_and_fails_closed(self):
+        m = self.module
+        with TestClient(m.app) as client:
+            self.assertEqual(client.get("/app", headers=self.auth_headers).status_code, 200)
+            self.assertEqual(client.get("/api/quotes", headers=self.auth_headers).status_code, 200)
+            wrong = "Basic " + base64.b64encode(
+                f"{self.test_username}:{secrets.token_urlsafe(24)}".encode()).decode()
+            self.assertEqual(client.get("/api/quotes", headers={"Authorization": wrong}).status_code, 401)
+            self.assertEqual(client.get("/api/quotes", headers={"Authorization": "Basic invalid"}).status_code, 401)
+            with patch.object(m, "APP_USERNAME", ""), patch.object(m, "APP_PASSWORD", ""):
+                self.assertEqual(client.get("/app", headers=self.auth_headers).status_code, 401)
+                self.assertEqual(client.get("/api/quotes", headers=self.auth_headers).status_code, 401)
+
+    def test_authenticated_cross_site_writes_rejected_before_handler(self):
+        m = self.module
+        attempts = (
+            ("POST", "/api/quote", "/api/quote"),
+            ("PUT", "/api/invoices/{invoice_id}", "/api/invoices/1"),
+            ("DELETE", "/api/customers/{customer_id}", "/api/customers/1"),
+            ("POST", "/api/invoices/{invoice_id}/send-email", "/api/invoices/1/send-email"),
+            ("POST", "/api/invoices/{invoice_id}/photos", "/api/invoices/1/photos"),
+            ("GET", "/api/live-product-refresh", "/api/live-product-refresh"),
+        )
+        with TestClient(m.app) as client:
+            for method, template, path in attempts:
+                route = next(r for r in m.app.routes if r.path == template and method in r.methods)
+                for origin_headers in ({"Origin": "https://elsewhere.example"},
+                                       {"Sec-Fetch-Site": "cross-site"}):
+                    with self.subTest(path=template, headers=origin_headers), patch.object(
+                        route.dependant, "call", side_effect=AssertionError("handler invoked")):
+                        response = client.request(method, path,
+                            headers={**self.auth_headers, **origin_headers})
+                        self.assertEqual(response.status_code, 403)
+            self.assertEqual(client.get("/api/quotes", headers={
+                **self.auth_headers, "Origin": "http://testserver",
+                "Sec-Fetch-Site": "same-origin",
+            }).status_code, 200)
+            valid = m.QuoteRequest(customer_name="Same Origin Test", job_description="Tap")
+            self.assertEqual(client.post("/api/forgotten-items", json=valid.model_dump(), headers={
+                **self.auth_headers, "Origin": "http://testserver",
+                "Sec-Fetch-Site": "same-origin",
+            }).status_code, 200)
 
     def test_invoice_email_sharing_baseline(self):
         m = self.module
@@ -132,6 +291,7 @@ class BaselineTests(unittest.TestCase):
         invoice = {"id": 47, "invoice_number": "INV-TEST-47", "invoice": {"customer_name": "Pat"},
                    "status": "unpaid", "balance_due": 50}
         with TestClient(m.app) as client, patch.object(m.smtplib, "SMTP_SSL") as smtp:
+            client.headers.update(self.auth_headers)
             payload = {"to_email": "pat@example.test", "message": "Please review"}
             missing = client.post("/api/invoices/-1/send-email", json=payload)
             self.assertEqual((missing.status_code, missing.json()), (404, {"detail": "Invoice not found"}))
@@ -194,8 +354,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             app_page = client.get("/app", headers={"Authorization": f"Basic {credentials}"})
             self.assertEqual(app_page.status_code, 200)
             self.assertIn("text/html", app_page.headers["content-type"])
-            # Existing access behaviour, including the known unprotected admin API.
-            self.assertEqual(client.get("/api/quotes").status_code, 200)
+            self.assertEqual(client.get("/api/quotes").status_code, 401)
             for path in ("/", "/new-home", "/request-quote", "/plumber-guildford", "/plumber-woking"):
                 response = client.get(path)
                 self.assertEqual(response.status_code, 200, path)
@@ -217,6 +376,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
     def test_http_quote_invoice_pdf_customer_routes(self):
         m = self.module
         with TestClient(m.app) as client:
+            client.headers.update(self.auth_headers)
             payload = m.QuoteRequest(customer_name="Route Customer", customer_address="4 Test Lane",
                                      customer_phone="07333333333", job_description="Install valve",
                                      labour_cost=100.10,
@@ -305,8 +465,8 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             self.assertEqual(resolved.status_code, 200)
             self.assertEqual(set(resolved.json()), {"requested_name", "matched", "best", "alternatives"})
             self.assertEqual(client.get("/api/material-resolve", headers=headers).status_code, 400)
-            self.assertEqual(client.get("/api/material-alias?q=ptfe").status_code, 200)
-            self.assertEqual(client.get("/api/material-charging?q=ptfe").status_code, 200)
+            self.assertEqual(client.get("/api/material-alias?q=ptfe", headers=headers).status_code, 200)
+            self.assertEqual(client.get("/api/material-charging?q=ptfe", headers=headers).status_code, 200)
             url = "https://example.test/route-material"
             m.upsert_material_price_cache(url, "Route valve", "Test", price=5, status="live")
             rows = client.get("/api/material-prices", headers=headers).json()
