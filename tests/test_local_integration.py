@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from urllib.parse import urljoin
 from unittest.mock import patch
 
+from bs4 import BeautifulSoup
 from fastapi.testclient import TestClient
 from PIL import Image
 import requests
@@ -625,6 +626,30 @@ context.runWorkflow().then(() => {
             self.assertEqual(self.app_module.build_invoice_public_url(47),
                              production + "/invoice/47")
             self.assertIn(f'href="{production}/"', self.client.get("/").text)
+
+    def test_apex_production_override_is_normalized_to_www(self):
+        production = "https://www.nigelharveyplumbing.co.uk"
+        with patch.dict(os.environ, {"PUBLIC_BASE_URL": "https://nigelharveyplumbing.co.uk",
+                                     "APP_ENVIRONMENT": "production"}):
+            self.assertEqual(self.app_module.get_public_base_url(), production)
+            for path in ("/", "/plumber-guildford", "/general-plumbing-surrey",
+                         "/request-quote"):
+                with self.subTest(path=path):
+                    response = self.client.get(path)
+                    self.assertEqual(response.status_code, 200)
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    canonical = soup.select_one('link[rel="canonical"]')
+                    if canonical:
+                        self.assertTrue(canonical["href"].startswith(production))
+                    og_url = soup.select_one('meta[property="og:url"]')
+                    if og_url:
+                        self.assertTrue(og_url["content"].startswith(production))
+                    for script in soup.select('script[type="application/ld+json"]'):
+                        self.assertNotIn("https://nigelharveyplumbing.co.uk",
+                                         json.dumps(json.loads(script.text)))
+            self.assertIn(production + "/sitemap.xml", self.client.get("/robots.txt").text)
+            self.assertIn(production + "/plumber-guildford",
+                          self.client.get("/sitemap.xml").text)
 
 
 class StagingAccessTests(unittest.TestCase):
