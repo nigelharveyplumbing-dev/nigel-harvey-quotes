@@ -1228,5 +1228,133 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
                          f"INV-{m.now_uk().year}-{int(expected_number[-4:]) + 1:04d}")
 
 
+    def test_stage7_public_seo_rendering_golden(self):
+        """Freeze the three existing SEO page families before moving renderers."""
+        m = self.module
+        cases = (
+            ("location", "7f657a7e9b221e208c0ab3f26826fb8bbb659b27b36407bf167f47fce2d88094"),
+            ("service", "f904168c2608697cfb35b8198a812a8ef5fe043b83461d07d98a80b3f2e5bcb1"),
+            ("local", "b266c843193f4c1c57dae5cd0dafda1836f26558d4068b582582afa695a1da0a"),
+        )
+        with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
+                                     "PUBLIC_BASE_URL": "https://stage7.invalid",
+                                     "GOOGLE_PLACES_API_KEY": ""}), \
+                patch.object(m, "_google_reviews_html", return_value="<div>Synthetic reviews</div>"):
+            rendered = {
+                "location": m.render_location_page("Guildford", "<span>Test logo</span>"),
+                "service": m.render_service_page(m.SERVICE_PAGES[1], "<span>Test logo</span>"),
+                "local": m.render_local_service_location_page(
+                    m.LOCAL_SERVICE_PAGES[0], m.LOCATION_PAGES[0], "<span>Test logo</span>"),
+            }
+        for name, digest in cases:
+            with self.subTest(page=name):
+                self.assertEqual(hashlib.sha256(rendered[name].encode()).hexdigest(), digest)
+
+    def test_stage7_merchant_parsing_and_matching_offline(self):
+        """No merchant request escapes the process; preserve exact parsed shapes."""
+        m = self.module
+        search_html = ('<html><body><div class="product-card"><a href="/p/12345">'
+                       '<h3>600 x 1200 Type 22 radiator</h3></a><span>£123.45</span>'
+                       '</div></body></html>')
+        self.assertEqual(m._extract_search_page_products(
+            search_html, "https://www.toolstation.com/search?q=radiator", "Toolstation",
+            ["toolstation.com"]), [{
+                "name": "600 x 1200 Type 22 radiator",
+                "url": "https://www.toolstation.com/p/12345", "price": 123.45,
+                "sku": "", "image_url": "",
+            }])
+        self.assertEqual(m._strict_product_match(
+            "600 x 1200 Type 22 radiator", "600 x 1200 type 22 radiator"),
+            (99, True, ""))
+        self.assertEqual(m._strict_product_match(
+            "22mm copper endfeed elbow", "22mm copper elbow"), (41, False, ""))
+
+        class Response:
+            status_code = 200
+            text = '<meta property="product:price:amount" content="23.45"><p>£90</p>'
+
+        with patch.object(m.requests, "get", return_value=Response()) as mocked:
+            self.assertEqual(m.scrape_live_price("https://www.screwfix.com/p/example"), 23.45)
+            mocked.assert_called_once()
+
+    def test_stage7_google_review_rendering_offline(self):
+        m = self.module
+
+        class Response:
+            ok = True
+
+            def json(self):
+                return {
+                    "rating": 4.8, "userRatingCount": 12,
+                    "googleMapsLinks": {"reviewsUri": "https://example.invalid/reviews"},
+                    "reviews": [{
+                        "rating": 5,
+                        "authorAttribution": {"displayName": "A & B",
+                                              "uri": "https://example.invalid/a"},
+                        "text": {"text": "Great <work>"},
+                        "relativePublishTimeDescription": "recent",
+                    }],
+                }
+
+        with patch.object(m, "GOOGLE_PLACES_API_KEY", "test-only"), \
+                patch.object(m, "_google_place_id", return_value="test-place"), \
+                patch.object(m.requests, "get", return_value=Response()) as mocked:
+            html = m._google_reviews_html()
+        self.assertEqual(hashlib.sha256(html.encode()).hexdigest(),
+                         "ea542a3a14068e0a2d2296ec01b563becd7ca77538d84b42182725e9544736ce")
+        self.assertIn("A &amp; B", html)
+        self.assertIn("&lt;work&gt;", html)
+        mocked.assert_called_once()
+
+    def test_stage7_merchant_search_orchestration_offline(self):
+        m = self.module
+
+        class Response:
+            status_code = 200
+            ok = True
+
+            def __init__(self, url):
+                self.url = url
+                if "/p/12345" in url:
+                    self.text = ('<html><head><meta property="product:price:amount" '
+                                 'content="123.45"></head><body><h1>600 x 1200 '
+                                 'Type 22 radiator</h1></body></html>')
+                else:
+                    self.text = ('<html><body><div class="product-card">'
+                                 '<a href="/p/12345"><h3>600 x 1200 Type 22 '
+                                 'radiator</h3></a><span>£123.45</span></div></body></html>')
+
+        with patch.object(m.requests, "get", side_effect=lambda url, **kwargs: Response(url)) as fetch, \
+                patch.object(m, "upsert_material_price_cache") as save:
+            result = m.search_live_merchant_products(
+                "600 x 1200 Type 22 radiator", suppliers=["Toolstation"])
+        self.assertEqual(len(result), 1)
+        self.assertEqual({key: value for key, value in result[0].items()
+                          if key != "checked_at"}, {
+            "name": "600 x 1200 Type 22 radiator", "supplier": "Toolstation",
+            "url": "https://www.toolstation.com/p/12345",
+            "default_price": 123.45, "live_price": 123.45,
+            "price_source": "live", "availability": "", "image_url": "", "sku": "",
+            "match_score": 99, "search_only": False, "strict_match": True,
+        })
+        self.assertEqual(fetch.call_count, 2)
+        save.assert_called_once()
+
+    def test_stage7_material_search_matching_rules(self):
+        m = self.module
+        self.assertEqual(m._material_match_normalise("22 mm End-Feed 90 degree Elbow"),
+                         "22mm endfeed elbow")
+        self.assertEqual(m._material_match_sizes("22mm to 15 mm"), [15, 22])
+        self.assertEqual(m._material_match_score("22mm copper elbow", {
+            "name": "22 mm endfeed elbow", "source": "built-in", "default_price": 3,
+        }), 80)
+        self.assertEqual(m._material_match_score("radiator valve", {
+            "name": "15mm TRV radiator valve", "source": "built-in", "default_price": 8,
+        }), 0)
+        self.assertEqual(m._material_match_score("PTFE tape", {
+            "name": "PTFE tape", "source": "built-in", "default_price": 1,
+        }), 94)
+
+
 if __name__ == "__main__":
     unittest.main()
