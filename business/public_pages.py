@@ -38,47 +38,29 @@ def build_homepage_faq_schema() -> str:
 
 
 def build_homepage_business_schema(canonical_home: str) -> str:
-    schema = {
+    return json.dumps(public_business_entity(canonical_home), ensure_ascii=False)
+
+
+def public_business_entity(canonical_home: str) -> dict:
+    """One service-area business identity across the public website.
+
+    The registered office is used for company paperwork, not advertised as a
+    customer-facing plumbing premises. Google reviews remain visible in the
+    page UI but are not marked up as self-serving ratings.
+    """
+    return {
         "@context": "https://schema.org",
         "@type": "Plumber",
-        "name": COMPANY_NAME,
-        "telephone": COMPANY_PHONE,
+        "@id": canonical_home + "#business",
+        "name": "Nigel Harvey Plumbing",
+        "legalName": COMPANY_NAME,
+        "telephone": "+44" + COMPANY_PHONE_TEL[1:],
         "email": COMPANY_EMAIL,
-        "address": {
-            "@type": "PostalAddress",
-            "streetAddress": "125 Bushy Hill Drive",
-            "addressLocality": "Guildford",
-            "postalCode": "GU1 2UG",
-            "addressCountry": "GB",
-        },
+        "location": {"@type": "Place", "name": "Guildford, Surrey"},
         "areaServed": ["Guildford", "Woking", "Farnham", "Godalming", "Camberley", "Aldershot", "Leatherhead", "Epsom", "Weybridge", "Cobham", "Surrey"],
         "url": canonical_home,
-        "description": "Plumbing services in Surrey and surrounding areas including emergency plumbing, general plumbing, bathroom plumbing, leaks, pipework and domestic plumbing repairs.",
+        "description": "Guildford-based domestic plumber covering Surrey and nearby areas for general plumbing, bathroom plumbing, leaks, pipework and repairs.",
     }
-    if GOOGLE_RATING_VALUE and GOOGLE_REVIEW_COUNT:
-        schema["aggregateRating"] = {
-            "@type": "AggregateRating",
-            "ratingValue": GOOGLE_RATING_VALUE,
-            "reviewCount": GOOGLE_REVIEW_COUNT,
-            "bestRating": "5",
-            "worstRating": "1",
-        }
-    reviews = []
-    for text_value, author in [
-        (GOOGLE_REVIEW_1_TEXT, GOOGLE_REVIEW_1_AUTHOR),
-        (GOOGLE_REVIEW_2_TEXT, GOOGLE_REVIEW_2_AUTHOR),
-        (GOOGLE_REVIEW_3_TEXT, GOOGLE_REVIEW_3_AUTHOR),
-    ]:
-        if text_value and author:
-            reviews.append({
-                "@type": "Review",
-                "author": {"@type": "Person", "name": author},
-                "reviewBody": text_value,
-                "reviewRating": {"@type": "Rating", "ratingValue": "5", "bestRating": "5", "worstRating": "1"},
-            })
-    if reviews:
-        schema["review"] = reviews
-    return json.dumps(schema, ensure_ascii=False)
 
 
 def build_reviews_badge_html() -> str:
@@ -235,24 +217,7 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
             {"@type": "ListItem", "position": 2, "name": f"Plumber in {location_name}", "item": canonical},
         ],
     }, ensure_ascii=False)
-    local_schema = json.dumps({
-        "@context": "https://schema.org",
-        "@type": "Plumber",
-        "name": "Nigel Harvey Plumbing",
-        "url": canonical,
-        "telephone": COMPANY_PHONE,
-        "email": COMPANY_EMAIL,
-        "address": {
-            "@type": "PostalAddress",
-            "streetAddress": "125 Bushy Hill Drive",
-            "addressLocality": "Guildford",
-            "postalCode": "GU1 2UG",
-            "addressCountry": "GB",
-        },
-        "areaServed": [location_name, "Guildford", "Surrey"],
-        "serviceType": ["General plumbing", "Bathroom plumbing", "Leak repairs", "Toilet repairs", "Radiator and valve plumbing"],
-        "description": f"Local plumber serving {location_name} and surrounding Surrey areas for domestic plumbing repairs and installations.",
-    }, ensure_ascii=False)
+    local_schema = build_homepage_business_schema(absolute_url("/", request))
 
 
     if is_guildford:
@@ -365,7 +330,7 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
         "@type": "Service",
         "name": service["title"],
         "serviceType": service["heading"],
-        "provider": {"@type": "Plumber", "name": COMPANY_NAME, "telephone": COMPANY_PHONE},
+        "provider": {"@id": absolute_url("/", request) + "#business"},
         "areaServed": [item["name"] for item in LOCATION_PAGES] + ["Surrey"],
         "url": canonical,
         "description": service["meta"],
@@ -496,12 +461,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         "@context": "https://schema.org",
         "@type": "Service",
         "name": f"{title} in {area}",
-        "provider": {
-            "@type": "Plumber",
-            "name": COMPANY_NAME,
-            "telephone": COMPANY_PHONE,
-            "email": COMPANY_EMAIL,
-        },
+        "provider": {"@id": absolute_url("/", request) + "#business"},
         "areaServed": [area, "Surrey"],
         "serviceType": service["service"],
         "url": canonical,
