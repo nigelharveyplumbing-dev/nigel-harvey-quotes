@@ -626,6 +626,30 @@ context.runWorkflow().then(() => {
                              production + "/invoice/47")
             self.assertIn(f'href="{production}/"', self.client.get("/").text)
 
+    def test_legacy_production_apex_origin_normalizes_to_preferred_www(self):
+        m = self.app_module
+        apex = "https://nigelharveyplumbing.co.uk"
+        preferred = "https://www.nigelharveyplumbing.co.uk"
+        with patch.dict(os.environ, {"PUBLIC_BASE_URL": apex + "/",
+                                     "APP_ENVIRONMENT": "production"}):
+            self.assertEqual(m.get_public_base_url(), preferred)
+            self.assertEqual(m.build_invoice_public_url(47), preferred + "/invoice/47")
+
+            home = self.client.get("/").text
+            self.assertIn(f'<link rel="canonical" href="{preferred}/">', home)
+            self.assertIn(f'<meta property="og:url" content="{preferred}/">', home)
+            self.assertIn(f'"@id": "{preferred}/#business"', home)
+            self.assertNotIn(f'<link rel="canonical" href="{apex}/">', home)
+
+            sitemap = self.client.get("/sitemap.xml").text
+            self.assertIn(preferred + "/plumber-guildford", sitemap)
+            self.assertNotIn(f"<loc>{apex}/", sitemap)
+            self.assertIn(preferred + "/sitemap.xml", self.client.get("/robots.txt").text)
+
+            service = self.client.get("/emergency-plumber-surrey").text
+            self.assertIn(preferred + "/emergency-plumber-surrey", service)
+            self.assertNotIn(f'<link rel="canonical" href="{apex}/', service)
+
 
 class StagingAccessTests(unittest.TestCase):
     @classmethod
