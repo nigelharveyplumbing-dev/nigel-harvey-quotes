@@ -1021,6 +1021,9 @@ def get_public_base_url(request: Request | None = None) -> str:
     if staging and parts.hostname.lower() in {
             "www.nigelharveyplumbing.co.uk", "nigelharveyplumbing.co.uk"}:
         raise ValueError("Staging PUBLIC_BASE_URL cannot be the live website")
+    if not staging and parts.hostname.lower() in {
+            "www.nigelharveyplumbing.co.uk", "nigelharveyplumbing.co.uk"}:
+        return production_origin
     return origin
 
 
