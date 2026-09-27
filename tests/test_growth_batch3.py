@@ -26,6 +26,9 @@ class GrowthBatch3EntityTests(unittest.TestCase):
                         self.assertEqual(business["name"], "Nigel Harvey Plumbing")
                         self.assertEqual(business["legalName"], "Nigel Harvey Ltd")
                         self.assertEqual(business["telephone"], "+447595725547")
+                        hours = business["openingHoursSpecification"]
+                        self.assertEqual((hours["opens"], hours["closes"]), ("00:00", "23:59"))
+                        self.assertEqual(len(hours["dayOfWeek"]), 7)
                         self.assertIn("Guildford", business["areaServed"])
                         self.assertNotIn("address", business)
                         self.assertNotIn("aggregateRating", business)
@@ -37,6 +40,12 @@ class GrowthBatch3EntityTests(unittest.TestCase):
                             client.get(path).text, "html.parser").select('script[type="application/ld+json"]')]
                         service = next(item for item in schema if item.get("@type") == "Service")
                         self.assertEqual(service["provider"], {"@id": base + "#business"})
+
+                urgent = client.get("/emergency-plumber-surrey")
+                self.assertEqual(urgent.status_code, 200)
+                self.assertIn("24-Hour Plumbing Availability in Surrey", urgent.text)
+                self.assertIn("including overnight", urgent.text)
+                self.assertIn("timing and the work that can be arranged depend", urgent.text)
 
 
 if __name__ == "__main__":
