@@ -640,6 +640,11 @@ def month_labels(count=6):
 
 from business.db import get_db, init_db, database_counts
 from business import quote_store, invoice_store, material_store
+from business import quote_history
+from business import public_invoice_render
+from business import notifications
+from business import ai_presentation
+from business import job_context
 from business import customer_store, lead_store, invoice_photo_store
 from business.material_store import normalize_material_url, get_cached_material_price
 from business.quote_store import row_to_quote, load_quotes, get_quote_by_id, delete_quote_by_id, build_payment_link
@@ -877,46 +882,13 @@ def update_invoice_reminder_timestamp(invoice_id: int):
 
 
 def send_overdue_reminder_now(item: dict):
-    email = (item.get("reminder_email") or "").strip()
-    if not email:
-        raise RuntimeError("No reminder email is saved on this invoice.")
-    if not invoice_is_overdue(item):
-        raise RuntimeError("This invoice is not currently overdue.")
-    message = (
-        f"This is a payment reminder for invoice {item['invoice_number']}"
-        f"{f' (Job Ref {item.get("job_reference")})' if item.get("job_reference") else ''}. "
-        f"The outstanding balance is {pounds_text(item.get('balance_due', 0))}. "
-        f"Please use {item['invoice_number']} as the bank-transfer reference."
-    )
-    send_invoice_email_now(item, email, message)
-    update_invoice_reminder_timestamp(item["id"])
-    return get_invoice_by_id(item["id"])
+    return notifications.send_overdue_reminder_now(
+        item, invoice_is_overdue=invoice_is_overdue, pounds_text=pounds_text, send_invoice_email_now=send_invoice_email_now, update_invoice_reminder_timestamp=update_invoice_reminder_timestamp, get_invoice_by_id=get_invoice_by_id)
 
 
 def process_overdue_invoice_reminders():
-    sent, skipped = [], []
-    for item in load_invoices():
-        if not item.get("reminders_enabled") or not invoice_is_overdue(item):
-            continue
-        if not item.get("reminder_email"):
-            skipped.append({"id": item["id"], "reason": "No reminder email"})
-            continue
-        last_value = item.get("last_reminder_at") or ""
-        if last_value:
-            try:
-                last_dt = datetime.fromisoformat(last_value)
-                if last_dt.tzinfo is None:
-                    last_dt = last_dt.replace(tzinfo=UK_TZ)
-                if (now_uk() - last_dt).total_seconds() < OVERDUE_REMINDER_INTERVAL_HOURS * 3600:
-                    continue
-            except Exception:
-                pass
-        try:
-            send_overdue_reminder_now(item)
-            sent.append(item["id"])
-        except Exception as exc:
-            skipped.append({"id": item["id"], "reason": str(exc)})
-    return {"sent": sent, "skipped": skipped}
+    return notifications.process_overdue_invoice_reminders(
+        load_invoices=load_invoices, invoice_is_overdue=invoice_is_overdue, send_overdue_reminder_now=send_overdue_reminder_now, now_uk=now_uk, UK_TZ=UK_TZ, OVERDUE_REMINDER_INTERVAL_HOURS=OVERDUE_REMINDER_INTERVAL_HOURS)
 
 
 def _overdue_reminder_worker():
@@ -959,203 +931,20 @@ def save_quote(request_data: dict, result_data: dict):
     return quote_store.save_quote(request_data, result_data, upsert_customer, now_uk)
 
 
-STOP_WORDS = {
-    "the", "and", "for", "with", "from", "into", "onto", "this", "that", "then", "than",
-    "pipe", "pipes", "plumbing", "work", "works", "supply", "fit", "install", "repair",
-    "replace", "new", "old", "existing", "including", "include", "test", "testing",
-    "customer", "job", "to", "of", "in", "on", "a", "an"
-}
+STOP_WORDS = quote_history.STOP_WORDS
 
 
 def learning_tokens(text: str):
-    words = re.findall(r"[a-zA-Z0-9]+", (text or "").lower())
-    return [w for w in words if len(w) >= 3 and w not in STOP_WORDS]
+    return quote_history.learning_tokens(text)
 
 
 def quote_similarity_score(query_tokens, quote: dict):
-    if not query_tokens:
-        return 0
-
-    job = quote.get("job", "") or ""
-    result = quote.get("result", {}) or {}
-    request = quote.get("request", {}) or {}
-
-    material_names = []
-    for line in result.get("material_lines", []) or []:
-        material_names.append(str(line.get("name", "")))
-
-    haystack = " ".join([
-        job,
-        result.get("quote_type", ""),
-        request.get("quote_type", ""),
-        " ".join(material_names),
-    ]).lower()
-
-    score = 0
-    for token in query_tokens:
-        if token in haystack:
-            score += 3
-        # crude plural/singular help
-        if token.endswith("s") and token[:-1] in haystack:
-            score += 1
-        if (token + "s") in haystack:
-            score += 1
-
-    job_tokens = set(learning_tokens(job))
-    score += len(set(query_tokens) & job_tokens) * 2
-    return score
+    return quote_history.quote_similarity_score(query_tokens, quote)
 
 
 def analyse_similar_quotes(query: str, quote_type: str = ""):
-    query_tokens = learning_tokens(query)
-    if not query_tokens:
-        return {
-            "query": query,
-            "similar_count": 0,
-            "similar_quotes": [],
-            "common_materials": [],
-            "averages": {},
-            "message": "Type a job description to learn from previous quotes."
-        }
-
-    quotes = load_quotes()
-    scored = []
-    for quote in quotes:
-        if quote_type and quote_type != "all":
-            q_type = (quote.get("result", {}) or {}).get("quote_type") or (quote.get("request", {}) or {}).get("quote_type")
-            if q_type and q_type != quote_type:
-                continue
-
-        score = quote_similarity_score(query_tokens, quote)
-        if score > 0:
-            scored.append((score, quote))
-
-    scored.sort(key=lambda x: (x[0], x[1].get("id", 0)), reverse=True)
-    matches = [q for _score, q in scored[:12]]
-
-    if not matches:
-        return {
-            "query": query,
-            "similar_count": 0,
-            "similar_quotes": [],
-            "common_materials": [],
-            "averages": {},
-            "message": "No similar quotes found yet. Once you quote jobs like this, the app will start learning."
-        }
-
-    labour_values = []
-    material_values = []
-    total_values = []
-    material_counter = {}
-
-    for quote in matches:
-        result = quote.get("result", {}) or {}
-        labour_values.append(safe_float(result.get("labour", 0), 0))
-        material_values.append(safe_float(result.get("materials", 0), 0))
-        total_values.append(safe_float(result.get("total_price", 0), 0))
-
-        for line in result.get("material_lines", []) or []:
-            name = (line.get("name") or "").strip()
-            if not name:
-                continue
-            alias = material_alias_info(name)
-            key = alias["canonical"]
-            entry = material_counter.setdefault(key, {
-                "name": alias["canonical"],
-                "example_name": name,
-                "category": alias.get("category", "other"),
-                "alias_matched": alias.get("matched", False),
-                "count": 0,
-                "quantity_total": 0,
-                "unit_prices": [],
-                "suppliers": {},
-                "urls": {},
-                "source_types": {},
-            })
-            entry["count"] += 1
-            entry["quantity_total"] += safe_float(line.get("quantity", 1), 1)
-            unit = safe_float(line.get("unit_price_used", 0), 0)
-            if unit > 0:
-                entry["unit_prices"].append(unit)
-            supplier = line.get("supplier") or ""
-            if supplier:
-                entry["suppliers"][supplier] = entry["suppliers"].get(supplier, 0) + 1
-            url = line.get("url") or ""
-            if url:
-                entry["urls"][url] = entry["urls"].get(url, 0) + 1
-            source = line.get("price_source") or ("live" if line.get("live_price_used") else "manual")
-            entry["source_types"][source] = entry["source_types"].get(source, 0) + 1
-
-    common_materials = []
-    for entry in material_counter.values():
-        avg_qty = entry["quantity_total"] / max(entry["count"], 1)
-        avg_unit = sum(entry["unit_prices"]) / len(entry["unit_prices"]) if entry["unit_prices"] else 0
-        supplier = max(entry["suppliers"], key=entry["suppliers"].get) if entry["suppliers"] else "City Plumbing"
-        url = max(entry["urls"], key=entry["urls"].get) if entry["urls"] else ""
-        source = max(entry["source_types"], key=entry["source_types"].get) if entry["source_types"] else "manual"
-
-        used_percent = round((entry["count"] / len(matches)) * 100, 0)
-        if used_percent >= 80:
-            bundle_status = "essential"
-        elif used_percent >= 40:
-            bundle_status = "common"
-        else:
-            bundle_status = "optional"
-
-        common_materials.append({
-            "name": entry["name"],
-            "example_name": entry.get("example_name", entry["name"]),
-            "category": entry.get("category", "other"),
-            "alias_matched": entry.get("alias_matched", False),
-            "used_count": entry["count"],
-            "used_percent": used_percent,
-            "average_quantity": round(avg_qty, 2),
-            "average_unit_price": round(avg_unit, 2),
-            "supplier": supplier,
-            "url": url,
-            "price_source": source,
-            "bundle_status": bundle_status,
-        })
-
-    common_materials.sort(key=lambda x: (x["used_count"], x["used_percent"]), reverse=True)
-
-    def avg(values):
-        values = [safe_float(v, 0) for v in values if safe_float(v, 0) > 0]
-        return round(sum(values) / len(values), 2) if values else 0
-
-
-    suggested_bundle = {
-        "name": "Suggested bundle from previous quotes",
-        "essential": [m for m in common_materials if m.get("bundle_status") == "essential"],
-        "common": [m for m in common_materials if m.get("bundle_status") == "common"],
-        "optional": [m for m in common_materials if m.get("bundle_status") == "optional"][:8],
-    }
-
-    similar_quotes = []
-    for quote in matches[:6]:
-        result = quote.get("result", {}) or {}
-        similar_quotes.append({
-            "id": quote.get("id"),
-            "created_at": quote.get("created_at"),
-            "job": quote.get("job", ""),
-            "labour": round(safe_float(result.get("labour", 0), 0), 2),
-            "materials": round(safe_float(result.get("materials", 0), 0), 2),
-            "total_price": round(safe_float(result.get("total_price", 0), 0), 2),
-        })
-
-    return {
-        "query": query,
-        "similar_count": len(matches),
-        "similar_quotes": similar_quotes,
-        "common_materials": common_materials[:20],
-        "suggested_bundle": suggested_bundle,
-        "averages": {
-            "labour": avg(labour_values),
-            "materials": avg(material_values),
-            "total_price": avg(total_values),
-        },
-        "message": f"Found {len(matches)} similar previous quote(s)."
-    }
+    return quote_history.analyse_similar_quotes(query, quote_type, load_quotes=load_quotes,
+                                                safe_float=safe_float, material_alias_info=material_alias_info)
 
 
 def next_invoice_number():
@@ -1341,43 +1130,8 @@ def delete_lead_by_id(lead_id: int):
 
 
 def send_lead_notification_email(lead: dict):
-    if not EMAIL_ENABLED or not EMAIL_USER or not EMAIL_PASS:
-        return
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"New quote request - {lead.get('name') or 'Website lead'}"
-        msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_USER}>"
-        msg["To"] = EMAIL_USER
-        public_url = get_public_base_url() if (os.getenv("PUBLIC_BASE_URL") or "").strip() else ""
-        plain = (
-            f"New website lead\n\n"
-            f"Name: {lead.get('name','')}\n"
-            f"Phone: {lead.get('phone','')}\n"
-            f"Email: {lead.get('email','')}\n"
-            f"Address: {lead.get('address','')}\n"
-            f"Job type: {lead.get('job_type','')}\n"
-            f"Description: {lead.get('description','')}\n\n"
-            f"Open app: {public_url}\n"
-        )
-        html = (
-            '<html><body style="font-family:Arial,sans-serif;">'
-            '<h2>New website lead</h2>'
-            f"<p><strong>Name:</strong> {escape(lead.get('name',''))}<br>"
-            f"<strong>Phone:</strong> {escape(lead.get('phone',''))}<br>"
-            f"<strong>Email:</strong> {escape(lead.get('email',''))}<br>"
-            f"<strong>Address:</strong> {escape(lead.get('address',''))}<br>"
-            f"<strong>Job type:</strong> {escape(lead.get('job_type',''))}</p>"
-            f"<p><strong>Description:</strong><br>{escape(lead.get('description','')).replace(chr(10), '<br>')}</p>"
-            '</body></html>'
-        )
-        msg.attach(MIMEText(plain, "plain", "utf-8"))
-        msg.attach(MIMEText(html, "html", "utf-8"))
-        context = ssl.create_default_context()
-        with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, context=context) as server:
-            server.login(EMAIL_USER, EMAIL_PASS)
-            server.sendmail(EMAIL_USER, [EMAIL_USER], msg.as_string())
-    except Exception:
-        return
+    return notifications.send_lead_notification_email(
+        lead, EMAIL_ENABLED=EMAIL_ENABLED, EMAIL_USER=EMAIL_USER, EMAIL_PASS=EMAIL_PASS, EMAIL_FROM_NAME=EMAIL_FROM_NAME, EMAIL_HOST=EMAIL_HOST, EMAIL_PORT=EMAIL_PORT, get_public_base_url=get_public_base_url)
 
 
 
@@ -2005,253 +1759,27 @@ def api_trade_jobs():
 
 
 def labour_intelligence_for_job(job_text: str = "", quote_type: str = "", current_labour: float = 0):
-    analysis = analyse_similar_quotes(job_text or "", quote_type or "")
-    averages = analysis.get("averages", {}) or {}
-    similar = analysis.get("similar_quotes", []) or []
-
-    labour_values = []
-    for item in similar:
-        labour = safe_float(item.get("labour", 0), 0)
-        if labour > 0:
-            labour_values.append(labour)
-
-    avg_labour = safe_float(averages.get("labour", 0), 0)
-    if not avg_labour and labour_values:
-        avg_labour = sum(labour_values) / len(labour_values)
-
-    if labour_values:
-        low = min(labour_values)
-        high = max(labour_values)
-    elif avg_labour:
-        low = avg_labour * 0.85
-        high = avg_labour * 1.20
-    else:
-        low = 0
-        high = 0
-
-    current = safe_float(current_labour, 0)
-    warning = ""
-    status = "unknown"
-
-    if avg_labour > 0 and current > 0:
-        if current < avg_labour * 0.85:
-            status = "too_low"
-            warning = f"Labour looks low. Similar jobs average £{avg_labour:.2f}."
-        elif current > avg_labour * 1.35:
-            status = "high"
-            warning = f"Labour is higher than your usual average of £{avg_labour:.2f}."
-        else:
-            status = "ok"
-            warning = "Labour is within your usual range."
-
-    return {
-        "job": job_text,
-        "quote_type": quote_type,
-        "current_labour": round(current, 2),
-        "average_labour": round(avg_labour, 2),
-        "low_range": round(low, 2),
-        "high_range": round(high, 2),
-        "similar_count": analysis.get("similar_count", 0),
-        "status": status,
-        "warning": warning,
-        "similar_quotes": similar[:6],
-    }
+    return quote_history.labour_intelligence_for_job(
+        job_text, quote_type, current_labour, analyse_similar_quotes=analyse_similar_quotes, safe_float=safe_float)
 
 
 
-FORGOTTEN_ITEM_RULES = [
-    {
-        "trigger": ["outside tap", "hose union bib tap", "wall plate elbow"],
-        "missing": ["15mm isolating valve", "double check valve 15mm", "pipe clips 15mm", "drain off cock 15mm"],
-        "job_keywords": ["outside tap", "garden tap", "external tap"],
-        "reason": "Outside taps usually need isolation, backflow protection, pipe clips and a drain off where freezing is possible."
-    },
-    {
-        "trigger": ["trv", "thermostatic radiator valve", "angled trv"],
-        "missing": ["angled lockshield valve", "radiator valve tail", "ptfe tape", "15mm copper olive", "central heating inhibitor"],
-        "job_keywords": ["trv", "radiator valve", "heating"],
-        "reason": "TRV jobs often need a matching lockshield, tails, olives, PTFE and inhibitor if draining/refilling."
-    },
-    {
-        "trigger": ["radiator", "radiator replacement"],
-        "missing": ["angled trv", "angled lockshield valve", "radiator valve tail", "central heating inhibitor", "radiator bleed valve"],
-        "job_keywords": ["radiator", "rad"],
-        "reason": "Radiator replacements commonly need valves, tails, inhibitor and bleed parts."
-    },
-    {
-        "trigger": ["filling loop", "braided filling loop"],
-        "missing": ["15mm isolating valve", "double check valve 15mm", "central heating inhibitor"],
-        "job_keywords": ["filling loop", "pressure", "low pressure", "repressurise"],
-        "reason": "Filling loop jobs often need isolation/check valve parts and inhibitor if system is topped up/refilled."
-    },
-    {
-        "trigger": ["basin waste", "bottle trap", "p trap"],
-        "missing": ["32mm waste pipe", "32mm waste pipe clips", "32mm solvent weld bend", "silicone"],
-        "job_keywords": ["basin", "waste", "trap"],
-        "reason": "Basin waste jobs often need pipe, clips, bends and sealant."
-    },
-    {
-        "trigger": ["kitchen sink waste", "sink waste"],
-        "missing": ["40mm waste pipe", "40mm waste pipe clips", "40mm solvent weld bend", "appliance waste spigot"],
-        "job_keywords": ["kitchen sink", "sink waste", "waste"],
-        "reason": "Kitchen sink waste jobs often need 40mm pipe, clips, bends and sometimes appliance spigots."
-    },
-    {
-        "trigger": ["tap", "kitchen tap", "basin tap"],
-        "missing": ["15mm isolating valve", "flexi hose 300mm", "ptfe tape"],
-        "job_keywords": ["tap", "kitchen tap", "basin tap"],
-        "reason": "Tap replacements often need isolation valves, flexis and PTFE/sundries."
-    },
-    {
-        "trigger": ["toilet", "replace toilet", "toilet replacement"],
-        "missing": ["straight pan connector", "toilet fixing kit", "15mm isolating valve", "15mm x 1/2 flexi hose", "doughnut washer"],
-        "job_keywords": ["toilet", "wc"],
-        "reason": "Toilet jobs often need pan connector, fixings, isolation/flexi and close-coupling seals."
-    },
-]
+FORGOTTEN_ITEM_RULES = quote_history.FORGOTTEN_ITEM_RULES
 
 
 def detect_forgotten_items(job_text: str, materials: list):
-    job = (job_text or "").lower()
-    material_names = []
-    canonical_names = []
-
-    for m in materials or []:
-        if hasattr(m, "dict"):
-            data = m.dict()
-        elif isinstance(m, dict):
-            data = m
-        else:
-            continue
-        name = data.get("name", "")
-        if not name:
-            continue
-        material_names.append(name.lower())
-        canonical_names.append(canonical_material_name(name))
-
-    hay = " ".join(material_names + canonical_names + [job])
-    results = []
-
-    for rule in FORGOTTEN_ITEM_RULES:
-        trigger_hit = any(t in hay for t in rule.get("trigger", [])) or any(k in job for k in rule.get("job_keywords", []))
-        if not trigger_hit:
-            continue
-
-        missing_now = []
-        for item in rule.get("missing", []):
-            item_can = canonical_material_name(item)
-            exists = any(item_can == c or item_can in c or c in item_can for c in canonical_names)
-            if not exists:
-                missing_now.append(item)
-
-        if missing_now:
-            results.append({
-                "reason": rule.get("reason", ""),
-                "missing": missing_now,
-                "trigger": rule.get("trigger", []),
-            })
-
-    # De-duplicate by missing item name
-    seen = set()
-    clean = []
-    for r in results:
-        unique_missing = []
-        for m in r.get("missing", []):
-            key = canonical_material_name(m)
-            if key not in seen:
-                seen.add(key)
-                unique_missing.append(m)
-        if unique_missing:
-            r["missing"] = unique_missing
-            clean.append(r)
-
-    return clean
+    return quote_history.detect_forgotten_items(job_text, materials, canonical_material_name=canonical_material_name)
 
 
 
 def supplier_preference_for_material(material_name: str):
-    canonical = canonical_material_name(material_name)
-    supplier_counts = {}
-    price_by_supplier = {}
-
-    for quote in load_quotes():
-        result = quote.get("result", {}) or {}
-        for line in result.get("material_lines", []) or []:
-            name = line.get("name", "")
-            if canonical_material_name(name) != canonical:
-                continue
-
-            supplier = (line.get("supplier") or "").strip() or "Unknown"
-            supplier_counts[supplier] = supplier_counts.get(supplier, 0) + 1
-
-            unit = safe_float(line.get("full_unit_price", line.get("unit_price_used", 0)), 0)
-            if unit > 0:
-                price_by_supplier.setdefault(supplier, []).append(unit)
-
-    if not supplier_counts:
-        return {
-            "material": canonical,
-            "preferred_supplier": "",
-            "supplier_counts": {},
-            "average_prices": {},
-            "source": "none",
-            "message": "No supplier history yet."
-        }
-
-    preferred = max(supplier_counts, key=supplier_counts.get)
-    average_prices = {
-        supplier: round(sum(values) / len(values), 2)
-        for supplier, values in price_by_supplier.items()
-        if values
-    }
-
-    return {
-        "material": canonical,
-        "preferred_supplier": preferred,
-        "supplier_counts": supplier_counts,
-        "average_prices": average_prices,
-        "source": "history",
-        "message": f"Preferred supplier from history: {preferred}"
-    }
+    return quote_history.supplier_preference_for_material(
+        material_name, load_quotes=load_quotes, canonical_material_name=canonical_material_name, safe_float=safe_float)
 
 
 def supplier_preferences_summary():
-    summary = {}
-    for quote in load_quotes():
-        result = quote.get("result", {}) or {}
-        for line in result.get("material_lines", []) or []:
-            name = line.get("name", "")
-            if not name:
-                continue
-            canonical = canonical_material_name(name)
-            supplier = (line.get("supplier") or "").strip() or "Unknown"
-            entry = summary.setdefault(canonical, {
-                "material": canonical,
-                "supplier_counts": {},
-                "average_prices": {},
-                "total_uses": 0,
-            })
-            entry["supplier_counts"][supplier] = entry["supplier_counts"].get(supplier, 0) + 1
-            entry["total_uses"] += 1
-            unit = safe_float(line.get("full_unit_price", line.get("unit_price_used", 0)), 0)
-            if unit > 0:
-                entry.setdefault("_prices", {}).setdefault(supplier, []).append(unit)
-
-    rows = []
-    for item in summary.values():
-        counts = item.get("supplier_counts", {})
-        preferred = max(counts, key=counts.get) if counts else ""
-        prices = item.pop("_prices", {})
-        item["preferred_supplier"] = preferred
-        item["average_prices"] = {
-            s: round(sum(v) / len(v), 2)
-            for s, v in prices.items()
-            if v
-        }
-        rows.append(item)
-
-    rows.sort(key=lambda x: x.get("total_uses", 0), reverse=True)
-    return rows[:100]
+    return quote_history.supplier_preferences_summary(
+        load_quotes=load_quotes, canonical_material_name=canonical_material_name, safe_float=safe_float)
 
 
 
@@ -2385,22 +1913,7 @@ AI_ESTIMATOR_FALLBACK_LIBRARY = [
 
 
 def normalise_ai_job_text(value: str):
-    value = (value or "").lower().strip()
-    corrections = {
-        "rmove": "remove",
-        "remve": "remove",
-        "shower and fix": "shower and fit",
-        "showe ": "shower ",
-        "fitt ": "fit ",
-        "replce": "replace",
-        "toilte": "toilet",
-        "raditor": "radiator",
-        "outisde": "outside",
-    }
-    for old, new in corrections.items():
-        value = value.replace(old, new)
-    value = re.sub(r"\s+", " ", value)
-    return value
+    return ai_presentation.normalise_ai_job_text(value)
 
 
 def ai_fallback_matches(job_text: str):
@@ -3523,202 +3036,35 @@ MULTI_JOB_CONNECTORS = [
 
 
 
-CONTEXT_NOTE_PATTERNS = {
-    "customer_supply": [
-        r"\bcustomer (?:is )?supplying\b",
-        r"\bcustomer supplied\b",
-        r"\bcustomer to supply\b",
-        r"\bclient (?:is )?supplying\b",
-        r"\bclient supplied\b",
-        r"\bsupplied by customer\b",
-        r"\bsupplied by client\b",
-    ],
-    "business_supply": [
-        r"\bnigel (?:is )?supplying\b",
-        r"\bnigel harvey ltd (?:is )?supplying\b",
-        r"\bwe (?:are )?supplying\b",
-        r"\bsupply and fit\b",
-        r"\bcontractor supplying\b",
-    ],
-    "access": [
-        r"\baccess\b",
-        r"\bawkward\b",
-        r"\brestricted\b",
-        r"\btight space\b",
-        r"\bunder (?:the )?(?:sink|basin|bath)\b",
-        r"\bbehind (?:the )?(?:toilet|basin|unit)\b",
-    ],
-    "existing_condition": [
-        r"\bexisting\b",
-        r"\bleaking\b",
-        r"\bseized\b",
-        r"\bold\b",
-        r"\bdamaged\b",
-        r"\bcorroded\b",
-        r"\bnot working\b",
-        r"\bfailed\b",
-    ],
-    "additional_work": [
-        r"\bmake good\b",
-        r"\btil(?:e|ing)\b",
-        r"\bplaster\b",
-        r"\bdecorate\b",
-        r"\bpaint\b",
-        r"\bboxing\b",
-        r"\brun new pipework\b",
-        r"\bmove pipework\b",
-        r"\balter pipework\b",
-        r"\bremove and refit\b",
-        r"\bdispose\b",
-    ],
-    "measurement": [
-        r"\b\d+(?:\.\d+)?\s*(?:mm|cm|m|metre|metres)\b",
-        r"\bpipe run\b",
-        r"\bcentres?\b",
-        r"\bheight\b",
-        r"\bwidth\b",
-        r"\bdepth\b",
-    ],
-}
+CONTEXT_NOTE_PATTERNS = job_context.CONTEXT_NOTE_PATTERNS
 
 
 def classify_context_note(sentence: str):
-    text = normalise_ai_job_text(sentence)
-    matched = []
-    for note_type, patterns in CONTEXT_NOTE_PATTERNS.items():
-        if any(re.search(pattern, text, flags=re.I) for pattern in patterns):
-            matched.append(note_type)
-    return matched
+    return job_context.classify_context_note(sentence, normalise_ai_job_text=normalise_ai_job_text)
 
 
 def sentence_starts_new_job(sentence: str):
-    text = normalise_ai_job_text(sentence)
-    classification = classify_smart_job(sentence)
-    if not classification:
-        return False
-
-    # A supply-only or condition-only statement is contextual, not a new job.
-    action_words = re.findall(
-        r"\b(?:replace|fit|install|repair|change|remove|supply and fit|move|relocate|renew)\b",
-        text,
-        flags=re.I
-    )
-    supply_note = any(
-        re.search(pattern, text, flags=re.I)
-        for pattern in CUSTOMER_SUPPLY_PATTERNS + BUSINESS_SUPPLY_PATTERNS
-    )
-    if supply_note and not action_words:
-        return False
-
-    return bool(action_words)
+    return job_context.sentence_starts_new_job(sentence, normalise_ai_job_text=normalise_ai_job_text, classify_smart_job=classify_smart_job)
 
 
 def attach_context_to_job(job_record: dict, sentence: str):
-    note_types = classify_context_note(sentence)
-    job_record.setdefault("context_notes", []).append({
-        "text": sentence.strip(),
-        "types": note_types,
-    })
-
-    if "customer_supply" in note_types:
-        job_record["supply_responsibility"] = "customer"
-    elif "business_supply" in note_types:
-        job_record["supply_responsibility"] = "business"
-
-    return job_record
+    return job_context.attach_context_to_job(job_record, sentence, classify_context_note=classify_context_note)
 
 
 def parse_context_aware_jobs(job_text: str):
-    original = (job_text or "").strip()
-    if not original:
-        return {
-            "jobs": [],
-            "unattached_notes": [],
-        }
-
-    # Preserve line order, then split obvious sentence boundaries.
-    raw_lines = re.split(r"[\n\r]+", original)
-    sentences = []
-    for line in raw_lines:
-        line = line.strip()
-        if not line:
-            continue
-        parts = re.split(r"(?<=[.;!?])\s+", line)
-        for part in parts:
-            part = part.strip(" .;,-")
-            if part:
-                sentences.append(part)
-
-    jobs = []
-    unattached = []
-    current = None
-
-    for sentence in sentences:
-        if sentence_starts_new_job(sentence):
-            classification = classify_smart_job(sentence)
-            current = {
-                "job_text": sentence,
-                "job_type": classification.get("job_type"),
-                "display_name": classification.get("display_name"),
-                "classification_score": classification.get("classification_score"),
-                "context_notes": [],
-                "supply_responsibility": detect_supply_responsibility(
-                    sentence,
-                    classification.get("job_type")
-                ),
-            }
-            jobs.append(current)
-            continue
-
-        # Context note belongs to the most recent job where possible.
-        if current is not None:
-            attach_context_to_job(current, sentence)
-        else:
-            unattached.append(sentence)
-
-    # Merge accidental consecutive duplicates of the same physical job.
-    merged = []
-    for job in jobs:
-        if (
-            merged
-            and merged[-1].get("job_type") == job.get("job_type")
-            and normalise_ai_job_text(merged[-1].get("job_text", "")) == normalise_ai_job_text(job.get("job_text", ""))
-        ):
-            merged[-1]["context_notes"].extend(job.get("context_notes", []))
-            if job.get("supply_responsibility") != "unknown":
-                merged[-1]["supply_responsibility"] = job.get("supply_responsibility")
-            continue
-        merged.append(job)
-
-    return {
-        "jobs": merged[:10],
-        "unattached_notes": unattached,
-    }
+    return job_context.parse_context_aware_jobs(job_text, sentence_starts_new_job=sentence_starts_new_job, classify_smart_job=classify_smart_job, detect_supply_responsibility=detect_supply_responsibility, attach_context_to_job=attach_context_to_job, normalise_ai_job_text=normalise_ai_job_text)
 
 
 def context_notes_as_text(job_record: dict):
-    return " ".join(
-        note.get("text", "")
-        for note in job_record.get("context_notes", [])
-        if note.get("text")
-    ).strip()
+    return job_context.context_notes_as_text(job_record)
 
 
 def context_note_summary(job_record: dict):
-    groups = {}
-    for note in job_record.get("context_notes", []):
-        for note_type in note.get("types", []):
-            groups.setdefault(note_type, []).append(note.get("text", ""))
-    return groups
+    return job_context.context_note_summary(job_record)
 
 
 def split_multi_job_description(job_text: str):
-    parsed = parse_context_aware_jobs(job_text)
-    return [
-        job.get("job_text", "")
-        for job in parsed.get("jobs", [])
-        if job.get("job_text")
-    ]
+    return job_context.split_multi_job_description(job_text, parse_context_aware_jobs=parse_context_aware_jobs)
 
 
 def smart_job_labour_suggestion(job_segment: str, classification: dict, quote_type: str):
@@ -3751,182 +3097,35 @@ def smart_job_labour_suggestion(job_segment: str, classification: dict, quote_ty
 
 
 def merge_multi_job_materials(job_records: list):
-    merged = {}
-
-    fractional_consumables = {
-        canonical_material_name("PTFE tape"),
-        canonical_material_name("Sanitary silicone"),
-        canonical_material_name("Central heating inhibitor"),
-    }
-
-    for job_record in job_records:
-        job_number = job_record.get("job_number")
-        job_name = job_record.get("display_name", "")
-        for material in job_record.get("materials", []) or []:
-            row = dict(material)
-            key = canonical_material_name(row.get("name", ""))
-            if not key:
-                continue
-
-            quantity = safe_float(row.get("quantity", 1), 1)
-            if key not in merged:
-                row["used_for_jobs"] = [job_number]
-                row["used_for_job_names"] = [job_name]
-                merged[key] = row
-                continue
-
-            existing = merged[key]
-            existing_qty = safe_float(existing.get("quantity", 1), 1)
-
-            # Consumable fractions accumulate; identical reusable fittings also
-            # accumulate because each separate job may need its own item.
-            existing["quantity"] = round(existing_qty + quantity, 2)
-            existing["required"] = bool(existing.get("required") or row.get("required"))
-
-            if job_number not in existing.get("used_for_jobs", []):
-                existing.setdefault("used_for_jobs", []).append(job_number)
-            if job_name and job_name not in existing.get("used_for_job_names", []):
-                existing.setdefault("used_for_job_names", []).append(job_name)
-
-            if not existing.get("url") and row.get("url"):
-                existing["url"] = row.get("url")
-            if not existing.get("supplier") and row.get("supplier"):
-                existing["supplier"] = row.get("supplier")
-            if safe_float(existing.get("manual_price", 0), 0) <= 0:
-                existing["manual_price"] = safe_float(row.get("manual_price", 0), 0)
-
-    rows = list(merged.values())
-    rows.sort(
-        key=lambda item: (
-            1 if item.get("required") else 0,
-            len(item.get("used_for_jobs", [])),
-            item.get("name", "")
-        ),
-        reverse=True
-    )
-    return rows
+    return job_context.merge_multi_job_materials(job_records, canonical_material_name=canonical_material_name, safe_float=safe_float)
 
 
 
-CUSTOMER_SUPPLY_PATTERNS = [
-    r"\bcustomer (?:is )?supplying\b",
-    r"\bcustomer supplied\b",
-    r"\bcustomer to supply\b",
-    r"\bclient (?:is )?supplying\b",
-    r"\bclient supplied\b",
-    r"\bclient to supply\b",
-    r"\bowner (?:is )?supplying\b",
-    r"\bowner supplied\b",
-    r"\bsupplied by customer\b",
-    r"\bsupplied by client\b",
-]
+CUSTOMER_SUPPLY_PATTERNS = job_context.CUSTOMER_SUPPLY_PATTERNS
 
-BUSINESS_SUPPLY_PATTERNS = [
-    r"\bnigel (?:is )?supplying\b",
-    r"\bnigel harvey ltd (?:is )?supplying\b",
-    r"\bwe (?:are )?supplying\b",
-    r"\bsupply and fit\b",
-    r"\bcontractor supplying\b",
-]
+BUSINESS_SUPPLY_PATTERNS = job_context.BUSINESS_SUPPLY_PATTERNS
 
-MAIN_ITEM_BY_JOB_TYPE = {
-    "outside_tap": ["outside tap kit", "outside tap", "hose union bib tap"],
-    "tap_replacement": ["replacement tap", "kitchen tap", "basin tap", "mixer tap"],
-    "toilet_replacement": ["replacement toilet", "toilet", "wc"],
-    "shower_replacement": ["replacement shower unit", "replacement shower", "shower"],
-    "radiator_replacement": ["radiator"],
-    "trv_replacement": ["trv valve", "thermostatic radiator valve"],
-    "basin_waste": ["basin waste"],
-    "kitchen_sink_waste": ["kitchen sink waste kit", "sink waste kit"],
-}
+MAIN_ITEM_BY_JOB_TYPE = job_context.MAIN_ITEM_BY_JOB_TYPE
 
 
 def detect_supply_responsibility(job_text: str, job_type: str):
-    text = normalise_ai_job_text(job_text)
-
-    customer_supplied = any(re.search(pattern, text, flags=re.I) for pattern in CUSTOMER_SUPPLY_PATTERNS)
-    business_supplied = any(re.search(pattern, text, flags=re.I) for pattern in BUSINESS_SUPPLY_PATTERNS)
-
-    if customer_supplied and not business_supplied:
-        return "customer"
-    if business_supplied and not customer_supplied:
-        return "business"
-    if customer_supplied and business_supplied:
-        return "mixed"
-    return "unknown"
+    return job_context.detect_supply_responsibility(job_text, job_type, normalise_ai_job_text=normalise_ai_job_text)
 
 
 def is_main_supply_item(material_name: str, job_type: str):
-    canonical = canonical_material_name(material_name)
-    for candidate in MAIN_ITEM_BY_JOB_TYPE.get(job_type, []):
-        candidate_can = canonical_material_name(candidate)
-        if canonical == candidate_can or candidate_can in canonical or canonical in candidate_can:
-            return True
-    return False
+    return job_context.is_main_supply_item(material_name, job_type, canonical_material_name=canonical_material_name)
 
 
 def apply_supply_responsibility_to_materials(materials: list, job_type: str, responsibility: str):
-    rows = []
-    removed = []
-
-    for material in materials or []:
-        row = dict(material)
-        main_item = is_main_supply_item(row.get("name", ""), job_type)
-
-        if responsibility == "customer" and main_item:
-            removed.append(row)
-            continue
-
-        if responsibility == "business" and main_item:
-            row["required"] = True
-            row["reason"] = (
-                row.get("reason", "") +
-                " Nigel Harvey Ltd is supplying this main item."
-            ).strip()
-
-        if responsibility == "unknown" and main_item:
-            row["required"] = False
-
-        rows.append(row)
-
-    return rows, removed
+    return job_context.apply_supply_responsibility_to_materials(materials, job_type, responsibility, is_main_supply_item=is_main_supply_item)
 
 
 def labour_confidence_for_job(record: dict):
-    similar = int(record.get("similar_quotes", 0) or 0)
-    source = record.get("labour_source", "")
-
-    if source == "labour_history" and similar >= 3:
-        return {
-            "level": "high",
-            "message": f"Based on {similar} similar saved quotes."
-        }
-    if source == "labour_history" and similar >= 1:
-        return {
-            "level": "medium",
-            "message": f"Based on {similar} similar saved quote(s)."
-        }
-    if source == "smart_job_range":
-        return {
-            "level": "medium",
-            "message": "Based on the approved labour range for this job type."
-        }
-    return {
-        "level": "low",
-        "message": "Requires manual labour review."
-    }
+    return job_context.labour_confidence_for_job(record)
 
 
 def merge_multi_job_materials_with_summary(job_records: list):
-    before_count = sum(len(record.get("materials", []) or []) for record in job_records)
-    merged = merge_multi_job_materials(job_records)
-    after_count = len(merged)
-
-    return merged, {
-        "materials_before_merge": before_count,
-        "unique_materials_after_merge": after_count,
-        "duplicates_merged": max(0, before_count - after_count),
-    }
+    return job_context.merge_multi_job_materials_with_summary(job_records, merge_multi_job_materials=merge_multi_job_materials)
 
 
 def build_multi_job_estimate(job_text: str, quote_type: str):
@@ -4098,269 +3297,43 @@ def enforce_multi_job_estimate(draft: dict, context: dict):
 
 
 
-STANDARD_QUOTE_EXCLUSIONS = [
-    "Substantial making good, plastering, tiling, flooring and decoration unless specifically included.",
-    "Repairs to concealed or defective existing pipework discovered after work starts.",
-    "Electrical or gas work unless specifically stated and completed by a suitably qualified person.",
-]
+STANDARD_QUOTE_EXCLUSIONS = ai_presentation.STANDARD_QUOTE_EXCLUSIONS
 
 
 def unique_short_items(items, limit=5):
-    output, seen = [], set()
-    for item in items or []:
-        value = re.sub(r"\s+", " ", str(item or "")).strip(" •-\n\t")
-        key = normalise_ai_job_text(value)
-        if value and key not in seen:
-            seen.add(key)
-            output.append(value)
-        if len(output) >= limit:
-            break
-    return output
+    return ai_presentation.unique_short_items(items, limit)
 
 
 def professional_assumptions_from_context(context: dict):
-    assumptions = []
-    jobs = (context.get("multi_job_estimate", {}) or {}).get("classified_jobs", []) or []
-    for job in jobs:
-        display = job.get("display_name", "Job")
-        responsibility = job.get("supply_responsibility", "unknown")
-        if responsibility == "customer":
-            removed = job.get("customer_supplied_items_removed", []) or []
-            assumptions.append(f"{display}: customer supplies {', '.join(removed) if removed else 'the main item'}.")
-        elif responsibility == "business":
-            assumptions.append(f"{display}: Nigel Harvey Ltd supplies the main item.")
-        summary = job.get("context_note_summary", {}) or {}
-        if summary.get("access"):
-            assumptions.append(f"{display}: access remains reasonably workable as described.")
-        if summary.get("measurement"):
-            assumptions.append(f"{display}: measurements and pipe routes remain provisional until checked on site.")
-
-    if not jobs:
-        smart = context.get("smart_job_kit", {}) or {}
-        responsibility = smart.get("supply_responsibility", "unknown")
-        removed = smart.get("customer_supplied_items_removed", []) or []
-        if responsibility == "customer":
-            assumptions.append(f"Customer supplies {', '.join(removed) if removed else 'the main item'}.")
-        elif responsibility == "business":
-            assumptions.append("Nigel Harvey Ltd supplies the main item.")
-
-    assumptions.extend([
-        "Existing isolation points and reusable connections are serviceable unless stated otherwise.",
-        "Final compatibility is subject to checking the existing installation and supplied products.",
-    ])
-    return unique_short_items(assumptions, 6)
+    return ai_presentation.professional_assumptions_from_context(context)
 
 
 def professional_exclusions_from_context(context: dict):
-    exclusions = list(STANDARD_QUOTE_EXCLUSIONS)
-    note_types = set()
-    for job in (context.get("multi_job_estimate", {}) or {}).get("classified_jobs", []) or []:
-        for note in job.get("context_notes", []) or []:
-            note_types.update(note.get("types", []) or [])
-    if "additional_work" in note_types:
-        exclusions[0] = (
-            "Only making-good or additional work expressly described in the scope is included; "
-            "other plastering, tiling, flooring and decoration are excluded."
-        )
-    return unique_short_items(exclusions, 5)
+    return ai_presentation.professional_exclusions_from_context(context)
 
 
 def calculate_estimator_confidence(draft: dict, context: dict):
-    score = 45
-    positives, gaps = [], []
-    multi = context.get("multi_job_estimate", {}) or {}
-    jobs = multi.get("classified_jobs", []) or []
-    smart = context.get("smart_job_kit", {}) or {}
-
-    if multi.get("is_multi_job") and jobs:
-        score += 12
-        positives.append(f"{len(jobs)} physical jobs identified and separated.")
-        if not multi.get("unclassified_segments"):
-            score += 5
-            positives.append("All description notes were attached or classified.")
-        else:
-            score -= 8
-            gaps.append("Some description text could not be confidently attached.")
-    elif smart.get("classification"):
-        score += 14
-        positives.append("A recognised smart job kit was selected.")
-    else:
-        score -= 12
-        gaps.append("No exact smart job kit was identified.")
-
-    materials = draft.get("materials", []) or []
-    if materials:
-        priced = sum(1 for x in materials if safe_float(x.get("manual_price", 0), 0) > 0)
-        matched = sum(1 for x in materials if x.get("data_source") not in {"ai_general", "ai_gap_fill", ""})
-        if matched == len(materials):
-            score += 10
-            positives.append("All materials came from approved or saved business data.")
-        elif matched:
-            score += 5
-            positives.append(f"{matched} of {len(materials)} materials matched business data.")
-        else:
-            score -= 8
-            gaps.append("Materials were not matched to saved business data.")
-        if priced == len(materials):
-            score += 8
-            positives.append("All material prices are available.")
-        elif priced:
-            score += 3
-            positives.append(f"{priced} of {len(materials)} material prices are available.")
-        else:
-            score -= 6
-            gaps.append("Material prices are not yet available.")
-
-    similar = sum(int(x.get("similar_quotes", 0) or 0) for x in jobs)
-    if similar >= 3:
-        score += 8
-        positives.append(f"{similar} similar saved quote references were found.")
-    elif similar:
-        score += 4
-        positives.append(f"{similar} similar saved quote reference(s) were found.")
-    else:
-        gaps.append("Little or no directly comparable quote history was found.")
-
-    unknown_supply = sum(1 for x in jobs if x.get("supply_responsibility", "unknown") == "unknown")
-    if jobs and unknown_supply == 0:
-        score += 5
-        positives.append("Supply responsibility was understood for each job.")
-    elif unknown_supply:
-        score -= min(unknown_supply * 3, 9)
-        gaps.append("Supply responsibility still needs confirming for one or more jobs.")
-
-    if len(draft.get("questions_to_confirm", []) or []) > 8:
-        score -= 5
-        gaps.append("Several details still need confirming.")
-
-    score = max(20, min(98, int(round(score))))
-    return {
-        "score": score,
-        "level": "high" if score >= 85 else "medium" if score >= 65 else "low",
-        "positive_reasons": unique_short_items(positives, 5),
-        "gaps": unique_short_items(gaps, 4),
-    }
+    return ai_presentation.calculate_estimator_confidence(draft, context, safe_float=safe_float)
 
 
 def build_professional_quote_mode(draft: dict, context: dict):
-    if not isinstance(draft, dict):
-        return draft
-
-    full_risks = unique_short_items(draft.get("risk_notes", []), 20)
-    full_questions = unique_short_items(draft.get("questions_to_confirm", []), 25)
-    full_warnings = unique_short_items(draft.get("warnings", []), 20)
-
-    evidence = []
-    for item in (draft.get("materials", []) or [])[:25]:
-        evidence.append({
-            "name": item.get("name", ""),
-            "source": (item.get("data_source") or "business data").replace("_", " "),
-            "confidence": 92 if item.get("data_source") not in {"ai_general", "ai_gap_fill", ""} else 65,
-            "used_count": int(item.get("learned_used_count", 0) or 0),
-        })
-
-    draft["professional_quote"] = {
-        "confidence": calculate_estimator_confidence(draft, context),
-        "assumptions": professional_assumptions_from_context(context),
-        "exclusions": professional_exclusions_from_context(context),
-        "questions": unique_short_items(full_questions, 5),
-        "risk_notes": unique_short_items(full_risks, 4),
-        "material_evidence": evidence,
-    }
-    draft["technical_detail"] = {
-        "all_risk_notes": full_risks,
-        "all_questions": full_questions,
-        "all_warnings": full_warnings,
-    }
-    return draft
+    return ai_presentation.build_professional_quote_mode(
+        draft, context, calculate_estimator_confidence=calculate_estimator_confidence,
+        professional_assumptions_from_context=professional_assumptions_from_context,
+        professional_exclusions_from_context=professional_exclusions_from_context)
 
 
 
 def calculate_quote_quality_breakdown(draft: dict, context: dict):
-    professional = draft.get("professional_quote", {}) or {}
-    base_confidence = int((professional.get("confidence", {}) or {}).get("score", 0) or 0)
-
-    materials = draft.get("materials", []) or []
-    jobs = draft.get("job_breakdown", []) or []
-
-    if materials:
-        priced = sum(1 for item in materials if safe_float(item.get("manual_price", 0), 0) > 0)
-        matched = sum(
-            1 for item in materials
-            if item.get("data_source") not in {"", "ai_general", "ai_gap_fill"}
-        )
-        material_score = round(((priced / len(materials)) * 45) + ((matched / len(materials)) * 55))
-    else:
-        material_score = 50
-
-    if jobs:
-        labour_confidences = []
-        for job in jobs:
-            level = (job.get("labour_confidence", {}) or {}).get("level", "low")
-            labour_confidences.append({"high": 95, "medium": 78, "low": 55}.get(level, 55))
-        labour_score = round(sum(labour_confidences) / len(labour_confidences))
-    else:
-        labour_score = max(50, min(98, base_confidence))
-
-    understanding_score = max(45, min(98, base_confidence + 3))
-    questions = len((professional.get("questions", []) or []))
-    site_confirmation = min(100, max(5, questions * 12 + (100 - base_confidence) // 3))
-
-    overall = round(
-        material_score * 0.32 +
-        labour_score * 0.28 +
-        understanding_score * 0.30 +
-        (100 - site_confirmation) * 0.10
-    )
-
-    stars = max(1, min(5, round(overall / 20)))
-
-    return {
-        "overall": overall,
-        "materials": material_score,
-        "labour": labour_score,
-        "understanding": understanding_score,
-        "site_confirmation": site_confirmation,
-        "stars": stars,
-    }
+    return ai_presentation.calculate_quote_quality_breakdown(draft, context, safe_float=safe_float)
 
 
 def classify_material_status(item: dict):
-    used_for = item.get("used_for_job_names", []) or []
-    if item.get("customer_supplied"):
-        return "customer_supplied"
-    if item.get("required"):
-        return "required"
-    return "optional"
+    return ai_presentation.classify_material_status(item)
 
 
 def build_customer_preview_payload(draft: dict):
-    professional = draft.get("professional_quote", {}) or {}
-    return {
-        "scope_of_work": draft.get("scope_of_work", ""),
-        "job_breakdown": [
-            {
-                "display_name": job.get("display_name", ""),
-                "scope": job.get("scope", ""),
-                "labour_suggestion": safe_float(job.get("labour_suggestion", 0), 0),
-                "customer_supplied_items_removed": job.get("customer_supplied_items_removed", []),
-            }
-            for job in (draft.get("job_breakdown", []) or [])
-        ],
-        "materials": [
-            {
-                "name": item.get("name", ""),
-                "quantity": safe_float(item.get("quantity", 1), 1),
-                "supplier": item.get("supplier", ""),
-                "manual_price": safe_float(item.get("manual_price", 0), 0),
-                "status": classify_material_status(item),
-            }
-            for item in (draft.get("materials", []) or [])
-        ],
-        "assumptions": professional.get("assumptions", []),
-        "exclusions": professional.get("exclusions", []),
-        "labour_total": safe_float(draft.get("labour_suggestion", 0), 0),
-    }
+    return ai_presentation.build_customer_preview_payload(draft, safe_float=safe_float)
 
 
 def enhance_v9_quote(draft: dict, context: dict):
@@ -6288,129 +5261,22 @@ def public_invoice(invoice_id: int):
     item = get_invoice_by_id(invoice_id)
     if not item:
         raise HTTPException(status_code=404, detail="Invoice not found")
-
-    invoice = item["invoice"]
-    quote_result = item["quote_result"]
-    is_small_job = (quote_result.get("quote_type", "") or "").lower() == "small"
-    terms = INVOICE_TERMS[:3] if is_small_job else INVOICE_TERMS
-    logo_html = f'<img src="{escape(COMPANY_LOGO_URL)}" alt="Logo" class="logo">' if COMPANY_LOGO_URL else ""
-    payment_html = f'<div class="pay-box"><strong>Payment link:</strong> <a href="{escape(item.get("payment_link") or "")}" target="_blank">Pay online</a></div>' if item.get("payment_link") else ""
-    bank_html = f"""
-      <div class="pay-box">
-        <div style="display:grid;grid-template-columns:1fr auto;gap:14px;align-items:start;">
-          <div>
-            <strong>Bank transfer</strong><br>
-            Bank: {escape(BANK_NAME)}<br>
-            Account name: {escape(BANK_ACCOUNT_NAME)}<br>
-            Sort code: <strong>{escape(BANK_SORT_CODE)}</strong><br>
-            Account number: <strong>{escape(BANK_ACCOUNT_NUMBER)}</strong><br>
-            Reference: <strong>{escape(bank_payment_reference(item))}</strong><br>
-            Amount due: <strong>{pounds_text(item.get("balance_due", 0))}</strong>
-          </div>
-          {(
-              f'<img src="/api/invoices/{item["id"]}/payment-qr" alt="Payment details QR" '
-              f'style="width:120px;height:120px;background:white;border:1px solid #ddd;border-radius:8px;">'
-              if QRCODE_AVAILABLE else
-              '<div style="width:120px;padding:10px;border:1px solid #ddd;border-radius:8px;'
-              'background:#fafafa;font-size:12px;">QR unavailable</div>'
-          )}
-        </div>
-        <div style="font-size:12px;color:#666;margin-top:6px;">The QR contains the payment details. Automatic bank-app prefilling varies.</div>
-      </div>
-    """
-    paid_watermark_html = '<div class="paid-watermark">PAID</div>' if str(item.get("status", "")).lower() == "paid" else ""
-    photos = item.get("photos", []) or []
-    photos_html = ""
-    if photos:
-        cards = []
-        for photo in photos:
-            cards.append(
-                f'<div class="photo-card">'
-                f'<img src="{escape(photo.get("url", ""))}" alt="Job photo">'
-                f'<div class="photo-caption"><strong>{escape(photo.get("category_label", "Job photo"))}</strong>'
-                f'<br>{escape(photo.get("caption", "") or "")}</div></div>'
-            )
-        photos_html = '<div class="section-title">Job photos</div><div class="photo-grid">' + "".join(cards) + '</div>' 
-
-    html = f"""
-    <!doctype html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>Invoice {escape(item['invoice_number'])}</title>
-      <style>
-        body {{ font-family: Arial, sans-serif; background:#f3f4f6; color:#111; margin:0; padding:18px; }}
-        .sheet {{ position:relative; max-width:900px; margin:0 auto; background:white; border-radius:18px; padding:28px; box-shadow:0 10px 30px rgba(0,0,0,0.08); }}
-        .paid-watermark {{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:120px; font-weight:900; color:rgba(22,163,74,.12); transform:rotate(-24deg); pointer-events:none; }}
-        .top {{ display:flex; justify-content:space-between; gap:20px; align-items:flex-start; border-bottom:2px solid #111; padding-bottom:18px; }}
-        .logo {{ max-height:72px; max-width:180px; object-fit:contain; }}
-        .company {{ font-size:30px; font-weight:800; margin-bottom:8px; }}
-        .doc-title {{ font-size:14px; text-transform:uppercase; letter-spacing:1.5px; color:#666; }}
-        .doc-number {{ font-size:24px; font-weight:800; margin-top:6px; }}
-        .grid {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:20px; }}
-        .box {{ border:1px solid #e5e7eb; border-radius:14px; padding:16px; background:#fafafa; }}
-        .label {{ color:#666; font-size:13px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }}
-        .row {{ display:flex; justify-content:space-between; gap:12px; margin:10px 0; }}
-        .muted {{ color:#666; }}
-        .section-title {{ font-size:18px; font-weight:800; margin:24px 0 10px; }}
-        .total {{ font-size:30px; font-weight:900; }}
-        .pay-box {{ margin-top:12px; padding:12px; background:#eef7ff; border:1px solid #cfe5f8; border-radius:12px; }}
-        .actions {{ margin-top:20px; display:flex; gap:10px; flex-wrap:wrap; }}
-        .photo-grid {{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }}
-        .photo-card {{ border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fafafa; }}
-        .photo-card img {{ width:100%; height:230px; object-fit:cover; display:block; }}
-        .photo-caption {{ padding:10px; }}
-        .btn {{ display:inline-block; padding:13px 16px; border-radius:12px; background:black; color:white; text-decoration:none; font-weight:700; }}
-        .btn.light {{ background:#e5e7eb; color:#111; }}
-        ul {{ margin:0; padding-left:18px; }}
-        @media (max-width:700px) {{ .sheet {{ padding:18px; }} .top, .grid, .row {{ display:block; }} .row span:last-child {{ display:block; margin-top:4px; }} .actions a {{ width:100%; text-align:center; box-sizing:border-box; }} }}
-        @media print {{ body {{ background:white; padding:0; }} .sheet {{ box-shadow:none; border-radius:0; max-width:100%; padding:0; }} .actions {{ display:none !important; }} }}
-      </style>
-    </head>
-    <body>
-      <div class="sheet">
-        {paid_watermark_html}
-        <div class="top">
-          <div>
-            <div class="company">{escape(COMPANY_NAME)}</div>
-            <div>{escape(COMPANY_ADDRESS)}<br>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div>
-          </div>
-          <div style="text-align:right;">{logo_html}<div class="doc-title">Invoice</div><div class="doc-number">{escape(item['invoice_number'])}</div></div>
-        </div>
-        <div class="grid">
-          <div class="box"><div class="label">Bill To</div>{escape(invoice.get('customer_name', '-') or '-')}<br>{escape(invoice.get('customer_address', '-') or '-')}<br>{escape(invoice.get('customer_phone', '-') or '-')}</div>
-          <div class="box">
-            <div class="row"><span class="muted">Date</span><span>{escape(item['created_at'])}</span></div>
-            <div class="row"><span class="muted">Job Ref</span><span>{escape(item.get('job_reference') or '-')}</span></div>
-            <div class="row"><span class="muted">Due date</span><span>{escape(item['due_date'])}</span></div>
-            <div class="row"><span class="muted">Status</span><span>{escape(item['status'].title())}</span></div>
-          </div>
-        </div>
-        <div class="section-title">Work</div>
-        <div class="box">{escape(invoice.get('job', '-') or '-').replace(chr(10), '<br>')}</div>
-        {photos_html}
-        <div class="section-title">Payment details</div>
-        {bank_html}
-        {payment_html}
-        <div class="section-title">Invoice totals</div>
-        <div class="box">
-          <div class="row"><span class="muted">Labour</span><span>{pounds_text(invoice.get('labour', 0))}</span></div>
-          <div class="row"><span class="muted">Materials</span><span>{pounds_text(invoice.get('materials', 0))}</span></div>
-          <div class="row"><span class="muted">Total</span><span>{pounds_text(item['total_price'])}</span></div>
-          <div class="row"><span class="muted">Amount paid</span><span>{pounds_text(item['amount_paid'])}</span></div>
-          <div class="row"><span class="muted">Balance due</span><span class="total">{pounds_text(item['balance_due'])}</span></div>
-        </div>
-        <div class="section-title">Payment terms</div>
-        <div class="box"><ul>{''.join(f'<li>{escape(t)}</li>' for t in terms)}</ul>{payment_html}</div>
-        <div class="actions">
-          <a href="/api/invoices/{item['id']}/pdf" target="_blank" class="btn">Download PDF</a>
-          <a href="javascript:window.print()" class="btn light">Print</a>
-        </div>
-      </div>
-    </body>
-    </html>
-    """
+    html = public_invoice_render.render_public_invoice_html(
+        item,
+        COMPANY_NAME=COMPANY_NAME,
+        COMPANY_ADDRESS=COMPANY_ADDRESS,
+        COMPANY_PHONE=COMPANY_PHONE,
+        COMPANY_EMAIL=COMPANY_EMAIL,
+        COMPANY_LOGO_URL=COMPANY_LOGO_URL,
+        INVOICE_TERMS=INVOICE_TERMS,
+        BANK_NAME=BANK_NAME,
+        BANK_ACCOUNT_NAME=BANK_ACCOUNT_NAME,
+        BANK_SORT_CODE=BANK_SORT_CODE,
+        BANK_ACCOUNT_NUMBER=BANK_ACCOUNT_NUMBER,
+        QRCODE_AVAILABLE=QRCODE_AVAILABLE,
+        pounds_text=pounds_text,
+        bank_payment_reference=bank_payment_reference,
+    )
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 

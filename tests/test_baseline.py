@@ -1451,6 +1451,145 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         )
         self.assertEqual(rendered.stdout.strip(), good)
 
+    def test_quote_history_reporting_and_supplier_rules_contract(self):
+        m = self.module
+        quote = {
+            "id": 42, "created_at": "27/09/2026", "job": "Install outside tap",
+            "request": {"quote_type": "small"},
+            "result": {"quote_type": "small", "labour": 180, "materials": 6,
+                       "total_price": 186, "material_lines": [{
+                           "name": "PTFE tape", "quantity": 2,
+                           "unit_price_used": 3, "full_unit_price": 3,
+                           "supplier": "Toolstation", "price_source": "manual",
+                       }]},
+        }
+        with patch.object(m, "load_quotes", return_value=[quote]):
+            result = m.analyse_similar_quotes("outside tap", "small")
+            self.assertEqual(result["similar_count"], 1)
+            self.assertEqual(result["averages"], {
+                "labour": 180.0, "materials": 6.0, "total_price": 186.0,
+            })
+            self.assertEqual(result["similar_quotes"], [{
+                "id": 42, "created_at": "27/09/2026", "job": "Install outside tap",
+                "labour": 180.0, "materials": 6.0, "total_price": 186.0,
+            }])
+            self.assertEqual(result["common_materials"][0]["supplier"], "Toolstation")
+            self.assertEqual(result["common_materials"][0]["average_quantity"], 2)
+            self.assertEqual(result["common_materials"][0]["bundle_status"], "essential")
+            self.assertEqual(m.supplier_preference_for_material("PTFE tape")
+                             ["preferred_supplier"], "Toolstation")
+            self.assertEqual(m.supplier_preferences_summary()[0]["total_uses"], 1)
+            labour = m.labour_intelligence_for_job("outside tap", "small", 100)
+            self.assertEqual((labour["status"], labour["average_labour"]),
+                             ("too_low", 180.0))
+            with TestClient(m.app) as client:
+                response = client.get("/api/quote-learning?q=outside+tap&quote_type=small",
+                                      headers=self.auth_headers)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), result)
+
+        missing = m.detect_forgotten_items("Install outside tap", [{"name": "PTFE tape"}])
+        self.assertEqual(missing[0]["missing"], [
+            "15mm isolating valve", "double check valve 15mm", "pipe clips 15mm",
+            "drain off cock 15mm",
+        ])
+        with patch.object(m, "load_quotes", return_value=[]):
+            self.assertEqual(m.analyse_similar_quotes("outside tap")["similar_count"], 0)
+            self.assertEqual(m.supplier_preferences_summary(), [])
+
+    def test_public_invoice_html_exact_render_contract(self):
+        m = self.module
+        item = {
+            "id": 9, "invoice_number": "INV-SYNTHETIC", "created_at": "27/09/2026",
+            "job_reference": "STAGING-JOB", "due_date": "01/10/2026",
+            "status": "unpaid", "total_price": 186, "amount_paid": 0,
+            "balance_due": 186, "payment_link": "", "photos": [],
+            "quote_result": {"quote_type": "small"},
+            "invoice": {"customer_name": "Synthetic Customer",
+                        "customer_address": "Test Road", "customer_phone": "000000",
+                        "job": "Replace tap", "labour": 180, "materials": 6},
+        }
+        values = {"BANK_NAME": "TEST BANK", "BANK_ACCOUNT_NAME": "TEST ACCOUNT",
+                  "BANK_SORT_CODE": "00-00-00", "BANK_ACCOUNT_NUMBER": "00000000",
+                  "COMPANY_NAME": "TEST COMPANY", "COMPANY_ADDRESS": "TEST ADDRESS",
+                  "COMPANY_PHONE": "000", "COMPANY_EMAIL": "test@example.invalid",
+                  "COMPANY_LOGO_URL": "", "QRCODE_AVAILABLE": False}
+        with patch.object(m, "get_invoice_by_id", return_value=item), \
+                patch.multiple(m, **values):
+            response = m.public_invoice(9)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.media_type, "text/html; charset=utf-8")
+        self.assertIn(b"Synthetic Customer", response.body)
+        self.assertIn(b"TEST BANK", response.body)
+        self.assertEqual(hashlib.sha256(response.body).hexdigest(),
+                         "d548f7956fd5e1c8d42fe3c62b4b7b9903713dc6a7cff73d9835dccbd4227bc3")
+
+    def test_lead_notification_and_overdue_reminder_ordering_offline(self):
+        m = self.module
+        lead = {"name": "Synthetic <Lead>", "phone": "000", "email": "fake@example.invalid",
+                "address": "Test Road", "job_type": "Bathroom", "description": "Tap <leak>"}
+        with patch.multiple(m, EMAIL_ENABLED=True, EMAIL_USER="sender@example.invalid",
+                            EMAIL_PASS="synthetic", EMAIL_FROM_NAME="Test",
+                            EMAIL_HOST="smtp.example.invalid", EMAIL_PORT=465), \
+                patch.object(m, "get_public_base_url", return_value="https://test.example.invalid"), \
+                patch.dict(os.environ, {"PUBLIC_BASE_URL": "https://test.example.invalid"}), \
+                patch.object(m.smtplib, "SMTP_SSL") as smtp:
+            m.send_lead_notification_email(lead)
+        smtp.assert_called_once()
+        payload = message_from_string(smtp.return_value.__enter__.return_value.sendmail.call_args.args[2])
+        self.assertIn("Synthetic <Lead>", str(payload["Subject"]))
+        self.assertIn("https://test.example.invalid", payload.get_payload()[0].get_payload(decode=True).decode())
+        self.assertIn("Synthetic &lt;Lead&gt;", payload.get_payload()[1].get_payload(decode=True).decode())
+
+        invoice = {"id": 7, "invoice_number": "INV-TEST", "job_reference": "REF",
+                   "balance_due": 20, "reminder_email": "synthetic@example.invalid",
+                   "reminders_enabled": True, "last_reminder_at": ""}
+        order = []
+        with patch.object(m, "invoice_is_overdue", return_value=True), \
+                patch.object(m, "send_invoice_email_now",
+                             side_effect=lambda *args: order.append("send")), \
+                patch.object(m, "update_invoice_reminder_timestamp",
+                             side_effect=lambda *args: order.append("timestamp")), \
+                patch.object(m, "get_invoice_by_id", return_value={"id": 7}) as reload, \
+                patch.object(m, "load_invoices", return_value=[invoice]):
+            self.assertEqual(m.process_overdue_invoice_reminders(), {"sent": [7], "skipped": []})
+        self.assertEqual(order, ["send", "timestamp"])
+        reload.assert_called_once_with(7)
+
+    def test_deterministic_ai_presentation_and_context_contract(self):
+        m = self.module
+        job = ("Replace kitchen tap. Customer supplying the tap. "
+               "Install outside tap. Access is limited.")
+        parsed = m.parse_context_aware_jobs(job)
+        self.assertEqual(len(parsed["jobs"]), 2)
+        self.assertEqual(parsed["jobs"][0]["supply_responsibility"], "customer")
+        self.assertEqual(m.split_multi_job_description(job),
+                         [row["job_text"] for row in parsed["jobs"]])
+        self.assertEqual(hashlib.sha256(json.dumps(parsed, sort_keys=True).encode()).hexdigest(),
+                         "9f400872951287e71681926adb6e6f4bb5cdb464e675e18ba5d5f973671b08ba")
+
+        materials = m.merge_multi_job_materials([
+            {"job_number": 1, "display_name": "Tap", "materials": [
+                {"name": "PTFE tape", "quantity": 0.5, "required": True}]},
+            {"job_number": 2, "display_name": "Outside tap", "materials": [
+                {"name": "PTFE tape", "quantity": 0.5, "required": False}]},
+        ])
+        self.assertEqual(len(materials), 1)
+        self.assertEqual(materials[0]["quantity"], 1.0)
+        self.assertEqual(materials[0]["used_for_jobs"], [1, 2])
+
+        draft = {"materials": [{"name": "PTFE tape", "manual_price": 3,
+                                 "data_source": "saved_material", "learned_used_count": 2}],
+                 "questions_to_confirm": ["Check access", "Check access"],
+                 "risk_notes": ["Concealed pipework"], "warnings": []}
+        context = {"multi_job_estimate": {"is_multi_job": True,
+                                           "classified_jobs": parsed["jobs"],
+                                           "unclassified_segments": []}}
+        presented = m.build_professional_quote_mode(draft, context)
+        self.assertIs(presented, draft)
+        self.assertEqual(hashlib.sha256(json.dumps(presented, sort_keys=True).encode()).hexdigest(),
+                         "fa50c7546849d0c7ee7fa7297856c3e2b29199e258981cb760c7247d6fa1fa63")
+
 
 if __name__ == "__main__":
     unittest.main()
