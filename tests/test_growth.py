@@ -80,6 +80,21 @@ class GrowthBatchTests(unittest.TestCase):
         self.assertNotIn("/leak-repair-farnborough", sitemap)
         self.assertIn("/emergency-plumber-surrey", sitemap)
 
+    def test_public_page_enquiry_context_and_no_broken_farnborough_links(self):
+        for path in ("/plumber-epsom", "/plumber-leatherhead", "/plumber-farnborough",
+                     "/emergency-plumber-surrey", "/general-plumbing-surrey",
+                     "/leak-repair-guildford"):
+            page = self.client.get(path).text
+            self.assertIn("next.searchParams.set('landing_page', location.pathname)", page, path)
+            self.assertIn("next.searchParams.set('referrer', referring)", page, path)
+            self.assertIn("utm_campaign", page, path)
+            self.assertIn('href="/request-quote"', page, path)
+        self.assertNotIn('href="/leak-repair-farnborough"',
+                         self.client.get("/leak-repair-guildford").text)
+        form = self.client.get("/request-quote").text
+        self.assertIn("params.get('landing_page')", form)
+        self.assertIn("params.get('referrer')", form)
+
     def test_local_stock_image_allowlist_and_staging_guard(self):
         c = self.client
         for filename in ("bathroom-illustrative.webp", "shower-illustrative.webp",

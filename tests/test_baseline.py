@@ -329,18 +329,18 @@ class BaselineTests(unittest.TestCase):
         literals = {
             "LANDING_PAGE_HTML": "0557ccac52285b3f8400972513c71c58c822defd224200f3bace562811472bb5",
             "SEO_CSS": "a22e53ee58ed48079fc147e3b604c75a2dfca3478da0ca9591cd9632f47cba0f",
-            "LEAD_FORM_HTML": "c60c035c0d2a8b8eaf39abdf4acd6f33691a0ea4f37371f681684b967bffbe6e",
+            "LEAD_FORM_HTML": "0e54841b8a4353a8b874131f110ac25fed9cbb355b835bdcd1a63dbf6e56cb7d",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "e0221fa61db4b5897d9dbc7a9384ea948b4ebd29df159156477782abc6332423",
+                "0547f41f471a464389de6d5bf8e7cc3a06b9ddc32281fec7aeb814274f67c8c9",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
         page_hashes = {
-            "/": "577b8c3233a71d848f6d77e9ea2741ab959f5c944f7119505bdc12bedb3bcf0d",
-            "/new-home": "577b8c3233a71d848f6d77e9ea2741ab959f5c944f7119505bdc12bedb3bcf0d",
-            "/request-quote": "f28b76aadc67ee04fea97ddd1f215f413397019a49cb446e5c1926c3f9dae125",
+            "/": "e05e23707848917bd5bcbd8963e3f61ce7bf6d635d6dadd1a91ddaa47b44065a",
+            "/new-home": "e05e23707848917bd5bcbd8963e3f61ce7bf6d635d6dadd1a91ddaa47b44065a",
+            "/request-quote": "060507aab53d82c01df105c487258e52cbf438453a04253eed545c209b55205b",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage6.invalid",
@@ -1240,7 +1240,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         cases = (
             ("location", "109b57c9af0e81fe33d45b095c6ab6cd67ebede2949692bbda9081071c66b099"),
             ("service", "11a6083f4d60a05bf8c6cc0b784ca65988f7fdb5b0bcd82460644eae66bfab26"),
-            ("local", "a6f8bfef54a0c258d16078d9bf0e2bfc07551f67c10f9dec9694382714ff7813"),
+            ("local", "b266c843193f4c1c57dae5cd0dafda1836f26558d4068b582582afa695a1da0a"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage7.invalid",

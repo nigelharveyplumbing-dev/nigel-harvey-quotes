@@ -1338,7 +1338,7 @@ def location_page(area_slug: str, request: Request):
     if not page:
         raise HTTPException(status_code=404, detail="Area page not found")
     logo_html = get_company_logo_html(get_company_logo_value())
-    return HTMLResponse(content=render_location_page(page["name"], logo_html), media_type="text/html; charset=utf-8")
+    return HTMLResponse(content=website_contact.add_quote_attribution(render_location_page(page["name"], logo_html)), media_type="text/html; charset=utf-8")
 
 
 
@@ -1350,7 +1350,7 @@ def local_service_location_page(service_slug: str, area_slug: str, request: Requ
     established_service = next((item for item in SERVICE_PAGES if item["slug"] == full_slug), None)
     if established_service:
         logo_html = get_company_logo_html(get_company_logo_value())
-        return HTMLResponse(content=render_service_page(established_service, logo_html, request),
+        return HTMLResponse(content=website_contact.add_quote_attribution(render_service_page(established_service, logo_html, request)),
                             media_type="text/html; charset=utf-8")
     service = next((item for item in LOCAL_SERVICE_PAGES if item["slug"] == service_slug.lower()), None)
     # No automatic service × Farnborough doorway pages in this growth batch.
@@ -1360,7 +1360,7 @@ def local_service_location_page(service_slug: str, area_slug: str, request: Requ
         raise HTTPException(status_code=404, detail="Local service page not found")
     logo_html = get_company_logo_html(get_company_logo_value())
     return HTMLResponse(
-        content=render_local_service_location_page(service, location, logo_html, request),
+        content=website_contact.add_quote_attribution(render_local_service_location_page(service, location, logo_html, request)),
         media_type="text/html; charset=utf-8"
     )
 
@@ -1370,7 +1370,7 @@ def service_page(service_slug: str):
     if not page:
         raise HTTPException(status_code=404, detail="Service page not found")
     logo_html = get_company_logo_html(get_company_logo_value())
-    return HTMLResponse(content=render_service_page(page, logo_html), media_type="text/html; charset=utf-8")
+    return HTMLResponse(content=website_contact.add_quote_attribution(render_service_page(page, logo_html)), media_type="text/html; charset=utf-8")
 
 
 

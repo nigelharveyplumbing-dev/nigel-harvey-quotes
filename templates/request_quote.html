@@ -22,9 +22,10 @@ form.addEventListener('submit', async function(event) {
   err.style.display = ok.style.display = 'none';
   const button = document.getElementById('submitButton');
   const params = new URLSearchParams(window.location.search);
-  const landing = params.get('landing_page') || window.location.pathname;
   let referring = '';
-  try { const url = new URL(document.referrer); referring = url.origin + url.pathname; } catch (_) {}
+  try { const url = new URL(document.referrer); referring = url.origin + (url.origin === window.location.origin ? url.pathname : ''); } catch (_) {}
+  const landing = params.get('landing_page') || (referring.startsWith(window.location.origin + '/') ? new URL(referring).pathname : window.location.pathname);
+  referring = params.get('referrer') || referring;
   const value = id => document.getElementById(id).value.trim();
   const payload = {
     name:value('lead_name'), phone:value('lead_phone'), email:value('lead_email'),
