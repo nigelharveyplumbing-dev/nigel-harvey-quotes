@@ -1306,6 +1306,47 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         self.assertIn("&lt;work&gt;", html)
         mocked.assert_called_once()
 
+    def test_google_reviews_config_to_authenticated_staging_homepage(self):
+        """The configured key and Place ID reach Google and its cards reach / in staging."""
+        m = self.module
+
+        class Response:
+            ok = True
+
+            def json(self):
+                return {
+                    "rating": 4.9, "userRatingCount": 7,
+                    "reviews": [{"rating": 5, "authorAttribution": {"displayName": "Test customer"},
+                                 "text": {"text": "Synthetic review"}}],
+                }
+
+        with patch.dict(os.environ, {"APP_ENVIRONMENT": "staging",
+                                     "PUBLIC_BASE_URL": "https://staging.example.invalid"}), \
+                patch.object(m, "GOOGLE_PLACES_API_KEY", "synthetic-key"), \
+                patch.object(m, "GOOGLE_PLACE_ID", "synthetic-place"), \
+                patch.object(m.google_reviews.requests, "get", return_value=Response()) as fetch:
+            with TestClient(m.app) as client:
+                self.assertEqual(client.get("/").status_code, 401)
+                response = client.get("/", headers=self.auth_headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Synthetic review", response.text)
+        self.assertIn('class="google-review-card"', response.text)
+        self.assertIn("4.9", response.text)
+        self.assertNotIn("See feedback from customers on Google", response.text)
+        fetch.assert_called_once()
+        self.assertTrue(fetch.call_args.args[0].endswith("/synthetic-place"))
+        self.assertEqual(fetch.call_args.kwargs["headers"]["X-Goog-Api-Key"], "synthetic-key")
+
+        with patch.dict(os.environ, {"APP_ENVIRONMENT": "staging",
+                                     "PUBLIC_BASE_URL": "https://staging.example.invalid"}), \
+                patch.object(m, "GOOGLE_PLACES_API_KEY", ""), \
+                patch.object(m.google_reviews.requests, "get") as fetch:
+            with TestClient(m.app) as client:
+                fallback = client.get("/", headers=self.auth_headers)
+        self.assertEqual(fallback.status_code, 200)
+        self.assertIn("See feedback from customers on Google", fallback.text)
+        fetch.assert_not_called()
+
     def test_stage7_merchant_search_orchestration_offline(self):
         m = self.module
 
