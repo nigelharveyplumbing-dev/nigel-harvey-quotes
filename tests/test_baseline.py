@@ -29,6 +29,7 @@ from fastapi.testclient import TestClient
 from bs4 import BeautifulSoup
 from PIL import Image
 from pypdf import PdfReader
+from encoding_audit import hits as encoding_hits, scan_database, text_leaves
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1395,6 +1396,60 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         self.assertEqual(m._material_match_score("PTFE tape", {
             "name": "PTFE tape", "source": "built-in", "default_price": 1,
         }), 94)
+
+    def test_unicode_material_roundtrip_and_read_only_encoding_audit(self):
+        """Catch mojibake in cached/JSON fields while preserving valid Unicode in output."""
+        m = self.module
+        good = "22mm chrome–plated elbow £3.50 – builder’s pack"
+        bad = "22mm chromeâ€“plated elbow Â£3.50"
+        self.assertFalse(encoding_hits(good))
+        self.assertTrue(encoding_hits(bad))
+        self.assertTrue(encoding_hits("Damaged replacement character �"))
+        self.assertFalse(any(encoding_hits(value) for item in m.MATERIAL_LIBRARY
+                             for _, value in text_leaves(item, "material")))
+
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "encoding.db"
+            conn = sqlite3.connect(db_path)
+            conn.executescript("CREATE TABLE material_price_cache (id INTEGER PRIMARY KEY, name TEXT, supplier TEXT);"
+                               "CREATE TABLE quotes (id INTEGER PRIMARY KEY, result_json TEXT);")
+            conn.execute("INSERT INTO material_price_cache VALUES (1, ?, ?)", (good, "Supplier"))
+            conn.execute("INSERT INTO material_price_cache VALUES (2, ?, ?)", (bad, "Supplier"))
+            conn.execute("INSERT INTO quotes VALUES (1, ?)",
+                         (json.dumps({"materials": [{"name": "Seal â€™ trim"}]}),))
+            conn.commit()
+            conn.close()
+            report = scan_database(db_path)
+        self.assertEqual(report["affected_records"], {"material_price_cache": 1, "quotes": 1})
+        self.assertEqual(report["affected_fields"], {
+            "material_price_cache.name": 1, "quotes.result_json.materials[0].name": 1,
+        })
+
+        merchant_html = ('<a href="/p/12345">' + good + '</a>')
+        parsed = m._extract_search_page_products(
+            merchant_html, "https://www.toolstation.com/search?q=elbow",
+            "Toolstation", ["toolstation.com"])
+        self.assertEqual(parsed[0]["name"], good)
+        self.assertFalse(encoding_hits(parsed[0]["name"]))
+
+        with patch.object(m, "get_material_search_library", return_value=[{
+            "name": good, "supplier": "Supplier", "url": "", "default_price": 3.5,
+        }]):
+            with TestClient(m.app) as client:
+                response = client.get("/api/material-search", headers=self.auth_headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]["name"], good)
+        self.assertEqual(response.content.decode("utf-8"), response.text)
+        self.assertFalse(encoding_hits(response.text))
+
+        script = (ROOT / "static/app.js").read_text(encoding="utf-8")
+        start = script.index("function escapeHtml(text) {")
+        end = script.index("\n}", start) + 2
+        rendered = subprocess.run(
+            ["node", "-e", script[start:end] + f"\nconsole.log(escapeHtml({json.dumps(good)}));"],
+            check=True, capture_output=True, text=True,
+        )
+        self.assertEqual(rendered.stdout.strip(), good)
 
 
 if __name__ == "__main__":
