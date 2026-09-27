@@ -328,19 +328,19 @@ class BaselineTests(unittest.TestCase):
         m = self.module
         literals = {
             "LANDING_PAGE_HTML": "0557ccac52285b3f8400972513c71c58c822defd224200f3bace562811472bb5",
-            "SEO_CSS": "a22e53ee58ed48079fc147e3b604c75a2dfca3478da0ca9591cd9632f47cba0f",
-            "LEAD_FORM_HTML": "0e54841b8a4353a8b874131f110ac25fed9cbb355b835bdcd1a63dbf6e56cb7d",
+            "SEO_CSS": "aea9aaf6e6704acabe4891b0ac98142966025a808ec6908954c410ff96f725da",
+            "LEAD_FORM_HTML": "80bd780348eefbf6665e4545896ebd918b7bebf5c2b0df40a0abe405cff5ba48",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "0547f41f471a464389de6d5bf8e7cc3a06b9ddc32281fec7aeb814274f67c8c9",
+                "d2b74c1885c9151fd81d15280e0fdbdbb73cc25c512d4bd0c6ca3fdb432c8a80",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
         page_hashes = {
-            "/": "e05e23707848917bd5bcbd8963e3f61ce7bf6d635d6dadd1a91ddaa47b44065a",
-            "/new-home": "e05e23707848917bd5bcbd8963e3f61ce7bf6d635d6dadd1a91ddaa47b44065a",
-            "/request-quote": "060507aab53d82c01df105c487258e52cbf438453a04253eed545c209b55205b",
+            "/": "d1a69e4c350adf2a071fd2814abd9bcb7e29d3947ccecd13b9363380c71a03cb",
+            "/new-home": "d1a69e4c350adf2a071fd2814abd9bcb7e29d3947ccecd13b9363380c71a03cb",
+            "/request-quote": "be26f7e559b7f3f0e5bd82cb56ff82c81ac8e59af0967b7ea130642c7da1d1e4",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage6.invalid",
@@ -1235,12 +1235,12 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
 
 
     def test_stage7_public_seo_rendering_golden(self):
-        """Freeze the three existing SEO page families before moving renderers."""
+        """Freeze the SEO page families after applying the shared public shell."""
         m = self.module
         cases = (
-            ("location", "109b57c9af0e81fe33d45b095c6ab6cd67ebede2949692bbda9081071c66b099"),
-            ("service", "11a6083f4d60a05bf8c6cc0b784ca65988f7fdb5b0bcd82460644eae66bfab26"),
-            ("local", "b266c843193f4c1c57dae5cd0dafda1836f26558d4068b582582afa695a1da0a"),
+            ("location", "9cde3fd04fa5386bfb483f48f6e21141e1af0291928a5da04f450e88d09919b5"),
+            ("service", "b6acac2caeaddf2ecfdb1fb1a4ba8640ebb0f441e850f7a84b67cc1aa8f18060"),
+            ("local", "6ee50edadc7459b25d3e14099bf377509b5ee8db92ba65dfe0229c77c0753fd8"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage7.invalid",

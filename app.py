@@ -974,7 +974,7 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict):
 def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     return invoice_store.update_invoice_by_id(invoice_id, data, row_to_invoice, safe_float, upsert_customer)
 
-from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search, website_contact
+from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search, website_contact, public_layout
 
 def get_dashboard():
     return dashboard_reporting.get_dashboard(get_db, now_uk)
@@ -1229,6 +1229,10 @@ def request_quote_page(request: Request):
     html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
     html = html.replace("__CANONICAL_QUOTE__", escape(absolute_url("/request-quote", request), quote=True))
     html = html.replace("__WHATSAPP_URL__", escape(website_contact.whatsapp_url(COMPANY_PHONE, "Hi Nigel, I've got a plumbing job I'd like some help with."), quote=True))
+    html = html.replace("__PUBLIC_SITE_CSS__", public_layout.SITE_CSS)
+    html = html.replace("__PUBLIC_QUOTE_CSS__", public_layout.QUOTE_CSS)
+    html = html.replace("__PUBLIC_HEADER__", public_layout.site_header())
+    html = html.replace("__PUBLIC_FOOTER__", public_layout.site_footer())
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -1294,6 +1298,9 @@ def render_public_homepage(request: Request):
     html = html.replace("__GOOGLE_REVIEWS_HTML__", reviews)
     html = html.replace("__WHATSAPP_URL__", escape(website_contact.whatsapp_url(COMPANY_PHONE, "Hi Nigel, I've got a plumbing job I'd like some help with."), quote=True))
     html = html.replace("__BUSINESS_SCHEMA__", build_homepage_business_schema(absolute_url("/", request)).replace("<", "\\u003c"))
+    html = html.replace("__PUBLIC_SITE_CSS__", public_layout.SITE_CSS)
+    html = html.replace("__PUBLIC_HEADER__", public_layout.site_header(home=True))
+    html = html.replace("__PUBLIC_FOOTER__", public_layout.site_footer())
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 

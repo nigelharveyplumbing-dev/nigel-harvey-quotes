@@ -5,8 +5,11 @@ import json
 import re
 import secrets
 import unittest
+from urllib.parse import urlsplit
 from unittest.mock import patch
+from xml.etree import ElementTree
 
+from bs4 import BeautifulSoup
 from fastapi.testclient import TestClient
 from local_browser_server import disposable_app
 
@@ -94,6 +97,54 @@ class GrowthBatchTests(unittest.TestCase):
         form = self.client.get("/request-quote").text
         self.assertIn("params.get('landing_page')", form)
         self.assertIn("params.get('referrer')", form)
+
+    def test_every_sitemap_page_uses_shared_layout_and_keeps_seo(self):
+        m, c = self.module, self.client
+        with patch.object(m, "_google_reviews_html", return_value='<h2>Customer reviews</h2>'):
+            sitemap = ElementTree.fromstring(c.get("/sitemap.xml").text)
+            paths = [urlsplit(loc.text).path for loc in sitemap.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")]
+            self.assertEqual(len(paths), 85)
+            for path in paths:
+                with self.subTest(path=path):
+                    response = c.get(path)
+                    self.assertEqual(response.status_code, 200)
+                    page = BeautifulSoup(response.text, "html.parser")
+                    self.assertEqual(len(page.select("header .navlinks")), 1)
+                    self.assertEqual(len(page.select("footer .foot")), 1)
+                    self.assertEqual(len(page.select(".mobile-contact")), 1)
+                    self.assertEqual(len(page.select("main#main")), 1)
+                    self.assertEqual(len(page.select("h1")), 1)
+                    self.assertFalse(page.select(".sticky-call,.mobile-call,.site-header,.topbar,.footer"))
+                    self.assertIn("--blue:#176092", page.style.text)
+                    self.assertEqual(urlsplit(page.select_one('link[rel="canonical"]')["href"]).path, path)
+                    self.assertTrue(page.select_one('meta[name="description"]')["content"])
+                    for schema in page.select('script[type="application/ld+json"]'):
+                        self.assertEqual(json.loads(schema.text)["@context"], "https://schema.org")
+
+    def test_google_review_cards_survive_shared_layout(self):
+        m = self.module
+
+        class Response:
+            ok = True
+
+            def json(self):
+                return {"rating": 4.9, "userRatingCount": 7,
+                        "reviews": [{"rating": 5, "authorAttribution": {"displayName": "Synthetic customer"},
+                                     "text": {"text": "Synthetic review"}}]}
+
+        with patch.object(m, "GOOGLE_PLACES_API_KEY", "synthetic-key"), \
+                patch.object(m, "GOOGLE_PLACE_ID", "synthetic-place"), \
+                patch.object(m.google_reviews.requests, "get", return_value=Response()) as fetch:
+            for path in ("/", "/plumber-guildford", "/plumber-epsom", "/plumber-farnborough"):
+                page = BeautifulSoup(self.client.get(path).text, "html.parser")
+                self.assertIn("Synthetic review", page.text)
+                self.assertTrue(page.select(".google-review-card"), path)
+            self.assertEqual(fetch.call_count, 4)
+        with patch.object(m, "GOOGLE_PLACES_API_KEY", ""), \
+                patch.object(m.google_reviews.requests, "get") as fetch:
+            for path in ("/", "/plumber-leatherhead"):
+                self.assertIn("Read Google Reviews", self.client.get(path).text)
+            fetch.assert_not_called()
 
     def test_local_stock_image_allowlist_and_staging_guard(self):
         c = self.client

@@ -5,6 +5,7 @@ from html import escape
 from pathlib import Path
 from fastapi import Request
 from business.config import (COMPANY_NAME, COMPANY_EMAIL, COMPANY_PHONE, COMPANY_PHONE_TEL, GOOGLE_RATING_VALUE, GOOGLE_REVIEW_COUNT, GOOGLE_REVIEWS_URL, GOOGLE_REVIEW_1_TEXT, GOOGLE_REVIEW_1_AUTHOR, GOOGLE_REVIEW_2_TEXT, GOOGLE_REVIEW_2_AUTHOR, GOOGLE_REVIEW_3_TEXT, GOOGLE_REVIEW_3_AUTHOR)
+from business.public_layout import render_shared_public_page
 
 def build_homepage_faq_schema() -> str:
     faq_items = [
@@ -229,23 +230,6 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
         "description": f"Local plumber serving {location_name} and surrounding Surrey areas for domestic plumbing repairs and installations.",
     }, ensure_ascii=False)
 
-    blue_location_css = r"""
-:root{--navy:#0b2032;--blue:#1263a5;--pale:#f3f7fa;--gold:#e2b353;--text:#142b3e;--muted:#60717e;--border:#dfe7ec}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--text);line-height:1.55;background:#fff}a{text-decoration:none;color:inherit}.wrap{width:min(1120px,92%);margin:auto}
-.topbar{background:var(--navy);color:#fff;font-size:14px}.topbar .wrap{padding:9px 0;display:flex;justify-content:space-between;gap:20px}
-.site-header{background:#fff;position:sticky;top:0;z-index:20;box-shadow:0 2px 18px #00000012}.site-nav{display:flex;align-items:center;justify-content:space-between;padding:15px 0}.brand{font-size:23px;font-weight:800;letter-spacing:-.5px}.brand small{display:block;color:var(--blue);font-size:11px;letter-spacing:2.5px}.navlinks{display:flex;align-items:center;gap:24px;font-weight:700;font-size:14px}.btn{display:inline-block;background:var(--blue);color:#fff;padding:13px 21px;border-radius:7px;font-weight:800}.btn.white{background:#fff;color:var(--navy)}
-.guildford-hero{min-height:570px;display:grid;align-items:center;color:#fff;background:linear-gradient(90deg,#071827f2 0%,#071827d9 48%,#07182762 80%),url('/site-images/bathroom-illustrative.webp') center/cover}.hero-copy{max-width:760px;padding:82px 0}.eyebrow{color:#f0c66e;text-transform:uppercase;letter-spacing:2px;font-size:13px;font-weight:800}.guildford-hero h1{font-size:clamp(43px,6vw,67px);line-height:1.02;letter-spacing:-2px;margin:14px 0 20px}.guildford-hero p{font-size:20px;max-width:680px;color:#e5edf3}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
-.trust{box-shadow:0 10px 30px #0000000c}.trustgrid{display:grid;grid-template-columns:repeat(4,1fr);text-align:center}.trustgrid div{padding:23px 10px;border-right:1px solid #e3e9ed}.trustgrid div:last-child{border:0}.trustgrid strong{display:block;font-size:17px}.trustgrid span{color:var(--muted);font-size:13px}
-section{padding:72px 0}.section-pale{background:var(--pale)}.section-dark{background:var(--navy);color:#fff}.intro{text-align:center;max-width:780px;margin:0 auto 38px}.intro.left{text-align:left;margin-left:0}.intro h2,.content-title{font-size:39px;line-height:1.12;letter-spacing:-1px;margin:0 0 14px}.intro p,.muted{color:var(--muted)}.section-dark .intro p{color:#cbd7df}
-.service-links{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.service-links a,.area-links a{background:#fff;border:1px solid var(--border);border-radius:11px;padding:17px;font-weight:800;color:var(--navy);text-align:center;transition:.15s}.service-links a:hover,.area-links a:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-1px)}
-.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.card{background:#fff;border-radius:13px;padding:28px;box-shadow:0 8px 25px #0b20320c}.section-pale .card{border:1px solid #e6edf1}.card h3{margin:0 0 9px}.card p{font-size:14px;color:var(--muted);margin:0}.section-dark .card{color:var(--text)}
-.review-section{background:#f5f8fa}.reviewbox{max-width:1040px;margin:auto;text-align:center;background:#fff;padding:46px;border-radius:15px;box-shadow:0 10px 30px #0b20320d}.google-brand{font-size:20px;font-weight:800;margin-bottom:8px}.google-rating{display:flex;justify-content:center;align-items:center;gap:12px;margin:8px 0 24px}.google-rating strong{font-size:24px;color:var(--text)}.google-rating .stars{font-size:22px}.google-review-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;text-align:left;margin:0 0 24px}.google-review-card{border:1px solid #e3e9ed;border-radius:12px;padding:20px;background:#fff}.review-author{display:flex;gap:11px;align-items:center}.review-author a{color:var(--text);text-decoration:none}.review-avatar{width:42px;height:42px;border-radius:50%;object-fit:cover}.review-avatar-fallback{display:flex;align-items:center;justify-content:center;background:#eef3f6;color:var(--blue);font-weight:900}.review-meta{font-size:12px;color:var(--muted);margin-top:3px}.mini-stars{color:#e3a923;letter-spacing:1px}.review-text{font-size:14px;line-height:1.55;color:#46545f;margin:15px 0}.review-source{font-size:12px;font-weight:800;color:var(--blue);text-decoration:none}.review-note{font-size:12px;color:var(--muted);margin:0 0 20px}
-.area-links{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.faq-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.faq-grid .card{border:1px solid var(--border)}
-.cta-blue{background:var(--blue);color:#fff}.cta-blue .wrap{display:flex;justify-content:space-between;align-items:center;gap:30px}.cta-blue h2{margin:0;font-size:37px}.cta-blue p{margin:7px 0 0;color:#e8f2f8}
-footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{display:flex;justify-content:space-between;gap:30px}.foot strong{color:#fff}.mobile-call{display:none}
-@media(max-width:800px){.site-nav{flex-wrap:wrap}.navlinks{flex-wrap:wrap;gap:10px}.topbar .wrap{justify-content:center}.topbar span:last-child{display:none}.guildford-hero{min-height:540px;background:linear-gradient(#071827c9,#071827e6),url('/site-images/bathroom-illustrative.webp') center/cover}.hero-copy{padding:62px 0}.guildford-hero h1{font-size:44px}.guildford-hero p{font-size:18px}.trustgrid{grid-template-columns:1fr 1fr}.trustgrid div:nth-child(2){border-right:0}.cards,.google-review-grid,.faq-grid{grid-template-columns:1fr}.service-links,.area-links{grid-template-columns:1fr 1fr}.cta-blue .wrap,.foot{display:block}.cta-blue .btn{margin-top:20px}.mobile-call{display:block;position:fixed;bottom:14px;left:4%;right:4%;z-index:25;background:var(--blue);color:#fff;padding:15px;border-radius:10px;text-align:center;font-weight:900;box-shadow:0 5px 22px #0005}section{padding:56px 0}.intro h2,.content-title{font-size:33px}}
-@media(max-width:520px){.service-links,.area-links{grid-template-columns:1fr}}
-"""
 
     if is_guildford:
         faq_items = [
@@ -272,28 +256,11 @@ footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{disp
             '<a href="/emergency-plumber-guildford">Urgent Plumbing in Guildford</a>',
         ])
         reviews_html = _google_reviews_html()
-        guildford_css = r"""
-:root{--navy:#0b2032;--blue:#1263a5;--pale:#f3f7fa;--gold:#e2b353;--text:#142b3e;--muted:#60717e;--border:#dfe7ec}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--text);line-height:1.55;background:#fff}a{text-decoration:none;color:inherit}.wrap{width:min(1120px,92%);margin:auto}
-.topbar{background:var(--navy);color:#fff;font-size:14px}.topbar .wrap{padding:9px 0;display:flex;justify-content:space-between;gap:20px}
-.site-header{background:#fff;position:sticky;top:0;z-index:20;box-shadow:0 2px 18px #00000012}.site-nav{display:flex;align-items:center;justify-content:space-between;padding:15px 0}.brand{font-size:23px;font-weight:800;letter-spacing:-.5px}.brand small{display:block;color:var(--blue);font-size:11px;letter-spacing:2.5px}.navlinks{display:flex;align-items:center;gap:24px;font-weight:700;font-size:14px}.btn{display:inline-block;background:var(--blue);color:#fff;padding:13px 21px;border-radius:7px;font-weight:800}.btn.white{background:#fff;color:var(--navy)}
-.guildford-hero{min-height:570px;display:grid;align-items:center;color:#fff;background:linear-gradient(90deg,#071827f2 0%,#071827d9 48%,#07182762 80%),url('/site-images/bathroom-illustrative.webp') center/cover}.hero-copy{max-width:760px;padding:82px 0}.eyebrow{color:#f0c66e;text-transform:uppercase;letter-spacing:2px;font-size:13px;font-weight:800}.guildford-hero h1{font-size:clamp(43px,6vw,67px);line-height:1.02;letter-spacing:-2px;margin:14px 0 20px}.guildford-hero p{font-size:20px;max-width:680px;color:#e5edf3}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
-.trust{box-shadow:0 10px 30px #0000000c}.trustgrid{display:grid;grid-template-columns:repeat(4,1fr);text-align:center}.trustgrid div{padding:23px 10px;border-right:1px solid #e3e9ed}.trustgrid div:last-child{border:0}.trustgrid strong{display:block;font-size:17px}.trustgrid span{color:var(--muted);font-size:13px}
-section{padding:72px 0}.section-pale{background:var(--pale)}.section-dark{background:var(--navy);color:#fff}.intro{text-align:center;max-width:780px;margin:0 auto 38px}.intro.left{text-align:left;margin-left:0}.intro h2,.content-title{font-size:39px;line-height:1.12;letter-spacing:-1px;margin:0 0 14px}.intro p,.muted{color:var(--muted)}.section-dark .intro p{color:#cbd7df}
-.service-links{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.service-links a,.area-links a{background:#fff;border:1px solid var(--border);border-radius:11px;padding:17px;font-weight:800;color:var(--navy);text-align:center;transition:.15s}.service-links a:hover,.area-links a:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-1px)}
-.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.card{background:#fff;border-radius:13px;padding:28px;box-shadow:0 8px 25px #0b20320c}.section-pale .card{border:1px solid #e6edf1}.card h3{margin:0 0 9px}.card p{font-size:14px;color:var(--muted);margin:0}.section-dark .card{color:var(--text)}
-.review-section{background:#f5f8fa}.reviewbox{max-width:1040px;margin:auto;text-align:center;background:#fff;padding:46px;border-radius:15px;box-shadow:0 10px 30px #0b20320d}.google-brand{font-size:20px;font-weight:800;margin-bottom:8px}.google-rating{display:flex;justify-content:center;align-items:center;gap:12px;margin:8px 0 24px}.google-rating strong{font-size:24px;color:var(--text)}.google-rating .stars{font-size:22px}.google-review-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;text-align:left;margin:0 0 24px}.google-review-card{border:1px solid #e3e9ed;border-radius:12px;padding:20px;background:#fff}.review-author{display:flex;gap:11px;align-items:center}.review-author a{color:var(--text);text-decoration:none}.review-avatar{width:42px;height:42px;border-radius:50%;object-fit:cover}.review-avatar-fallback{display:flex;align-items:center;justify-content:center;background:#eef3f6;color:var(--blue);font-weight:900}.review-meta{font-size:12px;color:var(--muted);margin-top:3px}.mini-stars{color:#e3a923;letter-spacing:1px}.review-text{font-size:14px;line-height:1.55;color:#46545f;margin:15px 0}.review-source{font-size:12px;font-weight:800;color:var(--blue);text-decoration:none}.review-note{font-size:12px;color:var(--muted);margin:0 0 20px}
-.area-links{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.faq-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.faq-grid .card{border:1px solid var(--border)}
-.cta-blue{background:var(--blue);color:#fff}.cta-blue .wrap{display:flex;justify-content:space-between;align-items:center;gap:30px}.cta-blue h2{margin:0;font-size:37px}.cta-blue p{margin:7px 0 0;color:#e8f2f8}
-footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{display:flex;justify-content:space-between;gap:30px}.foot strong{color:#fff}.mobile-call{display:none}
-@media(max-width:800px){.site-nav{flex-wrap:wrap}.navlinks{flex-wrap:wrap;gap:10px}.topbar .wrap{justify-content:center}.topbar span:last-child{display:none}.guildford-hero{min-height:540px;background:linear-gradient(#071827c9,#071827e6),url('/site-images/bathroom-illustrative.webp') center/cover}.hero-copy{padding:62px 0}.guildford-hero h1{font-size:44px}.guildford-hero p{font-size:18px}.trustgrid{grid-template-columns:1fr 1fr}.trustgrid div:nth-child(2){border-right:0}.cards,.google-review-grid,.faq-grid{grid-template-columns:1fr}.service-links,.area-links{grid-template-columns:1fr 1fr}.cta-blue .wrap,.foot{display:block}.cta-blue .btn{margin-top:20px}.mobile-call{display:block;position:fixed;bottom:14px;left:4%;right:4%;z-index:25;background:var(--blue);color:#fff;padding:15px;border-radius:10px;text-align:center;font-weight:900;box-shadow:0 5px 22px #0005}section{padding:56px 0}.intro h2,.content-title{font-size:33px}}
-@media(max-width:520px){.service-links,.area-links{grid-template-columns:1fr}}
-"""
-        return f"""<!doctype html>
+        return render_shared_public_page(f"""<!doctype html>
 <html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(title)}</title><meta name="description" content="{escape(meta_description)}"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="{escape(canonical)}">
 <meta property="og:type" content="website"><meta property="og:title" content="{escape(title)}"><meta property="og:description" content="{escape(meta_description)}"><meta property="og:url" content="{escape(canonical)}">
-<script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{local_schema}</script><script type="application/ld+json">{faq_schema}</script><style>{guildford_css}</style></head><body>
+<script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{local_schema}</script><script type="application/ld+json">{faq_schema}</script></head><body>
 <div class="topbar"><div class="wrap"><span>Local plumber serving Guildford &amp; Surrey</span><span>Call Nigel: {escape(COMPANY_PHONE)} &nbsp; · &nbsp; {escape(COMPANY_EMAIL)}</span></div></div>
 <header class="site-header"><div class="wrap site-nav"><div class="brand">Nigel Harvey <small>PLUMBING</small></div><div class="navlinks"><a href="#services">Services</a><a href="#about">About</a><a href="#reviews">Reviews</a><a href="#areas">Areas</a><a class="btn" href="/request-quote">Get a Quote</a></div></div></header>
 <section class="guildford-hero"><div class="wrap"><div class="hero-copy"><div class="eyebrow">Nigel Harvey Plumbing · Guildford</div><h1>Plumber in Guildford</h1><p>Local domestic plumbing for leaks, taps, toilets, bathrooms, showers, radiators and pipework. From first enquiry to finished job, you deal directly with me, Nigel.</p><div class="actions"><a class="btn" href="/request-quote">Get a Quote</a><a class="btn white" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a></div></div></div></section>
@@ -305,7 +272,7 @@ footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{disp
 <section id="areas"><div class="wrap"><div class="intro"><h2>Areas near Guildford</h2><p>As well as Guildford itself, plumbing work is available across nearby Surrey areas. Use the local pages below for more information.</p></div><div class="area-links">{related}</div></div></section>
 <section class="section-pale"><div class="wrap"><div class="intro"><h2>Frequently asked questions</h2></div><div class="faq-grid">{faq_html}</div></div></section>
 <section class="cta-blue"><div class="wrap"><div><h2>Need a plumber in Guildford?</h2><p>Send your postcode, a short description and photos if useful, or call Nigel directly.</p></div><div class="actions"><a class="btn white" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel</a><a class="btn white" href="/request-quote">Get a Quote</a></div></div></section>
-<footer><div class="wrap foot"><div><strong>Nigel Harvey Plumbing</strong><br>Nigel Harvey Ltd · Guildford, Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></footer><a class="mobile-call" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel · {escape(COMPANY_PHONE)}</a></body></html>"""
+<footer><div class="wrap foot"><div><strong>Nigel Harvey Plumbing</strong><br>Nigel Harvey Ltd · Guildford, Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></footer><a class="mobile-call" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel · {escape(COMPANY_PHONE)}</a></body></html>""")
 
     faq_items = [
         (f"What plumbing work do you cover in {location_name}?", f"I cover domestic plumbing in {location_name}, including leaks, taps, toilets, sinks, wastes, radiators and valves, bathroom plumbing, pipework changes and other general plumbing repairs."),
@@ -336,11 +303,11 @@ footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{disp
             for item in SERVICE_PAGES
         )
     reviews_html = _google_reviews_html()
-    return f"""<!doctype html>
+    return render_shared_public_page(f"""<!doctype html>
 <html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(title)}</title><meta name="description" content="{escape(meta_description)}"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="{escape(canonical)}">
 <meta property="og:type" content="website"><meta property="og:title" content="{escape(title)}"><meta property="og:description" content="{escape(meta_description)}"><meta property="og:url" content="{escape(canonical)}">
-<script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{local_schema}</script><script type="application/ld+json">{faq_schema}</script><style>{blue_location_css}</style></head><body>
+<script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{local_schema}</script><script type="application/ld+json">{faq_schema}</script></head><body>
 <div class="topbar"><div class="wrap"><span>Local plumber serving {escape(location_name)} &amp; Surrey</span><span>Call Nigel: {escape(COMPANY_PHONE)} &nbsp; · &nbsp; {escape(COMPANY_EMAIL)}</span></div></div>
 <header class="site-header"><div class="wrap site-nav"><a class="brand" href="/">Nigel Harvey <small>PLUMBING</small></a><div class="navlinks"><a href="#services">Services</a><a href="#about">About</a><a href="#reviews">Reviews</a><a href="#areas">Areas</a><a class="btn" href="/request-quote">Get a Quote</a></div></div></header>
 <section class="guildford-hero"><div class="wrap"><div class="hero-copy"><div class="eyebrow">Nigel Harvey Plumbing · {escape(location_name)}</div><h1>Plumber in {escape(location_name)}</h1><p>{escape(location_intro)}</p><div class="actions"><a class="btn" href="/request-quote">Get a Quote</a><a class="btn white" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a></div></div></div></section>
@@ -353,7 +320,7 @@ footer{background:#071827;color:#c8d3dc;padding:38px 0;font-size:14px}.foot{disp
 <section id="areas"><div class="wrap"><div class="intro"><h2>Areas I cover near {escape(location_name)}</h2><p>I also cover nearby areas across Surrey. Use the links below for local service information.</p></div><div class="area-links">{related}</div></div></section>
 <section class="section-pale"><div class="wrap"><div class="intro"><h2>Frequently asked questions</h2></div><div class="faq-grid">{faq_html}</div></div></section>
 <section class="cta-blue"><div class="wrap"><div><h2>Need a plumber in {escape(location_name)}?</h2><p>Send your postcode, a short description and photos if useful, or call me directly.</p></div><div class="actions"><a class="btn white" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel</a><a class="btn white" href="/request-quote">Get a Quote</a></div></div></section>
-<footer><div class="wrap foot"><div><strong>Nigel Harvey Plumbing</strong><br>Nigel Harvey Ltd · Guildford, Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></footer><a class="mobile-call" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel · {escape(COMPANY_PHONE)}</a></body></html>"""
+<footer><div class="wrap foot"><div><strong>Nigel Harvey Plumbing</strong><br>Nigel Harvey Ltd · Guildford, Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></footer><a class="mobile-call" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel · {escape(COMPANY_PHONE)}</a></body></html>""")
 
 
 def render_service_page(service: dict, logo_html: str, request: Request | None = None, *, absolute_url) -> str:
@@ -378,8 +345,8 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
         "url": canonical,
         "description": service["meta"],
     }, ensure_ascii=False)
-    return f"""<!doctype html>
-<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(service['title'])} | Nigel Harvey Ltd</title><meta name="description" content="{escape(service['meta'])}"><meta name="keywords" content="{escape(service['keywords'])}"><link rel="canonical" href="{escape(canonical)}"><script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{service_schema}</script><style>{SEO_CSS}</style></head>
+    return render_shared_public_page(f"""<!doctype html>
+<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(service['title'])} | Nigel Harvey Ltd</title><meta name="description" content="{escape(service['meta'])}"><meta name="keywords" content="{escape(service['keywords'])}"><link rel="canonical" href="{escape(canonical)}"><script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{service_schema}</script></head>
 <body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(service['title'])}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
 <main>
 <div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Surrey plumbing service</div><h1>{escape(service['heading'])}</h1><p class="lead">{escape(service['intro'])}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
@@ -388,7 +355,7 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
 <div class="wrap section"><h2>Related plumbing services</h2><div class="pill-links">{service_links}</div></div>
 <div class="wrap section"><h2>Frequently asked questions</h2><div class="faq-grid"><div class="card faq"><h3>How do I check whether you cover my address?</h3><p>Send your postcode and a short description. Nigel can confirm the location before arranging any work.</p></div><div class="card faq"><h3>Can I request a quote online?</h3><p>Yes. Send your details through the online quote form. Submission does not confirm a booking.</p></div><div class="card faq"><h3>What if the problem is urgent?</h3><p>Call Nigel to discuss the issue and availability. Isolate an active leak if it is safe to do so.</p></div></div></div>
 <div class="wrap"><div class="hero-card cta"><div><h2 style="margin:0 0 8px">Need help with {escape(service['heading']).lower()}?</h2><div style="color:var(--muted)">Call Nigel or send your job details online to discuss the next step.</div></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
-<div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services in Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}<br>Guildford, Surrey and surrounding areas</div></div></div><a href="tel:{escape(COMPANY_PHONE_TEL)}" class="sticky-call">📞 Call Now: {escape(COMPANY_PHONE)}</a></body></html>"""
+<div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services in Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}<br>Guildford, Surrey and surrounding areas</div></div></div><a href="tel:{escape(COMPANY_PHONE_TEL)}" class="sticky-call">📞 Call Now: {escape(COMPANY_PHONE)}</a></body></html>""")
 
 
 LOCAL_SERVICE_PAGES = [
@@ -482,7 +449,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         "description": intro,
     }, ensure_ascii=False)
 
-    return f"""<!doctype html>
+    return render_shared_public_page(f"""<!doctype html>
 <html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(title)} in {escape(area)} | Nigel Harvey Ltd</title>
 <meta name="description" content="{escape(intro)} Call Nigel Harvey Ltd on {escape(COMPANY_PHONE)} for reliable local plumbing help.">
@@ -490,7 +457,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
 <link rel="canonical" href="{escape(canonical)}">
 <script type="application/ld+json">{breadcrumb_schema}</script>
 <script type="application/ld+json">{service_schema}</script>
-<style>{SEO_CSS}</style></head>
+</head>
 <body>
 <div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(title)} in {escape(area)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
 <main>
@@ -511,4 +478,4 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
 </main>
 <div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services in Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}<br>{escape(area)}, Surrey and surrounding areas</div></div></div>
 <a href="tel:{escape(COMPANY_PHONE_TEL)}" class="sticky-call">📞 Call Now: {escape(COMPANY_PHONE)}</a>
-</body></html>"""
+</body></html>""")
