@@ -181,6 +181,10 @@
   ],
   [
     "GET",
+    "/site-images/{filename}"
+  ],
+  [
+    "GET",
     "/sitemap.xml"
   ],
   [

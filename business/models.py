@@ -72,6 +72,16 @@ class LeadRequest(BaseModel):
     job_type: str = "small"
     description: str = ""
     source: str = "website"
+    postcode: str = ""
+    urgency: str = ""
+    preferred_contact: str = ""
+    landing_page: str = ""
+    referrer: str = ""
+    utm_source: str = ""
+    utm_medium: str = ""
+    utm_campaign: str = ""
+    utm_content: str = ""
+    utm_term: str = ""
 
 
 class LeadStatusRequest(BaseModel):

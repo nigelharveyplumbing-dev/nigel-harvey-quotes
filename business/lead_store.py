@@ -2,10 +2,38 @@
 
 from business.db import get_db
 from business.models import LeadRequest
+import json
+
+SOURCE_PREFIX = "website-context-v1:"
+CONTEXT_FIELDS = ("postcode", "urgency", "preferred_contact", "landing_page", "referrer",
+                  "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term")
+
+
+def lead_source_with_context(data: LeadRequest) -> str:
+    source = (data.source or "website").strip() or "website"
+    context = {key: (getattr(data, key) or "").strip()[:300] for key in CONTEXT_FIELDS
+               if (getattr(data, key) or "").strip()}
+    if not context:
+        return source
+    return SOURCE_PREFIX + json.dumps({"source": source[:120], **context}, ensure_ascii=False,
+                                      separators=(",", ":"))
+
+
+def parse_lead_source(value: str) -> tuple[str, dict]:
+    if value.startswith(SOURCE_PREFIX):
+        try:
+            data = json.loads(value[len(SOURCE_PREFIX):])
+            if isinstance(data, dict) and isinstance(data.get("source"), str):
+                return data["source"], {key: data[key] for key in CONTEXT_FIELDS
+                                         if isinstance(data.get(key), str)}
+        except (ValueError, TypeError):
+            pass
+    return value or "website", {}
 
 
 def row_to_lead(row):
-    return {
+    source, context = parse_lead_source(row["source"] or "website")
+    result = {
         "id": row["id"],
         "name": row["name"] or "",
         "phone": row["phone"] or "",
@@ -14,10 +42,11 @@ def row_to_lead(row):
         "job_type": row["job_type"] or "small",
         "description": row["description"] or "",
         "status": row["status"] or "new",
-        "source": row["source"] or "website",
+        "source": source,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+    return {**result, **context}
 
 
 def save_lead(data: LeadRequest, now_uk, format_dt):
@@ -36,7 +65,7 @@ def save_lead(data: LeadRequest, now_uk, format_dt):
             (data.job_type or "small").strip() or "small",
             (data.description or "").strip(),
             "new",
-            (data.source or "website").strip() or "website",
+            lead_source_with_context(data),
             format_dt(now),
             now.isoformat(),
             now.isoformat(),

@@ -82,7 +82,8 @@ class LocalIntegrationTests(unittest.TestCase):
         self.assertEqual(c.get("/api/dashboard", headers=self.auth).status_code, 200)
         for path in ("/", "/plumber-guildford", "/request-quote", "/robots.txt", "/sitemap.xml"):
             self.assertEqual(c.get(path).status_code, 200, path)
-        self.assertEqual(c.get("/emergency-plumber-surrey").status_code, 404)
+        self.assertEqual(c.get("/emergency-plumber-surrey").status_code, 200)
+        self.assertEqual(c.get("/general-plumbing-surrey").status_code, 200)
 
     def test_invoice_card_payment_defaults_and_client_assets(self):
         """The default display matches server config without shipping payment literals."""
@@ -489,8 +490,8 @@ context.runWorkflow().then(() => {
             home = self.client.get("/").text
             self.assertIn(f'<link rel="canonical" href="{base}/">', home)
             self.assertIn(f'<meta property="og:url" content="{base}/">', home)
-            # This page currently has no canonical placeholder; preserve it.
-            self.assertNotIn('rel="canonical"', self.client.get("/request-quote").text)
+            self.assertIn(f'<link rel="canonical" href="{base}/request-quote">',
+                          self.client.get("/request-quote").text)
             self.assertIn(base + "/plumber-guildford", self.client.get("/plumber-guildford").text)
             self.assertIn(base + "/sitemap.xml", self.client.get("/robots.txt").text)
             self.assertIn(base + "/plumber-guildford", self.client.get("/sitemap.xml").text)
@@ -646,12 +647,12 @@ class StagingAccessTests(unittest.TestCase):
         cls.auth = header(cls.password)
         cls.wrong_auth = header(cls.password + "-wrong")
 
-    def test_all_66_routes_and_framework_pages_reject_before_side_effects(self):
+    def test_all_67_routes_and_framework_pages_reject_before_side_effects(self):
         m = self.app_module
         routes = [(method, route) for route in m.app.routes
                   if route.path not in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
                   for method in getattr(route, "methods", [])]
-        self.assertEqual(len(routes), 66)
+        self.assertEqual(len(routes), 67)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "material_id": "1", "photo_id": "1", "filename": "sample.db",
                       "area_slug": "guildford", "service_slug": "plumber"}

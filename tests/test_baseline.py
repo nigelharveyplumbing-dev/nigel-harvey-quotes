@@ -34,10 +34,11 @@ from encoding_audit import hits as encoding_hits, scan_database, text_leaves
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Explicit policy for the 66 application method/path routes. All others are private.
+# Explicit policy for the 67 application method/path routes. All others are private.
 PUBLIC_WEBSITE_ROUTES = {
     ("GET", path) for path in (
         "/", "/new-home", "/request-quote", "/robots.txt", "/sitemap.xml",
+        "/site-images/{filename}",
         "/plumber-{area_slug}", "/{service_slug}-{area_slug}", "/{service_slug}",
     )
 } | {("POST", "/api/leads")}
@@ -130,8 +131,8 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
-        self.assertEqual(len(routes), 66)
-        self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 9)
+        self.assertEqual(len(routes), 67)
+        self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 10)
         self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
         self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 52)
         self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
@@ -226,7 +227,7 @@ class BaselineTests(unittest.TestCase):
         self.assertIsNotNone(config)
         masked = m.HTML.replace(config.group(1), "__PAYMENT_CONFIG__", 1)
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
-                         "d53623c3edaa4221ef138f636254bc0e455610309338f3797e018165ae9dd34c")
+                         "274a31ea90339fe743dc8ad43bdf3d081afdf54dd1bc55fab825ba2b53b59168")
         self.assertEqual(m.HTML.count("<style>"), 1)
         self.assertEqual(m.HTML.count("<script>"), 1)
         self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {
@@ -303,12 +304,13 @@ class BaselineTests(unittest.TestCase):
             "/{service_slug}-{area_slug}":
                 f"/{m.LOCAL_SERVICE_PAGES[0]['slug']}-{m.LOCATION_PAGES[0]['slug']}",
             "/{service_slug}": f"/{m.SERVICE_PAGES[0]['slug']}",
+            "/site-images/{filename}": "/site-images/bathroom-illustrative.webp",
         }
         with TestClient(m.app) as client, patch.object(m, "send_lead_notification_email") as notify:
             for method, template in sorted(PUBLIC_WEBSITE_ROUTES):
                 if method == "GET":
                     with self.subTest(path=template):
-                        expected = 404 if template == "/{service_slug}" else 200
+                        expected = 200
                         self.assertEqual(client.get(paths.get(template, template)).status_code, expected)
             lead = client.post("/api/leads", json={
                 "name": "Public Test", "phone": "07000000000", "description": "Enquiry",
@@ -319,25 +321,26 @@ class BaselineTests(unittest.TestCase):
             detailed = client.get("/api/health", headers=self.auth_headers)
             self.assertEqual(detailed.status_code, 200)
             self.assertTrue({"ok", "db_path", "db_size_bytes", "counts", "backup_count"} <= detailed.json().keys())
-            self.assertEqual(client.get("/emergency-plumber-surrey").status_code, 404)
+            self.assertEqual(client.get("/emergency-plumber-surrey").status_code, 200)
+            self.assertEqual(client.get("/general-plumbing-surrey").status_code, 200)
 
     def test_public_page_literals_and_rendered_html_are_byte_identical(self):
         m = self.module
         literals = {
             "LANDING_PAGE_HTML": "0557ccac52285b3f8400972513c71c58c822defd224200f3bace562811472bb5",
             "SEO_CSS": "a22e53ee58ed48079fc147e3b604c75a2dfca3478da0ca9591cd9632f47cba0f",
-            "LEAD_FORM_HTML": "16bec9032f8177d7cccdd0b438807305c44a6c2051109556e78a827cd21e8366",
+            "LEAD_FORM_HTML": "c60c035c0d2a8b8eaf39abdf4acd6f33691a0ea4f37371f681684b967bffbe6e",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "54df0755a08b6a473e0a97f675a15aa9685ad42c92d87f6a1b92f2aa081779a4",
+                "e0221fa61db4b5897d9dbc7a9384ea948b4ebd29df159156477782abc6332423",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
         page_hashes = {
-            "/": "40975e54d0a2eae9b6aeb4eeeda43139f4cb0ea9a4b8ef8064a9937495f99b6d",
-            "/new-home": "40975e54d0a2eae9b6aeb4eeeda43139f4cb0ea9a4b8ef8064a9937495f99b6d",
-            "/request-quote": "0a77e0a22b92373ef504b97f9d2a95ef03b123c52cf489a30d214308bb1c629c",
+            "/": "577b8c3233a71d848f6d77e9ea2741ab959f5c944f7119505bdc12bedb3bcf0d",
+            "/new-home": "577b8c3233a71d848f6d77e9ea2741ab959f5c944f7119505bdc12bedb3bcf0d",
+            "/request-quote": "f28b76aadc67ee04fea97ddd1f215f413397019a49cb446e5c1926c3f9dae125",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage6.invalid",
@@ -370,7 +373,8 @@ class BaselineTests(unittest.TestCase):
                                           for a in nav.select("a.btn")],
                                          [("Get a Quote", "/request-quote"),
                                           ("Open App", "/app")])
-                        self.assertIn(".navlinks a:not(.btn){display:none}", response.text)
+                        self.assertIn('class="mobile-contact"', response.text)
+                        self.assertIn('href="/app"', response.text)
                 self.assertEqual(client.get("/app").status_code, 401)
                 self.assertEqual(client.get("/app", headers=self.auth_headers).status_code, 200)
 
@@ -577,8 +581,9 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             home = client.get("/").text
             self.assertIn("Plumber in Guildford", home)
             self.assertIn('rel="canonical"', home)
-            # Existing route precedence sends this service slug to the location handler.
-            self.assertEqual(client.get("/emergency-plumber-surrey").status_code, 404)
+            # Established Surrey service URLs resolve despite route precedence.
+            self.assertEqual(client.get("/emergency-plumber-surrey").status_code, 200)
+            self.assertEqual(client.get("/general-plumbing-surrey").status_code, 200)
             self.assertEqual(client.get("/plumber-not-a-real-place").status_code, 404)
             sitemap = client.get("/sitemap.xml")
             self.assertEqual(sitemap.status_code, 200)
@@ -1233,9 +1238,9 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         """Freeze the three existing SEO page families before moving renderers."""
         m = self.module
         cases = (
-            ("location", "7f657a7e9b221e208c0ab3f26826fb8bbb659b27b36407bf167f47fce2d88094"),
-            ("service", "f904168c2608697cfb35b8198a812a8ef5fe043b83461d07d98a80b3f2e5bcb1"),
-            ("local", "b266c843193f4c1c57dae5cd0dafda1836f26558d4068b582582afa695a1da0a"),
+            ("location", "109b57c9af0e81fe33d45b095c6ab6cd67ebede2949692bbda9081071c66b099"),
+            ("service", "11a6083f4d60a05bf8c6cc0b784ca65988f7fdb5b0bcd82460644eae66bfab26"),
+            ("local", "a6f8bfef54a0c258d16078d9bf0e2bfc07551f67c10f9dec9694382714ff7813"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage7.invalid",

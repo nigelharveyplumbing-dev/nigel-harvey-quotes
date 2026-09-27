@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from fastapi import FastAPI, HTTPException, Response, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from starlette.routing import Match
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
@@ -61,6 +61,7 @@ PUBLIC_ROUTE_KEYS = frozenset({
     ("GET", "/"),
     ("GET", "/new-home"),
     ("GET", "/request-quote"),
+    ("GET", "/site-images/{filename}"),
     ("GET", "/robots.txt"),
     ("GET", "/sitemap.xml"),
     ("GET", "/plumber-{area_slug}"),
@@ -973,7 +974,7 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict):
 def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     return invoice_store.update_invoice_by_id(invoice_id, data, row_to_invoice, safe_float, upsert_customer)
 
-from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search
+from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search, website_contact
 
 def get_dashboard():
     return dashboard_reporting.get_dashboard(get_db, now_uk)
@@ -1224,9 +1225,10 @@ def request_quote_page(request: Request):
     logo_html = f'<img src="{logo_value}" alt="Nigel Harvey Ltd logo" class="logo" width="240" height="90">' if logo_value else ""
     html = LEAD_FORM_HTML.replace("__COMPANY_LOGO_HTML__", logo_html)
     html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
-    html = html.replace("__COMPANY_PHONE_TEL__", COMPANY_PHONE_TEL)
+    html = html.replace("__COMPANY_PHONE_TEL__", website_contact.telephone_uri_number(COMPANY_PHONE))
     html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
-    html = html.replace("__CANONICAL_HOME__", absolute_url("/", request))
+    html = html.replace("__CANONICAL_QUOTE__", escape(absolute_url("/request-quote", request), quote=True))
+    html = html.replace("__WHATSAPP_URL__", escape(website_contact.whatsapp_url(COMPANY_PHONE, "Hi Nigel, I've got a plumbing job I'd like some help with."), quote=True))
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -1273,26 +1275,36 @@ def home_app():
 NEW_HOMEPAGE_PREVIEW_HTML = (Path(__file__).resolve().parent / "templates/homepage.html").read_text(encoding="utf-8")
 
 
-@app.get("/new-home", response_class=HTMLResponse)
-def new_homepage_preview(request: Request):
+@app.get("/site-images/{filename}")
+def public_site_image(filename: str):
+    # Only the reviewed, bundled stock illustrations may be served publicly.
+    if filename not in {"bathroom-illustrative.webp", "shower-illustrative.webp", "radiator-illustrative.webp"}:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(Path(__file__).resolve().parent / "static" / "site-images" / filename,
+                        media_type="image/webp", headers={"Cache-Control": "public, max-age=604800"})
+
+
+def render_public_homepage(request: Request):
+    reviews = _google_reviews_html()
     html = NEW_HOMEPAGE_PREVIEW_HTML.replace("__PUBLIC_HOME_URL__", escape(absolute_url("/", request), quote=True))
     html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
-    html = html.replace("__COMPANY_PHONE_TEL__", COMPANY_PHONE_TEL)
+    html = html.replace("__COMPANY_PHONE_TEL__", website_contact.telephone_uri_number(COMPANY_PHONE))
     html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
-    html = html.replace("__GOOGLE_REVIEWS_URL__", GOOGLE_REVIEWS_URL)
-    html = html.replace("__GOOGLE_REVIEWS_HTML__", _google_reviews_html())
+    html = html.replace("__GOOGLE_REVIEW_SUMMARY__", website_contact.review_summary_html(reviews, GOOGLE_REVIEWS_URL))
+    html = html.replace("__GOOGLE_REVIEWS_HTML__", reviews)
+    html = html.replace("__WHATSAPP_URL__", escape(website_contact.whatsapp_url(COMPANY_PHONE, "Hi Nigel, I've got a plumbing job I'd like some help with."), quote=True))
+    html = html.replace("__BUSINESS_SCHEMA__", build_homepage_business_schema(absolute_url("/", request)).replace("<", "\\u003c"))
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
+
+
+@app.get("/new-home", response_class=HTMLResponse)
+def new_homepage_preview(request: Request):
+    return render_public_homepage(request)
 
 
 @app.get("/", response_class=HTMLResponse)
 def landing_home(request: Request):
-    html = NEW_HOMEPAGE_PREVIEW_HTML.replace("__PUBLIC_HOME_URL__", escape(absolute_url("/", request), quote=True))
-    html = html.replace("__COMPANY_PHONE__", COMPANY_PHONE)
-    html = html.replace("__COMPANY_PHONE_TEL__", COMPANY_PHONE_TEL)
-    html = html.replace("__COMPANY_EMAIL__", COMPANY_EMAIL)
-    html = html.replace("__GOOGLE_REVIEWS_URL__", GOOGLE_REVIEWS_URL)
-    html = html.replace("__GOOGLE_REVIEWS_HTML__", _google_reviews_html())
-    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
+    return render_public_homepage(request)
 
 
 @app.get("/robots.txt")
@@ -1313,7 +1325,7 @@ def sitemap_xml(request: Request):
     urls.extend(
         f"/{service['slug']}-{location['slug']}"
         for service in LOCAL_SERVICE_PAGES
-        for location in LOCATION_PAGES
+        for location in LOCATION_PAGES if location["slug"] != "farnborough"
     )
     body = "".join(f"<url><loc>{absolute_url(url, request)}</loc></url>" for url in urls)
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
@@ -1332,8 +1344,18 @@ def location_page(area_slug: str, request: Request):
 
 @app.get("/{service_slug}-{area_slug}", response_class=HTMLResponse)
 def local_service_location_page(service_slug: str, area_slug: str, request: Request):
+    # The established Surrey service slugs contain a hyphen and otherwise match
+    # this two-part route before FastAPI reaches /{service_slug}.
+    full_slug = f"{service_slug}-{area_slug}".lower()
+    established_service = next((item for item in SERVICE_PAGES if item["slug"] == full_slug), None)
+    if established_service:
+        logo_html = get_company_logo_html(get_company_logo_value())
+        return HTMLResponse(content=render_service_page(established_service, logo_html, request),
+                            media_type="text/html; charset=utf-8")
     service = next((item for item in LOCAL_SERVICE_PAGES if item["slug"] == service_slug.lower()), None)
-    location = next((item for item in LOCATION_PAGES if item["slug"] == area_slug.lower()), None)
+    # No automatic service × Farnborough doorway pages in this growth batch.
+    location = next((item for item in LOCATION_PAGES if item["slug"] == area_slug.lower()
+                     and item["slug"] != "farnborough"), None)
     if not service or not location:
         raise HTTPException(status_code=404, detail="Local service page not found")
     logo_html = get_company_logo_html(get_company_logo_value())

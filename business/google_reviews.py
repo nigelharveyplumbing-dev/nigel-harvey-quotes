@@ -7,7 +7,6 @@ from urllib.parse import quote_plus
 def google_reviews_html(*, GOOGLE_PLACES_API_KEY, GOOGLE_REVIEWS_URL, _google_place_id):
     """Build the live Google rating/review section. Falls back cleanly if Google is unavailable."""
     fallback = (
-        '<div class="stars">★★★★★</div>'
         '<h2>Customer reviews</h2>'
         '<p class="muted">See feedback from customers on Google, or leave a review after Nigel has completed your plumbing work.</p>'
         f'<a class="btn" href="{escape(GOOGLE_REVIEWS_URL, quote=True)}" target="_blank" rel="noopener">Read Google Reviews</a>'

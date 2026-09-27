@@ -2259,6 +2259,8 @@ async function loadLeads() {
         <div class="small">${escapeHtml(l.address || '')}</div>
         <div style="margin-top:8px;">${escapeHtml(l.description || '')}</div>
         <div class="small" style="margin-top:8px;">${escapeHtml(l.created_at || '')} · ${escapeHtml((l.job_type || 'small').toUpperCase())} · ${escapeHtml(l.source || 'website')}</div>
+        ${l.postcode || l.urgency || l.preferred_contact ? `<div class="small">${l.postcode ? 'Postcode: ' + escapeHtml(l.postcode) + ' · ' : ''}${l.urgency ? 'Urgency: ' + escapeHtml(l.urgency) + ' · ' : ''}${l.preferred_contact ? 'Prefers: ' + escapeHtml(l.preferred_contact) : ''}</div>` : ''}
+        ${l.landing_page || l.referrer || l.utm_source || l.utm_campaign ? `<div class="small">${l.landing_page ? 'Landing: ' + escapeHtml(l.landing_page) + ' · ' : ''}${l.referrer ? 'Referrer: ' + escapeHtml(l.referrer) + ' · ' : ''}${l.utm_source ? 'Source: ' + escapeHtml(l.utm_source) + ' · ' : ''}${l.utm_campaign ? 'Campaign: ' + escapeHtml(l.utm_campaign) : ''}</div>` : ''}
         <div class="history-actions" style="grid-template-columns:repeat(2,1fr);">
           <button type="button" class="btn-light" onclick="startQuoteFromLead(${l.id})">Start Quote</button>
           <button type="button" class="btn-blue" onclick="updateLeadStatus(${l.id}, 'contacted')">Mark Contacted</button>
