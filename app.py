@@ -1302,6 +1302,7 @@ def render_public_homepage(request: Request):
     html = html.replace("__GOOGLE_REVIEWS_HTML__", reviews)
     html = html.replace("__WHATSAPP_URL__", escape(website_contact.whatsapp_url(COMPANY_PHONE, "Hi Nigel, I've got a plumbing job I'd like some help with."), quote=True))
     html = html.replace("__BUSINESS_SCHEMA__", build_homepage_business_schema(absolute_url("/", request)).replace("<", "\\u003c"))
+    html = html.replace("__FAQ_SCHEMA__", build_homepage_faq_schema().replace("<", "\\u003c"))
     html = html.replace("__PUBLIC_SITE_CSS__", public_layout.SITE_CSS)
     html = html.replace("__PUBLIC_HEADER__", public_layout.site_header(home=True))
     html = html.replace("__PUBLIC_FOOTER__", public_layout.site_footer())
