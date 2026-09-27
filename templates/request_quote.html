@@ -14,13 +14,16 @@ __PUBLIC_QUOTE_CSS__</style></head>
 <div class="actions"><button class="btn" id="submitButton" type="submit">Send quote request</button></div><p class="small">Nigel will use these details to respond to your enquiry. Please avoid sending sensitive personal information in the job description.</p><div id="lead_ok" class="ok" role="status" aria-live="polite">Thank you — your request has reached Nigel’s Leads list. He can review it and contact you to discuss the next step.</div><div id="lead_err" class="err" role="alert" aria-live="assertive"></div></form>
 <div class="alternatives"><h2>Want to share a photo?</h2><p>Open <a href="__WHATSAPP_URL__" target="_blank" rel="noopener noreferrer">WhatsApp Nigel</a> to add images to your message, or call <a href="tel:__COMPANY_PHONE_TEL__">__COMPANY_PHONE__</a>. This form does not upload files, and WhatsApp will not send anything until you choose to send it there.</p><p class="small">You can also email <a href="mailto:__COMPANY_EMAIL__">__COMPANY_EMAIL__</a>.</p></div></div></main>
 __PUBLIC_FOOTER__
+__PUBLIC_ANALYTICS__
 <script>
 const form = document.getElementById('leadForm');
+let submitted = false;
 form.addEventListener('submit', async function(event) {
   event.preventDefault();
+  const button = document.getElementById('submitButton');
+  if (submitted || button.disabled) return;
   const err = document.getElementById('lead_err'), ok = document.getElementById('lead_ok');
   err.style.display = ok.style.display = 'none';
-  const button = document.getElementById('submitButton');
   const params = new URLSearchParams(window.location.search);
   let referring = '';
   try { const url = new URL(document.referrer); referring = url.origin + (url.origin === window.location.origin ? url.pathname : ''); } catch (_) {}
@@ -45,8 +48,10 @@ form.addEventListener('submit', async function(event) {
     const res = await fetch('/api/leads', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Could not send quote request.');
+    submitted = true;
     ok.style.display='block'; form.reset(); ok.scrollIntoView({block:'nearest'});
+    if (window.nhpAnalytics) window.nhpAnalytics.track('generate_lead');
   } catch (error) { err.textContent = error.message || 'Could not send quote request.'; err.style.display='block'; }
-  finally { button.disabled = false; }
+  finally { if (!submitted) button.disabled = false; }
 });
 </script></body></html>

@@ -1233,6 +1233,7 @@ def request_quote_page(request: Request):
     html = html.replace("__PUBLIC_QUOTE_CSS__", public_layout.QUOTE_CSS)
     html = html.replace("__PUBLIC_HEADER__", public_layout.site_header())
     html = html.replace("__PUBLIC_FOOTER__", public_layout.site_footer())
+    html = html.replace("__PUBLIC_ANALYTICS__", public_layout.analytics_markup())
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -1301,6 +1302,7 @@ def render_public_homepage(request: Request):
     html = html.replace("__PUBLIC_SITE_CSS__", public_layout.SITE_CSS)
     html = html.replace("__PUBLIC_HEADER__", public_layout.site_header(home=True))
     html = html.replace("__PUBLIC_FOOTER__", public_layout.site_footer())
+    html = html.replace("__PUBLIC_ANALYTICS__", public_layout.analytics_markup())
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -1320,7 +1322,7 @@ def robots_txt(request: Request):
         return Response(content="User-agent: *\nDisallow: /\n",
                         media_type="text/plain; charset=utf-8")
     sitemap_url = absolute_url("/sitemap.xml", request)
-    content = f"User-agent: *\nAllow: /\nSitemap: {sitemap_url}\n"
+    content = f"User-agent: *\nAllow: /\nDisallow: /app\nDisallow: /api/\nSitemap: {sitemap_url}\n"
     return Response(content=content, media_type="text/plain; charset=utf-8")
 
 

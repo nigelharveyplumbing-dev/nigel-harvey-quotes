@@ -1,6 +1,7 @@
 """Shared customer-facing shell for the homepage, enquiry and SEO pages."""
 
 from html import escape
+import os
 from pathlib import Path
 
 from bs4 import BeautifulSoup
@@ -14,6 +15,8 @@ SITE_CSS = (ROOT / "static/public_site.css").read_text(encoding="utf-8")
 SUBPAGE_CSS = (ROOT / "static/public_seo.css").read_text(encoding="utf-8")
 HEADER = (ROOT / "templates/public_header.html").read_text(encoding="utf-8")
 FOOTER = (ROOT / "templates/public_footer.html").read_text(encoding="utf-8")
+ANALYTICS_JS = (ROOT / "static/public_analytics.js").read_text(encoding="utf-8")
+GA4_MEASUREMENT_ID = "G-Q9Z2WWNF6F"
 
 QUOTE_CSS = """
 .quote-page{background:var(--light)}
@@ -60,6 +63,21 @@ def site_footer() -> str:
     return _contact_markup(FOOTER)
 
 
+def analytics_markup() -> str:
+    # The public measurement ID is not a secret. Staging deliberately queues
+    # consented events only; it never loads the tag or sends a hit to GA4.
+    send = "false" if os.getenv("APP_ENVIRONMENT", "").strip().lower() == "staging" else "true"
+    return ("<div id=\"analytics-consent\" class=\"analytics-consent\" role=\"region\" "
+            "aria-label=\"Analytics choice\" hidden><div><strong>Optional analytics</strong> "
+            "helps Nigel understand which pages and contact routes are useful. "
+            "If you accept, Google Analytics may store cookies and receive browsing and contact-click information; "
+            "your job details are not sent. You can change this later in the footer.</div>"
+            "<div class=\"analytics-choices\"><button type=\"button\" data-choice=\"rejected\">Decline</button>"
+            "<button type=\"button\" data-choice=\"accepted\">Accept analytics</button></div></div>"
+            f'<script id="public-analytics" data-measurement-id="{GA4_MEASUREMENT_ID}" '
+            f'data-send-to-google="{send}">{ANALYTICS_JS}</script>')
+
+
 def render_shared_public_page(html: str) -> str:
     """Keep page content and SEO head intact while replacing the legacy chrome."""
     soup = BeautifulSoup(html, "html.parser")
@@ -92,6 +110,9 @@ def render_shared_public_page(html: str) -> str:
     for node in reversed(list(fragment.contents)):
         body.insert(0, node.extract())
     fragment = BeautifulSoup(site_footer(), "html.parser")
+    for node in list(fragment.contents):
+        body.append(node.extract())
+    fragment = BeautifulSoup(analytics_markup(), "html.parser")
     for node in list(fragment.contents):
         body.append(node.extract())
     return str(soup)

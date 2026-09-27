@@ -138,12 +138,24 @@ LOCATION_PAGES = [
 
 SERVICE_PAGES = [
     {"slug":"emergency-plumber-surrey","title":"Urgent Plumbing in Surrey","meta":"For a leak, burst pipe or urgent domestic plumbing problem around Guildford and nearby areas, call Nigel to discuss the issue and availability.","heading":"Urgent Plumbing in Surrey","intro":"Water escaping from a pipe or fitting, a failed toilet or another pressing plumbing issue? Call Nigel to describe what is happening and discuss availability. For a significant leak, isolate the water if it is safe to do so.","body":"Explain where the problem is, whether water is still escaping and what you have safely been able to isolate. Your postcode helps confirm whether Nigel can reach your area. An online form can provide details, but a call is better for a time-sensitive problem.","keywords":"urgent plumber Surrey, plumbing leak Surrey, burst pipe Guildford"},
-    {"slug":"general-plumbing-surrey","title":"General Plumbing in Surrey","meta":"Taps, toilets, sinks, wastes, leaks, outside taps and domestic plumbing repairs around Guildford and nearby Surrey areas. Speak directly with Nigel.","heading":"General Plumbing in Surrey","intro":"Nigel handles everyday domestic plumbing jobs, from tap and toilet repairs to sink fittings, wastes, outside taps, leaks and pipework alterations around Guildford and nearby towns.","body":"A useful enquiry includes the fixture involved, what is going wrong and whether there is an active leak. You can send the details and your postcode, then discuss the work and any relevant charges with Nigel before proceeding.","keywords":"general plumbing Surrey, plumber Guildford, tap and toilet repairs"},
+    {"slug":"general-plumbing-surrey","title":"General Plumbing & Small Repairs in Surrey","meta":"Leaking taps, running toilets, wastes, outside taps or minor pipework repairs? Tell Guildford-based Nigel what needs fixing and where you are for a clear next step.","heading":"General Plumbing in Surrey","intro":"Nigel handles everyday domestic plumbing jobs, from tap and toilet repairs to sink fittings, wastes, outside taps, leaks and pipework alterations around Guildford and nearby towns.","body":"A useful enquiry includes the fixture involved, what is going wrong and whether there is an active leak. You can send the details and your postcode, then discuss the work and any relevant charges with Nigel before proceeding.","keywords":"general plumbing Surrey, minor plumbing repairs, tap and toilet repairs"},
     {"slug":"bathroom-plumbing-surrey","title":"Bathroom Plumbing in Surrey","meta":"Bathroom and shower plumbing around Guildford and nearby areas, including sanitaryware connections, pipework changes and first or second fix work.","heading":"Bathroom Plumbing in Surrey","intro":"For bathroom plumbing, Nigel can discuss sanitaryware connections, shower pipework and first or second fix plumbing as part of a planned refurbishment or smaller update.","body":"Tell Nigel which fittings you want to replace, what is staying in place and whether the layout changes. These details help distinguish a straightforward replacement from new pipework or other preparation before a quote is agreed.","keywords":"bathroom plumbing Surrey, shower plumbing Guildford, sanitaryware plumbing"},
     {"slug":"heating-repairs-surrey","title":"Radiators & Heating Plumbing in Surrey","meta":"Radiator, valve, towel radiator and heating pipework plumbing around Guildford and nearby Surrey areas. Discuss the work with Nigel.","heading":"Radiators & Heating Plumbing in Surrey","intro":"Nigel can help with plumbing-related heating work such as radiators, towel radiators, valves and associated pipework. Describe which rooms and fittings are affected.","body":"For a radiator enquiry, say whether the issue is a valve, a leak or a planned replacement, and whether the pipework position will change. Nigel can discuss the practical plumbing work required.","keywords":"radiator plumber Surrey, radiator valves Guildford, heating pipework"},
 ]
 
 PRIMARY_LOCATION_NOTES = {
+    "aldershot": {
+        "intro": "For a leaking pipe, running toilet or planned bathroom plumbing in Aldershot, send Nigel a short description and the job postcode. He is based in Guildford and can confirm coverage and the next step before you arrange work.",
+        "detail": "Tell Nigel which fixture is affected, whether water is still escaping and whether you can safely isolate it. Photos can help with a tap, toilet or visible pipework problem; use WhatsApp after making contact if you have them.",
+        "nearby": "Camberley, Farnborough and surrounding areas",
+        "related": ("/leak-repair-aldershot", "Leak repair in Aldershot"),
+    },
+    "camberley": {
+        "intro": "Need help with a leak, toilet or bathroom fitting in Camberley? Describe what you can see and send the postcode so Guildford-based Nigel can discuss the work and confirm whether he can attend your address.",
+        "detail": "For a leak, note whether it is at a pipe, tap, toilet or waste, whether it happens continuously and whether you can safely turn off the water. Call for an active leak rather than waiting for an online reply.",
+        "nearby": "Aldershot, Farnborough and nearby Surrey areas",
+        "related": ("/leak-repair-camberley", "Leak repair in Camberley"),
+    },
     "epsom": {
         "intro": "For a leaking tap, toilet fault or planned bathroom plumbing in Epsom, tell me what you have noticed and whether the water can be isolated. I am based in Guildford; sending the postcode helps me confirm travel and the next step.",
         "detail": "Epsom enquiries can range from a small repair to bathroom pipework. If you can, describe the fixture, when the problem started and whether access or parking needs arranging. For an active leak, call rather than waiting for a form reply.",
@@ -185,23 +197,35 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
         'I can then discuss the next step and any relevant charges.</p><p><a href="/request-quote">Request a quote</a></p></div>'
         '</div></div></section>'
     ) if primary_note else ""
+    if primary_note and primary_note.get("related"):
+        href, label = primary_note["related"]
+        primary_details_html += (f'<section><div class="wrap"><p>Looking for a specific repair? '
+                                 f'<a href="{escape(href, quote=True)}">{escape(label)}</a> explains what details to send.</p></div></section>')
     location_intro = primary_note["intro"] if primary_note else (
         f"Reliable domestic plumbing for leaks, taps, toilets, bathrooms, showers, radiators and pipework in {location_name} and surrounding Surrey areas. From first enquiry to finished job, you deal directly with me, Nigel."
     )
 
     title = (
-        "Plumber in Guildford | Local Plumbing Services | Nigel Harvey Plumbing"
+        "Plumber in Guildford | Repairs & Bathrooms | Nigel Harvey Plumbing"
         if is_guildford else
         f"Plumber in {location_name} | Reliable Local Plumbing Services | Nigel Harvey Ltd"
     )
     meta_description = (
-        "Local plumber in Guildford for leaks, toilets, taps, radiators, bathroom plumbing and general plumbing repairs. Deal directly with Nigel Harvey Plumbing and request a clear quote online."
+        "Need a plumber in Guildford for leaks, toilets, taps or bathroom plumbing? Deal directly with Guildford-based Nigel. Call or send the job details for a clear quote."
         if is_guildford else
         f"Looking for a plumber in {location_name}? Nigel Harvey Ltd provides leaks, bathroom plumbing and general plumbing services in {location_name} and surrounding Surrey areas."
     )
     if slug == "farnborough":
         meta_description = ("Domestic plumbing in Farnborough for taps, toilets, showers, radiators and pipework. "
                             "Contact Guildford-based Nigel with the job details and postcode.")
+    elif slug == "aldershot":
+        title = "Plumber in Aldershot | Repairs & Bathrooms | Nigel Harvey Plumbing"
+        meta_description = ("A leaking tap, toilet fault or bathroom plumbing job in Aldershot? "
+                            "Tell Guildford-based Nigel what is happening and send your postcode to discuss a quote.")
+    elif slug == "camberley":
+        title = "Plumber in Camberley | Leaks & Repairs | Nigel Harvey Plumbing"
+        meta_description = ("Need plumbing help in Camberley? Describe a leak, tap, toilet or bathroom job "
+                            "and send your postcode to Guildford-based Nigel for the next step.")
 
     breadcrumb_schema = json.dumps({
         "@context": "https://schema.org",
@@ -267,6 +291,7 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
 <div class="trust"><div class="wrap trustgrid"><div><strong>Local &amp; independent</strong><span>Based in Guildford</span></div><div><strong>Clear communication</strong><span>Deal directly with Nigel</span></div><div><strong>Clear quotes</strong><span>Work &amp; charges explained</span></div><div><strong>Surrey coverage</strong><span>Guildford &amp; nearby areas</span></div></div></div>
 <section id="services"><div class="wrap"><div class="intro"><h2>Plumbing services in Guildford</h2><p>Whether you have a leaking fitting, a toilet that is not working properly, a radiator or valve problem, or planned bathroom plumbing, send the details directly to Nigel. Photos and a short description can help establish what may be required before the visit.</p></div><div class="service-links">{local_service_links}</div></div></section>
 <section class="section-pale"><div class="wrap"><div class="intro"><h2>Domestic plumbing work I can help with</h2><p>Practical plumbing repairs and planned work for homes and landlords across Guildford.</p></div><div class="cards"><div class="card"><h3>Leaks, taps &amp; toilets</h3><p>Repairs to leaking pipework and fittings, taps, toilet mechanisms, wastes, traps and other everyday plumbing problems.</p></div><div class="card"><h3>Bathrooms &amp; showers</h3><p>Bathroom plumbing, sanitaryware connections, shower pipework, first and second fix work and practical plumbing alterations.</p></div><div class="card"><h3>Radiators &amp; pipework</h3><p>Radiators, TRVs and valves, towel radiators, pipework alterations and plumbing-related heating work.</p></div></div></div></section>
+<section><div class="wrap"><div class="intro"><h2>Common Guildford plumbing enquiries</h2><p>Small repairs matter too. If a tap keeps dripping, a toilet runs after flushing, a waste leaks under the sink or a radiator valve needs attention, tell me what you can see and whether the water can be safely isolated.</p><p>For a specific problem, read about <a href="/leak-repair-guildford">leak repairs</a> or <a href="/toilet-repair-guildford">toilet repairs in Guildford</a>. For a wider mix of minor jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a>. I am based in Guildford; if you are in <a href="/plumber-merrow">Merrow</a>, <a href="/plumber-burpham">Burpham</a> or <a href="/plumber-worplesdon">Worplesdon</a>, send the postcode with your enquiry.</p></div></div></section>
 <section class="section-dark" id="about"><div class="wrap"><div class="intro"><h2>A local Guildford plumber you deal with directly</h2><p>Nigel Harvey Plumbing is based in Guildford. When you enquire, you deal directly with Nigel rather than a call centre or salesperson. The aim is straightforward communication, a clear quotation and a practical plan for getting the work completed.</p></div><div class="cards"><div class="card"><h3>Direct contact</h3><p>Speak directly with the person who will be carrying out the plumbing work.</p></div><div class="card"><h3>Clear quotations</h3><p>Work and relevant charges can be set out before you decide whether to proceed.</p></div><div class="card"><h3>Local coverage</h3><p>Based in Guildford and covering surrounding towns and villages across Surrey.</p></div></div></div></section>
 <section class="review-section" id="reviews"><div class="wrap"><div class="intro"><h2>Customer reviews</h2><p>Recent independent Google feedback from plumbing customers.</p></div><div class="reviewbox">{reviews_html}</div></div></section>
 <section id="areas"><div class="wrap"><div class="intro"><h2>Areas near Guildford</h2><p>As well as Guildford itself, plumbing work is available across nearby Surrey areas. Use the local pages below for more information.</p></div><div class="area-links">{related}</div></div></section>
@@ -345,12 +370,22 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
         "url": canonical,
         "description": service["meta"],
     }, ensure_ascii=False)
+    general_detail = (
+        '<div class="wrap section"><h2>Everyday repairs and small plumbing jobs</h2>'
+        '<p>A dripping tap, toilet that keeps filling, leaking waste or outside tap may be a modest job, '
+        'but it still helps to know the fitting, where the water is coming from and whether you can isolate it safely. '
+        'Nigel can discuss the repair and any parts or pipework changes before you decide what to do.</p>'
+        '<p>Based in Guildford? See the <a href="/plumber-guildford">Guildford plumber page</a> for local coverage. '
+        'For a visible leak, the <a href="/leak-repair-camberley">Camberley</a> and '
+        '<a href="/leak-repair-farnham">Farnham leak repair pages</a> explain what to describe.</p></div>'
+    ) if service["slug"] == "general-plumbing-surrey" else ""
     return render_shared_public_page(f"""<!doctype html>
 <html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(service['title'])} | Nigel Harvey Ltd</title><meta name="description" content="{escape(service['meta'])}"><meta name="keywords" content="{escape(service['keywords'])}"><link rel="canonical" href="{escape(canonical)}"><script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{service_schema}</script></head>
 <body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(service['title'])}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
 <main>
 <div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Surrey plumbing service</div><h1>{escape(service['heading'])}</h1><p class="lead">{escape(service['intro'])}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
 <div class="wrap section"><h2>What to tell Nigel</h2><p>{escape(service['body'])}</p><div class="grid3"><div class="card item"><h3>Where is the job?</h3><p>Send the postcode so Nigel can confirm whether the location is in his service area.</p></div><div class="card item"><h3>What is happening?</h3><p>Describe the fixture or pipework and whether this is a repair or planned installation.</p></div><div class="card item"><h3>How to get in touch</h3><p>Call for a pressing problem or use the quote form for planned work. You deal directly with Nigel.</p></div></div></div>
+{general_detail}
 <div class="wrap section"><h2>Areas covered for {escape(service['heading']).lower()}</h2><p>We also cover nearby towns for customers searching for this service in Surrey.</p><div class="pill-links">{location_links}</div></div>
 <div class="wrap section"><h2>Related plumbing services</h2><div class="pill-links">{service_links}</div></div>
 <div class="wrap section"><h2>Frequently asked questions</h2><div class="faq-grid"><div class="card faq"><h3>How do I check whether you cover my address?</h3><p>Send your postcode and a short description. Nigel can confirm the location before arranging any work.</p></div><div class="card faq"><h3>Can I request a quote online?</h3><p>Yes. Send your details through the online quote form. Submission does not confirm a booking.</p></div><div class="card faq"><h3>What if the problem is urgent?</h3><p>Call Nigel to discuss the issue and availability. Isolate an active leak if it is safe to do so.</p></div></div></div>
@@ -363,7 +398,7 @@ LOCAL_SERVICE_PAGES = [
         "slug": "emergency-plumber",
         "title": "Emergency Plumber",
         "heading": "Emergency Plumber in {area}",
-        "intro": "Need an emergency plumber in {area}? Nigel Harvey Ltd provides fast local help for urgent leaks, burst pipes, overflowing toilets, faulty taps and other plumbing problems that need sorting quickly.",
+        "intro": "Have an urgent leak, burst pipe or overflowing toilet in {area}? Call Nigel to describe the problem and discuss availability. If it is safe, isolate the water while you seek help.",
         "service": "emergency plumbing",
         "keywords": "emergency plumber {area}, urgent plumber {area}, plumber {area}",
         "problems": ["Burst pipes", "Leaks", "Overflowing toilets", "Faulty taps", "Urgent pipework repairs"],
@@ -416,6 +451,30 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
     intro = service["intro"].format(area=area)
     keywords = service["keywords"].format(area=area)
     canonical = absolute_url(f"/{service_slug}-{area_slug}", request)
+    priority_details = {
+        ("leak-repair", "camberley"): (
+            "Leak repair in Camberley: what to check before calling",
+            "If water is escaping, turn it off at the nearest safe valve or stopcock if you can. Tell Nigel whether the leak is at a pipe, tap, toilet, shower or waste, whether it happens continuously, and what you can see without taking fittings apart. A postcode and a photo can help him discuss the next step from his Guildford base."
+        ),
+        ("leak-repair", "farnham"): (
+            "Describing a leak in Farnham",
+            "Note where the water appears and whether the leak is constant or only when a tap, shower or appliance is used. Isolate the supply if it is safe. Send the postcode and a photo if useful so Nigel can discuss the repair and whether he can cover your address."
+        ),
+        ("toilet-repair", "leatherhead"): (
+            "What is wrong with the toilet?",
+            "A running cistern, weak flush, leak at the pan or fill valve fault can need different parts. Tell Nigel what happens when you flush, whether water is escaping and whether you can safely isolate the toilet. Include the Leatherhead postcode before arranging a visit."
+        ),
+    }
+    detail = priority_details.get((service_slug, area_slug))
+    priority_html = (f'<div class="wrap section"><h2>{escape(detail[0])}</h2><p>{escape(detail[1])}</p>'
+                     '<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
+                     'or <a href="/request-quote">send the job details</a>.</p></div>') if detail else ""
+    priority_meta = {
+        ("leak-repair", "camberley"): "Leak repair in Camberley for pipes, taps, toilets and wastes. Tell Guildford-based Nigel where water appears, whether it can be isolated and your postcode.",
+        ("leak-repair", "farnham"): "A leaking pipe, tap or bathroom fitting in Farnham? Describe where the water appears and send your postcode to Guildford-based Nigel to discuss the repair.",
+        ("toilet-repair", "leatherhead"): "Toilet not flushing, running or leaking in Leatherhead? Tell Nigel what happens, whether water can be isolated and your postcode to discuss a repair.",
+    }
+    meta_description = priority_meta.get((service_slug, area_slug), intro + f" Call Nigel Harvey Ltd on {COMPANY_PHONE} to discuss local plumbing help.")
     problem_items = "".join(f"<li>{escape(item)}</li>" for item in service["problems"])
     related_locations = "".join(
         f'<a href="/{escape(service_slug)}-{escape(item["slug"])}">{escape(title)} in {escape(item["name"])}</a>'
@@ -452,21 +511,22 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
     return render_shared_public_page(f"""<!doctype html>
 <html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(title)} in {escape(area)} | Nigel Harvey Ltd</title>
-<meta name="description" content="{escape(intro)} Call Nigel Harvey Ltd on {escape(COMPANY_PHONE)} for reliable local plumbing help.">
+<meta name="description" content="{escape(meta_description)}">
 <meta name="keywords" content="{escape(keywords)}">
 <link rel="canonical" href="{escape(canonical)}">
 <script type="application/ld+json">{breadcrumb_schema}</script>
 <script type="application/ld+json">{service_schema}</script>
 </head>
 <body>
-<div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(title)} in {escape(area)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
+<div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(title)} in {escape(area)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
 <main>
 <div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Local plumbing help in {escape(area)}</div><h1>{escape(heading)}</h1><p class="lead">{escape(intro)}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
 
 <div class="wrap section"><h2>{escape(title)} Services in {escape(area)}</h2><p>If you are looking for {escape(service["service"])} in {escape(area)}, we provide practical, reliable help for local homes, landlords and small businesses.</p><ul class="list">{problem_items}</ul></div>
+{priority_html}
 
 <div class="wrap section"><div class="grid3">
-<div class="card item"><h3>Fast Local Response</h3><p>We cover {escape(area)} and nearby Surrey areas for urgent and planned plumbing work.</p></div>
+<div class="card item"><h3>Discuss availability</h3><p>Send the postcode for {escape(area)} so Nigel can confirm coverage and discuss urgent or planned plumbing work.</p></div>
 <div class="card item"><h3>Clear Communication</h3><p>You get straightforward advice and a clear explanation of the work needed.</p></div>
 <div class="card item"><h3>Trusted Local Plumber</h3><p>Nigel Harvey Ltd provides dependable domestic plumbing services across Guildford and Surrey.</p></div>
 </div></div>
@@ -474,7 +534,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
 <div class="wrap section"><h2>Other Plumbing Services in {escape(area)}</h2><div class="pill-links">{related_services}</div></div>
 <div class="wrap section"><h2>Nearby Areas We Cover</h2><div class="pill-links">{related_locations}</div></div>
 
-<div class="wrap cta card"><div><h2>Need {escape(title.lower())} in {escape(area)}?</h2><p>Call now or request a fast quote online.</p></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Get a Fast Quote</a></div></div>
+<div class="wrap cta card"><div><h2>Need {escape(title.lower())} in {escape(area)}?</h2><p>Call now or send the job details online.</p></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div>
 </main>
 <div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services in Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}<br>{escape(area)}, Surrey and surrounding areas</div></div></div>
 <a href="tel:{escape(COMPANY_PHONE_TEL)}" class="sticky-call">📞 Call Now: {escape(COMPANY_PHONE)}</a>

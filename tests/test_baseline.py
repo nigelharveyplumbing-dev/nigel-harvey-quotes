@@ -329,18 +329,18 @@ class BaselineTests(unittest.TestCase):
         literals = {
             "LANDING_PAGE_HTML": "0557ccac52285b3f8400972513c71c58c822defd224200f3bace562811472bb5",
             "SEO_CSS": "aea9aaf6e6704acabe4891b0ac98142966025a808ec6908954c410ff96f725da",
-            "LEAD_FORM_HTML": "80bd780348eefbf6665e4545896ebd918b7bebf5c2b0df40a0abe405cff5ba48",
+            "LEAD_FORM_HTML": "ebad8b2a87d805fb4e2e0fe6a9ca848ae6982d1f70782502b2900f36ae9fef06",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "d2b74c1885c9151fd81d15280e0fdbdbb73cc25c512d4bd0c6ca3fdb432c8a80",
+                "2dbc41d7dace08ae446933da0458f308ad3358a8b25e2a7b8c7b243d374fbb52",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
         page_hashes = {
-            "/": "d1a69e4c350adf2a071fd2814abd9bcb7e29d3947ccecd13b9363380c71a03cb",
-            "/new-home": "d1a69e4c350adf2a071fd2814abd9bcb7e29d3947ccecd13b9363380c71a03cb",
-            "/request-quote": "be26f7e559b7f3f0e5bd82cb56ff82c81ac8e59af0967b7ea130642c7da1d1e4",
+            "/": "5c70519ad41f7374d31b374848ea98c82c02e2c79d9d0d035112e7c1393891c7",
+            "/new-home": "5c70519ad41f7374d31b374848ea98c82c02e2c79d9d0d035112e7c1393891c7",
+            "/request-quote": "0b9d71a15bdcf403aa43f77d0f284a1e1467bb7f75f1ea26e45d17dbedaa0dd4",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage6.invalid",
@@ -579,7 +579,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
                 self.assertEqual(response.status_code, 200, path)
                 self.assertIn("text/html", response.headers["content-type"])
             home = client.get("/").text
-            self.assertIn("Plumber in Guildford", home)
+            self.assertIn("Local Plumber Across Surrey", home)
             self.assertIn('rel="canonical"', home)
             # Established Surrey service URLs resolve despite route precedence.
             self.assertEqual(client.get("/emergency-plumber-surrey").status_code, 200)
@@ -1238,9 +1238,9 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         """Freeze the SEO page families after applying the shared public shell."""
         m = self.module
         cases = (
-            ("location", "9cde3fd04fa5386bfb483f48f6e21141e1af0291928a5da04f450e88d09919b5"),
-            ("service", "b6acac2caeaddf2ecfdb1fb1a4ba8640ebb0f441e850f7a84b67cc1aa8f18060"),
-            ("local", "6ee50edadc7459b25d3e14099bf377509b5ee8db92ba65dfe0229c77c0753fd8"),
+            ("location", "8b3e2949b89df51fb71864b7e74e1670a874d556c4a3b757ddbd5ad88ef52bd9"),
+            ("service", "259bfb1d5ec346d3cdb34f0017246303e08391eeb7ea225470f75d0b74245056"),
+            ("local", "d696a6912ad1b190ffde6b6cdbeb4c32939f3aa359d827de3a5293d6b4bcf6e0"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage7.invalid",

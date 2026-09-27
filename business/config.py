@@ -14,7 +14,7 @@ UK_TZ = ZoneInfo("Europe/London")
 COMPANY_NAME = "Nigel Harvey Ltd"
 COMPANY_ADDRESS = "125 Bushy Hill Drive, Guildford, GU1 2UG"
 COMPANY_PHONE = "07595 725547"
-COMPANY_PHONE_TEL = re.sub(r"\\D", "", COMPANY_PHONE)
+COMPANY_PHONE_TEL = re.sub(r"\D", "", COMPANY_PHONE)
 COMPANY_EMAIL = "Nigelharveyplumbing@gmail.com"
 
 BANK_NAME = (os.getenv("BANK_NAME") or "Monzo").strip()
@@ -47,4 +47,3 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
 EMAIL_USER = os.getenv("EMAIL_USER", "")
 EMAIL_PASS = os.getenv("EMAIL_PASS", "")
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", COMPANY_NAME)
-
