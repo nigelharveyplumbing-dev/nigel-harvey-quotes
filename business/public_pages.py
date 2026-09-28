@@ -4,7 +4,7 @@ import json
 from html import escape
 from pathlib import Path
 from fastapi import Request
-from business.config import (COMPANY_NAME, COMPANY_EMAIL, COMPANY_PHONE, COMPANY_PHONE_TEL, GOOGLE_RATING_VALUE, GOOGLE_REVIEW_COUNT, GOOGLE_REVIEWS_URL, GOOGLE_REVIEW_1_TEXT, GOOGLE_REVIEW_1_AUTHOR, GOOGLE_REVIEW_2_TEXT, GOOGLE_REVIEW_2_AUTHOR, GOOGLE_REVIEW_3_TEXT, GOOGLE_REVIEW_3_AUTHOR)
+from business.config import (COMPANY_NAME, COMPANY_EMAIL, COMPANY_PHONE, COMPANY_PHONE_TEL, GOOGLE_BUSINESS_PROFILE_URL, GOOGLE_RATING_VALUE, GOOGLE_REVIEW_COUNT, GOOGLE_REVIEWS_URL, GOOGLE_REVIEW_1_TEXT, GOOGLE_REVIEW_1_AUTHOR, GOOGLE_REVIEW_2_TEXT, GOOGLE_REVIEW_2_AUTHOR, GOOGLE_REVIEW_3_TEXT, GOOGLE_REVIEW_3_AUTHOR)
 from business.public_layout import render_shared_public_page
 
 def build_homepage_faq_schema() -> str:
@@ -76,6 +76,8 @@ def public_business_entity(canonical_home: str) -> dict:
         "openingHoursSpecification": {"@type": "OpeningHoursSpecification", "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], "opens": "00:00", "closes": "23:59"},
         "areaServed": ["Guildford", "Woking", "Farnham", "Godalming", "Camberley", "Aldershot", "Leatherhead", "Epsom", "Farnborough", "West Horsley", "Weybridge", "Cobham", "Surrey"],
         "url": canonical_home,
+        "hasMap": GOOGLE_BUSINESS_PROFILE_URL,
+        "sameAs": [GOOGLE_BUSINESS_PROFILE_URL],
         "description": "Nigel Harvey Plumbing is a Guildford-based domestic plumbing service operated by Nigel Harvey, covering Surrey and nearby areas for general plumbing, bathrooms, leaks, pipework and repairs, with 24-hour availability for plumbing enquiries.",
     }
 

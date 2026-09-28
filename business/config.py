@@ -29,7 +29,13 @@ COMPANY_LOGO_URL = os.getenv("COMPANY_LOGO_URL", DEFAULT_COMPANY_LOGO_URL)
 
 GOOGLE_RATING_VALUE = os.getenv("GOOGLE_RATING_VALUE", "").strip()
 GOOGLE_REVIEW_COUNT = os.getenv("GOOGLE_REVIEW_COUNT", "").strip()
-GOOGLE_REVIEWS_URL = os.getenv("GOOGLE_REVIEWS_URL", "https://www.google.com/search?q=Nigel+Harvey+Ltd+Guildford+reviews").strip()
+GOOGLE_BUSINESS_PROFILE_URL = os.getenv(
+    "GOOGLE_BUSINESS_PROFILE_URL",
+    "https://maps.google.com/maps?cid=10784369675639695050",
+).strip()
+GOOGLE_REVIEWS_URL = os.getenv(
+    "GOOGLE_REVIEWS_URL", GOOGLE_BUSINESS_PROFILE_URL
+).strip()
 GOOGLE_REVIEW_1_TEXT = os.getenv("GOOGLE_REVIEW_1_TEXT", "").strip()
 GOOGLE_REVIEW_1_AUTHOR = os.getenv("GOOGLE_REVIEW_1_AUTHOR", "").strip()
 GOOGLE_REVIEW_2_TEXT = os.getenv("GOOGLE_REVIEW_2_TEXT", "").strip()
