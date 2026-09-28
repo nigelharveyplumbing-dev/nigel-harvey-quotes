@@ -32,6 +32,8 @@
       <h2>Dashboard</h2>
       <div class="small" id="dashboardMonth"></div>
       <div id="dashboardGrid" class="dashboard-grid"></div>
+      <h3>Enquiries and quote outcomes</h3>
+      <div id="businessReport" class="quote-box small">Loading business outcomes...</div>
       <h3>Monthly profit</h3>
       <div id="profitChart" class="quote-box small">Loading chart...</div>
       <div id="dashboardSummary" class="dashboard-summary"></div>
@@ -42,6 +44,24 @@
       <p class="small">Enter the customer and describe the work. AI will build the scope, labour and materials for you. Review and adjust before generating the final quote.</p>
       <div id="editingStatus" class="status-bar hidden"></div>
       <button type="button" class="btn-light no-print" style="margin-bottom:12px;" onclick="startNewQuote()">Start Fresh Quote</button>
+      <div id="quoteWorkflow" class="quote-box small no-print" style="margin-bottom:12px;">New quotes start Pending. Save a quote to track follow-up and outcome.</div>
+
+      <label for="quote_source">Lead source (optional)</label>
+      <select id="quote_source">
+        <option value="">Unknown / linked lead source</option>
+        <option>Google Business Profile</option><option>Google organic search</option>
+        <option>Website/direct</option><option>Referral</option><option>Repeat customer</option>
+        <option>MyBuilder</option><option>Locally</option><option>Bing</option><option>Yell</option>
+        <option>Checkatrade</option><option>TrustATrader</option><option>Other</option>
+      </select>
+      <label for="quote_work_type">Plumbing work type (optional)</label>
+      <select id="quote_work_type">
+        <option value="">Not classified</option>
+        <option>Leak / repair</option><option>Tap</option><option>Toilet / cistern</option>
+        <option>Shower</option><option>Bathroom plumbing</option><option>Radiator / TRV</option>
+        <option>Outside tap</option><option>Pipework</option><option>Power/heating-system flush</option>
+        <option>Cylinder / tank</option><option>Other</option>
+      </select>
 
       <div class="quote-box small no-print" style="margin-bottom:12px;background:#f8fafc;">
         <strong>Simple workflow</strong><br>
@@ -593,6 +613,8 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
 
   <div class="card no-print">
     <h2>Saved Quotes</h2>
+    <label for="quoteStatusFilter">View quotes</label>
+    <select id="quoteStatusFilter" onchange="loadHistory()"><option value="all">All quotes</option><option value="pending">Pending</option><option value="due">Follow-up due</option><option value="won">Won</option><option value="lost">Lost</option><option value="expired">Expired</option><option value="unclassified">Historical unclassified</option></select>
     <div id="historyList" class="small">No saved quotes yet.</div>
   </div>
 

@@ -32,7 +32,7 @@ class GrowthBatch2Tests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         root = ElementTree.fromstring(response.text)
         paths = [urlsplit(loc.text).path for loc in root.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")]
-        self.assertEqual(len(paths), 85)
+        self.assertEqual(len(paths), 72)
         self.assertEqual(len(set(paths)), len(paths))
         titles = {}
         for path in paths:

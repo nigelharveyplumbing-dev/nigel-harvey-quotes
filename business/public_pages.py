@@ -400,10 +400,10 @@ LOCAL_SERVICE_PAGES = [
         "slug": "toilet-repair",
         "title": "Toilet Repair",
         "heading": "Toilet Repairs in {area}",
-        "intro": "Nigel provides toilet repairs in {area}, including leaks, flushing problems, running toilets, blockages, faulty cisterns and replacement parts.",
+        "intro": "Nigel provides toilet repairs in {area}, including leaks, flushing problems, running toilets, faulty cisterns and replacement parts.",
         "service": "toilet repair",
         "keywords": "toilet repair {area}, toilet plumber {area}, plumber {area}",
-        "problems": ["Toilets not flushing", "Running toilets", "Leaking toilets", "Blocked toilets", "Faulty cistern parts"],
+        "problems": ["Toilets not flushing", "Running toilets", "Leaking toilets", "Faulty cistern parts", "Replacement parts"],
     },
     {
         "slug": "leak-repair",
@@ -422,15 +422,6 @@ LOCAL_SERVICE_PAGES = [
         "service": "bathroom plumbing",
         "keywords": "bathroom plumbing {area}, bathroom plumber {area}, plumber {area}",
         "problems": ["Toilet fitting", "Basin plumbing", "Shower pipework", "Bath connections", "Bathroom leaks"],
-    },
-    {
-        "slug": "blocked-drains",
-        "title": "Blocked Drains",
-        "heading": "Blocked Drains and Waste Pipes in {area}",
-        "intro": "Nigel helps with blocked drains and waste pipe issues in {area}, including slow-draining sinks, blocked wastes, toilet blockages and drainage-related plumbing problems.",
-        "service": "blocked drains and waste pipes",
-        "keywords": "blocked drains {area}, blocked sink {area}, plumber {area}",
-        "problems": ["Blocked sinks", "Slow drains", "Blocked wastes", "Toilet blockages", "Kitchen and bathroom drainage issues"],
     },
 ]
 

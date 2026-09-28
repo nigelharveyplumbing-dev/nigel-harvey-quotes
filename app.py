@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from fastapi import FastAPI, HTTPException, Response, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from starlette.routing import Match
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
@@ -565,7 +565,7 @@ LABOUR_HINTS = quote_rules.LABOUR_HINTS
 
 
 from business.models import (
-    MaterialItem, QuoteRequest, AIQuoteDraftRequest, InvoiceStatusRequest, PaymentLinkUpdateRequest, SendInvoiceEmailRequest, LeadRequest, LeadStatusRequest, InvoiceEditRequest
+    MaterialItem, QuoteRequest, AIQuoteDraftRequest, InvoiceStatusRequest, PaymentLinkUpdateRequest, SendInvoiceEmailRequest, LeadRequest, LeadStatusRequest, LeadClassificationRequest, QuoteOutcomeRequest, InvoiceEditRequest
 )
 
 
@@ -974,7 +974,7 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict):
 def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     return invoice_store.update_invoice_by_id(invoice_id, data, row_to_invoice, safe_float, upsert_customer)
 
-from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search, website_contact, public_layout
+from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search, website_contact, public_layout, growth_tracking
 
 def get_dashboard():
     return dashboard_reporting.get_dashboard(get_db, now_uk)
@@ -1195,7 +1195,7 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
 # /toilet-repair-guildford
 # /leak-repair-guildford
 # /bathroom-plumbing-guildford
-# /blocked-drains-guildford
+# Legacy blocked-drain URLs now redirect to the applicable area overview.
 LOCAL_SERVICE_PAGES = public_pages.LOCAL_SERVICE_PAGES
 
 
@@ -1255,6 +1255,17 @@ def api_create_lead(data: LeadRequest):
 @app.put("/api/leads/{lead_id}/status")
 def api_update_lead_status(lead_id: int, data: LeadStatusRequest):
     lead = update_lead_status(lead_id, data.status)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+
+@app.put("/api/leads/{lead_id}/classification")
+def api_classify_lead(lead_id: int, data: LeadClassificationRequest):
+    try:
+        lead = lead_store.classify_lead(lead_id, data.source_category, data.work_type, now_uk)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
@@ -1369,6 +1380,8 @@ def local_service_location_page(service_slug: str, area_slug: str, request: Requ
     # No automatic service × Farnborough doorway pages in this growth batch.
     location = next((item for item in LOCATION_PAGES if item["slug"] == area_slug.lower()
                      and item["slug"] != "farnborough"), None)
+    if service_slug.lower() == "blocked-drains" and location:
+        return RedirectResponse(url=f"/plumber-{location['slug']}", status_code=301)
     if not service or not location:
         raise HTTPException(status_code=404, detail="Local service page not found")
     logo_html = get_company_logo_html(get_company_logo_value())
@@ -1674,12 +1687,18 @@ def api_intelligence(request: Request):
 
 @app.get("/api/health")
 def api_health():
+    integrity = None
+    if DB_PATH.exists():
+        with sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True) as connection:
+            integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
     return {
         "ok": True,
         "version": APP_VERSION,
         "db_exists": DB_PATH.exists(),
         "db_path": str(DB_PATH),
         "db_size_bytes": DB_PATH.stat().st_size if DB_PATH.exists() else 0,
+        "sqlite_integrity": integrity,
+        "var_data_is_mount": os.path.ismount(DB_PATH.parent),
         "counts": database_counts(),
         "backup_count": len(list_db_backups()),
         "time": now_uk().isoformat(),
@@ -1726,6 +1745,11 @@ def api_dashboard():
     return get_dashboard()
 
 
+@app.get("/api/business-performance")
+def api_business_performance():
+    return growth_tracking.business_report()
+
+
 @app.get("/api/dashboard/monthly-profit")
 def api_dashboard_monthly_profit():
     return get_monthly_profit_series(6)
@@ -1739,6 +1763,18 @@ def api_quotes():
 @app.get("/api/quotes/{quote_id}")
 def api_quote(quote_id: int):
     quote = get_quote_by_id(quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return quote
+
+
+@app.put("/api/quotes/{quote_id}/outcome")
+def api_quote_outcome(quote_id: int, data: QuoteOutcomeRequest):
+    try:
+        quote = quote_store.update_quote_outcome(quote_id, data.status, data.next_follow_up,
+                                                  data.loss_reason, data.loss_note, now_uk)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
     return quote
@@ -5266,18 +5302,32 @@ def api_quote_learning(q: str = "", quote_type: str = ""):
 
 @app.post("/api/quote")
 def api_create_quote(data: QuoteRequest):
+    if data.source_category and data.source_category not in growth_tracking.SOURCES:
+        raise HTTPException(status_code=422, detail="Invalid lead source")
+    if data.work_type and data.work_type not in growth_tracking.WORK_TYPES:
+        raise HTTPException(status_code=422, detail="Invalid work type")
     request_data = data.model_dump()
     result_data = calculate_quote(data)
-    quote_id = save_quote(request_data, result_data)
+    try:
+        quote_id = save_quote(request_data, result_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     quote = get_quote_by_id(quote_id)
     return JSONResponse(content=quote)
 
 
 @app.put("/api/quotes/{quote_id}")
 def api_update_quote(quote_id: int, data: QuoteRequest):
+    if data.source_category and data.source_category not in growth_tracking.SOURCES:
+        raise HTTPException(status_code=422, detail="Invalid lead source")
+    if data.work_type and data.work_type not in growth_tracking.WORK_TYPES:
+        raise HTTPException(status_code=422, detail="Invalid work type")
     request_data = data.model_dump()
     result_data = calculate_quote(data)
-    quote = update_quote_by_id(quote_id, request_data, result_data)
+    try:
+        quote = update_quote_by_id(quote_id, request_data, result_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
     return JSONResponse(content=quote)

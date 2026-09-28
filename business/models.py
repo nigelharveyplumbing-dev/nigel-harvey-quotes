@@ -36,6 +36,9 @@ class QuoteRequest(BaseModel):
     wall_height: str = "half"
     customer_supplies_tiles: bool = False
     deposit_percent: float = 0
+    lead_id: int | None = None
+    source_category: str = ""
+    work_type: str = ""
 
 
 
@@ -82,10 +85,24 @@ class LeadRequest(BaseModel):
     utm_campaign: str = ""
     utm_content: str = ""
     utm_term: str = ""
+    source_category: str = ""
+    work_type: str = ""
 
 
 class LeadStatusRequest(BaseModel):
     status: str = "new"
+
+
+class LeadClassificationRequest(BaseModel):
+    source_category: str = ""
+    work_type: str = ""
+
+
+class QuoteOutcomeRequest(BaseModel):
+    status: str
+    next_follow_up: str = ""
+    loss_reason: str = ""
+    loss_note: str = ""
 
 
 class InvoiceEditRequest(BaseModel):
@@ -103,5 +120,4 @@ class InvoiceEditRequest(BaseModel):
     amount_paid: float = 0
     reminder_email: str = ""
     reminders_enabled: bool = False
-
 

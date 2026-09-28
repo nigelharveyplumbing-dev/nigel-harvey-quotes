@@ -672,12 +672,12 @@ class StagingAccessTests(unittest.TestCase):
         cls.auth = header(cls.password)
         cls.wrong_auth = header(cls.password + "-wrong")
 
-    def test_all_67_routes_and_framework_pages_reject_before_side_effects(self):
+    def test_all_70_routes_and_framework_pages_reject_before_side_effects(self):
         m = self.app_module
         routes = [(method, route) for route in m.app.routes
                   if route.path not in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
                   for method in getattr(route, "methods", [])]
-        self.assertEqual(len(routes), 67)
+        self.assertEqual(len(routes), 70)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "material_id": "1", "photo_id": "1", "filename": "sample.db",
                       "area_slug": "guildford", "service_slug": "plumber"}

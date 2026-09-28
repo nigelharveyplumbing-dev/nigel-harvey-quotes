@@ -543,6 +543,7 @@ let SAVED_CUSTOMERS = [];
 let SAVED_LEADS = [];
 let SAVED_MATERIAL_DB = [];
 let CURRENT_QUOTE_ID = null;
+let CURRENT_LEAD_ID = null;
 let CURRENT_QUOTE_DATA = null;
 let CURRENT_INVOICE_ID = null;
 let CURRENT_EDITING_INVOICE_ID = null;
@@ -1612,6 +1613,9 @@ function collectFormPayload() {
 
   return {
     quote_type: document.getElementById("quote_type").value,
+    lead_id: typeof CURRENT_LEAD_ID === 'undefined' ? null : CURRENT_LEAD_ID,
+    source_category: document.getElementById("quote_source")?.value || "",
+    work_type: document.getElementById("quote_work_type")?.value || "",
     customer_name: document.getElementById("customer_name").value,
     customer_address: document.getElementById("customer_address").value,
     customer_phone: document.getElementById("customer_phone").value,
@@ -1988,13 +1992,18 @@ function setQuoteButtonMode(isEditing = false) {
 
 function resetQuoteFormState() {
   CURRENT_QUOTE_ID = null;
+  CURRENT_LEAD_ID = null;
   clearAIQuoteDraftState();
   setEditingStatus("", false);
   setQuoteButtonMode(false);
+  document.getElementById('quoteWorkflow').innerText = 'New quotes start Pending. Save a quote to track follow-up and outcome.';
 }
 
 function fillFormFromRequest(requestData, quoteId = null) {
   clearAIQuoteDraftState();
+  CURRENT_LEAD_ID = requestData.lead_id || null;
+  document.getElementById("quote_source").value = requestData.source_category || "";
+  document.getElementById("quote_work_type").value = requestData.work_type || "";
   document.getElementById("quote_type").value = requestData.quote_type || "small";
   document.getElementById("customer_name").value = requestData.customer_name || "";
   document.getElementById("customer_address").value = requestData.customer_address || "";
@@ -2105,10 +2114,35 @@ async function loadDashboard() {
     `;
     renderProfitChart(chartData);
     renderDashboardSummary(chartData);
+    const businessResponse = await fetch('/api/business-performance');
+    if (businessResponse.ok) renderBusinessReport(await businessResponse.json());
   } catch (e) {
     document.getElementById("profitChart").innerHTML = "Could not load chart.";
     document.getElementById("dashboardSummary").innerHTML = "";
   }
+}
+
+function renderBusinessReport(data) {
+  const counts = data.status_counts;
+  const money = data.status_values;
+  const follow = data.follow_ups.filter(x => x.due);
+  const sourceRows = Object.entries(data.by_source).sort((a,b) => b[1].enquiries - a[1].enquiries);
+  document.getElementById('businessReport').innerHTML = `
+    <div class="dashboard-grid">
+      <div class="dashboard-item">Enquiries <strong>${data.enquiries}</strong></div>
+      <div class="dashboard-item">Quotes saved <strong>${data.quotes_saved}</strong></div>
+      <div class="dashboard-item">Pending <strong>${counts.pending}</strong> · ${pounds(money.pending)}</div>
+      <div class="dashboard-item">Won <strong>${counts.won}</strong> · ${pounds(money.won)}</div>
+      <div class="dashboard-item">Lost <strong>${counts.lost}</strong> · ${pounds(money.lost)}</div>
+      <div class="dashboard-item">Expired <strong>${counts.expired}</strong></div>
+    </div>
+    <p>Quoted value ${pounds(data.quoted_value)} · Win rate ${data.win_rate_percent == null ? 'Not enough decided quotes' : data.win_rate_percent + '% (' + data.win_rate_denominator + ' decisions)'}</p>
+    <p>Estimated gross profit on won quotes: ${pounds(data.estimated_gross_profit_won)}. This is an estimate, not realised net profit. Historical unclassified quotes: ${counts.unclassified}.</p>
+    <h4>Follow up now (${follow.length}; overdue ${follow.filter(x => x.overdue).length})</h4>
+    <p>${follow.length ? follow.map(x => `<button type="button" class="btn-light" onclick="showTab('quotesTab');loadSavedQuote(${x.id})">#${x.id} ${escapeHtml(x.date)}${x.overdue ? ' overdue' : ' due'}</button>`).join(' ') : 'No follow-ups due.'}</p>
+    <p>Recently won: ${data.recent_won.map(x => `<button type="button" class="btn-light" onclick="showTab('quotesTab');loadSavedQuote(${x})">#${x}</button>`).join(' ') || 'None'} · Recently lost: ${data.recent_lost.map(x => `<button type="button" class="btn-light" onclick="showTab('quotesTab');loadSavedQuote(${x})">#${x}</button>`).join(' ') || 'None'}</p>
+    <h4>Sources</h4><div class="history-list">${sourceRows.map(([source,item]) => `<div class="history-item">${escapeHtml(source)}: ${item.enquiries} enquiries, ${item.quotes} quotes, ${item.wins} wins · won ${pounds(item.won_value)} · invoiced ${pounds(item.invoiced_value)} · paid ${pounds(item.paid_value)}</div>`).join('') || 'No attributable enquiries yet.'}</div>
+    <p>Invoice amounts are linked to quotes where possible. Paid amounts are recorded receipts, not net profit; unattributed historical records are excluded from source totals.</p>`;
 }
 
 async function deleteCustomer(id) {
@@ -2148,17 +2182,32 @@ async function loadHistory() {
     const data = await res.json();
     SAVED_QUOTES = data;
     const history = document.getElementById("historyList");
+    const filter = document.getElementById('quoteStatusFilter')?.value || 'all';
+    const dateParts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p => [p.type,p.value]));
+    const today = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+    const visible = data.filter(q => filter === 'all' || (filter === 'due'
+      ? q.status === 'pending' && q.next_follow_up && q.next_follow_up <= today
+      : q.status === filter));
 
-    if (!data.length) {
-      history.innerHTML = "No saved quotes yet.";
+    if (!visible.length) {
+      history.innerHTML = filter === 'all' ? "No saved quotes yet." : "No quotes match this view.";
       return;
     }
 
-    history.innerHTML = data.map(q => `
+    history.innerHTML = visible.map(q => `
       <div class="history-item">
-        <div><strong>${escapeHtml(q.customer_name || "No customer name")}</strong></div>
+        <div><strong>#${q.id} ${escapeHtml(q.customer_name || "No customer name")}</strong> · ${renderQuoteStatus(q.status)}</div>
         <div>${escapeHtml(q.job || "")}</div>
         <div class="small">${escapeHtml(q.created_at || "")} · Total ${pounds(q.total_price)} · Profit ${pounds(q.gross_profit)} · Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
+        <div class="small">${q.lead_id ? 'Lead #' + q.lead_id + ' · ' : ''}${escapeHtml(q.source_category || 'Linked lead source / unknown')} · ${escapeHtml(q.work_type || 'Work type not classified')}${q.next_follow_up ? ' · Follow up ' + escapeHtml(q.next_follow_up) : ''}${q.loss_reason ? ' · Lost: ' + escapeHtml(q.loss_reason) : ''}</div>
+        <div class="row">
+          <select id="quote_status_${q.id}" aria-label="Quote status for ${escapeHtml(q.customer_name || 'quote')}">
+            ${['pending','won','lost','expired','unclassified'].map(s => `<option value="${s}" ${q.status === s ? 'selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('')}
+          </select>
+          <input id="quote_follow_${q.id}" type="date" aria-label="Next follow-up date" value="${escapeHtml(q.next_follow_up || '')}">
+        </div>
+        <div class="row"><select id="quote_loss_${q.id}" aria-label="Reason lost"><option value="">Loss reason (optional)</option>${['Price','Customer chose another contractor','Customer cancelled work','No response','Timing / availability','Job not suitable','Other'].map(s => `<option ${q.loss_reason === s ? 'selected' : ''}>${s}</option>`).join('')}</select><input id="quote_loss_note_${q.id}" maxlength="500" placeholder="Short note (optional)" value="${escapeHtml(q.loss_note || '')}"></div>
+        <button type="button" class="btn-blue" onclick="saveQuoteOutcome(${q.id})">Save outcome / follow-up</button>
         <div class="history-actions">
           <button type="button" class="btn-light" onclick="loadSavedQuote(${q.id})">Load</button>
           <button type="button" class="btn-blue" onclick="editSavedQuote(${q.id})">Edit</button>
@@ -2223,6 +2272,25 @@ async function loadInvoices() {
   }
 }
 
+function renderQuoteStatus(status) {
+  const color = {won:'green',lost:'red',pending:'blue',expired:'orange'}[status] || 'gray';
+  return `<span class="badge ${color}">${escapeHtml((status || 'unclassified').toUpperCase())}</span>`;
+}
+
+async function saveQuoteOutcome(id) {
+  const payload = { status: document.getElementById(`quote_status_${id}`).value,
+    next_follow_up: document.getElementById(`quote_follow_${id}`).value,
+    loss_reason: document.getElementById(`quote_loss_${id}`).value,
+    loss_note: document.getElementById(`quote_loss_note_${id}`).value };
+  try {
+    const response = await fetch(`/api/quotes/${id}/outcome`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Could not save outcome');
+    await Promise.all([loadHistory(), loadDashboard(), loadLeads()]);
+    showNotice('Quote outcome saved.');
+  } catch (error) { alert(error.message); }
+}
+
 function renderLeadBadge(status) {
   const s = (status || 'new').toLowerCase();
   if (s === 'won') return '<span class="badge green">Won</span>';
@@ -2259,6 +2327,10 @@ async function loadLeads() {
         <div class="small">${escapeHtml(l.address || '')}</div>
         <div style="margin-top:8px;">${escapeHtml(l.description || '')}</div>
         <div class="small" style="margin-top:8px;">${escapeHtml(l.created_at || '')} · ${escapeHtml((l.job_type || 'small').toUpperCase())} · ${escapeHtml(l.source || 'website')}</div>
+        <div class="small">Source: ${escapeHtml(l.source_category || 'Unknown')}${l.work_type ? ' · Work: ' + escapeHtml(l.work_type) : ''}</div>
+        <div class="row"><select id="lead_source_${l.id}" aria-label="Lead source"><option value="">Automatic source</option>${['Google Business Profile','Google organic search','Website/direct','Referral','Repeat customer','MyBuilder','Locally','Bing','Yell','Checkatrade','TrustATrader','Other'].map(s => `<option ${l.source_category === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+        <select id="lead_work_${l.id}" aria-label="Work type"><option value="">Work type (optional)</option>${['Leak / repair','Tap','Toilet / cistern','Shower','Bathroom plumbing','Radiator / TRV','Outside tap','Pipework','Power/heating-system flush','Cylinder / tank','Other'].map(s => `<option ${l.work_type === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+        <button type="button" class="btn-light" onclick="saveLeadClassification(${l.id})">Save source / work type</button>
         ${l.postcode || l.urgency || l.preferred_contact ? `<div class="small">${l.postcode ? 'Postcode: ' + escapeHtml(l.postcode) + ' · ' : ''}${l.urgency ? 'Urgency: ' + escapeHtml(l.urgency) + ' · ' : ''}${l.preferred_contact ? 'Prefers: ' + escapeHtml(l.preferred_contact) : ''}</div>` : ''}
         ${l.landing_page || l.referrer || l.utm_source || l.utm_campaign ? `<div class="small">${l.landing_page ? 'Landing: ' + escapeHtml(l.landing_page) + ' · ' : ''}${l.referrer ? 'Referrer: ' + escapeHtml(l.referrer) + ' · ' : ''}${l.utm_source ? 'Source: ' + escapeHtml(l.utm_source) + ' · ' : ''}${l.utm_campaign ? 'Campaign: ' + escapeHtml(l.utm_campaign) : ''}</div>` : ''}
         <div class="history-actions" style="grid-template-columns:repeat(2,1fr);">
@@ -2291,6 +2363,9 @@ function startQuoteFromLead(id) {
   const lead = SAVED_LEADS.find(x => x.id === id);
   if (!lead) return;
   startNewQuote();
+  CURRENT_LEAD_ID = id;
+  document.getElementById('quote_source').value = '';
+  document.getElementById('quote_work_type').value = lead.work_type || '';
   document.getElementById('customer_name').value = lead.name || '';
   document.getElementById('customer_address').value = lead.address || '';
   document.getElementById('customer_phone').value = lead.phone || '';
@@ -2301,6 +2376,15 @@ function startQuoteFromLead(id) {
   scheduleQuoteLearning();
   showTab('quotesTab');
   setEditingStatus('Lead loaded into quote builder.', true);
+}
+
+async function saveLeadClassification(id) {
+  const response = await fetch(`/api/leads/${id}/classification`, {method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({source_category:document.getElementById(`lead_source_${id}`).value,
+                         work_type:document.getElementById(`lead_work_${id}`).value})});
+  if (!response.ok) { const data = await response.json(); alert(data.detail || 'Could not save classification'); return; }
+  await Promise.all([loadLeads(), loadDashboard()]);
+  showNotice('Lead classification saved.');
 }
 
 async function updateLeadStatus(id, status) {
@@ -2650,6 +2734,8 @@ function startQuoteForCustomer(id) {
 
 function startNewQuote() {
   resetQuoteFormState();
+  document.getElementById("quote_source").value = "";
+  document.getElementById("quote_work_type").value = "";
   CURRENT_QUOTE_DATA = null;
   document.getElementById("resultCard").style.display = "none";
   document.getElementById("invoiceCard").style.display = "none";
@@ -2688,6 +2774,7 @@ async function loadSavedQuote(id) {
     const res = await fetch("/api/quotes/" + id);
     if (!res.ok) throw new Error();
     const data = await res.json();
+    document.getElementById('quoteWorkflow').innerText = `Quote #${data.id}: ${data.status.toUpperCase()}${data.next_follow_up ? ' · Follow up ' + data.next_follow_up : ''}${data.loss_reason ? ' · ' + data.loss_reason : ''}. Change outcome in Saved Quotes below.`;
     fillFormFromRequest(data.request, data.id);
     renderQuoteResult(data.result);
     showTab("quotesTab");
@@ -2703,6 +2790,7 @@ async function editSavedQuote(id) {
     const res = await fetch("/api/quotes/" + id);
     if (!res.ok) throw new Error();
     const data = await res.json();
+    document.getElementById('quoteWorkflow').innerText = `Quote #${data.id}: ${data.status.toUpperCase()}${data.next_follow_up ? ' · Follow up ' + data.next_follow_up : ''}. Change outcome in Saved Quotes below.`;
 
     const q = normaliseQuoteDataForEditing(data);
     fillFormFromRequest(q, data.id || id);
@@ -5040,6 +5128,9 @@ function normaliseQuoteDataForEditing(data) {
 
   const q = {
     quote_type: request.quote_type || result.quote_type || quote.quote_type || root.quote_type || "small",
+    lead_id: request.lead_id || root.lead_id || null,
+    source_category: request.source_category || root.source_category || "",
+    work_type: request.work_type || root.work_type || "",
     customer_name: request.customer_name || result.customer_name || quote.customer_name || root.customer_name || "",
     customer_address: request.customer_address || result.customer_address || quote.customer_address || root.customer_address || "",
     customer_phone: request.customer_phone || result.customer_phone || quote.customer_phone || root.customer_phone || "",

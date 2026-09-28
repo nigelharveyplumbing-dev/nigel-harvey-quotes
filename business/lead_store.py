@@ -2,6 +2,7 @@
 
 from business.db import get_db
 from business.models import LeadRequest
+from business.growth_tracking import SOURCES, WORK_TYPES, inferred_source
 import json
 
 SOURCE_PREFIX = "website-context-v1:"
@@ -43,6 +44,8 @@ def row_to_lead(row):
         "description": row["description"] or "",
         "status": row["status"] or "new",
         "source": source,
+        "source_category": row["source_category"] or inferred_source(source, context),
+        "work_type": row["work_type"] or "",
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -54,8 +57,8 @@ def save_lead(data: LeadRequest, now_uk, format_dt):
     conn = get_db()
     conn.execute(
         """
-        INSERT INTO leads (name, phone, email, address, job_type, description, status, source, created_at, created_at_sort, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO leads (name, phone, email, address, job_type, description, status, source, created_at, created_at_sort, updated_at, source_category, work_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             (data.name or "").strip(),
@@ -69,6 +72,8 @@ def save_lead(data: LeadRequest, now_uk, format_dt):
             format_dt(now),
             now.isoformat(),
             now.isoformat(),
+            data.source_category if data.source_category in SOURCES else None,
+            data.work_type if data.work_type in WORK_TYPES else None,
         ),
     )
     lead_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -111,6 +116,19 @@ def update_lead_status(lead_id: int, status: str, now_uk):
     if cur.rowcount <= 0:
         return None
     return get_lead_by_id(lead_id)
+
+
+def classify_lead(lead_id, source_category, work_type, now_uk):
+    if source_category and source_category not in SOURCES:
+        raise ValueError("Invalid lead source")
+    if work_type and work_type not in WORK_TYPES:
+        raise ValueError("Invalid work type")
+    conn = get_db()
+    cur = conn.execute("UPDATE leads SET source_category = ?, work_type = ?, updated_at = ? WHERE id = ?",
+                       (source_category or None, work_type or None, now_uk().isoformat(), lead_id))
+    conn.commit()
+    conn.close()
+    return get_lead_by_id(lead_id) if cur.rowcount else None
 
 
 def delete_lead_by_id(lead_id: int):

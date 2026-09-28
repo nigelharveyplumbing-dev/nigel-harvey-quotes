@@ -266,5 +266,17 @@
   [
     "PUT",
     "/api/quotes/{quote_id}"
+  ],
+  [
+    "GET",
+    "/api/business-performance"
+  ],
+  [
+    "PUT",
+    "/api/leads/{lead_id}/classification"
+  ],
+  [
+    "PUT",
+    "/api/quotes/{quote_id}/outcome"
   ]
 ]

@@ -8,6 +8,7 @@ from datetime import timedelta
 
 from business.config import PAYMENT_LINK_BASE
 from business.db import get_db
+from business.growth_tracking import LOSS_REASONS, QUOTE_STATUSES, SOURCES, WORK_TYPES
 
 
 def row_to_quote(row):
@@ -20,6 +21,13 @@ def row_to_quote(row):
         "gross_profit": round(row["gross_profit"] or 0, 2),
         "margin_percent": round(row["margin_percent"] or 0, 2),
         "created_at": row["created_at"],
+        "status": row["status"],
+        "next_follow_up": row["next_follow_up"] or "",
+        "loss_reason": row["loss_reason"] or "",
+        "loss_note": row["loss_note"] or "",
+        "lead_id": row["lead_id"],
+        "source_category": row["source_category"] or "",
+        "work_type": row["work_type"] or "",
         "request": json.loads(row["request_json"]),
         "result": json.loads(row["result_json"]),
     }
@@ -53,6 +61,15 @@ def save_quote_intelligence(quote_id: int, result_data: dict, now_uk):
 
 
 def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
+    lead_id = request_data.get("lead_id")
+    source = request_data.get("source_category") or None
+    work_type = request_data.get("work_type") or None
+    if lead_id:
+        check = get_db()
+        found = check.execute("SELECT 1 FROM leads WHERE id = ?", (lead_id,)).fetchone()
+        check.close()
+        if not found:
+            raise ValueError("Linked lead not found")
     customer_id = upsert_customer(
         request_data.get("customer_name", ""),
         request_data.get("customer_address", ""),
@@ -63,8 +80,9 @@ def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
     conn.execute("""
         INSERT INTO quotes (
             customer_id, customer_name, job, total_price, gross_profit, margin_percent,
-            created_at, created_at_sort, request_json, result_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            created_at, created_at_sort, request_json, result_json,
+            status, lead_id, source_category, work_type
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         customer_id,
         result_data.get("customer_name", ""),
@@ -76,8 +94,12 @@ def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
         result_data.get("created_at_sort", ""),
         json.dumps(request_data),
         json.dumps(result_data),
+        "pending", lead_id, source, work_type,
     ))
     quote_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    if lead_id:
+        conn.execute("UPDATE leads SET status = 'quoted', updated_at = ? WHERE id = ?",
+                     (now_uk().isoformat(), lead_id))
     conn.commit()
     conn.close()
     save_quote_intelligence(quote_id, result_data, now_uk)
@@ -200,6 +222,13 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict, ups
     if not existing:
         return None
 
+    lead_id = request_data.get("lead_id") or existing["lead_id"]
+    if lead_id:
+        check = get_db()
+        found = check.execute("SELECT 1 FROM leads WHERE id = ?", (lead_id,)).fetchone()
+        check.close()
+        if not found:
+            raise ValueError("Linked lead not found")
     customer_id = upsert_customer(
         request_data.get("customer_name", ""),
         request_data.get("customer_address", ""),
@@ -207,10 +236,14 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict, ups
     )
 
     conn = get_db()
+    request_data = {**request_data, "lead_id": lead_id,
+                    "source_category": request_data.get("source_category") or existing["source_category"],
+                    "work_type": request_data.get("work_type") or existing["work_type"]}
     conn.execute("""
         UPDATE quotes
         SET customer_id = ?, customer_name = ?, job = ?, total_price = ?, gross_profit = ?, margin_percent = ?,
-            created_at = ?, created_at_sort = ?, request_json = ?, result_json = ?
+            created_at = ?, created_at_sort = ?, request_json = ?, result_json = ?,
+            lead_id = ?, source_category = ?, work_type = ?
         WHERE id = ?
     """, (
         customer_id,
@@ -223,8 +256,45 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict, ups
         result_data.get("created_at_sort", existing["result"].get("created_at_sort", existing["created_at"])),
         json.dumps(request_data),
         json.dumps(result_data),
+        lead_id, request_data.get("source_category") or existing["source_category"] or None,
+        request_data.get("work_type") or existing["work_type"] or None,
         quote_id,
     ))
+    conn.commit()
+    conn.close()
+    return get_quote_by_id(quote_id)
+
+
+def update_quote_outcome(quote_id, status, next_follow_up, loss_reason, loss_note, now_uk):
+    status = status.strip().lower()
+    if status not in QUOTE_STATUSES:
+        raise ValueError("Invalid quote status")
+    if next_follow_up:
+        from datetime import date
+        try:
+            if date.fromisoformat(next_follow_up).isoformat() != next_follow_up:
+                raise ValueError
+        except ValueError:
+            raise ValueError("Use a valid YYYY-MM-DD follow-up date") from None
+    if loss_reason and loss_reason not in LOSS_REASONS:
+        raise ValueError("Invalid loss reason")
+    conn = get_db()
+    row = conn.execute("SELECT lead_id FROM quotes WHERE id = ?", (quote_id,)).fetchone()
+    if not row:
+        conn.close()
+        return None
+    timestamp = now_uk().isoformat()
+    conn.execute("""UPDATE quotes SET status = ?, next_follow_up = ?, loss_reason = ?,
+                   loss_note = ?, outcome_updated_at = ? WHERE id = ?""",
+                 (status, next_follow_up if status == "pending" else None,
+                  loss_reason if status == "lost" else None,
+                  loss_note[:500] if status == "lost" else None, timestamp, quote_id))
+    if row["lead_id"]:
+        lead_status = {"pending": "quoted", "won": "won", "lost": "lost",
+                       "expired": "lost"}.get(status)
+        if lead_status:
+            conn.execute("UPDATE leads SET status = ?, updated_at = ? WHERE id = ?",
+                         (lead_status, timestamp, row["lead_id"]))
     conn.commit()
     conn.close()
     return get_quote_by_id(quote_id)

@@ -156,6 +156,27 @@ def init_db():
     if "last_reminder_at" not in existing_invoice_columns:
         conn.execute("ALTER TABLE invoices ADD COLUMN last_reminder_at TEXT")
 
+    # Additive migration. Historical quotes keep an unknown outcome; the app
+    # must not count them as pending or won without Nigel's confirmation.
+    quote_columns = {row["name"] for row in conn.execute("PRAGMA table_info(quotes)")}
+    for name, definition in {
+        "status": "TEXT NOT NULL DEFAULT 'unclassified'",
+        "next_follow_up": "TEXT",
+        "loss_reason": "TEXT",
+        "loss_note": "TEXT",
+        "outcome_updated_at": "TEXT",
+        "lead_id": "INTEGER",
+        "source_category": "TEXT",
+        "work_type": "TEXT",
+    }.items():
+        if name not in quote_columns:
+            conn.execute(f"ALTER TABLE quotes ADD COLUMN {name} {definition}")
+    lead_columns = {row["name"] for row in conn.execute("PRAGMA table_info(leads)")}
+    for name in ("source_category", "work_type"):
+        if name not in lead_columns:
+            conn.execute(f"ALTER TABLE leads ADD COLUMN {name} TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_quotes_lead_id ON quotes (lead_id)")
+
     conn.commit()
     conn.close()
 
@@ -171,6 +192,5 @@ def database_counts():
             counts[table] = None
     conn.close()
     return counts
-
 
 

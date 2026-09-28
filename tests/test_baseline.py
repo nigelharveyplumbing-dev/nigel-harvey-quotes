@@ -34,7 +34,7 @@ from encoding_audit import hits as encoding_hits, scan_database, text_leaves
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Explicit policy for the 67 application method/path routes. All others are private.
+# Explicit policy for the 70 application method/path routes. All others are private.
 PUBLIC_WEBSITE_ROUTES = {
     ("GET", path) for path in (
         "/", "/new-home", "/request-quote", "/robots.txt", "/sitemap.xml",
@@ -131,10 +131,10 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
-        self.assertEqual(len(routes), 67)
+        self.assertEqual(len(routes), 70)
         self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 10)
         self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
-        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 52)
+        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 55)
         self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
         self.assertEqual(self.module.PUBLIC_ROUTE_KEYS,
                          PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES)
@@ -227,7 +227,7 @@ class BaselineTests(unittest.TestCase):
         self.assertIsNotNone(config)
         masked = m.HTML.replace(config.group(1), "__PAYMENT_CONFIG__", 1)
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
-                         "274a31ea90339fe743dc8ad43bdf3d081afdf54dd1bc55fab825ba2b53b59168")
+                         "9c0b3f1c1a37fe95e8ecd9ca6223e90ecbce1e0094e35592cfde3c3615c35649")
         self.assertEqual(m.HTML.count("<style>"), 1)
         self.assertEqual(m.HTML.count("<script>"), 1)
         self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {
@@ -236,7 +236,7 @@ class BaselineTests(unittest.TestCase):
         })
         self.assertEqual(set(re.findall(r"/api/[A-Za-z0-9_/-]+", m.HTML)), {
             "/api/ai-quote-draft", "/api/ai-quote-status", "/api/backups", "/api/backups/",
-            "/api/customers", "/api/customers/", "/api/dashboard",
+            "/api/customers", "/api/customers/", "/api/dashboard", "/api/business-performance",
             "/api/dashboard/monthly-profit", "/api/intelligence", "/api/invoices",
             "/api/invoices/", "/api/labour-intelligence", "/api/leads", "/api/leads/",
             "/api/live-product-refresh", "/api/live-product-search", "/api/material-prices",
@@ -268,7 +268,7 @@ class BaselineTests(unittest.TestCase):
         m = self.module
         private = {tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         private -= PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES
-        self.assertEqual(len(private), 52)
+        self.assertEqual(len(private), 55)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "material_id": "1", "photo_id": "1", "filename": "sample.db"}
         def file_state():
@@ -781,7 +781,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             lead = created.json()
             self.assertEqual(set(lead), {"id", "name", "phone", "email", "address",
                                          "job_type", "description", "status", "source",
-                                         "created_at", "updated_at"})
+                                         "created_at", "updated_at", "source_category", "work_type"})
             self.assertEqual((lead["name"], lead["phone"], lead["email"], lead["address"],
                               lead["job_type"], lead["description"], lead["status"], lead["source"]),
                              ("Test Lead", "07123456789", "lead@example.test", "5 Example Road",
@@ -1240,7 +1240,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         cases = (
             ("location", "f2cb0dcf128c371129883559368773dc37b592ff422e0a01b88ce9efb470eaef"),
             ("service", "0b5390eedb07304325a59dc205ac4c52c5573b619b6df4f1f018437eaa534a77"),
-            ("local", "adea6010288ffa3f8cb3e24fd459f0a18b3fa396424af1456a11818ab24e7b1c"),
+            ("local", "962e8cb9c8c42bea5e70ee3d8412aa98fb1bb229afb6b48001f92ecca27b46a6"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage7.invalid",

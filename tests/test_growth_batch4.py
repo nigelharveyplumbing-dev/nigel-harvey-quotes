@@ -114,8 +114,8 @@ class GrowthBatch4Tests(unittest.TestCase):
     def test_complete_sitemap_metadata_targets_and_internal_links(self):
         sitemap = ElementTree.fromstring(self.client.get("/sitemap.xml").text)
         urls = [item.text for item in sitemap.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")]
-        self.assertEqual(len(urls), 85)
-        self.assertEqual(len(set(urls)), 85)
+        self.assertEqual(len(urls), 72)
+        self.assertEqual(len(set(urls)), 72)
         self.assertTrue(all(url.startswith(PRODUCTION + "/") for url in urls))
 
         titles = {}
