@@ -457,6 +457,68 @@ assert.equal(context.render([]), 'None');
         )
         self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
+    @unittest.skipUnless(shutil.which("node"), "Node is required to execute browser JavaScript")
+    def test_invoice_preview_button_brings_rendered_card_into_view(self):
+        script = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+function section(start, end) {
+  const first = source.indexOf(start), last = source.indexOf(end, first);
+  assert.ok(first >= 0 && last > first);
+  return source.slice(first, last);
+}
+const code = section('function renderInvoiceCard(item, scrollToTop = true) {',
+                     '\n\nfunction downloadCurrentQuotePdf(')
+  + section('async function loadInvoices() {', '\n\nfunction renderQuoteStatus(')
+  + section('async function openInvoice(id) {', '\n\nasync function editInvoice(')
+  + '\nglobalThis.preview = openInvoice; globalThis.list = loadInvoices;'
+  + '\nglobalThis.currentId = () => CURRENT_INVOICE_ID;';
+const events = [], nodes = {};
+const document = {getElementById(id) {
+  return nodes[id] ||= {
+    style: {}, classList: {toggle() {}}, innerText: '', innerHTML: '', href: '',
+    scrollIntoView(options) {events.push({id, options});}
+  };
+}};
+const invoice = {
+  id: 3, invoice_number: 'INV-2026-0003', created_at: '2026-09-29',
+  status: 'unpaid', total_price: 125, amount_paid: 0, balance_due: 125,
+  invoice: {customer_name: 'Test customer', customer_phone: '07000000000', job: 'Test job'},
+  quote_result: {quote_type: 'small'}, photos: [],
+};
+const context = {
+  document, window: {location: {origin: 'https://staging.example'},
+                     scrollTo() {events.push('top');}},
+  fetch: async url => ({ok: true, json: async () => url === '/api/invoices' ? [invoice] : invoice}),
+  renderStatusBadge: () => 'Unpaid', renderInvoicePhotoGallery() {},
+  cancelInvoiceEdit() {}, normalisePhone: () => '',
+  escapeHtml: value => String(value || ''), pounds: value => '£' + Number(value || 0).toFixed(2),
+  APP_PAYMENT_CONFIG: {bank: 'Test bank', accountName: 'Test', sortCode: '00-00-00', accountNumber: '00000000'},
+  alert(message) {throw new Error(message);}, CURRENT_INVOICE_ID: null, SAVED_INVOICES: [],
+};
+vm.createContext(context);
+vm.runInContext(code, context);
+(async () => {
+  await context.list();
+  assert.match(nodes.invoiceList.innerHTML, /onclick="openInvoice\(3\)">Preview Invoice<\/button>/);
+  await context.preview(3);
+  assert.equal(context.currentId(), 3);
+  assert.equal(nodes.invoiceCard.style.display, 'block');
+  assert.equal(nodes.i_number.innerText, 'INV-2026-0003');
+  assert.equal(nodes.invoiceOpenBtn.href, 'https://staging.example/invoice/3');
+  assert.deepEqual(JSON.parse(JSON.stringify(events)),
+                   [{id: 'invoiceCard', options: {behavior: 'smooth', block: 'start'}}]);
+  assert.equal([...source.matchAll(/onclick="openInvoice\(\$\{i\.id\}\)">Preview Invoice<\/button>/g)].length, 2);
+})().catch(error => {console.error(error); process.exitCode = 1;});
+"""
+        result = subprocess.run(
+            ["node", "-e", script, str(self.root / "static" / "app.js")],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+
     def test_quote_and_invoice_cards_are_not_nested_inside_flex_headers(self):
         """Malformed div nesting makes the document cards collapse into narrow columns."""
         parser = _DivTreeParser()

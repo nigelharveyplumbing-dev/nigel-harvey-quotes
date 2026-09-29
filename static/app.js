@@ -1863,7 +1863,7 @@ async function sendCurrentOverdueReminder() {
   }
 }
 
-function renderInvoiceCard(item) {
+function renderInvoiceCard(item, scrollToTop = true) {
   CURRENT_INVOICE_ID = item.id;
   document.getElementById("resultCard").style.display = "none";
   document.getElementById("invoiceCard").style.display = "block";
@@ -1954,7 +1954,7 @@ ${invoiceUrl}`;
 
   document.getElementById("invoiceOpenBtn").href = invoiceUrl;
 
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  if (scrollToTop) window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function downloadCurrentQuotePdf() {
@@ -2264,7 +2264,7 @@ async function loadInvoices() {
           <button type="button" class="btn-secondary" onclick="markInvoicePaid(${i.id}, ${i.total_price})">Mark Paid</button>
           <button type="button" class="btn-light" onclick="markInvoiceUnpaid(${i.id})">Mark Unpaid</button>
           <button type="button" class="btn-blue" onclick="editInvoice(${i.id})">Edit Invoice / Job Ref</button>
-          <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Open</button>
+          <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Preview Invoice</button>
           <button type="button" class="btn-secondary" onclick="sendInvoiceWhatsApp(${i.id})">WhatsApp</button>
           <button type="button" class="btn-blue" onclick="emailInvoice(${i.id})">Email</button>
           <button type="button" class="btn-light" onclick="openInvoicePage(${i.id})">Invoice Page</button>
@@ -2708,7 +2708,7 @@ async function viewCustomerHistory(id) {
           <div class="history-item" style="margin-top:10px;padding:10px;background:#fff;">
             <div><strong>${escapeHtml(i.invoice_number || "")}</strong> — ${pounds(i.total_price || 0)} — ${escapeHtml(i.status || "")}</div>
             <div class="history-actions" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
-              <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Open</button>
+              <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Preview Invoice</button>
               <button type="button" class="btn-light" onclick="editInvoice(${i.id})">Edit</button>
               <button type="button" class="btn-primary" onclick="window.open('/invoice/${i.id}', '_blank')">Public Link</button>
             </div>
@@ -5259,7 +5259,8 @@ async function openInvoice(id) {
     const res = await fetch("/api/invoices/" + id);
     if (!res.ok) throw new Error();
     const data = await res.json();
-    renderInvoiceCard(data);
+    renderInvoiceCard(data, false);
+    document.getElementById("invoiceCard").scrollIntoView({behavior: "smooth", block: "start"});
   } catch (e) {
     alert("Could not open invoice.");
   }
