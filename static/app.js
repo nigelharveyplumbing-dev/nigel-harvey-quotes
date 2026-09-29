@@ -543,6 +543,7 @@ let SAVED_CUSTOMERS = [];
 let SAVED_LEADS = [];
 let SAVED_MATERIAL_DB = [];
 let CURRENT_QUOTE_ID = null;
+let QUOTE_CREATE_IN_PROGRESS = false;
 let CURRENT_LEAD_ID = null;
 let CURRENT_QUOTE_DATA = null;
 let CURRENT_INVOICE_ID = null;
@@ -5010,6 +5011,9 @@ async function generateQuote(options = {}) {
     skipDashboardReload = false
   } = options || {};
 
+  // A second click must not start another POST before the first save returns an ID.
+  if (!CURRENT_QUOTE_ID && QUOTE_CREATE_IN_PROGRESS) return null;
+
   const errorBox = document.getElementById("error");
   errorBox.style.display = "none";
 
@@ -5032,6 +5036,16 @@ async function generateQuote(options = {}) {
   const isEditing = !!CURRENT_QUOTE_ID;
   const url = isEditing ? "/api/quotes/" + CURRENT_QUOTE_ID : "/api/quote";
   const method = isEditing ? "PUT" : "POST";
+  const createButton = !isEditing
+    ? document.querySelector('#quotesTab button[onclick="generateQuote()"]')
+    : null;
+  if (!isEditing) {
+    QUOTE_CREATE_IN_PROGRESS = true;
+    if (createButton) {
+      createButton.disabled = true;
+      createButton.innerText = "Generating Quote…";
+    }
+  }
 
   try {
     const res = await fetch(url, {
@@ -5071,6 +5085,12 @@ async function generateQuote(options = {}) {
     }
     if (autoRefresh || silent) throw err;
     return null;
+  } finally {
+    if (!isEditing) {
+      QUOTE_CREATE_IN_PROGRESS = false;
+      if (createButton) createButton.disabled = false;
+      setQuoteButtonMode(!!CURRENT_QUOTE_ID);
+    }
   }
 }
 

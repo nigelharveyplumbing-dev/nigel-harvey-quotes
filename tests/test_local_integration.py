@@ -267,6 +267,7 @@ const context = {
   console,
   document: {
     getElementById: element,
+    querySelector: () => ({disabled: false, innerText: ''}),
     querySelectorAll(selector) {
       return selector === '.material-row' ? materialRows : [];
     },
@@ -309,6 +310,7 @@ let RECORDED_SITE_VIDEO = null;
 let LAST_AI_QUOTE_DRAFT = null;
 let AI_QUOTE_DRAFT_PENDING = false;
 let CURRENT_QUOTE_ID = null;
+let QUOTE_CREATE_IN_PROGRESS = false;
 
 ${generateAI}
 ${collectPayload}
@@ -347,6 +349,82 @@ context.runWorkflow().then(() => {
             result.returncode, 0,
             "AI draft values did not reach Generate Quote: " + (result.stderr or result.stdout),
         )
+
+    @unittest.skipUnless(shutil.which("node"), "Node is required to execute browser JavaScript")
+    def test_generate_quote_double_click_sends_one_create_request(self):
+        """Hold the first response open: the second click must not create another quote."""
+        script = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const first = source.indexOf('async function generateQuote(options = {}) {');
+const last = source.indexOf('\n\nasync function convertQuoteToInvoice(', first);
+assert.ok(first >= 0 && last > first);
+const button = { disabled: false, innerText: 'Generate Quote' };
+const errorBox = { style: { display: 'none' }, innerText: '' };
+const calls = [];
+let resolveRequest;
+const context = {
+  document: {
+    getElementById: () => errorBox,
+    querySelector: () => button,
+  },
+  collectFormPayload: () => ({customer_name: 'Synthetic Customer'}),
+  setEditingStatus: () => {},
+  setQuoteButtonMode: editing => { button.innerText = editing ? 'Update Quote' : 'Generate Quote'; },
+  renderQuoteResult: () => {},
+  showNotice: () => {},
+  fetch: async (url, options) => {
+    calls.push(`${options.method} ${url}`);
+    return await new Promise(resolve => { resolveRequest = resolve; });
+  },
+};
+vm.createContext(context);
+vm.runInContext(`
+let CURRENT_QUOTE_ID = null;
+let QUOTE_CREATE_IN_PROGRESS = false;
+let AI_QUOTE_DRAFT_PENDING = false;
+let LAST_AI_QUOTE_DRAFT = null;
+${source.slice(first, last)}
+globalThis.generateQuoteForTest = generateQuote;
+globalThis.resetQuoteForTest = () => { CURRENT_QUOTE_ID = null; };
+`, context);
+
+(async () => {
+  const firstSave = context.generateQuoteForTest({skipDashboardReload: true});
+  const repeatedClick = context.generateQuoteForTest({skipDashboardReload: true});
+  assert.deepEqual(calls, ['POST /api/quote']);
+  assert.equal(button.disabled, true);
+  assert.equal(await repeatedClick, null);
+  resolveRequest({ok: true, json: async () => ({id: 42, result: {}})});
+  await firstSave;
+  assert.equal(button.disabled, false);
+  assert.equal(button.innerText, 'Update Quote');
+
+  const update = context.generateQuoteForTest({skipDashboardReload: true});
+  assert.deepEqual(calls, ['POST /api/quote', 'PUT /api/quotes/42']);
+  resolveRequest({ok: true, json: async () => ({id: 42, result: {}})});
+  await update;
+
+  context.resetQuoteForTest();
+  const failedSave = context.generateQuoteForTest({skipDashboardReload: true});
+  assert.equal(button.disabled, true);
+  resolveRequest({ok: false});
+  assert.equal(await failedSave, null);
+  assert.equal(button.disabled, false);
+  assert.equal(button.innerText, 'Generate Quote');
+  const retry = context.generateQuoteForTest({skipDashboardReload: true});
+  assert.deepEqual(calls, ['POST /api/quote', 'PUT /api/quotes/42', 'POST /api/quote', 'POST /api/quote']);
+  resolveRequest({ok: true, json: async () => ({id: 43, result: {}})});
+  await retry;
+})().catch(error => { console.error(error); process.exitCode = 1; });
+"""
+        result = subprocess.run(
+            ["node", "-e", script, str(self.root / "static" / "app.js")],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
     def test_quote_and_invoice_cards_are_not_nested_inside_flex_headers(self):
         """Malformed div nesting makes the document cards collapse into narrow columns."""
