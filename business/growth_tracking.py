@@ -45,7 +45,7 @@ def inferred_source(source, context):
 def business_report():
     conn = get_db()
     leads = conn.execute("SELECT id, source, source_category FROM leads").fetchall()
-    quotes = conn.execute("SELECT id, lead_id, status, source_category, total_price, gross_profit, "
+    quotes = conn.execute("SELECT id, customer_name, lead_id, status, source_category, total_price, gross_profit, "
                           "next_follow_up, outcome_updated_at FROM quotes").fetchall()
     invoices = conn.execute("SELECT quote_id, total_price, amount_paid FROM invoices").fetchall()
     from business.lead_store import parse_lead_source
@@ -90,6 +90,13 @@ def business_report():
         for field in ("won_value", "invoiced_value", "paid_value"):
             item[field] = round(item[field], 2)
     decisions = counts["won"] + counts["lost"]
+    recent = sorted(quotes, key=lambda q: q["outcome_updated_at"] or "", reverse=True)
+
+    def recent_quotes(status):
+        return [{"id": q["id"], "customer_name": q["customer_name"] or "",
+                 "total_price": round(q["total_price"] or 0, 2)}
+                for q in recent if q["status"] == status][:5]
+
     return {
         "enquiries": len(leads), "quotes_saved": len(quotes), "status_counts": counts,
         "quoted_value": round(sum(values.values()), 2),
@@ -100,8 +107,6 @@ def business_report():
                                                  if q["status"] == "won"), 2),
         "follow_ups": sorted(follow_ups, key=lambda row: row["date"]),
         "by_source": by_source,
-        "recent_won": [q["id"] for q in sorted(quotes, key=lambda q: q["outcome_updated_at"] or "", reverse=True)
-                       if q["status"] == "won"][:5],
-        "recent_lost": [q["id"] for q in sorted(quotes, key=lambda q: q["outcome_updated_at"] or "", reverse=True)
-                        if q["status"] == "lost"][:5],
+        "recent_won": recent_quotes("won"),
+        "recent_lost": recent_quotes("lost"),
     }

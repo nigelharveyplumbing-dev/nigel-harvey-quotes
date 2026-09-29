@@ -426,6 +426,37 @@ globalThis.resetQuoteForTest = () => { CURRENT_QUOTE_ID = null; };
         )
         self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
+    @unittest.skipUnless(shutil.which("node"), "Node is required to execute browser JavaScript")
+    def test_recent_quote_links_show_customer_and_value(self):
+        script = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+function section(start, end) {
+  const first = source.indexOf(start);
+  const last = source.indexOf(end, first);
+  assert.ok(first >= 0 && last > first);
+  return source.slice(first, last);
+}
+const code = section('function pounds(value) {', '\n\nfunction escapeHtml(')
+  + section('function escapeHtml(text) {', '\n\nfunction showNotice(')
+  + section('function renderRecentQuotes(items) {', '\n\nfunction renderBusinessReport(')
+  + '\nglobalThis.render = renderRecentQuotes;';
+const context = {};
+vm.runInNewContext(code, context);
+const html = context.render([{id: 2, customer_name: 'Nigel & Sam', total_price: 125.5},
+                             {id: 3, customer_name: '<script>', total_price: 40}]);
+assert.match(html, /loadSavedQuote\(2\).*#2 · Nigel &amp; Sam · £125\.50/);
+assert.match(html, /loadSavedQuote\(3\).*#3 · &lt;script&gt; · £40\.00/);
+assert.equal(context.render([]), 'None');
+"""
+        result = subprocess.run(
+            ["node", "-e", script, str(self.root / "static" / "app.js")],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+
     def test_quote_and_invoice_cards_are_not_nested_inside_flex_headers(self):
         """Malformed div nesting makes the document cards collapse into narrow columns."""
         parser = _DivTreeParser()

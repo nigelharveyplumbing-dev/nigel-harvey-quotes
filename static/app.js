@@ -2123,6 +2123,10 @@ async function loadDashboard() {
   }
 }
 
+function renderRecentQuotes(items) {
+  return items.map(x => `<button type="button" class="btn-light" onclick="showTab('quotesTab');loadSavedQuote(${Number(x.id)})">#${Number(x.id)} · ${escapeHtml(x.customer_name || 'Unnamed customer')} · ${pounds(x.total_price)}</button>`).join(' ') || 'None';
+}
+
 function renderBusinessReport(data) {
   const counts = data.status_counts;
   const money = data.status_values;
@@ -2141,7 +2145,8 @@ function renderBusinessReport(data) {
     <p>Estimated gross profit on won quotes: ${pounds(data.estimated_gross_profit_won)}. This is an estimate, not realised net profit. Historical unclassified quotes: ${counts.unclassified}.</p>
     <h4>Follow up now (${follow.length}; overdue ${follow.filter(x => x.overdue).length})</h4>
     <p>${follow.length ? follow.map(x => `<button type="button" class="btn-light" onclick="showTab('quotesTab');loadSavedQuote(${x.id})">#${x.id} ${escapeHtml(x.date)}${x.overdue ? ' overdue' : ' due'}</button>`).join(' ') : 'No follow-ups due.'}</p>
-    <p>Recently won: ${data.recent_won.map(x => `<button type="button" class="btn-light" onclick="showTab('quotesTab');loadSavedQuote(${x})">#${x}</button>`).join(' ') || 'None'} · Recently lost: ${data.recent_lost.map(x => `<button type="button" class="btn-light" onclick="showTab('quotesTab');loadSavedQuote(${x})">#${x}</button>`).join(' ') || 'None'}</p>
+    <p>Recently won: ${renderRecentQuotes(data.recent_won)}</p>
+    <p>Recently lost: ${renderRecentQuotes(data.recent_lost)}</p>
     <h4>Sources</h4><div class="history-list">${sourceRows.map(([source,item]) => `<div class="history-item">${escapeHtml(source)}: ${item.enquiries} enquiries, ${item.quotes} quotes, ${item.wins} wins · won ${pounds(item.won_value)} · invoiced ${pounds(item.invoiced_value)} · paid ${pounds(item.paid_value)}</div>`).join('') || 'No attributable enquiries yet.'}</div>
     <p>Invoice amounts are linked to quotes where possible. Paid amounts are recorded receipts, not net profit; unattributed historical records are excluded from source totals.</p>`;
 }

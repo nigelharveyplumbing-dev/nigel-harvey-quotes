@@ -49,6 +49,10 @@ class BusinessGrowthTests(unittest.TestCase):
                         due = client.get('/api/business-performance', headers=auth).json()['follow_ups']
                         self.assertEqual(due[0]['id'], quote['id'])
                         self.assertTrue(due[0]['overdue'])
+                    if status == 'lost':
+                        recent = client.get('/api/business-performance', headers=auth).json()['recent_lost']
+                        self.assertEqual(recent, [{'id': quote['id'], 'customer_name': 'Local test',
+                                                   'total_price': quote['total_price']}])
                 self.assertEqual(client.put(outcome_url, headers=auth,
                                             json={'status': 'nonsense'}).status_code, 422)
                 self.assertEqual(client.put(outcome_url, headers=auth,
@@ -59,6 +63,8 @@ class BusinessGrowthTests(unittest.TestCase):
                 self.assertEqual(report['status_counts']['pending'], 0)
                 self.assertEqual(report['by_source']['Google organic search']['wins'], 1)
                 self.assertEqual(report['win_rate_percent'], 100)
+                self.assertEqual(report['recent_won'], [{'id': quote['id'], 'customer_name': 'Local test',
+                                                         'total_price': quote['total_price']}])
                 invoice = client.post(f"/api/quotes/{quote['id']}/to-invoice", headers=auth).json()
                 self.assertEqual(invoice['quote_id'], quote['id'])
                 report = client.get('/api/business-performance', headers=auth).json()
