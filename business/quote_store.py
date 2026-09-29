@@ -60,6 +60,22 @@ def save_quote_intelligence(quote_id: int, result_data: dict, now_uk):
         pass
 
 
+def sync_lead_status_from_quotes(conn, lead_id, timestamp):
+    """A linked lead reflects the strongest active outcome across its quotes."""
+    statuses = {row["status"] for row in conn.execute(
+        "SELECT status FROM quotes WHERE lead_id = ?", (lead_id,)).fetchall()}
+    if not statuses:
+        return
+    if "won" in statuses:
+        lead_status = "won"
+    elif statuses <= {"lost", "expired"}:
+        lead_status = "lost"
+    else:
+        lead_status = "quoted"
+    conn.execute("UPDATE leads SET status = ?, updated_at = ? WHERE id = ? AND status != ?",
+                 (lead_status, timestamp, lead_id, lead_status))
+
+
 def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
     lead_id = request_data.get("lead_id")
     source = request_data.get("source_category") or None
@@ -98,8 +114,7 @@ def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
     ))
     quote_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     if lead_id:
-        conn.execute("UPDATE leads SET status = 'quoted', updated_at = ? WHERE id = ?",
-                     (now_uk().isoformat(), lead_id))
+        sync_lead_status_from_quotes(conn, lead_id, now_uk().isoformat())
     conn.commit()
     conn.close()
     save_quote_intelligence(quote_id, result_data, now_uk)
@@ -290,11 +305,7 @@ def update_quote_outcome(quote_id, status, next_follow_up, loss_reason, loss_not
                   loss_reason if status == "lost" else None,
                   loss_note[:500] if status == "lost" else None, timestamp, quote_id))
     if row["lead_id"]:
-        lead_status = {"pending": "quoted", "won": "won", "lost": "lost",
-                       "expired": "lost"}.get(status)
-        if lead_status:
-            conn.execute("UPDATE leads SET status = ?, updated_at = ? WHERE id = ?",
-                         (lead_status, timestamp, row["lead_id"]))
+        sync_lead_status_from_quotes(conn, row["lead_id"], timestamp)
     conn.commit()
     conn.close()
     return get_quote_by_id(quote_id)

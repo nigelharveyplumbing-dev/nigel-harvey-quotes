@@ -13,6 +13,51 @@ from local_browser_server import disposable_app
 
 
 class BusinessGrowthTests(unittest.TestCase):
+    def test_multiple_quotes_share_lead_without_downgrading_won_outcome(self):
+        username, password = secrets.token_urlsafe(12), secrets.token_urlsafe(16)
+        auth = {'Authorization': 'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()}
+        with disposable_app(username, password) as (module, _):
+            with TestClient(module.app) as client:
+                lead = client.post('/api/leads', json={
+                    'name': 'Shared lead', 'phone': '07000000000', 'description': 'Two options',
+                }).json()
+
+                def lead_status():
+                    return client.get('/api/leads', headers=auth).json()[0]['status']
+
+                def create_quote():
+                    response = client.post('/api/quote', headers=auth, json={
+                        'customer_name': 'Shared lead', 'customer_phone': '07000000000',
+                        'job_description': 'Plumbing option', 'labour_cost': 100,
+                        'lead_id': lead['id'],
+                    })
+                    self.assertEqual(response.status_code, 200, response.text)
+                    return response.json()['id']
+
+                def set_outcome(quote_id, status):
+                    response = client.put(f'/api/quotes/{quote_id}/outcome', headers=auth,
+                                          json={'status': status})
+                    self.assertEqual(response.status_code, 200, response.text)
+
+                first = create_quote()
+                self.assertEqual(lead_status(), 'quoted')
+                set_outcome(first, 'won')
+                self.assertEqual(lead_status(), 'won')
+                second = create_quote()
+                self.assertEqual(lead_status(), 'won')
+                for status in ('lost', 'expired', 'pending'):
+                    set_outcome(second, status)
+                    self.assertEqual(lead_status(), 'won', status)
+
+                set_outcome(first, 'lost')
+                self.assertEqual(lead_status(), 'quoted')  # The second quote is pending.
+                set_outcome(second, 'expired')
+                self.assertEqual(lead_status(), 'lost')
+                set_outcome(first, 'won')
+                self.assertEqual(lead_status(), 'won')
+                set_outcome(second, 'lost')
+                self.assertEqual(lead_status(), 'won')
+
     def test_linked_lead_quote_outcomes_and_source_report(self):
         username, password = secrets.token_urlsafe(12), secrets.token_urlsafe(16)
         auth = {'Authorization': 'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()}
