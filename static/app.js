@@ -525,6 +525,28 @@ function enrichDraftMaterialsFromSavedDatabase(draft) {
   return draft;
 }
 
+function isolationValveRequirement(name) {
+  const words = String(name || '').toLowerCase().replace(/[-–]/g, ' ').trim()
+    .replace(/^(?:two|2)\s+/, '').replace(/\s+/g, ' ');
+  const match = words.match(/^(?:(\d{1,3})\s*mm\s+)?(?:isolation|isolating) valves?$/);
+  return match ? {size: match[1] || ''} : null;
+}
+
+function surveyMaterialRowMatches(name, requested) {
+  const wantedValve = isolationValveRequirement(requested);
+  if (wantedValve) {
+    const rowValve = isolationValveRequirement(name);
+    // Only a plain isolating valve is interchangeable. A specified diameter
+    // must agree; angled, full-bore and other valve types need Nigel's choice.
+    return Boolean(rowValve && (!wantedValve.size ||
+      wantedValve.size === rowValve.size));
+  }
+  const key = canonicalMaterialName(name);
+  const requestedKey = canonicalMaterialName(requested);
+  return key === requestedKey || Boolean(key && requestedKey &&
+    (key.includes(requestedKey) || requestedKey.includes(key)));
+}
+
 function reconcileRequiredSurveyMaterials(draft) {
   const customerActions = (CURRENT_SITE_SURVEY?.material_actions || [])
     .filter(action => action.action === 'customer_supplied' && String(action.material_name || '').trim());
@@ -570,7 +592,8 @@ function reconcileRequiredSurveyMaterials(draft) {
   });
   const actions = (CURRENT_SITE_SURVEY?.material_actions || [])
     .filter(action => action.action === 'include_required' && String(action.material_name || '').trim() &&
-      !customerActions.some(customer => suppliedMatch(action.material_name, customer.material_name)));
+      !customerActions.some(customer => suppliedMatch(action.material_name, customer.material_name)) &&
+      !optionalActions.some(optional => siteCheckMatch(action.material_name, optional.material_name)));
   if (!actions.length) return draft;
   draft.materials = draft.materials || [];
   const saved = MaterialSelection.savedRows(SAVED_MATERIAL_DB);
@@ -578,29 +601,52 @@ function reconcileRequiredSurveyMaterials(draft) {
     .filter(Boolean).join('\n');
   actions.forEach(action => {
     const requested = String(action.material_name).trim();
-    const requestedKey = canonicalMaterialName(requested);
-    let material = draft.materials.find(item => item.survey_requested_name === requested);
-    if (!material) material = draft.materials.find(item => {
-      const names = [item.original_rule_name, item.original_ai_name,
-        item.original_requested_name, item.name].filter(Boolean);
-      return names.some(name => {
-        const key = canonicalMaterialName(name);
-        return key === requestedKey || (key && requestedKey &&
-          (key.includes(requestedKey) || requestedKey.includes(key)));
-      });
-    });
+    const valveRequirement = isolationValveRequirement(requested);
+    const reviewName = valveRequirement
+      ? requested.replace(/^(?:two|2)\s+/i, '').replace(/valves$/i, 'valve')
+      : requested;
+    const candidates = draft.materials.filter(item => valveRequirement
+      ? surveyMaterialRowMatches(item.name, requested)
+      : [item.survey_requested_name, item.original_rule_name, item.original_ai_name,
+          item.original_requested_name, item.name].filter(Boolean)
+        .some(name => surveyMaterialRowMatches(name, requested)));
+    let material = candidates.length === 1 ? candidates[0] : null;
     if (!material) {
       material = {name: requested, quantity: Number(action.quantity || 1), required: true,
         display_status: 'required', reason: action.reason || 'Required by the site visit.'};
       draft.materials.push(material);
     }
+    const savedProduct = saved.find(row => (row.name.toLowerCase() ===
+      String(material.name || '').toLowerCase() ||
+      (valveRequirement && material.url && row.url === material.url &&
+        surveyMaterialRowMatches(row.name, material.name))) &&
+      (!material.supplier || !row.supplier || row.supplier === material.supplier) &&
+      (!material.url || !row.url || row.url === material.url));
+    const existingProduct = valveRequirement && savedProduct && Number(material.manual_price || material.live_price ||
+      material.default_price || material.price || 0) > 0;
     material.survey_requested_name = requested;
     material.site_survey_material_review = true;
     material.required = true;
     material.display_status = 'required';
-    if (Number(action.quantity || 1) > 1) material.quantity = Number(action.quantity);
+    if (Number(action.quantity) > 0) {
+      material.quantity = material.survey_explicit_quantity
+        ? Math.max(Number(material.quantity || 0), Number(action.quantity))
+        : Number(action.quantity);
+      material.survey_explicit_quantity = true;
+    }
     if (material.material_review?.manually_selected) return;
-    const review = MaterialSelection.review(requested, transcript, saved);
+    const review = MaterialSelection.review(reviewName, transcript, saved);
+    if (existingProduct) {
+      const selected = review.choices.find(choice => choice.name === savedProduct.name &&
+        choice.supplier === savedProduct.supplier && choice.url === savedProduct.url);
+      if (selected) {
+        review.selected = selected;
+        review.status = 'selected';
+        material.material_review = review;
+        material.name = selected.name;
+        return;
+      }
+    }
     material.material_review = review;
     const selected = review.selected;
     material.name = selected?.name || requested;

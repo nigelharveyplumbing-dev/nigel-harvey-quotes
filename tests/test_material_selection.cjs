@@ -39,7 +39,7 @@ assert.equal(absent.choices.length, 0);
 // Exercise the actual draft reconciliation and choice handler without loading
 // unrelated UI startup code or submitting a quote.
 const app = fs.readFileSync(path.join(__dirname, '../static/app.js'), 'utf8');
-const code = app.slice(app.indexOf('function reconcileRequiredSurveyMaterials('),
+const code = app.slice(app.indexOf('function isolationValveRequirement('),
   app.indexOf('function materialAliasInfo('));
 let currentDraft;
 const fields = {job:{value:''}, labour:{value:''}, materials_handling_percent:{value:'25'}};
@@ -130,6 +130,87 @@ assert.equal(quantityDraft.materials.length, 1);
 assert.equal(quantityDraft.materials[0].quantity, 2);
 assert.equal(quantityDraft.materials[0].material_review.status, 'choose');
 assert.equal(quantityDraft.materials[0].material_review.choices[0].price, 4);
+
+const savedValve = {name:'15mm Isolating Valve', supplier:'Toolstation',
+  url:'https://example.test/15mm-valve', last_price:4};
+context.SAVED_MATERIAL_DB = [savedValve];
+const existingValve = {materials:[{name:savedValve.name, quantity:2, required:false,
+  supplier:savedValve.supplier, url:savedValve.url, manual_price:4,
+  saved_material_id:42, original_rule_name:'isolation valve'}]};
+context.reconcileRequiredSurveyMaterials(existingValve);
+assert.equal(existingValve.materials.length, 1);
+assert.equal(existingValve.materials[0].quantity, 2);
+assert.equal(existingValve.materials[0].required, true);
+assert.equal(existingValve.materials[0].name, savedValve.name);
+assert.equal(existingValve.materials[0].supplier, 'Toolstation');
+assert.equal(existingValve.materials[0].url, savedValve.url);
+assert.equal(existingValve.materials[0].manual_price, 4);
+assert.equal(existingValve.materials[0].saved_material_id, 42);
+assert.equal(existingValve.materials[0].material_review.status, 'selected');
+assert.equal(existingValve.materials[0].material_review.selected.name, savedValve.name);
+context.reconcileRequiredSurveyMaterials(existingValve);
+assert.equal(existingValve.materials.length, 1);
+assert.equal(existingValve.materials[0].quantity, 2);
+
+const kitValve = {materials:[{name:'15mm Isolation Valve', quantity:1,
+  supplier:'Toolstation', url:savedValve.url, manual_price:4}]};
+context.CURRENT_SITE_SURVEY = {transcript:'I need two isolating valves.', material_actions:[
+  {action:'include_required', material_name:'two isolating valves', quantity:2},
+  {action:'include_required', material_name:'isolation valve'}]};
+context.reconcileRequiredSurveyMaterials(kitValve);
+assert.equal(kitValve.materials.length, 1);
+assert.equal(kitValve.materials[0].quantity, 2);
+assert.equal(kitValve.materials[0].required, true);
+assert.equal(kitValve.materials[0].name, savedValve.name);
+assert.equal(kitValve.materials[0].manual_price, 4);
+assert.equal(kitValve.materials[0].supplier, 'Toolstation');
+
+context.CURRENT_SITE_SURVEY = {transcript:'I need 15mm isolation valves.', material_actions:[
+  {action:'include_required', material_name:'15mm isolation valve', quantity:2}]};
+const differentSize = {materials:[{name:'22mm Isolating Valve', quantity:2,
+  original_rule_name:'15mm isolation valve', manual_price:7}]};
+context.reconcileRequiredSurveyMaterials(differentSize);
+assert.equal(differentSize.materials.length, 2);
+assert.equal(differentSize.materials[0].name, '22mm Isolating Valve');
+assert.equal(differentSize.materials[1].quantity, 2);
+const differentType = {materials:[{name:'15mm Angled Isolating Valve', quantity:2,
+  original_rule_name:'15mm isolation valve', manual_price:9}]};
+context.reconcileRequiredSurveyMaterials(differentType);
+assert.equal(differentType.materials.length, 2);
+assert.equal(differentType.materials[0].manual_price, 9);
+
+context.CURRENT_SITE_SURVEY = {transcript:'The customer supplies the tap and I might need flexis.',
+  material_actions:[{action:'customer_supplied', material_name:'tap'},
+    {action:'site_check', material_name:'flexis'},
+    {action:'include_required', material_name:'flexis'}]};
+const precedenceDraft = {materials:[{name:'Kitchen tap', manual_price:60},
+  {name:'Flexible Tap Connector', manual_price:6, required:true}]};
+context.reconcileRequiredSurveyMaterials(precedenceDraft);
+assert.equal(precedenceDraft.materials.length, 1);
+assert.equal(precedenceDraft.materials[0].name, 'Flexible Tap Connector');
+assert.equal(precedenceDraft.materials[0].display_status, 'site_check');
+assert.equal(precedenceDraft.materials[0].include_in_quote, false);
+
+context.CURRENT_SITE_SURVEY = {transcript:'The customer supplies the basin tap and pop-up waste. I need a dual-flush valve, a tube of silicone and two isolation valves. Might need flexis.',
+  material_actions:[{action:'customer_supplied', material_name:'tap'},
+    {action:'customer_supplied', material_name:'pop-up waste'},
+    {action:'include_required', material_name:'dual-flush valve'},
+    {action:'include_required', material_name:'silicone', quantity:1},
+    {action:'include_required', material_name:'isolation valve', quantity:2},
+    {action:'site_check', material_name:'flexis'}]};
+const mixedDraft = {scope_of_work:'Fit basin tap and pop-up waste; repair flush.', materials:[
+  {name:'Basin tap', manual_price:70}, {name:'Pop-up waste', manual_price:20},
+  {name:savedValve.name, quantity:2, supplier:'Toolstation', url:savedValve.url,
+    manual_price:4}, {name:'Flexible Tap Connector', required:true, manual_price:6}]};
+context.reconcileRequiredSurveyMaterials(mixedDraft);
+assert.deepEqual(mixedDraft.materials.map(item => item.name),
+  [savedValve.name, 'Flexible Tap Connector', 'dual-flush valve', 'silicone']);
+assert.equal(mixedDraft.materials[0].quantity, 2);
+assert.equal(mixedDraft.materials[0].manual_price, 4);
+assert.equal(mixedDraft.materials[1].include_in_quote, false);
+assert.equal(mixedDraft.materials[2].manual_price, 0);
+assert.equal(mixedDraft.materials[3].quantity, 1);
+assert.match(mixedDraft.scope_of_work, /Customer supplies tap, pop-up waste/);
 context.SAVED_MATERIAL_DB = rows;
 
 // A single saved silicone has a clear suggestion, still changeable in review.
