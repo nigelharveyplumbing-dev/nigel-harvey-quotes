@@ -141,14 +141,73 @@ def classify_lead(lead_id, source_category, work_type, now_uk, additional_work_t
     return get_lead_by_id(lead_id) if cur.rowcount else None
 
 
-def delete_lead_by_id(lead_id: int):
+def _exclusive_quick_add_customer(conn, lead):
+    """Only clean up a customer created with this exact Quick Add transaction."""
+    customer_id = lead["customer_id"]
+    if not (customer_id and lead["quick_add_key"]):
+        return False
+    customer = conn.execute("SELECT created_at FROM customers WHERE id=?", (customer_id,)).fetchone()
+    if not customer or customer["created_at"] != lead["created_at_sort"]:
+        return False
+    return not any(conn.execute(query, parameters).fetchone() for query, parameters in (
+        ("SELECT 1 FROM leads WHERE customer_id=? AND id<>? LIMIT 1", (customer_id, lead["id"])),
+        ("SELECT 1 FROM quotes WHERE customer_id=? LIMIT 1", (customer_id,)),
+        ("SELECT 1 FROM invoices WHERE customer_id=? LIMIT 1", (customer_id,)),
+        ("SELECT 1 FROM jobs WHERE customer_id=? LIMIT 1", (customer_id,)),
+    ))
+
+
+def _lead_deletion_info(conn, lead_id):
+    lead = conn.execute("SELECT id, customer_id, quick_add_key, created_at_sort FROM leads WHERE id=?",
+                        (lead_id,)).fetchone()
+    if not lead:
+        return None
+    reason = ""
+    if conn.execute("SELECT 1 FROM quotes WHERE lead_id=? LIMIT 1", (lead_id,)).fetchone():
+        reason = "This enquiry has a saved quote. Keep its history and mark it Lost or Expired instead."
+    elif conn.execute("SELECT 1 FROM jobs WHERE lead_id=? LIMIT 1", (lead_id,)).fetchone():
+        reason = "This enquiry has a plumbing job. Keep its work and invoice history instead of deleting it."
+    elif conn.execute("""SELECT 1 FROM appointments WHERE lead_id=?
+                         AND (kind!='site_visit' OR job_id IS NOT NULL) LIMIT 1""", (lead_id,)).fetchone():
+        reason = "This enquiry has a plumbing job booking. It cannot be deleted from here."
+    visits = conn.execute("SELECT COUNT(*) FROM appointments WHERE lead_id=? AND kind='site_visit'",
+                          (lead_id,)).fetchone()[0]
+    return {"can_delete": not reason, "reason": reason, "site_visit_count": visits,
+            "customer_contact_will_be_deleted": not reason and _exclusive_quick_add_customer(conn, lead)}
+
+
+def lead_deletion_info(lead_id: int):
     conn = get_db()
-    if conn.execute("SELECT 1 FROM appointments WHERE lead_id=? LIMIT 1", (lead_id,)).fetchone() or \
-       conn.execute("SELECT 1 FROM jobs WHERE lead_id=? LIMIT 1", (lead_id,)).fetchone():
+    try:
+        return _lead_deletion_info(conn, lead_id)
+    finally:
         conn.close()
-        raise ValueError("This lead has linked visits or jobs and cannot be deleted from this screen")
-    cur = conn.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
-    conn.commit()
-    deleted = cur.rowcount > 0
-    conn.close()
-    return deleted
+
+
+def delete_lead_by_id(lead_id: int, confirmed_site_visits: int | None = None):
+    conn = get_db()
+    try:
+        # Recheck inside the write transaction. A quote/job added after the
+        # confirmation preview must never be removed or left dangling.
+        conn.execute("BEGIN IMMEDIATE")
+        info = _lead_deletion_info(conn, lead_id)
+        if not info:
+            conn.rollback()
+            return False
+        if not info["can_delete"]:
+            raise ValueError(info["reason"])
+        if info["site_visit_count"] and confirmed_site_visits != info["site_visit_count"]:
+            raise ValueError("Review and confirm the number of linked site visits before deleting this enquiry.")
+        conn.execute("DELETE FROM appointments WHERE lead_id=? AND kind='site_visit' AND job_id IS NULL",
+                     (lead_id,))
+        customer_id = conn.execute("SELECT customer_id FROM leads WHERE id=?", (lead_id,)).fetchone()[0]
+        conn.execute("DELETE FROM leads WHERE id=?", (lead_id,))
+        if info["customer_contact_will_be_deleted"]:
+            conn.execute("DELETE FROM customers WHERE id=?", (customer_id,))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()

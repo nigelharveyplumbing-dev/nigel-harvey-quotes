@@ -2423,15 +2423,23 @@ async function updateLeadStatus(id, status) {
 }
 
 async function deleteLead(id) {
-  if (!confirm('Delete this lead?')) return;
   try {
-    const res = await fetch('/api/leads/' + id, { method: 'DELETE' });
+    const check = await fetch('/api/leads/' + id + '/deletion-check');
+    const preview = await check.json();
+    if (!check.ok) throw new Error(preview.detail || 'Could not check this enquiry.');
+    if (!preview.can_delete) { alert(preview.reason); return; }
+    const visits = Number(preview.site_visit_count) || 0;
+    const visitText = visits ? ` and its ${visits} linked site visit${visits === 1 ? '' : 's'}` : '';
+    const contactText = preview.customer_contact_will_be_deleted ?
+      ' The contact created with it will also be removed.' : '';
+    if (!confirm(`Delete this enquiry${visitText}?${contactText} This cannot be undone.`)) return;
+    const res = await fetch('/api/leads/' + id + '?confirm_visits=' + visits, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Could not delete lead.');
-    await loadLeads();
-    showNotice('Lead deleted.');
+    await Promise.all([loadLeads(), loadDashboard()]);
+    showNotice(`Enquiry${visits ? ' and linked site visit' + (visits === 1 ? '' : 's') : ''} deleted.`);
   } catch (e) {
-    alert('Could not delete lead: ' + e);
+    alert('Could not delete enquiry: ' + e.message);
   }
 }
 

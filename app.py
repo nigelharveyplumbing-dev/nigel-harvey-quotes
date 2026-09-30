@@ -1130,8 +1130,8 @@ def update_lead_status(lead_id: int, status: str):
     return lead_store.update_lead_status(lead_id, status, now_uk)
 
 
-def delete_lead_by_id(lead_id: int):
-    return lead_store.delete_lead_by_id(lead_id)
+def delete_lead_by_id(lead_id: int, confirmed_site_visits: int | None = None):
+    return lead_store.delete_lead_by_id(lead_id, confirmed_site_visits)
 
 
 def send_lead_notification_email(lead: dict):
@@ -1340,10 +1340,18 @@ def api_classify_lead(lead_id: int, data: LeadClassificationRequest):
     return lead
 
 
+@app.get("/api/leads/{lead_id}/deletion-check")
+def api_lead_deletion_check(lead_id: int):
+    info = lead_store.lead_deletion_info(lead_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Enquiry not found")
+    return info
+
+
 @app.delete("/api/leads/{lead_id}")
-def api_delete_lead(lead_id: int):
+def api_delete_lead(lead_id: int, confirm_visits: int | None = None):
     try:
-        if not delete_lead_by_id(lead_id):
+        if not delete_lead_by_id(lead_id, confirm_visits):
             raise HTTPException(status_code=404, detail="Lead not found")
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

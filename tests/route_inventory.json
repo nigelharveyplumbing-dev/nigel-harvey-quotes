@@ -287,5 +287,6 @@
   ["PUT", "/api/jobs/{job_id}"],
   ["GET", "/api/pipeline"],
   ["POST", "/api/quick-add/preview"],
-  ["POST", "/api/quick-add/confirm"]
+  ["POST", "/api/quick-add/confirm"],
+  ["GET", "/api/leads/{lead_id}/deletion-check"]
 ]

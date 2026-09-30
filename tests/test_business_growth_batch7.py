@@ -202,6 +202,170 @@ class Batch7Tests(unittest.TestCase):
                         f"PRAGMA table_info({table})")})
                 conn.close()
 
+    def test_accidental_enquiry_and_visits_delete_without_touching_other_work(self):
+        user, password = secrets.token_urlsafe(12), secrets.token_urlsafe(18)
+        with disposable_app(user, password) as (module, _):
+            with TestClient(module.app) as client:
+                auth = authorization(user, password)
+                plain = client.post("/api/leads", json={"name":"Plain", "description":"Question"}).json()
+                self.assertEqual(client.get(f"/api/leads/{plain['id']}/deletion-check").status_code, 401)
+                self.assertEqual(client.get(f"/api/leads/{plain['id']}/deletion-check",
+                                            headers=auth).json()["site_visit_count"], 0)
+                self.assertEqual(client.delete(f"/api/leads/{plain['id']}", headers=auth).json(), {"ok":True})
+                self.assertEqual(client.get(f"/api/leads/{plain['id']}/deletion-check",
+                                            headers=auth).status_code, 404)
+
+                other = client.post("/api/leads", json={"name":"Other", "phone":"07111000000",
+                                                           "description":"Another job"}).json()
+                other_quote = client.post("/api/quote", headers=auth, json={
+                    "customer_name":"Other", "customer_phone":"07111000000",
+                    "job_description":"Another job", "labour_cost":80, "lead_id":other["id"]}).json()
+                other_job = client.post("/api/jobs", headers=auth, json={
+                    "lead_id":other["id"], "quote_id":other_quote["id"],
+                    "title":"Other plumbing job"}).json()
+                payload = {"idempotency_key":secrets.token_urlsafe(22), "name":"Accidental",
+                           "phone":"07999000000", "address":"17 Carroll Avenue, Guildford",
+                           "description":"Replace tap and repair flush", "work_type":"Tap",
+                           "additional_work_types":["Toilet / cistern"],
+                           "visit_starts_at":"2026-10-03T10:00", "visit_ends_at":"2026-10-03T10:30"}
+                created = client.post("/api/quick-add/confirm", headers=auth, json=payload).json()
+                lead_id, contact_id = created["lead"]["id"], created["lead"]["customer_id"]
+                second_visit = client.post("/api/appointments", headers=auth, json={
+                    "lead_id":lead_id, "kind":"site_visit", "status":"provisional",
+                    "starts_at":"2026-10-04T11:00", "ends_at":"2026-10-04T11:30",
+                    "provisional_follow_up":"2026-10-02"})
+                self.assertEqual(second_visit.status_code, 200, second_visit.text)
+                preview = client.get(f"/api/leads/{lead_id}/deletion-check", headers=auth).json()
+                self.assertEqual(preview["site_visit_count"], 2)
+                self.assertTrue(preview["can_delete"])
+                self.assertTrue(preview["customer_contact_will_be_deleted"])
+                self.assertEqual(client.delete(f"/api/leads/{lead_id}", headers=auth).status_code, 409)
+                self.assertEqual(client.delete(f"/api/leads/{lead_id}?confirm_visits=1",
+                                               headers=auth).status_code, 409)
+                self.assertEqual(client.delete(f"/api/leads/{lead_id}?confirm_visits=2",
+                                               headers=auth).json(), {"ok":True})
+                self.assertFalse(any(a["lead_id"] == lead_id for a in
+                                     client.get("/api/appointments", headers=auth).json()))
+                self.assertFalse(any(l["id"] == lead_id for l in client.get("/api/leads", headers=auth).json()))
+                conn = module.get_db()
+                self.assertIsNone(conn.execute("SELECT id FROM customers WHERE id=?", (contact_id,)).fetchone())
+                self.assertEqual(conn.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+                conn.close()
+                self.assertEqual(client.get(f"/api/quotes/{other_quote['id']}", headers=auth).status_code, 200)
+                self.assertIn(other_job["id"], [j["id"] for j in client.get("/api/jobs", headers=auth).json()])
+                self.assertEqual(client.get("/api/pipeline", headers=auth).json()["total"], 1)
+                self.assertEqual(client.get("/api/business-performance", headers=auth).json()["enquiries"], 1)
+
+    def test_quote_job_and_invoice_history_block_cascade_and_shared_customer_survives(self):
+        user, password = secrets.token_urlsafe(12), secrets.token_urlsafe(18)
+        with disposable_app(user, password) as (module, _):
+            with TestClient(module.app) as client:
+                auth = authorization(user, password)
+                base = {"name":"Shared Customer", "phone":"07111000001", "address":"2 Main Road",
+                        "description":"Tap repair", "visit_starts_at":"2026-10-05T10:00",
+                        "visit_ends_at":"2026-10-05T10:30"}
+                first = client.post("/api/quick-add/confirm", headers=auth,
+                    json={**base,"idempotency_key":secrets.token_urlsafe(22)}).json()["lead"]
+                second = client.post("/api/quick-add/confirm", headers=auth,
+                    json={**base,"idempotency_key":secrets.token_urlsafe(22)}).json()["lead"]
+                self.assertEqual(first["customer_id"], second["customer_id"])
+                quote = client.post("/api/quote", headers=auth, json={
+                    "customer_name":second["name"], "customer_phone":second["phone"],
+                    "customer_address":second["address"], "job_description":"Tap repair",
+                    "labour_cost":100, "lead_id":second["id"]}).json()
+                invoice = client.post(f"/api/quotes/{quote['id']}/to-invoice", headers=auth).json()
+                client.post(f"/api/invoices/{invoice['id']}/status", headers=auth,
+                            json={"status":"paid", "amount_paid":invoice["total_price"]})
+                check = client.get(f"/api/leads/{second['id']}/deletion-check", headers=auth).json()
+                self.assertFalse(check["can_delete"])
+                self.assertIn("saved quote", check["reason"])
+                self.assertEqual(client.delete(f"/api/leads/{second['id']}?confirm_visits=1",
+                                               headers=auth).status_code, 409)
+                self.assertEqual(client.get(f"/api/quotes/{quote['id']}", headers=auth).status_code, 200)
+                self.assertEqual(client.get(f"/api/invoices/{invoice['id']}", headers=auth).status_code, 200)
+                # The first accidental lead can be removed, but its shared
+                # customer and the second lead's paid invoice stay intact.
+                first_check = client.get(f"/api/leads/{first['id']}/deletion-check", headers=auth).json()
+                self.assertFalse(first_check["customer_contact_will_be_deleted"])
+                self.assertEqual(client.delete(f"/api/leads/{first['id']}?confirm_visits=1",
+                                               headers=auth).status_code, 200)
+                self.assertEqual(client.get(f"/api/customers/{first['customer_id']}/history",
+                                            headers=auth).status_code, 200)
+                self.assertEqual(client.get(f"/api/invoices/{invoice['id']}", headers=auth).json()["status"], "paid")
+                job_only = client.post("/api/leads", json={"name":"Job only", "description":"Work"}).json()
+                job = client.post("/api/jobs", headers=auth, json={
+                    "lead_id":job_only["id"], "title":"Existing work"}).json()
+                blocked = client.get(f"/api/leads/{job_only['id']}/deletion-check", headers=auth).json()
+                self.assertFalse(blocked["can_delete"])
+                self.assertIn("plumbing job", blocked["reason"])
+                self.assertEqual(client.delete(f"/api/leads/{job_only['id']}", headers=auth).status_code, 409)
+                self.assertIn(job["id"], [j["id"] for j in client.get("/api/jobs", headers=auth).json()])
+                self.assertEqual(module.database_counts()["invoices"], 1)
+
+    def test_lead_and_visits_delete_rollback_together_on_database_error(self):
+        user, password = secrets.token_urlsafe(12), secrets.token_urlsafe(18)
+        with disposable_app(user, password) as (module, _):
+            with TestClient(module.app) as client:
+                auth = authorization(user, password)
+                lead = client.post("/api/leads", json={"name":"Rollback", "description":"Tap"}).json()
+                client.post("/api/appointments", headers=auth, json={
+                    "lead_id":lead["id"], "kind":"site_visit", "status":"confirmed",
+                    "starts_at":"2026-10-05T10:00", "ends_at":"2026-10-05T10:30"})
+                conn = module.get_db()
+                conn.execute(f"""CREATE TRIGGER prevent_lead_delete BEFORE DELETE ON leads
+                    WHEN OLD.id={int(lead['id'])} BEGIN SELECT RAISE(ABORT, 'test rollback'); END""")
+                conn.commit(); conn.close()
+                with self.assertRaises(sqlite3.IntegrityError):
+                    module.delete_lead_by_id(lead["id"], 1)
+                self.assertEqual(len(client.get("/api/appointments", headers=auth).json()), 1)
+                self.assertEqual(len(client.get("/api/leads", headers=auth).json()), 1)
+                conn = module.get_db()
+                self.assertEqual(conn.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+                conn.close()
+
+    @unittest.skipUnless(shutil.which("node"), "Node is required for lead delete UI coverage")
+    def test_lead_delete_ui_requires_informed_confirmation_and_honours_cancel(self):
+        script = r'''
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const start = source.indexOf('async function deleteLead(id) {');
+const end = source.indexOf('\n\nasync function ', start + 1);
+assert(start >= 0 && end > start);
+const calls = [], prompts = [], notices = [], alerts = [];
+let preview = {can_delete:true, site_visit_count:2,
+  customer_contact_will_be_deleted:true}, accepted = false;
+const context = {fetch:async(url, options={})=>{
+  calls.push([url, options.method || 'GET']);
+  return {ok:true, json:async()=>options.method === 'DELETE' ? {ok:true} : preview};
+}, confirm:message=>{prompts.push(message); return accepted}, alert:message=>alerts.push(message),
+  loadLeads:async()=>{}, loadDashboard:async()=>{}, showNotice:message=>notices.push(message)};
+vm.createContext(context);
+vm.runInContext(source.slice(start,end), context);
+async function run() {
+  await context.deleteLead(17);
+  assert.equal(calls.length,1);
+  assert.match(prompts[0],/2 linked site visits/);
+  assert.match(prompts[0],/contact created with it/);
+  assert.match(prompts[0],/cannot be undone/);
+  accepted=true;
+  await context.deleteLead(17);
+  assert.deepEqual(calls.at(-1),['/api/leads/17?confirm_visits=2','DELETE']);
+  assert.match(notices.at(-1),/site visits deleted/);
+  preview = {can_delete:false, reason:'This enquiry has a saved quote.', site_visit_count:1};
+  const before=calls.length;
+  await context.deleteLead(18);
+  assert.equal(calls.length,before+1);
+  assert.match(alerts.at(-1),/saved quote/);
+}
+run().catch(e=>{console.error(e); process.exitCode=1});
+'''
+        path = Path(__file__).resolve().parents[1] / "static" / "app.js"
+        result = subprocess.run(["node", "-e", script, str(path)],
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     @unittest.skipUnless(shutil.which("node"), "Node is required for Quick Add browser workflow")
     def test_quick_add_save_exposes_lead_visit_quote_actions_and_diary_location(self):
         source = Path(__file__).resolve().parents[1]
@@ -360,6 +524,9 @@ run().catch(e=>{console.error(e);process.exitCode=1});
                 visits = client.get("/api/appointments", headers=auth).json()
                 self.assertEqual(len(visits), 1)
                 self.assertEqual(visits[0]["lead_id"], lead["id"])
+                deletion_check = client.get(f"/api/leads/{lead['id']}/deletion-check", headers=auth)
+                self.assertEqual(deletion_check.status_code, 200)
+                self.assertEqual(deletion_check.json()["site_visit_count"], 1)
                 self.assertEqual(client.delete(f"/api/leads/{lead['id']}", headers=auth).status_code, 409)
                 self.assertEqual(module.database_counts()["quotes"], 0)
                 bad = dict(payload, idempotency_key=secrets.token_urlsafe(22),
