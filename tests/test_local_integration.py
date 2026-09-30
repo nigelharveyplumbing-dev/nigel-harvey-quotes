@@ -26,6 +26,8 @@ import requests
 
 from local_browser_server import disposable_app
 
+FAKE_SHARE_PATH = "/share/invoice/" + "t" * 43
+
 
 class _DivTreeParser(HTMLParser):
     """Track explicit div nesting without needing a browser or HTML dependency."""
@@ -484,6 +486,7 @@ const document = {getElementById(id) {
 }};
 const invoice = {
   id: 3, invoice_number: 'INV-2026-0003', created_at: '2026-09-29',
+  share_path: '/share/invoice/' + 't'.repeat(43),
   status: 'unpaid', total_price: 125, amount_paid: 0, balance_due: 125,
   invoice: {customer_name: 'Test customer', customer_phone: '07000000000', job: 'Test job'},
   quote_result: {quote_type: 'small'}, photos: [],
@@ -507,7 +510,7 @@ vm.runInContext(code, context);
   assert.equal(context.currentId(), 3);
   assert.equal(nodes.invoiceCard.style.display, 'block');
   assert.equal(nodes.i_number.innerText, 'INV-2026-0003');
-  assert.equal(nodes.invoiceOpenBtn.href, 'https://staging.example/invoice/3');
+  assert.equal(nodes.invoiceOpenBtn.href, 'https://staging.example/share/invoice/' + 't'.repeat(43));
   assert.deepEqual(JSON.parse(JSON.stringify(events)),
                    [{id: 'invoiceCard', options: {behavior: 'smooth', block: 'start'}}]);
   assert.equal([...source.matchAll(/onclick="openInvoice\(\$\{i\.id\}\)">Preview Invoice<\/button>/g)].length, 2);
@@ -561,8 +564,8 @@ vm.runInContext(code, context);
         self.assertEqual(quote["result"]["total_price"], 125.10)
         quote_id = quote["id"]
         self.assertEqual(c.get(f"/api/quotes/{quote_id}").status_code, 401)
-        self.assertEqual(c.get(f"/api/quotes/{quote_id}/pdf").status_code, 200)
-        self.assertEqual(c.get(f"/api/quotes/{quote_id}/pdf").content[:4], b"%PDF")
+        self.assertEqual(c.get(f"/api/quotes/{quote_id}/pdf").status_code, 401)
+        self.assertEqual(c.get(quote["share_pdf_path"]).content[:4], b"%PDF")
         payload["labour_cost"] = 120.20
         edited = c.put(f"/api/quotes/{quote_id}", headers=self.auth, json=payload)
         self.assertEqual(edited.json()["result"]["total_price"], 145.20)
@@ -572,9 +575,10 @@ vm.runInContext(code, context);
         self.assertEqual(invoice["quote_id"], quote_id)
         self.assertEqual(invoice["invoice"]["customer_name"], payload["customer_name"])
         self.assertEqual(c.get(f"/api/invoices/{invoice_id}").status_code, 401)
-        self.assertEqual(c.get(f"/invoice/{invoice_id}").status_code, 200)
-        self.assertEqual(c.get(f"/api/invoices/{invoice_id}/pdf").content[:4], b"%PDF")
-        self.assertEqual(c.get(f"/api/invoices/{invoice_id}/payment-qr").status_code, 200)
+        self.assertEqual(c.get(f"/invoice/{invoice_id}").status_code, 401)
+        self.assertEqual(c.get(invoice["share_path"]).status_code, 200)
+        self.assertEqual(c.get(invoice["share_path"] + "/pdf").content[:4], b"%PDF")
+        self.assertEqual(c.get(invoice["share_path"] + "/payment-qr").status_code, 200)
         history = c.get(f"/api/customers/{customer_id}/history", headers=self.auth).json()
         self.assertTrue(history["quotes"])
         self.assertTrue(history["invoices"])
@@ -628,7 +632,8 @@ vm.runInContext(code, context);
                           files={"photos": ("sample.png", image_bytes.getvalue(), "image/png")})
         self.assertEqual(uploaded.status_code, 200)
         photo = uploaded.json()["photos"][0]
-        self.assertEqual(c.get(photo["url"]).headers["content-type"], "image/jpeg")
+        self.assertEqual(c.get(photo["url"]).status_code, 401)
+        self.assertEqual(c.get(photo["url"], headers=self.auth).headers["content-type"], "image/jpeg")
         self.assertTrue((self.root / "photos" / str(invoice_id) / photo["filename"]).exists())
         self.assertEqual(c.delete(photo["url"], headers=self.auth).status_code, 200)
         self.assertFalse((self.root / "photos" / str(invoice_id) / photo["filename"]).exists())
@@ -646,9 +651,10 @@ vm.runInContext(code, context);
             smtplib.SMTP_SSL("example.test")
 
     def test_default_invoice_link_still_uses_live_domain(self):
-        with patch.dict(os.environ, {"PUBLIC_BASE_URL": "", "APP_ENVIRONMENT": ""}):
+        with patch.dict(os.environ, {"PUBLIC_BASE_URL": "", "APP_ENVIRONMENT": ""}), \
+             patch.object(self.app_module, "get_invoice_by_id", return_value={"share_path": FAKE_SHARE_PATH}):
             self.assertEqual(self.app_module.build_invoice_public_url(1),
-                             "https://www.nigelharveyplumbing.co.uk/invoice/1")
+                             "https://www.nigelharveyplumbing.co.uk" + FAKE_SHARE_PATH)
 
     def test_default_absolute_document_and_website_urls(self):
         m = self.app_module
@@ -658,7 +664,8 @@ vm.runInContext(code, context);
             for path in ("/invoice/47", "/api/invoices/47/pdf",
                          "/api/quotes/12/pdf", "/api/invoices/47/payment-qr"):
                 self.assertEqual(m.absolute_url(path), base + path)
-            self.assertEqual(m.build_invoice_public_url(47), base + "/invoice/47")
+            with patch.object(m, "get_invoice_by_id", return_value={"share_path": FAKE_SHARE_PATH}):
+                self.assertEqual(m.build_invoice_public_url(47), base + FAKE_SHARE_PATH)
             home = self.client.get("/").text
             self.assertIn(f'<link rel="canonical" href="{base}/">', home)
             self.assertIn(f'<meta property="og:url" content="{base}/">', home)
@@ -676,7 +683,7 @@ vm.runInContext(code, context);
             "balance_due": 12.5,
         }
         context = SimpleNamespace(
-            build_invoice_public_url=m.build_invoice_public_url,
+            build_invoice_public_url=lambda _: m.absolute_url(FAKE_SHARE_PATH),
             company_name="Test company", company_phone="000", company_email="test@example.test",
             pounds_text=m.pounds_text, get_company_logo_value=lambda: "",
             generate_invoice_pdf_bytes=lambda _: b"%PDF-synthetic",
@@ -686,7 +693,7 @@ vm.runInContext(code, context);
             invoice_msg = m.document_sharing.prepare_invoice_email(
                 item, "recipient@example.test", "", context)
             plain = next(p for p in invoice_msg.walk() if p.get_content_type() == "text/plain")
-            self.assertIn("Invoice link: https://www.nigelharveyplumbing.co.uk/invoice/47",
+            self.assertIn("Invoice link: https://www.nigelharveyplumbing.co.uk" + FAKE_SHARE_PATH,
                           plain.get_payload(decode=True).decode())
             with patch.object(m, "EMAIL_ENABLED", True), \
                  patch.object(m, "EMAIL_USER", "sender@example.test"), \
@@ -712,7 +719,8 @@ vm.runInContext(code, context);
                     self.assertEqual(m.absolute_url(path), stage + path)
                     self.assertNotIn(production, m.absolute_url(path))
             self.assertEqual(m.absolute_url("invoice/47"), stage + "/invoice/47")
-            self.assertEqual(m.build_invoice_public_url(47), stage + "/invoice/47")
+            with patch.object(m, "get_invoice_by_id", return_value={"share_path": FAKE_SHARE_PATH}):
+                self.assertEqual(m.build_invoice_public_url(47), stage + FAKE_SHARE_PATH)
 
             for page in ("/", "/new-home", "/plumber-guildford", "/emergency-plumber-guildford",
                          "/request-quote", "/robots.txt", "/sitemap.xml"):
@@ -732,9 +740,9 @@ vm.runInContext(code, context);
             quote = self.client.post("/api/quote", headers=self.auth, json=payload).json()
             invoice = self.client.post(f"/api/quotes/{quote['id']}/to-invoice",
                                        headers=self.auth).json()
-            invoice_page = self.client.get(f"/invoice/{invoice['id']}", headers=self.auth).text
-            for relative in (f"/api/invoices/{invoice['id']}/pdf",
-                             f"/api/invoices/{invoice['id']}/payment-qr"):
+            invoice_page = self.client.get(invoice["share_path"], headers=self.auth).text
+            for relative in (invoice["share_path"] + "/pdf",
+                             invoice["share_path"] + "/payment-qr"):
                 self.assertIn(relative, invoice_page)
                 self.assertEqual(urljoin(stage + "/", relative), stage + relative)
             self.assertNotIn(production, invoice_page)
@@ -746,7 +754,7 @@ vm.runInContext(code, context);
                 "invoice": {"customer_name": "Synthetic Customer"}, "status": "unpaid",
                 "balance_due": 12.5}
         context = SimpleNamespace(
-            build_invoice_public_url=m.build_invoice_public_url,
+            build_invoice_public_url=lambda _: m.absolute_url(FAKE_SHARE_PATH),
             company_name="Test company", company_phone="000", company_email="test@example.test",
             pounds_text=m.pounds_text, get_company_logo_value=lambda: "",
             generate_invoice_pdf_bytes=lambda _: b"%PDF-synthetic",
@@ -758,9 +766,9 @@ vm.runInContext(code, context);
                 item, "recipient@example.test", "", context)
             plain = next(p for p in invoice_msg.walk() if p.get_content_type() == "text/plain")
             html = next(p for p in invoice_msg.walk() if p.get_content_type() == "text/html")
-            self.assertIn("Invoice link: " + stage + "/invoice/47",
+            self.assertIn("Invoice link: " + stage + FAKE_SHARE_PATH,
                           plain.get_payload(decode=True).decode())
-            self.assertIn('href="' + stage + '/invoice/47"', html.get_payload(decode=True).decode())
+            self.assertIn('href="' + stage + FAKE_SHARE_PATH + '"', html.get_payload(decode=True).decode())
             with patch.object(m, "EMAIL_ENABLED", True), \
                  patch.object(m, "EMAIL_USER", "sender@example.test"), \
                  patch.object(m, "EMAIL_PASS", "test-only"), \
@@ -794,8 +802,9 @@ vm.runInContext(code, context);
         with patch.dict(os.environ, {"PUBLIC_BASE_URL": production + "/",
                                      "APP_ENVIRONMENT": "production"}):
             self.assertEqual(self.app_module.get_public_base_url(), production)
-            self.assertEqual(self.app_module.build_invoice_public_url(47),
-                             production + "/invoice/47")
+            with patch.object(self.app_module, "get_invoice_by_id", return_value={"share_path": FAKE_SHARE_PATH}):
+                self.assertEqual(self.app_module.build_invoice_public_url(47),
+                                 production + FAKE_SHARE_PATH)
             self.assertIn(f'href="{production}/"', self.client.get("/").text)
 
     def test_apex_production_override_is_normalized_to_www(self):
@@ -848,11 +857,11 @@ class StagingAccessTests(unittest.TestCase):
         routes = [(method, route) for route in m.app.routes
                   if route.path not in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
                   for method in getattr(route, "methods", [])]
-        self.assertEqual(len(routes), 80)
+        self.assertEqual(len(routes), 86)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "appointment_id": "1", "job_id": "1",
                       "material_id": "1", "photo_id": "1", "filename": "sample.db",
-                      "area_slug": "guildford", "service_slug": "plumber"}
+                      "area_slug": "guildford", "service_slug": "plumber", "token": "t" * 43}
 
         def file_state():
             return {str(p.relative_to(self.root)): hashlib.sha256(p.read_bytes()).hexdigest()

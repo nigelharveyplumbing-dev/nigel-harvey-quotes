@@ -18,6 +18,9 @@ class ReleaseVerificationTests(unittest.TestCase):
     def test_staging_robots_require_disallow_without_sitemap_declaration(self):
         result = self.valid_result("staging")
         self.assertTrue(verify_release.evaluate(result))
+        result["http"]["privacy_notice"] = False
+        self.assertFalse(verify_release.evaluate(result))
+        result["http"]["privacy_notice"] = True
         result["http"]["robots"] = "User-agent: *\nAllow: /\n"
         self.assertFalse(verify_release.evaluate(result))
 
@@ -43,6 +46,7 @@ class ReleaseVerificationTests(unittest.TestCase):
                          "counts": counts, "backup_files": 0},
             "http": {
                 "api_statuses": {"/api/health": 200}, "public_statuses": {"/": 200},
+                "privacy_notice": True,
                 "health": {"db_exists": True, "sqlite_integrity": "ok",
                            "var_data_is_mount": True, "counts": counts, "backup_count": 0},
                 "documents": {"quote_pdf": True}, "anonymous_statuses": {"/app": 401},

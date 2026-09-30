@@ -33,11 +33,19 @@
   ],
   [
     "GET",
+    "/api/appointments"
+  ],
+  [
+    "GET",
     "/api/backups"
   ],
   [
     "GET",
     "/api/backups/{filename}"
+  ],
+  [
+    "GET",
+    "/api/business-performance"
   ],
   [
     "GET",
@@ -85,11 +93,19 @@
   ],
   [
     "GET",
+    "/api/jobs"
+  ],
+  [
+    "GET",
     "/api/labour-intelligence"
   ],
   [
     "GET",
     "/api/leads"
+  ],
+  [
+    "GET",
+    "/api/leads/{lead_id}/deletion-check"
   ],
   [
     "GET",
@@ -126,6 +142,10 @@
   [
     "GET",
     "/api/material-search"
+  ],
+  [
+    "GET",
+    "/api/pipeline"
   ],
   [
     "GET",
@@ -173,11 +193,35 @@
   ],
   [
     "GET",
+    "/privacy"
+  ],
+  [
+    "GET",
     "/request-quote"
   ],
   [
     "GET",
     "/robots.txt"
+  ],
+  [
+    "GET",
+    "/share/invoice/{token}"
+  ],
+  [
+    "GET",
+    "/share/invoice/{token}/payment-qr"
+  ],
+  [
+    "GET",
+    "/share/invoice/{token}/pdf"
+  ],
+  [
+    "GET",
+    "/share/invoice/{token}/photos/{photo_id}"
+  ],
+  [
+    "GET",
+    "/share/quote/{token}/pdf"
   ],
   [
     "GET",
@@ -198,6 +242,10 @@
   [
     "POST",
     "/api/ai-quote-draft"
+  ],
+  [
+    "POST",
+    "/api/appointments"
   ],
   [
     "POST",
@@ -233,11 +281,23 @@
   ],
   [
     "POST",
+    "/api/jobs"
+  ],
+  [
+    "POST",
     "/api/leads"
   ],
   [
     "POST",
     "/api/material-prices/refresh"
+  ],
+  [
+    "POST",
+    "/api/quick-add/confirm"
+  ],
+  [
+    "POST",
+    "/api/quick-add/preview"
   ],
   [
     "POST",
@@ -253,7 +313,19 @@
   ],
   [
     "PUT",
+    "/api/appointments/{appointment_id}"
+  ],
+  [
+    "PUT",
     "/api/invoices/{invoice_id}"
+  ],
+  [
+    "PUT",
+    "/api/jobs/{job_id}"
+  ],
+  [
+    "PUT",
+    "/api/leads/{lead_id}/classification"
   ],
   [
     "PUT",
@@ -268,25 +340,7 @@
     "/api/quotes/{quote_id}"
   ],
   [
-    "GET",
-    "/api/business-performance"
-  ],
-  [
-    "PUT",
-    "/api/leads/{lead_id}/classification"
-  ],
-  [
     "PUT",
     "/api/quotes/{quote_id}/outcome"
-  ],
-  ["GET", "/api/appointments"],
-  ["POST", "/api/appointments"],
-  ["PUT", "/api/appointments/{appointment_id}"],
-  ["GET", "/api/jobs"],
-  ["POST", "/api/jobs"],
-  ["PUT", "/api/jobs/{job_id}"],
-  ["GET", "/api/pipeline"],
-  ["POST", "/api/quick-add/preview"],
-  ["POST", "/api/quick-add/confirm"],
-  ["GET", "/api/leads/{lead_id}/deletion-check"]
+  ]
 ]
