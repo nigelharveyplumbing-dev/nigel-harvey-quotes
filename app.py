@@ -3988,6 +3988,56 @@ def material_name_matches(name: str, aliases: list):
     )
 
 
+def site_survey_supplied_item_matches(name: str, requested: str):
+    """Match a supplied main item without swallowing separately supplied fittings."""
+    requested_words = set(re.findall(r"[a-z0-9]+", requested.lower()))
+    name_words = set(re.findall(r"[a-z0-9]+", name.lower()))
+    if not requested_words or not requested_words <= name_words:
+        return False
+    accessories = {"connector", "tail", "washer", "seal", "pipe", "kit", "trap"}
+    return not bool((name_words - requested_words) & accessories)
+
+
+def explicit_site_survey_supply_actions(transcript: str):
+    """Only extract short, unambiguous spoken supply clauses."""
+    actions = []
+    patterns = (
+        (r"\b(?:the\s+)?customer\s+(?:is\s+)?(?:supplying|providing|supplies|will\s+supply)\s+([^.!?;\n]+)", "customer_supplied"),
+        (r"\bI\s+(?:also\s+)?need\s+((?:a\s+|an\s+|the\s+)[^.!?;\n]+)", "include_required"),
+    )
+    for pattern, action in patterns:
+        for match in re.finditer(pattern, transcript or "", flags=re.I):
+            for part in re.split(r"\s+and\s+|,\s*", match.group(1)):
+                name = re.sub(r"^(?:the|an|a)\s+", "", part.strip(), flags=re.I)
+                name = re.sub(r"^tube\s+of\s+", "", name, flags=re.I).strip()
+                if not name or len(name.split()) > 7:
+                    continue
+                actions.append({"material_name": name, "action": action,
+                                "reason": "Nigel stated who supplies this item in the walkthrough.",
+                                "confidence": 99})
+    return actions
+
+
+def reconcile_site_survey_supply_actions(result: dict, transcript: str):
+    explicit = explicit_site_survey_supply_actions(transcript)
+    actions = list(result.get("material_actions", []) or [])
+    for spoken in explicit:
+        actions = [item for item in actions if not
+                   site_survey_supplied_item_matches(item.get("material_name", ""), spoken["material_name"])]
+        actions.append(spoken)
+    result["material_actions"] = actions
+    customer_items = [item["material_name"] for item in actions
+                      if item.get("action") == "customer_supplied"]
+    if customer_items:
+        supplied = "Customer supplies " + ", ".join(customer_items) + "."
+        for key in ("proposed_job_description", "site_visit_addition"):
+            existing = str(result.get(key, "")).strip()
+            if not (re.search(r"\bcustomer\b.{0,35}\b(?:suppl|provid)", existing, re.I)
+                    and all(name.lower() in existing.lower() for name in customer_items)):
+                result[key] = (existing + " " + supplied).strip()
+    return result
+
+
 def count_jobs_by_type(context: dict):
     counts = {}
     jobs = (context.get("multi_job_estimate", {}) or {}).get("classified_jobs", []) or []
@@ -4511,9 +4561,27 @@ def apply_site_survey_to_draft(draft: dict, context: dict):
     actions = survey.get("material_actions", []) or []
     applied = []
 
+    supplied = [action.get("material_name", "") for action in actions
+                if action.get("action") == "customer_supplied" and action.get("material_name")]
+    if supplied:
+        draft["materials"] = [item for item in draft.get("materials", []) or []
+                              if not any(site_survey_supplied_item_matches(item.get("name", ""), name)
+                                         for name in supplied)]
+        draft["customer_supplied_items"] = supplied
+        existing_scope = str(draft.get("scope_of_work", "")).strip()
+        if not (re.search(r"\bcustomer\b.{0,35}\b(?:suppl|provid)", existing_scope, re.I)
+                and all(name.lower() in existing_scope.lower() for name in supplied)):
+            draft["scope_of_work"] = (existing_scope + " Customer supplies " +
+                                      ", ".join(supplied) + ".").strip()
+
     for action in actions:
         name = action.get("material_name", "")
         if not name:
+            continue
+        if action.get("action") == "customer_supplied":
+            applied.append({"material_name": name, "action": "customer_supplied",
+                            "reason": action.get("reason", ""),
+                            "confidence": int(action.get("confidence", 0) or 0)})
             continue
         for item in draft.get("materials", []) or []:
             if not material_name_matches(item.get("name", ""), [name]):
@@ -4876,7 +4944,7 @@ SITE_SURVEY_SCHEMA = {
             "properties": {
                 "material_name": {"type": "string"},
                 "action": {"type": "string", "enum": [
-                    "reuse_existing", "keep_optional", "include_required", "site_check"
+                    "reuse_existing", "keep_optional", "include_required", "site_check", "customer_supplied"
                 ]},
                 "reason": {"type": "string"},
                 "confidence": {"type": "integer", "minimum": 0, "maximum": 100}
@@ -5080,7 +5148,7 @@ Nigel's spoken transcript:
 Additional site notes:
 {site_notes or 'No additional notes'}
 
-Use only supported evidence. Nigel explicitly saying he tested an item and it works is stronger than visual evidence. Seeing an item does not prove it works or will reseal after disturbance. Hidden pipework cannot be confirmed. Do not call something absent merely because the angle does not show it. Use reuse_existing only when Nigel explicitly confirms it works; keep_optional when visible but condition is uncertain; include_required when clearly absent/damaged or Nigel says it needs replacement; otherwise site_check. Use concise UK plumbing terminology.
+Use only supported evidence. Nigel explicitly saying he tested an item and it works is stronger than visual evidence. Seeing an item does not prove it works or will reseal after disturbance. Hidden pipework cannot be confirmed. Do not call something absent merely because the angle does not show it. Use reuse_existing only when Nigel explicitly confirms it works; keep_optional when visible but condition is uncertain; include_required when clearly absent/damaged or Nigel says it needs replacement; otherwise site_check. When Nigel says the customer supplies an item, mark that item customer_supplied, retain it in the work description, and never price its purchase. When Nigel says he needs to supply an item, mark it include_required. Distinguish each material separately, even in one sentence. Use concise UK plumbing terminology.
 
 Also write:
 - proposed_job_description: a concise complete works description suitable for Nigel's quote form.
@@ -5157,6 +5225,7 @@ Do not repeat vague enquiry wording. Do not include prices. Do not describe AI a
         )
 
     result["transcript"] = transcript or result.get("transcript", "")
+    result = reconcile_site_survey_supply_actions(result, result["transcript"])
     result["warnings"] = unique_short_items(
         (result.get("warnings", []) or []) + warnings,
         12,

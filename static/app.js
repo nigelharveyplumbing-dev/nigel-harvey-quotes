@@ -526,8 +526,29 @@ function enrichDraftMaterialsFromSavedDatabase(draft) {
 }
 
 function reconcileRequiredSurveyMaterials(draft) {
+  const customerActions = (CURRENT_SITE_SURVEY?.material_actions || [])
+    .filter(action => action.action === 'customer_supplied' && String(action.material_name || '').trim());
+  const suppliedMatch = (materialName, requested) => {
+    const words = value => new Set(String(value || '').toLowerCase().match(/[a-z0-9]+/g) || []);
+    const product = words(materialName), supplied = words(requested);
+    if (!supplied.size || ![...supplied].every(word => product.has(word))) return false;
+    return !['connector', 'tail', 'washer', 'seal', 'pipe', 'kit', 'trap']
+      .some(word => product.has(word) && !supplied.has(word));
+  };
+  if (customerActions.length) {
+    draft.materials = (draft.materials || []).filter(material => !customerActions.some(action =>
+      [material.name, material.original_ai_name, material.original_rule_name]
+        .filter(Boolean).some(name => suppliedMatch(name, action.material_name))));
+    draft.customer_supplied_items = customerActions.map(action => action.material_name);
+    const scope = String(draft.scope_of_work || '');
+    if (!(/\bcustomer\b.{0,35}\b(?:suppl|provid)/i.test(scope) &&
+      draft.customer_supplied_items.every(name => scope.toLowerCase().includes(name.toLowerCase())))) {
+      draft.scope_of_work = `${String(draft.scope_of_work || '').trim()} Customer supplies ${draft.customer_supplied_items.join(', ')}.`.trim();
+    }
+  }
   const actions = (CURRENT_SITE_SURVEY?.material_actions || [])
-    .filter(action => action.action === 'include_required' && String(action.material_name || '').trim());
+    .filter(action => action.action === 'include_required' && String(action.material_name || '').trim() &&
+      !customerActions.some(customer => suppliedMatch(action.material_name, customer.material_name)));
   if (!actions.length) return draft;
   draft.materials = draft.materials || [];
   const saved = MaterialSelection.savedRows(SAVED_MATERIAL_DB);
@@ -3311,6 +3332,7 @@ function surveyActionLabel(value) {
     reuse_existing: "Reuse existing",
     keep_optional: "Keep optional",
     include_required: "Include required",
+    customer_supplied: "Customer supplied — no material charge",
     site_check: "Site check",
     no_quote_change: "No quote change"
   })[value] || value || "";
@@ -5121,6 +5143,13 @@ function applyAIQuoteDraft() {
 
   if (draft.scope_of_work) {
     document.getElementById("job").value = draft.scope_of_work;
+  }
+
+  // New site-survey quotes use Nigel's stated 30% procurement rate. The rate
+  // remains visible/editable; historical quotes and other quote flows are unchanged.
+  if (CURRENT_SITE_SURVEY && !CURRENT_QUOTE_ID) {
+    const rate = document.getElementById("materials_handling_percent");
+    if (rate && rate.value === '25') rate.value = '30';
   }
 
   if (Number(draft.labour_suggestion || 0) > 0) {

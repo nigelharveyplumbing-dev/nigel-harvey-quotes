@@ -42,14 +42,16 @@ const app = fs.readFileSync(path.join(__dirname, '../static/app.js'), 'utf8');
 const code = app.slice(app.indexOf('function reconcileRequiredSurveyMaterials('),
   app.indexOf('function materialAliasInfo('));
 let currentDraft;
+const fields = {job:{value:''}, labour:{value:''}, materials_handling_percent:{value:'25'}};
 const context = {
   MaterialSelection, SAVED_MATERIAL_DB: rows,
+  CURRENT_QUOTE_ID: null,
   CURRENT_SITE_SURVEY: {transcript:'I need a dual-flush valve.', material_actions:[
     {action:'include_required', material_name:'dual-flush valve'}]},
   canonicalMaterialName: x => x.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(),
   LAST_AI_QUOTE_DRAFT: null,
   renderAIQuoteDraft: x => { currentDraft = x.draft; },
-  document: {getElementById: () => null},
+  document: {getElementById: id => fields[id] || null},
 };
 vm.createContext(context);
 vm.runInContext(code, context);
@@ -68,8 +70,43 @@ assert.equal(currentDraft.materials[0].supplier, 'City Plumbing');
 context.reconcileRequiredSurveyMaterials(currentDraft);
 assert.equal(currentDraft.materials[0].name, rows[0].name);
 assert.equal(currentDraft.materials[0].manual_price, 42.5);
+const selectedDraft = currentDraft;
+
+const responsibilityDraft = {scope_of_work:'Fit the tap and waste and repair the toilet.', materials:[
+  {name:'Kitchen mixer tap', manual_price:70},
+  {name:'Pop-up waste', manual_price:20},
+  {name:'Flexible tap connector', manual_price:5},
+]};
+context.CURRENT_SITE_SURVEY = {transcript:'The customer is supplying the tap and pop-up waste. I need a dual-flush valve and a tube of silicone.',
+  material_actions:[
+    {action:'customer_supplied', material_name:'tap'},
+    {action:'customer_supplied', material_name:'pop-up waste'},
+    {action:'include_required', material_name:'dual-flush valve'},
+    {action:'include_required', material_name:'silicone'},
+  ]};
+context.reconcileRequiredSurveyMaterials(responsibilityDraft);
+assert.deepEqual(responsibilityDraft.materials.map(x => x.name),
+  ['Flexible tap connector', 'dual-flush valve', 'silicone']);
+assert.equal(responsibilityDraft.materials[1].material_review.status, 'choose');
+assert.equal(responsibilityDraft.materials[2].manual_price, 0);
+assert.match(responsibilityDraft.scope_of_work, /Customer supplies tap, pop-up waste/);
+assert.deepEqual(responsibilityDraft.customer_supplied_items, ['tap', 'pop-up waste']);
+
+// A single saved silicone has a clear suggestion, still changeable in review.
+context.SAVED_MATERIAL_DB = [{name:'Silicone', supplier:'Toolstation', last_price:8}];
+const oneMatch = {materials:[]};
+context.reconcileRequiredSurveyMaterials(oneMatch);
+assert.equal(oneMatch.materials.find(x => x.survey_requested_name === 'silicone').material_review.status, 'selected');
+context.LAST_AI_QUOTE_DRAFT = oneMatch;
+context.chooseDraftMaterial(1, -1);
+assert.equal(oneMatch.materials[1].manual_price, 0);
+assert.equal(oneMatch.materials[1].name, 'silicone');
+context.SAVED_MATERIAL_DB = rows;
+context.CURRENT_SITE_SURVEY = {transcript:'I need a dual-flush valve.', material_actions:[
+  {action:'include_required', material_name:'dual-flush valve'}]};
 
 const applied = [];
+context.LAST_AI_QUOTE_DRAFT = selectedDraft;
 Object.assign(context, {
   prepareDraftForV125: x => context.reconcileRequiredSurveyMaterials(x),
   clearMaterials: () => {}, addMaterial: x => applied.push(x),
@@ -84,6 +121,7 @@ context.applyAIQuoteDraft();
 assert.equal(applied[0].name, rows[0].name);
 assert.equal(applied[0].manual_price, 42.5);
 assert.equal(applied[0].supplier, 'City Plumbing');
+assert.equal(fields.materials_handling_percent.value, '30');
 
 const noMatch = {materials:[]};
 context.CURRENT_SITE_SURVEY.material_actions[0].material_name = 'macerator pump';
