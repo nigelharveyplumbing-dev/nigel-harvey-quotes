@@ -565,7 +565,7 @@ LABOUR_HINTS = quote_rules.LABOUR_HINTS
 
 
 from business.models import (
-    MaterialItem, QuoteRequest, AIQuoteDraftRequest, InvoiceStatusRequest, PaymentLinkUpdateRequest, SendInvoiceEmailRequest, LeadRequest, LeadStatusRequest, LeadClassificationRequest, QuoteOutcomeRequest, InvoiceEditRequest
+    MaterialItem, QuoteRequest, AIQuoteDraftRequest, InvoiceStatusRequest, PaymentLinkUpdateRequest, SendInvoiceEmailRequest, LeadRequest, LeadStatusRequest, LeadClassificationRequest, QuoteOutcomeRequest, InvoiceEditRequest, AppointmentRequest, JobRequest, QuickAddPreviewRequest, QuickAddConfirmRequest
 )
 
 
@@ -647,6 +647,7 @@ from business import notifications
 from business import ai_presentation
 from business import job_context
 from business import customer_store, lead_store, invoice_photo_store
+from business import job_pipeline, quick_add
 from business.material_store import normalize_material_url, get_cached_material_price
 from business.quote_store import row_to_quote, load_quotes, get_quote_by_id, delete_quote_by_id, build_payment_link
 
@@ -1220,6 +1221,7 @@ payment_config = json.dumps({
 }).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 HTML = HTML.replace("__APP_PAYMENT_CONFIG__", payment_config)
 HTML = HTML.replace("__APP_JS__", (APP_UI_ROOT / "static" / "app.js").read_text(encoding="utf-8"))
+HTML = HTML.replace("__PIPELINE_JS__", (APP_UI_ROOT / "static" / "pipeline.js").read_text(encoding="utf-8"))
 
 
 @app.get("/request-quote", response_class=HTMLResponse)
@@ -1243,6 +1245,69 @@ def request_quote_page(request: Request):
 @app.get("/api/leads")
 def api_leads():
     return load_leads()
+
+
+@app.post("/api/quick-add/preview")
+def api_quick_add_preview(data: QuickAddPreviewRequest):
+    try:
+        return quick_add.preview(data.message)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/quick-add/confirm")
+def api_quick_add_confirm(data: QuickAddConfirmRequest):
+    try:
+        return quick_add.confirm(data, now_uk, format_dt)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/pipeline")
+def api_pipeline():
+    return job_pipeline.pipeline_report()
+
+
+@app.get("/api/appointments")
+def api_appointments():
+    return job_pipeline.list_appointments()
+
+
+@app.post("/api/appointments")
+def api_create_appointment(data: AppointmentRequest):
+    try:
+        return job_pipeline.save_appointment(data, now_uk)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.put("/api/appointments/{appointment_id}")
+def api_update_appointment(appointment_id: int, data: AppointmentRequest):
+    try:
+        return job_pipeline.save_appointment(data, now_uk, appointment_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/jobs")
+def api_jobs():
+    return job_pipeline.list_jobs()
+
+
+@app.post("/api/jobs")
+def api_create_job(data: JobRequest):
+    try:
+        return job_pipeline.save_job(data, now_uk)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.put("/api/jobs/{job_id}")
+def api_update_job(job_id: int, data: JobRequest):
+    try:
+        return job_pipeline.save_job(data, now_uk, job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/leads")
@@ -1273,8 +1338,11 @@ def api_classify_lead(lead_id: int, data: LeadClassificationRequest):
 
 @app.delete("/api/leads/{lead_id}")
 def api_delete_lead(lead_id: int):
-    if not delete_lead_by_id(lead_id):
-        raise HTTPException(status_code=404, detail="Lead not found")
+    try:
+        if not delete_lead_by_id(lead_id):
+            raise HTTPException(status_code=404, detail="Lead not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"ok": True}
 
 

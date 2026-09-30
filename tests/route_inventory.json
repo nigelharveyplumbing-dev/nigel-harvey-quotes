@@ -278,5 +278,14 @@
   [
     "PUT",
     "/api/quotes/{quote_id}/outcome"
-  ]
+  ],
+  ["GET", "/api/appointments"],
+  ["POST", "/api/appointments"],
+  ["PUT", "/api/appointments/{appointment_id}"],
+  ["GET", "/api/jobs"],
+  ["POST", "/api/jobs"],
+  ["PUT", "/api/jobs/{job_id}"],
+  ["GET", "/api/pipeline"],
+  ["POST", "/api/quick-add/preview"],
+  ["POST", "/api/quick-add/confirm"]
 ]

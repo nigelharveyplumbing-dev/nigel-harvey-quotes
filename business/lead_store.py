@@ -133,6 +133,10 @@ def classify_lead(lead_id, source_category, work_type, now_uk):
 
 def delete_lead_by_id(lead_id: int):
     conn = get_db()
+    if conn.execute("SELECT 1 FROM appointments WHERE lead_id=? LIMIT 1", (lead_id,)).fetchone() or \
+       conn.execute("SELECT 1 FROM jobs WHERE lead_id=? LIMIT 1", (lead_id,)).fetchone():
+        conn.close()
+        raise ValueError("This lead has linked visits or jobs and cannot be deleted from this screen")
     cur = conn.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
     conn.commit()
     deleted = cur.rowcount > 0

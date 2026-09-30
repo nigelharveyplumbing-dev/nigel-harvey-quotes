@@ -105,6 +105,45 @@ class QuoteOutcomeRequest(BaseModel):
     loss_note: str = ""
 
 
+class AppointmentRequest(BaseModel):
+    lead_id: int
+    job_id: int | None = None
+    kind: str = "site_visit"
+    status: str = "confirmed"
+    starts_at: str
+    ends_at: str
+    provisional_follow_up: str = ""
+    notes: str = ""
+
+
+class JobRequest(BaseModel):
+    lead_id: int | None = None
+    quote_id: int | None = None
+    invoice_id: int | None = None
+    title: str = ""
+    status: str = "awaiting_schedule"
+    notes: str = ""
+
+
+class QuickAddPreviewRequest(BaseModel):
+    message: str
+
+
+class QuickAddConfirmRequest(BaseModel):
+    idempotency_key: str
+    name: str = ""
+    phone: str = ""
+    email: str = ""
+    address: str = ""
+    description: str = ""
+    source_category: str = ""
+    work_type: str = ""
+    visit_starts_at: str = ""
+    visit_ends_at: str = ""
+    visit_status: str = "confirmed"
+    provisional_follow_up: str = ""
+
+
 class InvoiceEditRequest(BaseModel):
     customer_name: str = ""
     customer_address: str = ""
@@ -120,4 +159,3 @@ class InvoiceEditRequest(BaseModel):
     amount_paid: float = 0
     reminder_email: str = ""
     reminders_enabled: bool = False
-

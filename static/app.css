@@ -60,7 +60,11 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 .dashboard-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
 .dashboard-item { border:1px solid #ddd; border-radius:10px; padding:12px; background:#fafafa; }
 .dashboard-item .num { font-size:26px; font-weight:800; margin-top:4px; }
-.tabs { display:grid; grid-template-columns:repeat(7, 1fr); gap:8px; margin-bottom:14px; }
+.tabs { display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; margin-bottom:14px; }
+.pipeline-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; }
+.pipeline-stage { padding:12px; border:1px solid #ccd8e0; border-radius:8px; background:#f8fafc; min-width:0; }
+.pipeline-stage h3 { margin:0 0 8px; font-size:16px; }
+.pipeline-stage .history-item { overflow-wrap:anywhere; }
 .tabs button { padding:12px; }
 .tab-panel { display:none; }
 .tab-panel.active { display:block; }

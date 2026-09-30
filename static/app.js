@@ -601,6 +601,8 @@ function showTab(id) {
   if (id === "invoicesTab") loadInvoices();
   if (id === "customersTab") loadCustomers();
   if (id === "leadsTab") loadLeads();
+  if (id === "pipelineTab") loadPipeline();
+  if (id === "diaryTab") loadDiary();
   if (id === "safetyTab") loadSafety();
   if (id === "materialsDbTab") loadMaterialDb();
   if (id === "intelligenceTab") loadIntelligence();
@@ -2219,6 +2221,7 @@ async function loadHistory() {
           <button type="button" class="btn-blue" onclick="editSavedQuote(${q.id})">Edit</button>
           <button type="button" class="btn-secondary" onclick="sendSavedQuoteWhatsApp(${q.id})">WhatsApp</button>
           <button type="button" class="btn-blue" onclick="convertQuoteToInvoice(${q.id})">To Invoice</button>
+          ${q.status === 'won' ? `<button type="button" class="btn-light" onclick="jobFromQuote(${q.id})">Add to Pipeline</button>` : ''}
           <button type="button" class="btn-light" onclick="printSavedQuote(${q.id})">Print</button>
           <button type="button" class="btn-red" onclick="deleteSavedQuote(${q.id})">Delete</button>
         </div>
@@ -2341,6 +2344,7 @@ async function loadLeads() {
         ${l.landing_page || l.referrer || l.utm_source || l.utm_campaign ? `<div class="small">${l.landing_page ? 'Landing: ' + escapeHtml(l.landing_page) + ' · ' : ''}${l.referrer ? 'Referrer: ' + escapeHtml(l.referrer) + ' · ' : ''}${l.utm_source ? 'Source: ' + escapeHtml(l.utm_source) + ' · ' : ''}${l.utm_campaign ? 'Campaign: ' + escapeHtml(l.utm_campaign) : ''}</div>` : ''}
         <div class="history-actions" style="grid-template-columns:repeat(2,1fr);">
           <button type="button" class="btn-light" onclick="startQuoteFromLead(${l.id})">Start Quote</button>
+          <button type="button" class="btn-light" onclick="bookVisitForLead(${l.id})">Book Visit</button>
           <button type="button" class="btn-blue" onclick="updateLeadStatus(${l.id}, 'contacted')">Mark Contacted</button>
         </div>
         <div class="history-actions" style="grid-template-columns:repeat(3,1fr);">

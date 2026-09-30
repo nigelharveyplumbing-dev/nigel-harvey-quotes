@@ -1,0 +1,62 @@
+# Business Growth Batch 7 — pipeline, diary, Quick Add Lead
+
+Branch: `growth/business-growth-batch-7` from production/main
+`587f397120adc2f2cc6054446f45ab03bdc3a4c5`. Staging only until Nigel
+explicitly approves production promotion.
+
+## Existing record relationships
+
+- A lead can exist before a customer, visit or quote. Batch 6 already links a
+  quote to a lead and an invoice to a quote, while preserving independent quote
+  outcomes, follow-up dates, source and work type.
+- New `appointments` link to a lead. A site visit does not require a quote or
+  job. Confirmed, provisional, completed and cancelled visits are explicit;
+  provisional appointments can have a follow-up date.
+- New `jobs` link a lead or quote and, optionally, an existing invoice. They
+  have awaiting schedule, scheduled, in progress and completed statuses.
+  Invoiced/paid stages are derived from existing linked invoice data.
+- Pipeline cards aggregate multiple quotes under one lead. A won quote cannot
+  be downgraded by another pending/lost quote. Historical unclassified quotes
+  remain unclassified; closed lost/expired work remains visible separately.
+
+## Quick Add
+
+Paste a message into the private app, request a conservative preview, correct
+name/phone/address/job/source/work type and optionally confirm a site visit.
+Only explicit full UK dates with a time are suggested. The confirmation writes
+one lead and optional appointment in a single SQLite transaction; a unique
+submission key returns the same lead after a repeated click/request. It never
+sends the customer a message. Public enquiry capture remains unchanged.
+
+## Calendar boundary
+
+The diary shows a week at a time and marks provisional follow-ups. “Add to
+Google Calendar” opens a pre-filled event draft for Nigel to review and save.
+There is **no automatic two-way Google Calendar sync or conflict check**:
+the deployed app has no authorised Google Calendar OAuth integration. This
+prevents silent external calendar writes or inferred availability. Full sync
+would need a separate account authorisation and safe token/storage design.
+
+## Release verification
+
+Run `python scripts/verify_release.py --environment staging` inside the
+existing staging service Shell, or `python scripts/verify_release.py
+--environment production --read-only` inside the production service Shell
+after a separately approved future release. The script checks service identity
+where Render exposes it, environment, origin and mounted disk; opens SQLite
+`mode=ro`; checks counts, backup files, integrity, required schema, protected
+GET APIs, existing documents, anonymous auth boundaries, all 72 sitemap URLs,
+metadata/canonicals, robots, 13 redirects and apex redirect on production.
+It produces JSON and PASS/FAIL. It never writes records or contacts customers.
+Render deploy SHA, runtime logs and HTTP 5xx outside its own requests are
+verified separately through Render's deployment/log API. The Shell environment
+must expose the existing APP_USERNAME/APP_PASSWORD to access private GET APIs;
+the script never prints them.
+
+## Verification record
+
+- Local Batch 6 baseline: 89/89 Python tests passed, production verified.
+- Batch 7 isolated tests: pending final run.
+- Staging service: `srv-das0vrflk1mc73dtb2cg`; branch/deployment pending.
+- Production/main, GBP, directories, credentials, analytics and Render
+  environment/disk/build/start settings: unchanged by Batch 7.

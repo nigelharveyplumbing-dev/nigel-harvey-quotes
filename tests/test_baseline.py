@@ -34,7 +34,7 @@ from encoding_audit import hits as encoding_hits, scan_database, text_leaves
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Explicit policy for the 70 application method/path routes. All others are private.
+# Explicit policy for the application method/path routes. All others are private.
 PUBLIC_WEBSITE_ROUTES = {
     ("GET", path) for path in (
         "/", "/new-home", "/request-quote", "/robots.txt", "/sitemap.xml",
@@ -131,10 +131,10 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
-        self.assertEqual(len(routes), 70)
+        self.assertEqual(len(routes), 79)
         self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 10)
         self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
-        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 55)
+        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 64)
         self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
         self.assertEqual(self.module.PUBLIC_ROUTE_KEYS,
                          PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES)
@@ -227,7 +227,7 @@ class BaselineTests(unittest.TestCase):
         self.assertIsNotNone(config)
         masked = m.HTML.replace(config.group(1), "__PAYMENT_CONFIG__", 1)
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
-                         "ccb9fc3d7ae4a0c516f8d68d79a75da1ea1f06e6bb93998ac812525478b0d86f")
+                         "d3cade71e1a024667d553a0a46f02083df61cb84bcaafcbaf5566cc44c414c7e")
         self.assertEqual(m.HTML.count("<style>"), 1)
         self.assertEqual(m.HTML.count("<script>"), 1)
         self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {
@@ -237,6 +237,8 @@ class BaselineTests(unittest.TestCase):
         self.assertEqual(set(re.findall(r"/api/[A-Za-z0-9_/-]+", m.HTML)), {
             "/api/ai-quote-draft", "/api/ai-quote-status", "/api/backups", "/api/backups/",
             "/api/customers", "/api/customers/", "/api/dashboard", "/api/business-performance",
+            "/api/appointments", "/api/appointments/", "/api/jobs", "/api/jobs/",
+            "/api/pipeline", "/api/quick-add/preview", "/api/quick-add/confirm",
             "/api/dashboard/monthly-profit", "/api/intelligence", "/api/invoices",
             "/api/invoices/", "/api/labour-intelligence", "/api/leads", "/api/leads/",
             "/api/live-product-refresh", "/api/live-product-search", "/api/material-prices",
@@ -268,9 +270,10 @@ class BaselineTests(unittest.TestCase):
         m = self.module
         private = {tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         private -= PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES
-        self.assertEqual(len(private), 55)
+        self.assertEqual(len(private), 64)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
-                      "lead_id": "1", "material_id": "1", "photo_id": "1", "filename": "sample.db"}
+                      "lead_id": "1", "appointment_id": "1", "job_id": "1",
+                      "material_id": "1", "photo_id": "1", "filename": "sample.db"}
         def file_state():
             return {
                 str(path.relative_to(self.temp.name)): hashlib.sha256(path.read_bytes()).hexdigest()

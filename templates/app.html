@@ -14,7 +14,7 @@
 
   <div class="card">
     <h1>Nigel Harvey Ltd</h1>
-    <div class="sub">Quotes, invoices, customers, profit tracking</div>
+    <div class="sub">Enquiries, diary, jobs, quotes and invoices</div>
     <div id="appNotice" class="notice success"></div>
 
     <div class="tabs no-print">
@@ -23,6 +23,8 @@
       <button class="btn-light" onclick="showTab('invoicesTab')">Invoices</button>
       <button class="btn-light" onclick="showTab('customersTab')">Customers</button>
       <button class="btn-light" onclick="showTab('leadsTab')">Leads</button>
+      <button class="btn-light" onclick="showTab('pipelineTab')">Pipeline</button>
+      <button class="btn-light" onclick="showTab('diaryTab')">Diary</button>
       <button class="btn-light" onclick="showTab('safetyTab')">Safety</button>
       <button class="btn-light" onclick="showTab('materialsDbTab')">Material Database</button>
       <button class="btn-light" onclick="showTab('intelligenceTab')">Intelligence</button>
@@ -326,6 +328,27 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
     <div id="leadsTab" class="tab-panel">
       <h2>Lead Generator</h2>
       <div class="small">Public quote request page: <a href="/request-quote" target="_blank">/request-quote</a></div>
+      <details class="quote-box no-print" style="margin:14px 0;">
+        <summary><strong>Quick Add Lead from a message</strong></summary>
+        <p class="small">Paste a customer SMS or WhatsApp message. Review every suggested detail before saving; nothing is sent to the customer.</p>
+        <textarea id="quickMessage" rows="5" maxlength="10000" placeholder="Paste the customer's message here"></textarea>
+        <button type="button" class="btn-blue" onclick="previewQuickLead()">Extract details for review</button>
+        <div id="quickPreview" class="hidden" style="margin-top:10px;">
+          <div class="small" id="quickHint"></div>
+          <label>Name</label><input id="quickName" autocomplete="off">
+          <label>Phone</label><input id="quickPhone" type="tel" autocomplete="off">
+          <label>Email</label><input id="quickEmail" type="email" autocomplete="off">
+          <label>Address / postcode</label><input id="quickAddress" autocomplete="off">
+          <label>Job details</label><textarea id="quickDescription" rows="4"></textarea>
+          <div class="grid2"><div><label>Lead source</label><select id="quickSource"><option value="">Unknown / confirm later</option><option>Google Business Profile</option><option>Google organic search</option><option>Website/direct</option><option>Referral</option><option>Repeat customer</option><option>MyBuilder</option><option>Locally</option><option>Bing</option><option>Yell</option><option>Checkatrade</option><option>TrustATrader</option><option>Other</option></select></div>
+          <div><label>Work type</label><select id="quickWork"><option value="">Not classified</option><option>Leak / repair</option><option>Tap</option><option>Toilet / cistern</option><option>Shower</option><option>Bathroom plumbing</option><option>Radiator / TRV</option><option>Outside tap</option><option>Pipework</option><option>Power/heating-system flush</option><option>Cylinder / tank</option><option>Other</option></select></div></div>
+          <p class="small">Optional site visit: leave both times blank to save an enquiry without an appointment.</p>
+          <div class="grid2"><div><label>Visit starts</label><input id="quickVisitStart" type="datetime-local"></div><div><label>Visit ends</label><input id="quickVisitEnd" type="datetime-local"></div></div>
+          <label>Visit status</label><select id="quickVisitStatus" onchange="document.getElementById('quickProvisionalFollow').classList.toggle('hidden',this.value!=='provisional')"><option value="confirmed">Confirmed</option><option value="provisional">Pencilled in</option></select>
+          <div id="quickProvisionalFollow" class="hidden"><label>Follow up pencilled booking on</label><input id="quickFollowUp" type="date"></div>
+          <button type="button" class="btn-blue" id="quickSave" onclick="saveQuickLead()">Confirm and save lead</button>
+        </div>
+      </details>
       <div class="lead-filter-row">
         <input id="leadSearch" placeholder="Search leads by name, phone, email, address or job" oninput="loadLeads()">
         <select id="leadStatusFilter" onchange="loadLeads()">
@@ -338,6 +361,40 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
         </select>
       </div>
       <div id="leadList" class="small" style="margin-top:10px;">No leads yet.</div>
+    </div>
+    <div id="pipelineTab" class="tab-panel">
+      <h2>Job Pipeline</h2>
+      <p class="small">One view of active opportunities. Closed lost/expired quotes remain in Leads and Quotes; historical quotes are not assigned an outcome automatically.</p>
+      <button type="button" class="btn-light" onclick="loadPipeline()">Refresh pipeline</button>
+      <div id="pipelineBoard" class="pipeline-grid" style="margin-top:12px;">Loading...</div>
+      <details class="quote-box" style="margin-top:14px;"><summary><strong>Add or update a job</strong></summary>
+        <p class="small">Link an existing lead or quote. A job can exist before a quote.</p>
+        <label>Job ID to update (leave blank for new)</label><input id="jobEditId" type="number" min="1">
+        <label>Lead ID</label><input id="jobLeadId" type="number" min="1">
+        <label>Quote ID (optional)</label><input id="jobQuoteId" type="number" min="1">
+        <label>Invoice ID (optional)</label><input id="jobInvoiceId" type="number" min="1">
+        <label>Job title</label><input id="jobTitle" maxlength="180">
+        <label>Stage</label><select id="jobStatus"><option value="awaiting_schedule">Won / awaiting schedule</option><option value="scheduled">Scheduled</option><option value="in_progress">In progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select>
+        <label>Internal notes</label><textarea id="jobNotes" rows="3"></textarea>
+        <button type="button" class="btn-blue" onclick="savePipelineJob()">Save job</button>
+      </details>
+    </div>
+    <div id="diaryTab" class="tab-panel">
+      <h2>Plumbing Diary</h2>
+      <p class="small">Book a site visit before quoting, or schedule a job. Times are local UK times. This diary does not contact customers automatically.</p>
+      <div class="row"><button type="button" class="btn-light" onclick="shiftDiary(-7)">Previous week</button><strong id="diaryWeek"></strong><button type="button" class="btn-light" onclick="shiftDiary(7)">Next week</button></div>
+      <div id="diaryList" class="history-list">Loading...</div>
+      <details class="quote-box" style="margin-top:14px;"><summary><strong>Book or update an appointment</strong></summary>
+        <label>Appointment ID to update (leave blank for new)</label><input id="appointmentEditId" type="number" min="1">
+        <label>Lead ID</label><input id="appointmentLeadId" type="number" min="1">
+        <label>Linked job ID (optional)</label><input id="appointmentJobId" type="number" min="1">
+        <div class="grid2"><div><label>Type</label><select id="appointmentKind"><option value="site_visit">Site visit</option><option value="job">Job</option></select></div><div><label>Status</label><select id="appointmentStatus" onchange="document.getElementById('appointmentFollow').classList.toggle('hidden',this.value!=='provisional')"><option value="confirmed">Confirmed</option><option value="provisional">Pencilled in</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div></div>
+        <div class="grid2"><div><label>Start</label><input id="appointmentStart" type="datetime-local"></div><div><label>End</label><input id="appointmentEnd" type="datetime-local"></div></div>
+        <div id="appointmentFollow" class="hidden"><label>Follow up provisional booking on</label><input id="appointmentFollowDate" type="date"></div>
+        <label>Internal notes</label><textarea id="appointmentNotes" rows="3"></textarea>
+        <button type="button" class="btn-blue" onclick="saveDiaryAppointment()">Save appointment</button>
+      </details>
+      <p class="small">“Add to Google Calendar” opens an event draft for you to review and save. Automatic two-way calendar sync is not enabled.</p>
     </div>
     <div id="materialsDbTab" class="tab-panel">
       <h2>Material Price Database</h2>
@@ -621,6 +678,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
 </div>
 
 <script>const APP_PAYMENT_CONFIG = __APP_PAYMENT_CONFIG__;
-__APP_JS__</script>
+__APP_JS__
+__PIPELINE_JS__</script>
 </body>
 </html>

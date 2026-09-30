@@ -177,6 +177,42 @@ def init_db():
             conn.execute(f"ALTER TABLE leads ADD COLUMN {name} TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_quotes_lead_id ON quotes (lead_id)")
 
+    # Batch 7 records are additive. An appointment may predate any quote, while
+    # a job can link to an existing lead, quote or invoice as work progresses.
+    conn.execute("""CREATE TABLE IF NOT EXISTS appointments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lead_id INTEGER NOT NULL,
+        job_id INTEGER,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        starts_at TEXT NOT NULL,
+        ends_at TEXT NOT NULL,
+        provisional_follow_up TEXT,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_start ON appointments(starts_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_lead ON appointments(lead_id)")
+    conn.execute("""CREATE TABLE IF NOT EXISTS jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lead_id INTEGER,
+        quote_id INTEGER,
+        invoice_id INTEGER,
+        customer_id INTEGER,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'awaiting_schedule',
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_lead ON jobs(lead_id)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_quote ON jobs(quote_id) WHERE quote_id IS NOT NULL")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_invoice ON jobs(invoice_id) WHERE invoice_id IS NOT NULL")
+    if "quick_add_key" not in {row["name"] for row in conn.execute("PRAGMA table_info(leads)")}:
+        conn.execute("ALTER TABLE leads ADD COLUMN quick_add_key TEXT")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_quick_add_key ON leads(quick_add_key) WHERE quick_add_key IS NOT NULL")
+
     conn.commit()
     conn.close()
 
@@ -192,5 +228,4 @@ def database_counts():
             counts[table] = None
     conn.close()
     return counts
-
 
