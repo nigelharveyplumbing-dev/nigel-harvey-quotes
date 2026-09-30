@@ -37,17 +37,17 @@ ROOT = Path(__file__).resolve().parents[1]
 # Explicit policy for the application method/path routes. All others are private.
 PUBLIC_WEBSITE_ROUTES = {
     ("GET", path) for path in (
-        "/", "/new-home", "/request-quote", "/robots.txt", "/sitemap.xml",
+        "/", "/new-home", "/request-quote", "/privacy", "/robots.txt", "/sitemap.xml",
         "/site-images/{filename}",
         "/plumber-{area_slug}", "/{service_slug}-{area_slug}", "/{service_slug}",
     )
 } | {("POST", "/api/leads")}
 PUBLIC_CUSTOMER_ROUTES = {
     ("GET", path) for path in (
-        "/invoice/{invoice_id}", "/api/invoices/{invoice_id}/pdf",
-        "/api/invoices/{invoice_id}/payment-qr",
-        "/api/invoices/{invoice_id}/photos/{photo_id}",
-        "/api/quotes/{quote_id}/pdf",
+        "/share/invoice/{token}", "/share/invoice/{token}/pdf",
+        "/share/invoice/{token}/payment-qr",
+        "/share/invoice/{token}/photos/{photo_id}",
+        "/share/quote/{token}/pdf",
     )
 }
 
@@ -131,10 +131,10 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
-        self.assertEqual(len(routes), 80)
-        self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 10)
+        self.assertEqual(len(routes), 86)
+        self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 11)
         self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
-        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 65)
+        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 70)
         self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
         self.assertEqual(self.module.PUBLIC_ROUTE_KEYS,
                          PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES)
@@ -227,7 +227,7 @@ class BaselineTests(unittest.TestCase):
         self.assertIsNotNone(config)
         masked = m.HTML.replace(config.group(1), "__PAYMENT_CONFIG__", 1)
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
-                         "fbcdb03af239d67051ccb898cf023648f97dc6b98e06f785129e443c2ee6ca81")
+                         "4a7e4761c2d5bc59b03ed8a24c452caf78a1c63e33b6aefd787f6fd856ebf6e9")
         self.assertEqual(m.HTML.count("<style>"), 1)
         self.assertEqual(m.HTML.count("<script>"), 1)
         self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {
@@ -270,7 +270,7 @@ class BaselineTests(unittest.TestCase):
         m = self.module
         private = {tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         private -= PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES
-        self.assertEqual(len(private), 65)
+        self.assertEqual(len(private), 70)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "appointment_id": "1", "job_id": "1",
                       "material_id": "1", "photo_id": "1", "filename": "sample.db"}
@@ -332,7 +332,7 @@ class BaselineTests(unittest.TestCase):
         literals = {
             "LANDING_PAGE_HTML": "0557ccac52285b3f8400972513c71c58c822defd224200f3bace562811472bb5",
             "SEO_CSS": "aea9aaf6e6704acabe4891b0ac98142966025a808ec6908954c410ff96f725da",
-            "LEAD_FORM_HTML": "ebad8b2a87d805fb4e2e0fe6a9ca848ae6982d1f70782502b2900f36ae9fef06",
+            "LEAD_FORM_HTML": "27308313859222e429d0501fe6174f81fa7323d34a41cd6a1f123792aebc577a",
             "NEW_HOMEPAGE_PREVIEW_HTML":
                 "320571878093ef74a5a4625b89659459e575aa9eec3776e9911b4ae40dc2fef5",
         }
@@ -341,9 +341,9 @@ class BaselineTests(unittest.TestCase):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
         page_hashes = {
-            "/": "e760fe4163ae177387c36e8666b957e3ed15a4d3a1738a8d1d616ad0f70145e2",
-            "/new-home": "e760fe4163ae177387c36e8666b957e3ed15a4d3a1738a8d1d616ad0f70145e2",
-            "/request-quote": "0b9d71a15bdcf403aa43f77d0f284a1e1467bb7f75f1ea26e45d17dbedaa0dd4",
+            "/": "824adfeab9845364552e390a1cf2d598671edbe2c84c3ac9c7e17ef359cb515f",
+            "/new-home": "824adfeab9845364552e390a1cf2d598671edbe2c84c3ac9c7e17ef359cb515f",
+            "/request-quote": "11f2ab29ace1361c3132dfb68566893871912fc0a172421ebcaedb1947bc6a67",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage6.invalid",
@@ -381,7 +381,7 @@ class BaselineTests(unittest.TestCase):
                 self.assertEqual(client.get("/app").status_code, 401)
                 self.assertEqual(client.get("/app", headers=self.auth_headers).status_code, 200)
 
-    def test_customer_document_routes_remain_public(self):
+    def test_customer_documents_use_opaque_links_and_numbered_routes_require_staff(self):
         m = self.module
         request = m.QuoteRequest(customer_name="Document Test", labour_cost=10)
         result = m.calculate_quote(request)
@@ -390,21 +390,61 @@ class BaselineTests(unittest.TestCase):
         photo = m.invoice_photo_folder(invoice["id"]) / "public-test.jpg"
         Image.new("RGB", (12, 12), "blue").save(photo)
         photo_id = m.save_invoice_photo_record(invoice["id"], "after", "Test", photo.name, photo.name)
+        prefix = invoice["share_path"]
         urls = {
-            "/invoice/{invoice_id}": f"/invoice/{invoice['id']}",
-            "/api/quotes/{quote_id}/pdf": f"/api/quotes/{quote_id}/pdf",
-            "/api/invoices/{invoice_id}/pdf": f"/api/invoices/{invoice['id']}/pdf",
-            "/api/invoices/{invoice_id}/payment-qr": f"/api/invoices/{invoice['id']}/payment-qr",
-            "/api/invoices/{invoice_id}/photos/{photo_id}":
-                f"/api/invoices/{invoice['id']}/photos/{photo_id}",
+            "/share/invoice/{token}": prefix,
+            "/share/quote/{token}/pdf": m.get_quote_by_id(quote_id)["share_pdf_path"],
+            "/share/invoice/{token}/pdf": prefix + "/pdf",
+            "/share/invoice/{token}/payment-qr": prefix + "/payment-qr",
+            "/share/invoice/{token}/photos/{photo_id}": prefix + f"/photos/{photo_id}",
         }
         self.assertEqual({("GET", key) for key in urls}, PUBLIC_CUSTOMER_ROUTES)
         with TestClient(m.app) as client:
             for template, url in urls.items():
                 with self.subTest(path=template):
                     self.assertEqual(client.get(url).status_code, 200)
+                    self.assertEqual(client.get(url).headers.get("cache-control"), "no-store")
+            for url in (f"/invoice/{invoice['id']}", f"/api/quotes/{quote_id}/pdf",
+                        f"/api/invoices/{invoice['id']}/pdf",
+                        f"/api/invoices/{invoice['id']}/payment-qr",
+                        f"/api/invoices/{invoice['id']}/photos/{photo_id}"):
+                self.assertEqual(client.get(url).status_code, 401)
+                self.assertEqual(client.get(url, headers=self.auth_headers).status_code, 200)
+            self.assertEqual(client.get("/share/invoice/not-a-token").status_code, 404)
             self.assertEqual(client.get(f"/api/invoices/{invoice['id']}").status_code, 401)
             self.assertEqual(client.get(f"/api/quotes/{quote_id}").status_code, 401)
+
+    def test_existing_documents_gain_stable_tokens_without_changing_business_records(self):
+        m = self.module
+        request = m.QuoteRequest(customer_name="Historical document", labour_cost=20)
+        quote_id = m.save_quote(request.model_dump(), m.calculate_quote(request))
+        invoice_id = m.create_invoice_from_quote(quote_id)["id"]
+        conn = m.get_db()
+        conn.execute("UPDATE quotes SET share_token=NULL WHERE id=?", (quote_id,))
+        conn.execute("UPDATE invoices SET share_token=NULL WHERE id=?", (invoice_id,))
+        conn.commit()
+        conn.close()
+        before = m.database_counts()
+        m.init_db()
+        quote = m.get_quote_by_id(quote_id)
+        invoice = m.get_invoice_by_id(invoice_id)
+        self.assertRegex(quote["share_pdf_path"], r"^/share/quote/[A-Za-z0-9_-]{43}/pdf$")
+        self.assertRegex(invoice["share_path"], r"^/share/invoice/[A-Za-z0-9_-]{43}$")
+        self.assertNotEqual(quote["share_pdf_path"].split("/")[3], invoice["share_path"].split("/")[3])
+        m.init_db()
+        self.assertEqual(m.get_quote_by_id(quote_id)["share_pdf_path"], quote["share_pdf_path"])
+        self.assertEqual(m.get_invoice_by_id(invoice_id)["share_path"], invoice["share_path"])
+        self.assertEqual(m.database_counts(), before)
+
+    def test_privacy_draft_is_accessible_without_being_indexed(self):
+        with TestClient(self.module.app) as client:
+            page = client.get("/privacy")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn("noindex", page.headers["x-robots-tag"])
+            self.assertIn("Draft for staging review", page.text)
+            self.assertIn("Privacy &amp; cookies", client.get("/").text)
+            self.assertIn('href="/privacy"', client.get("/request-quote").text)
+            self.assertNotIn("/privacy", client.get("/sitemap.xml").text)
 
     def test_basic_auth_is_environment_backed_and_fails_closed(self):
         m = self.module
@@ -498,6 +538,7 @@ class BaselineTests(unittest.TestCase):
         with patch.object(m, "EMAIL_ENABLED", True), patch.object(m, "EMAIL_USER", "sender@example.test"), \
              patch.object(m, "EMAIL_PASS", "test-only"), patch.object(m, "get_company_logo_value", return_value=""), \
              patch.object(m, "generate_invoice_pdf_bytes", return_value=b"%PDF-default"), \
+             patch.object(m, "get_invoice_by_id", return_value={**invoice, "share_path": "/share/invoice/" + "t" * 43}), \
              patch.object(m.smtplib, "SMTP_SSL") as smtp:
             m.send_invoice_email_now({**invoice, "job_reference": ""}, "pat@example.test")
             raw_default = smtp.return_value.__enter__.return_value.sendmail.call_args.args[2]
@@ -511,7 +552,8 @@ class BaselineTests(unittest.TestCase):
     def test_invoice_email_route_responses_without_sending(self):
         m = self.module
         invoice = {"id": 47, "invoice_number": "INV-TEST-47", "invoice": {"customer_name": "Pat"},
-                   "status": "unpaid", "balance_due": 50}
+                   "status": "unpaid", "balance_due": 50,
+                   "share_path": "/share/invoice/" + "t" * 43}
         with TestClient(m.app) as client, patch.object(m.smtplib, "SMTP_SSL") as smtp:
             client.headers.update(self.auth_headers)
             payload = {"to_email": "pat@example.test", "message": "Please review"}
@@ -540,12 +582,13 @@ class BaselineTests(unittest.TestCase):
         html = self.module.HTML
         normalise = html[html.index("function normalisePhone(phone) {"):html.index("function setEditingStatus(")]
         quote = html[html.index("function buildQuoteWhatsappMessage(data) {"):html.index("function renderQuoteResult(data) {")]
-        invoice = html[html.index("  const invoiceUrl = window.location.origin + \"/invoice/\" + item.id;"):
+        invoice = html[html.index("  const invoiceUrl = window.location.origin + item.share_path;"):
                        html.index("  document.getElementById(\"invoiceOpenBtn\").href = invoiceUrl;")]
         script = f"""
 const assert = require('node:assert/strict');
 const window = {{location: {{origin: 'https://example.test'}}}};
 const CURRENT_QUOTE_ID = 12;
+const CURRENT_QUOTE_SHARE_PATH = '/share/quote/' + 'q'.repeat(43) + '/pdf';
 const pounds = n => String.fromCharCode(163) + Number(n || 0).toFixed(2);
 const document = {{nodes: {{}}, getElementById(id) {{return this.nodes[id] ||= {{href: ''}};}}}};
 {normalise}
@@ -554,13 +597,13 @@ assert.equal(normalisePhone('07595 725547'), '447595725547');
 assert.equal(normalisePhone('+44 (7595) 725547'), '447595725547');
 assert.equal(normalisePhone('not supplied'), '');
 assert.equal(buildQuoteWhatsappMessage({{customer_name:'Pat', total_price:125.5}}),
-  'Hi Pat,\\n\\nPlease find your quote below.\\n\\nQuote total: £125.50\\n\\nView/download your quote PDF:\\nhttps://example.test/api/quotes/12/pdf\\n\\nIf you have any questions, just let me know.\\n\\nNigel Harvey Ltd\\n07595 725547');
-const item = {{id:47, invoice_number:'INV-TEST-47', balance_due:125.5}};
+  'Hi Pat,\\n\\nPlease find your quote below.\\n\\nQuote total: £125.50\\n\\nView/download your quote PDF:\\nhttps://example.test/share/quote/' + 'q'.repeat(43) + '/pdf\\n\\nIf you have any questions, just let me know.\\n\\nNigel Harvey Ltd\\n07595 725547');
+const item = {{id:47, invoice_number:'INV-TEST-47', balance_due:125.5, share_path:'/share/invoice/' + 't'.repeat(43)}};
 const invoice = {{customer_name:'Pat', customer_phone:'07595 725547'}};
 const quoteResult = {{customer_phone:''}};
 {invoice}
 assert.equal(document.getElementById('invoiceWhatsappBtn').href,
- 'https://wa.me/447595725547?text=' + encodeURIComponent('Nigel Harvey Ltd Invoice\\n\\nInvoice: INV-TEST-47\\nCustomer: Pat\\nBalance due: £125.50\\n\\nView your invoice:\\nhttps://example.test/invoice/47'));
+ 'https://wa.me/447595725547?text=' + encodeURIComponent('Nigel Harvey Ltd Invoice\\n\\nInvoice: INV-TEST-47\\nCustomer: Pat\\nBalance due: £125.50\\n\\nView your invoice:\\nhttps://example.test/share/invoice/' + 't'.repeat(43)));
 """
         result = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -637,7 +680,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             self.assertEqual(public.status_code, 200)
             self.assertIn(invoice["invoice_number"], public.text)
             self.assertIn("Route Customer", public.text)
-            self.assertIn(f"/api/invoices/{invoice_id}/pdf", public.text)
+            self.assertIn(invoice["share_path"] + "/pdf", public.text)
             invoice_pdf = client.get(f"/api/invoices/{invoice_id}/pdf")
             self.assertEqual(invoice_pdf.status_code, 200)
             self.assertTrue(invoice_pdf.content.startswith(b"%PDF"))
@@ -861,10 +904,11 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             rows_at_unlink.append(m.load_invoice_photos(invoice_id))
             return original_unlink(path, *args, **kwargs)
         with patch.object(Path, "unlink", inspect_unlink), TestClient(m.app) as client:
-            self.assertEqual(client.get(photo["url"]).content, path.read_bytes())
+            self.assertEqual(client.get(photo["url"]).status_code, 401)
+            self.assertEqual(client.get(photo["url"], headers=self.auth_headers).content, path.read_bytes())
             deleted = client.delete(photo["url"], headers=self.auth_headers)
             self.assertEqual(deleted.json(), {"ok": True, "photos": []})
-            self.assertEqual(client.get(photo["url"]).status_code, 404)
+            self.assertEqual(client.get(photo["url"], headers=self.auth_headers).status_code, 404)
             self.assertEqual(client.delete(photo["url"], headers=self.auth_headers).status_code, 404)
         self.assertEqual(rows_at_unlink, [[]])
         self.assertFalse(path.exists())
@@ -945,15 +989,17 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         self.assertEqual(m.bank_payment_reference(invoice), invoice["invoice_number"])
         self.assertTrue(m.bank_payment_qr_png(invoice).startswith(b"\x89PNG"))
         with TestClient(m.app) as client:
-            quote_route = client.get(f"/api/quotes/{quote_id}/pdf")
-            invoice_route = client.get(f"/api/invoices/{invoice['id']}/pdf")
+            quote_path = m.get_quote_by_id(quote_id)["share_pdf_path"]
+            invoice_path = invoice["share_path"] + "/pdf"
+            quote_route = client.get(quote_path)
+            invoice_route = client.get(invoice_path)
             self.assertEqual(quote_route.headers["content-disposition"],
                              f'attachment; filename="quote-{quote_id}.pdf"')
             self.assertEqual(invoice_route.headers["content-disposition"],
                              f'attachment; filename="{invoice["invoice_number"]}.pdf"')
-            self.assertEqual(client.get(f"/api/quotes/{quote_id}/pdf?view=1").headers["content-disposition"],
+            self.assertEqual(client.get(quote_path + "?view=1").headers["content-disposition"],
                              f'inline; filename="quote-{quote_id}.pdf"')
-            self.assertEqual(client.get(f"/api/invoices/{invoice["id"]}/pdf?view=1").headers["content-disposition"],
+            self.assertEqual(client.get(invoice_path + "?view=1").headers["content-disposition"],
                              f'inline; filename="{invoice["invoice_number"]}.pdf"')
 
     def test_database_schema_connection_and_counts(self):
@@ -1017,7 +1063,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         self.assertEqual(invoice["status"], "unpaid")
         self.assertEqual(invoice["invoice"]["due_date"], invoice["due_date"])
         self.assertEqual(m.build_invoice_public_url(invoice["id"]),
-                         f"https://www.nigelharveyplumbing.co.uk/invoice/{invoice['id']}")
+                         f"https://www.nigelharveyplumbing.co.uk{invoice['share_path']}")
         self.assertEqual(m.get_invoice_by_id(invoice["id"]), invoice)
         self.assertIn(invoice, m.load_invoices())
 
@@ -1242,9 +1288,9 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         """Freeze the SEO page families after applying the shared public shell."""
         m = self.module
         cases = (
-            ("location", "f2cb0dcf128c371129883559368773dc37b592ff422e0a01b88ce9efb470eaef"),
-            ("service", "0b5390eedb07304325a59dc205ac4c52c5573b619b6df4f1f018437eaa534a77"),
-            ("local", "962e8cb9c8c42bea5e70ee3d8412aa98fb1bb229afb6b48001f92ecca27b46a6"),
+            ("location", "8d0f0a7aad9e335ebb33a3c12c29d8022d73faec655ed38e238483d8b55d8339"),
+            ("service", "cd1d02db21e873a9f2d37f07cbf7f8592893ce72d6b17de30bf8ddb8894588d4"),
+            ("local", "2061cb51f153aeead9c4a2acf5e0acb733c7113cf4cbfb6440a41d86a68ae0a1"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage7.invalid",
@@ -1531,7 +1577,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         self.assertIn(b"Synthetic Customer", response.body)
         self.assertIn(b"TEST BANK", response.body)
         self.assertEqual(hashlib.sha256(response.body).hexdigest(),
-                         "d548f7956fd5e1c8d42fe3c62b4b7b9903713dc6a7cff73d9835dccbd4227bc3")
+                         "7c29945d303f272a8dee0b0dafd6a02c18f8d8b1bf83fcd11c2ac8338955c42b")
 
     def test_lead_notification_and_overdue_reminder_ordering_offline(self):
         m = self.module

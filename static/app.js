@@ -726,6 +726,7 @@ let SAVED_CUSTOMERS = [];
 let SAVED_LEADS = [];
 let SAVED_MATERIAL_DB = [];
 let CURRENT_QUOTE_ID = null;
+let CURRENT_QUOTE_SHARE_PATH = "";
 let QUOTE_CREATE_IN_PROGRESS = false;
 let CURRENT_LEAD_ID = null;
 let CURRENT_QUOTE_DATA = null;
@@ -1849,8 +1850,8 @@ function buildQuoteMaterialsWhatsappText(data) {
 }
 
 function buildQuoteWhatsappMessage(data) {
-  const quotePdfUrl = CURRENT_QUOTE_ID
-    ? `${window.location.origin}/api/quotes/${CURRENT_QUOTE_ID}/pdf`
+  const quotePdfUrl = CURRENT_QUOTE_ID && CURRENT_QUOTE_SHARE_PATH
+    ? `${window.location.origin}${CURRENT_QUOTE_SHARE_PATH}`
     : "";
 
   const pdfLine = quotePdfUrl
@@ -2131,7 +2132,7 @@ function renderInvoiceCard(item, scrollToTop = true) {
   if (watermark) watermark.classList.toggle("hidden", String(item.status || "").toLowerCase() !== "paid");
   window.CURRENT_INVOICE_PAYMENT_DETAILS = bankDetails;
 
-  const invoiceUrl = window.location.origin + "/invoice/" + item.id;
+  const invoiceUrl = window.location.origin + item.share_path;
 
   const msg =
 `Nigel Harvey Ltd Invoice
@@ -2189,6 +2190,7 @@ function setQuoteButtonMode(isEditing = false) {
 
 function resetQuoteFormState() {
   CURRENT_QUOTE_ID = null;
+  CURRENT_QUOTE_SHARE_PATH = "";
   CURRENT_LEAD_ID = null;
   clearAIQuoteDraftState();
   setEditingStatus("", false);
@@ -2196,7 +2198,7 @@ function resetQuoteFormState() {
   document.getElementById('quoteWorkflow').innerText = 'New quotes start Pending. Save a quote to track follow-up and outcome.';
 }
 
-function fillFormFromRequest(requestData, quoteId = null) {
+function fillFormFromRequest(requestData, quoteId = null, sharePath = "") {
   clearAIQuoteDraftState();
   CURRENT_LEAD_ID = requestData.lead_id || null;
   document.getElementById("quote_source").value = requestData.source_category || "";
@@ -2227,6 +2229,7 @@ function fillFormFromRequest(requestData, quoteId = null) {
   if (materials.length) materials.forEach(item => addMaterial(item));
 
   CURRENT_QUOTE_ID = quoteId;
+  CURRENT_QUOTE_SHARE_PATH = sharePath;
   if (quoteId) {
     setEditingStatus("Editing saved quote #" + quoteId, true);
     setQuoteButtonMode(true);
@@ -2923,7 +2926,7 @@ async function viewCustomerHistory(id) {
             <div class="history-actions" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
               <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Preview Invoice</button>
               <button type="button" class="btn-light" onclick="editInvoice(${i.id})">Edit</button>
-              <button type="button" class="btn-primary" onclick="window.open('/invoice/${i.id}', '_blank')">Public Link</button>
+              <button type="button" class="btn-primary" onclick="window.open('${i.share_path}', '_blank')">Customer Link</button>
             </div>
           </div>
         `).join("")
@@ -2996,7 +2999,7 @@ async function loadSavedQuote(id) {
     if (!res.ok) throw new Error();
     const data = await res.json();
     document.getElementById('quoteWorkflow').innerText = `Quote #${data.id}: ${data.status.toUpperCase()}${data.next_follow_up ? ' · Follow up ' + data.next_follow_up : ''}${data.loss_reason ? ' · ' + data.loss_reason : ''}. Change outcome in Saved Quotes below.`;
-    fillFormFromRequest(data.request, data.id);
+    fillFormFromRequest(data.request, data.id, data.share_pdf_path);
     renderQuoteResult(data.result);
     showTab("quotesTab");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -3014,7 +3017,7 @@ async function editSavedQuote(id) {
     document.getElementById('quoteWorkflow').innerText = `Quote #${data.id}: ${data.status.toUpperCase()}${data.next_follow_up ? ' · Follow up ' + data.next_follow_up : ''}. Change outcome in Saved Quotes below.`;
 
     const q = normaliseQuoteDataForEditing(data);
-    fillFormFromRequest(q, data.id || id);
+    fillFormFromRequest(q, data.id || id, data.share_pdf_path);
 
     if (data.result) {
       renderQuoteResult(data.result);
@@ -3034,7 +3037,7 @@ async function sendSavedQuoteWhatsApp(id) {
     const res = await fetch("/api/quotes/" + id);
     if (!res.ok) throw new Error();
     const data = await res.json();
-    fillFormFromRequest(data.request, data.id);
+    fillFormFromRequest(data.request, data.id, data.share_pdf_path);
     renderQuoteResult(data.result);
     showTab("quotesTab");
     setTimeout(() => document.getElementById("whatsappBtn").click(), 250);
@@ -3048,7 +3051,7 @@ async function printSavedQuote(id) {
     const res = await fetch("/api/quotes/" + id);
     if (!res.ok) throw new Error();
     const data = await res.json();
-    fillFormFromRequest(data.request, data.id);
+    fillFormFromRequest(data.request, data.id, data.share_pdf_path);
     renderQuoteResult(data.result);
     showTab("quotesTab");
     setTimeout(() => window.print(), 250);
@@ -5321,6 +5324,7 @@ async function generateQuote(options = {}) {
     const data = await res.json();
 
     CURRENT_QUOTE_ID = data.id || null;
+    CURRENT_QUOTE_SHARE_PATH = data.share_pdf_path || "";
     setEditingStatus(CURRENT_QUOTE_ID ? "Editing saved quote #" + CURRENT_QUOTE_ID : "", !!CURRENT_QUOTE_ID);
     setQuoteButtonMode(!!CURRENT_QUOTE_ID);
 

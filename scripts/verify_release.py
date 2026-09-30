@@ -33,7 +33,8 @@ REDIRECT_TOWNS = (
 )
 SCHEMA = {
     "quotes": {"status", "next_follow_up", "loss_reason", "lead_id", "source_category", "work_type",
-               "additional_work_types"},
+               "additional_work_types", "share_token"},
+    "invoices": {"share_token"},
     "leads": {"source_category", "work_type", "quick_add_key", "customer_id",
               "additional_work_types"},
     "appointments": {"lead_id", "job_id", "kind", "status", "starts_at", "ends_at",
@@ -108,20 +109,33 @@ def check_http(environment, origin, username, password):
     if quotes:
         pdf = read(local + f"/api/quotes/{quotes[0]['id']}/pdf")
         documents["quote_pdf"] = pdf.status_code == 200 and pdf.content.startswith(b"%PDF-")
+        shared = read(origin + quotes[0]["share_pdf_path"], authenticated=environment == "staging")
+        documents["shared_quote_pdf"] = shared.status_code == 200 and shared.content.startswith(b"%PDF-")
     if invoices:
         invoice_id = invoices[0]["id"]
         documents["invoice_page"] = read(local + f"/invoice/{invoice_id}").status_code == 200
         pdf = read(local + f"/api/invoices/{invoice_id}/pdf")
         documents["invoice_pdf"] = pdf.status_code == 200 and pdf.content.startswith(b"%PDF-")
+        shared = read(origin + invoices[0]["share_path"], authenticated=environment == "staging")
+        documents["shared_invoice_page"] = shared.status_code == 200
+        shared_pdf = read(origin + invoices[0]["share_path"] + "/pdf", authenticated=environment == "staging")
+        documents["shared_invoice_pdf"] = shared_pdf.status_code == 200 and shared_pdf.content.startswith(b"%PDF-")
     # Authentication checks are anonymous even on staging. Staging guards all routes.
     private = ("/app", "/api/customers", "/api/leads", "/api/quotes",
                "/api/invoices", "/api/dashboard", "/api/business-performance")
+    if quotes:
+        private += (f"/api/quotes/{quotes[0]['id']}/pdf",)
+    if invoices:
+        private += (f"/invoice/{invoices[0]['id']}", f"/api/invoices/{invoices[0]['id']}/pdf")
     auth = {path: read(local + path, authenticated=False).status_code for path in private}
     staging_auth = environment == "staging"
     sitemap_response = read(origin + "/sitemap.xml", authenticated=staging_auth)
     robots_response = read(origin + "/robots.txt", authenticated=staging_auth)
     public_routes = {path: read(origin + path, authenticated=staging_auth).status_code
-                     for path in ("/", "/request-quote")}
+                     for path in ("/", "/request-quote", "/privacy")}
+    privacy = read(origin + "/privacy", authenticated=staging_auth)
+    privacy_notice = (privacy.status_code == 200 and "Privacy and cookies" in privacy.text
+                      and "noindex" in privacy.headers.get("X-Robots-Tag", ""))
     urls = []
     if sitemap_response.status_code == 200:
         urls = [element.text for element in ElementTree.fromstring(sitemap_response.content)
@@ -177,7 +191,7 @@ def check_http(environment, origin, username, password):
             parsed = urlsplit(resolved)
             if parsed.netloc == urlsplit(origin).netloc and parsed.path.startswith("/"):
                 internal.add(parsed.path)
-    known = {urlsplit(url).path for url in urls} | {"/request-quote", "/app", "/"}
+    known = {urlsplit(url).path for url in urls} | {"/request-quote", "/privacy", "/app", "/"}
     for path in sorted(internal - known):
         if path.startswith(("/site-images/", "/invoice/", "/api/")):
             continue
@@ -190,6 +204,7 @@ def check_http(environment, origin, username, password):
         response = read("https://nigelharveyplumbing.co.uk/", authenticated=False)
         apex = [response.status_code, response.headers.get("location")]
     return {"api_statuses": api, "public_statuses": public_routes,
+            "privacy_notice": privacy_notice,
             "health": health, "documents": documents,
             "anonymous_statuses": auth, "sitemap_status": sitemap_response.status_code,
             "sitemap_count": len(urls), "sitemap_unique": len(set(urls)),
@@ -213,6 +228,7 @@ def evaluate(result):
     return (db["integrity"] == "ok" and db["mounted"] and not db["missing_columns"]
             and all(code == 200 for code in web["api_statuses"].values())
             and all(code == 200 for code in web["public_statuses"].values())
+            and web["privacy_notice"]
             and web["health"].get("db_exists") is True
             and web["health"].get("sqlite_integrity") == "ok"
             and web["health"].get("var_data_is_mount") is True

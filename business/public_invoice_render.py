@@ -23,6 +23,7 @@ def render_public_invoice_html(item: dict, *,
     is_small_job = (quote_result.get("quote_type", "") or "").lower() == "small"
     terms = INVOICE_TERMS[:3] if is_small_job else INVOICE_TERMS
     logo_html = f'<img src="{escape(COMPANY_LOGO_URL)}" alt="Logo" class="logo">' if COMPANY_LOGO_URL else ""
+    share_path = item.get("share_path") or f"/invoice/{item['id']}"
     payment_html = f'<div class="pay-box"><strong>Payment link:</strong> <a href="{escape(item.get("payment_link") or "")}" target="_blank">Pay online</a></div>' if item.get("payment_link") else ""
     bank_html = f"""
       <div class="pay-box">
@@ -37,7 +38,7 @@ def render_public_invoice_html(item: dict, *,
             Amount due: <strong>{pounds_text(item.get("balance_due", 0))}</strong>
           </div>
           {(
-              f'<img src="/api/invoices/{item["id"]}/payment-qr" alt="Payment details QR" '
+              f'<img src="{escape(share_path)}/payment-qr" alt="Payment details QR" '
               f'style="width:120px;height:120px;background:white;border:1px solid #ddd;border-radius:8px;">'
               if QRCODE_AVAILABLE else
               '<div style="width:120px;padding:10px;border:1px solid #ddd;border-radius:8px;'
@@ -55,7 +56,7 @@ def render_public_invoice_html(item: dict, *,
         for photo in photos:
             cards.append(
                 f'<div class="photo-card">'
-                f'<img src="{escape(photo.get("url", ""))}" alt="Job photo">'
+                f'<img src="{escape(share_path + "/photos/" + str(photo["id"]))}" alt="Job photo">'
                 f'<div class="photo-caption"><strong>{escape(photo.get("category_label", "Job photo"))}</strong>'
                 f'<br>{escape(photo.get("caption", "") or "")}</div></div>'
             )
@@ -67,6 +68,7 @@ def render_public_invoice_html(item: dict, *,
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="robots" content="noindex,nofollow,noarchive">
       <title>Invoice {escape(item['invoice_number'])}</title>
       <style>
         body {{ font-family: Arial, sans-serif; background:#f3f4f6; color:#111; margin:0; padding:18px; }}
@@ -133,7 +135,7 @@ def render_public_invoice_html(item: dict, *,
         <div class="section-title">Payment terms</div>
         <div class="box"><ul>{''.join(f'<li>{escape(t)}</li>' for t in terms)}</ul>{payment_html}</div>
         <div class="actions">
-          <a href="/api/invoices/{item['id']}/pdf" target="_blank" class="btn">Download PDF</a>
+          <a href="{escape(share_path)}/pdf" target="_blank" rel="noreferrer" class="btn">Download PDF</a>
           <a href="javascript:window.print()" class="btn light">Print</a>
         </div>
       </div>

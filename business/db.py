@@ -1,6 +1,7 @@
 """Shared SQLite connection, schema initialization and row counts."""
 
 import sqlite3
+import secrets
 
 from business.config import DB_PATH
 
@@ -169,6 +170,7 @@ def init_db():
         "source_category": "TEXT",
         "work_type": "TEXT",
         "additional_work_types": "TEXT NOT NULL DEFAULT '[]'",
+        "share_token": "TEXT",
     }.items():
         if name not in quote_columns:
             conn.execute(f"ALTER TABLE quotes ADD COLUMN {name} {definition}")
@@ -216,6 +218,15 @@ def init_db():
         conn.execute("ALTER TABLE leads ADD COLUMN quick_add_key TEXT")
     if "customer_id" not in {row["name"] for row in conn.execute("PRAGMA table_info(leads)")}:
         conn.execute("ALTER TABLE leads ADD COLUMN customer_id INTEGER")
+    if "share_token" not in {row["name"] for row in conn.execute("PRAGMA table_info(invoices)")}:
+        conn.execute("ALTER TABLE invoices ADD COLUMN share_token TEXT")
+    # Opaque per-document links replace enumerable customer-document URLs.
+    # Existing documents gain tokens without changing their content or IDs.
+    for table in ("quotes", "invoices"):
+        for row in conn.execute(f"SELECT id FROM {table} WHERE share_token IS NULL OR share_token = ''"):
+            conn.execute(f"UPDATE {table} SET share_token=? WHERE id=?",
+                         (secrets.token_urlsafe(32), row["id"]))
+        conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS idx_{table}_share_token ON {table}(share_token)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_quick_add_key ON leads(quick_add_key) WHERE quick_add_key IS NOT NULL")
 
     conn.commit()

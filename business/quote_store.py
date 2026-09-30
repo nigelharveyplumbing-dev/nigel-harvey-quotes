@@ -4,6 +4,7 @@ The app supplies existing backup, customer, clock and invoice lookup boundaries.
 """
 
 import json
+import secrets
 from datetime import timedelta
 
 from business.config import PAYMENT_LINK_BASE
@@ -15,6 +16,7 @@ from business.work_types import read_additional
 def row_to_quote(row):
     return {
         "id": row["id"],
+        "share_pdf_path": f"/share/quote/{row['share_token']}/pdf" if row["share_token"] else "",
         "customer_id": row["customer_id"],
         "customer_name": row["customer_name"] or "",
         "job": row["job"] or "",
@@ -100,8 +102,8 @@ def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
         INSERT INTO quotes (
             customer_id, customer_name, job, total_price, gross_profit, margin_percent,
             created_at, created_at_sort, request_json, result_json,
-            status, lead_id, source_category, work_type, additional_work_types
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            status, lead_id, source_category, work_type, additional_work_types, share_token
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         customer_id,
         result_data.get("customer_name", ""),
@@ -113,7 +115,7 @@ def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
         result_data.get("created_at_sort", ""),
         json.dumps(request_data),
         json.dumps(result_data),
-        "pending", lead_id, source, work_type, json.dumps(additional),
+        "pending", lead_id, source, work_type, json.dumps(additional), secrets.token_urlsafe(32),
     ))
     quote_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     if lead_id:
@@ -207,8 +209,8 @@ def create_invoice_from_quote(quote_id: int, now_uk, format_dt, get_invoice_by_i
         INSERT INTO invoices (
             quote_id, customer_id, invoice_number, customer_name, total_price, amount_paid, balance_due,
             status, due_date, payment_link, job_reference, reminder_email, reminders_enabled, last_reminder_at,
-            created_at, created_at_sort, quote_result_json, invoice_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            created_at, created_at_sort, quote_result_json, invoice_json, share_token
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         quote["id"],
         quote["customer_id"],
@@ -228,6 +230,7 @@ def create_invoice_from_quote(quote_id: int, now_uk, format_dt, get_invoice_by_i
         now_uk().isoformat(),
         json.dumps(result),
         json.dumps(invoice_payload),
+        secrets.token_urlsafe(32),
     ))
     invoice_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     conn.commit()

@@ -61,6 +61,7 @@ PUBLIC_ROUTE_KEYS = frozenset({
     ("GET", "/"),
     ("GET", "/new-home"),
     ("GET", "/request-quote"),
+    ("GET", "/privacy"),
     ("GET", "/site-images/{filename}"),
     ("GET", "/robots.txt"),
     ("GET", "/sitemap.xml"),
@@ -68,11 +69,11 @@ PUBLIC_ROUTE_KEYS = frozenset({
     ("GET", "/{service_slug}-{area_slug}"),
     ("GET", "/{service_slug}"),
     ("POST", "/api/leads"),
-    ("GET", "/invoice/{invoice_id}"),
-    ("GET", "/api/invoices/{invoice_id}/pdf"),
-    ("GET", "/api/invoices/{invoice_id}/payment-qr"),
-    ("GET", "/api/invoices/{invoice_id}/photos/{photo_id}"),
-    ("GET", "/api/quotes/{quote_id}/pdf"),
+    ("GET", "/share/invoice/{token}"),
+    ("GET", "/share/invoice/{token}/pdf"),
+    ("GET", "/share/invoice/{token}/payment-qr"),
+    ("GET", "/share/invoice/{token}/photos/{photo_id}"),
+    ("GET", "/share/quote/{token}/pdf"),
 })
 
 
@@ -906,6 +907,7 @@ def _overdue_reminder_worker():
 def row_to_invoice(row):
     return {
         "id": row["id"],
+        "share_path": f"/share/invoice/{row['share_token']}" if row["share_token"] else "",
         "quote_id": row["quote_id"],
         "customer_id": row["customer_id"],
         "invoice_number": row["invoice_number"],
@@ -1039,7 +1041,10 @@ def absolute_url(path: str, request: Request | None = None) -> str:
 
 
 def build_invoice_public_url(invoice_id: int, request: Request | None = None):
-    return absolute_url(f"/invoice/{invoice_id}", request)
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        raise ValueError("Invoice not found")
+    return absolute_url(invoice["share_path"], request)
 
 
 from business import pdf_render
@@ -1243,6 +1248,19 @@ def request_quote_page(request: Request):
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_page():
+    html = (APP_UI_ROOT / "templates" / "privacy.html").read_text(encoding="utf-8")
+    html = html.replace("__COMPANY_PHONE__", escape(COMPANY_PHONE))
+    html = html.replace("__COMPANY_PHONE_TEL__", website_contact.telephone_uri_number(COMPANY_PHONE))
+    html = html.replace("__COMPANY_EMAIL__", escape(COMPANY_EMAIL))
+    html = html.replace("__PUBLIC_SITE_CSS__", public_layout.SITE_CSS)
+    html = html.replace("__PUBLIC_HEADER__", public_layout.site_header())
+    html = html.replace("__PUBLIC_FOOTER__", public_layout.site_footer())
+    html = html.replace("__PUBLIC_ANALYTICS__", public_layout.analytics_markup())
+    return HTMLResponse(content=html, headers={"X-Robots-Tag": "noindex"})
+
+
 @app.get("/api/leads")
 def api_leads():
     return load_leads()
@@ -1418,7 +1436,7 @@ def robots_txt(request: Request):
         return Response(content="User-agent: *\nDisallow: /\n",
                         media_type="text/plain; charset=utf-8")
     sitemap_url = absolute_url("/sitemap.xml", request)
-    content = f"User-agent: *\nAllow: /\nDisallow: /app\nDisallow: /api/\nSitemap: {sitemap_url}\n"
+    content = f"User-agent: *\nAllow: /\nDisallow: /app\nDisallow: /api/\nDisallow: /share/\nSitemap: {sitemap_url}\n"
     return Response(content=content, media_type="text/plain; charset=utf-8")
 
 
@@ -5544,7 +5562,86 @@ def public_invoice(invoice_id: int):
         pounds_text=pounds_text,
         bank_payment_reference=bank_payment_reference,
     )
-    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
+    return HTMLResponse(content=html, media_type="text/html; charset=utf-8", headers=_shared_document_headers())
+
+
+def _shared_document_headers():
+    return {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow, noarchive",
+            "Referrer-Policy": "no-referrer"}
+
+
+def _invoice_for_share(token: str):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
+        raise HTTPException(status_code=404, detail="Document not found")
+    conn = get_db()
+    row = conn.execute("SELECT * FROM invoices WHERE share_token=?", (token,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return row_to_invoice(row)
+
+
+def _quote_for_share(token: str):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
+        raise HTTPException(status_code=404, detail="Document not found")
+    conn = get_db()
+    row = conn.execute("SELECT * FROM quotes WHERE share_token=?", (token,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return row_to_quote(row)
+
+
+@app.get("/share/invoice/{token}", response_class=HTMLResponse)
+def shared_invoice(token: str):
+    item = _invoice_for_share(token)
+    html = public_invoice_render.render_public_invoice_html(
+        item, COMPANY_NAME=COMPANY_NAME, COMPANY_ADDRESS=COMPANY_ADDRESS,
+        COMPANY_PHONE=COMPANY_PHONE, COMPANY_EMAIL=COMPANY_EMAIL,
+        COMPANY_LOGO_URL=COMPANY_LOGO_URL, INVOICE_TERMS=INVOICE_TERMS,
+        BANK_NAME=BANK_NAME, BANK_ACCOUNT_NAME=BANK_ACCOUNT_NAME,
+        BANK_SORT_CODE=BANK_SORT_CODE, BANK_ACCOUNT_NUMBER=BANK_ACCOUNT_NUMBER,
+        QRCODE_AVAILABLE=QRCODE_AVAILABLE, pounds_text=pounds_text,
+        bank_payment_reference=bank_payment_reference,
+    )
+    return HTMLResponse(content=html, headers=_shared_document_headers())
+
+
+@app.get("/share/quote/{token}/pdf")
+def shared_quote_pdf(token: str, request: Request):
+    quote = _quote_for_share(token)
+    disposition = "inline" if request.query_params.get("view") == "1" else "attachment"
+    return Response(content=generate_quote_pdf_bytes(quote), media_type="application/pdf",
+                    headers={**_shared_document_headers(), "Content-Disposition":
+                             f'{disposition}; filename="quote-{quote["id"]}.pdf"'})
+
+
+@app.get("/share/invoice/{token}/pdf")
+def shared_invoice_pdf(token: str, request: Request):
+    invoice = _invoice_for_share(token)
+    disposition = "inline" if request.query_params.get("view") == "1" else "attachment"
+    return Response(content=generate_invoice_pdf_bytes(invoice), media_type="application/pdf",
+                    headers={**_shared_document_headers(), "Content-Disposition":
+                             f'{disposition}; filename="{invoice["invoice_number"]}.pdf"'})
+
+
+@app.get("/share/invoice/{token}/payment-qr")
+def shared_invoice_qr(token: str):
+    invoice = _invoice_for_share(token)
+    if not QRCODE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="QR support is unavailable")
+    return Response(content=bank_payment_qr_png(invoice), media_type="image/png",
+                    headers=_shared_document_headers())
+
+
+@app.get("/share/invoice/{token}/photos/{photo_id}")
+def shared_invoice_photo(token: str, photo_id: int):
+    invoice = _invoice_for_share(token)
+    path = invoice_photo_path(invoice["id"], photo_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    return Response(content=path.read_bytes(), media_type="image/jpeg",
+                    headers=_shared_document_headers())
 
 
 
