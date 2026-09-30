@@ -184,7 +184,7 @@ try {
   await page.locator('#invoiceList').getByText('Paid', { exact: true }).first().waitFor();
 
   // A synthetic image goes through the browser file input and normal upload UI.
-  await invoiceRow.getByRole('button', { name: 'Open', exact: true }).click();
+  await invoiceRow.getByRole('button', { name: 'Preview Invoice' }).click();
   const paymentDisplay = await page.locator('#i_payment_link_box').innerText();
   assert.ok(paymentDisplay.includes('Test Bank'));
   assert.ok(paymentDisplay.includes('Synthetic Test Account'));
@@ -207,12 +207,15 @@ try {
   assert.equal(invoicePdf.status(), 200);
   assert.match(invoicePdf.headers()['content-disposition'] || '', /invoice.*\.pdf/i);
   assert.equal((await invoicePdf.body()).subarray(0, 4).toString(), '%PDF');
-  assert.equal((await anonymous.request.get(`${origin}/api/invoices/${invoice.id}/pdf`)).status(), 200);
-  assert.equal((await anonymous.request.get(`${origin}/api/quotes/${quote.id}/pdf`)).status(), 200);
-  assert.equal((await anonymous.request.get(`${origin}/invoice/${invoice.id}`)).status(), 200);
+  assert.equal((await anonymous.request.get(`${origin}/api/invoices/${invoice.id}/pdf`)).status(), 401);
+  assert.equal((await anonymous.request.get(`${origin}/api/quotes/${quote.id}/pdf`)).status(), 401);
+  assert.equal((await anonymous.request.get(`${origin}/invoice/${invoice.id}`)).status(), 401);
+  assert.equal((await anonymous.request.get(`${origin}${quote.share_pdf_path}`)).status(), 200);
+  assert.equal((await anonymous.request.get(`${origin}${invoice.share_path}`)).status(), 200);
+  assert.equal((await anonymous.request.get(`${origin}${invoice.share_path}/pdf`)).status(), 200);
   const whatsappHref = await page.locator('#invoiceWhatsappBtn').getAttribute('href');
   assert.match(whatsappHref, /^https:\/\/wa\.me\//);
-  assert.ok(decodeURIComponent(whatsappHref).includes(`${origin}/invoice/${invoice.id}`));
+  assert.ok(decodeURIComponent(whatsappHref).includes(`${origin}${invoice.share_path}`));
   // Never click a WhatsApp link or send email.
   await page.locator('#invoicePhotoGallery button').first().click();
   await page.locator('#invoicePhotoGallery img').first().waitFor({ state: 'detached' });
@@ -227,7 +230,7 @@ try {
   await page.locator('#materialDbSearch').fill('Synthetic valve');
   await page.locator('#materialDbList').getByText('Synthetic valve').waitFor();
 
-  for (const path of ['/', '/plumber-guildford', '/request-quote', '/robots.txt', '/sitemap.xml']) {
+  for (const path of ['/', '/plumber-guildford', '/request-quote', '/privacy', '/robots.txt', '/sitemap.xml']) {
     assert.equal((await anonymous.request.get(`${origin}${path}`)).status(), 200);
   }
   assert.equal((await anonymous.request.get(`${origin}/api/quotes`)).status(), 401);
