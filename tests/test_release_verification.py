@@ -15,6 +15,49 @@ spec.loader.exec_module(verify_release)
 
 
 class ReleaseVerificationTests(unittest.TestCase):
+    def test_staging_robots_require_disallow_without_sitemap_declaration(self):
+        result = self.valid_result("staging")
+        self.assertTrue(verify_release.evaluate(result))
+        result["http"]["robots"] = "User-agent: *\nAllow: /\n"
+        self.assertFalse(verify_release.evaluate(result))
+
+    def test_production_robots_require_allow_and_correct_sitemap(self):
+        result = self.valid_result("production")
+        self.assertTrue(verify_release.evaluate(result))
+        result["http"]["robots"] = "User-agent: *\nAllow: /\n"
+        self.assertFalse(verify_release.evaluate(result))
+        result["http"]["robots"] += "Sitemap: https://nigelharveyplumbing.co.uk/sitemap.xml\n"
+        self.assertFalse(verify_release.evaluate(result))
+        result["http"]["robots"] = "User-agent: *\nDisallow: /\nSitemap: " + \
+            verify_release.PRODUCTION_ORIGIN + "/sitemap.xml\n"
+        self.assertFalse(verify_release.evaluate(result))
+
+    @staticmethod
+    def valid_result(environment):
+        origin = ("https://nigel-harvey-quotes-staging.onrender.com" if environment == "staging"
+                  else verify_release.PRODUCTION_ORIGIN)
+        counts = {table: 0 for table in verify_release.TABLES}
+        return {
+            "identity": {"environment": environment, "origin": origin},
+            "database": {"integrity": "ok", "mounted": True, "missing_columns": {},
+                         "counts": counts, "backup_files": 0},
+            "http": {
+                "api_statuses": {"/api/health": 200}, "public_statuses": {"/": 200},
+                "health": {"db_exists": True, "sqlite_integrity": "ok",
+                           "var_data_is_mount": True, "counts": counts, "backup_count": 0},
+                "documents": {"quote_pdf": True}, "anonymous_statuses": {"/app": 401},
+                "sitemap_status": 200, "sitemap_count": 72, "sitemap_unique": 72,
+                "crawl_failures": [], "duplicate_titles": [], "duplicate_descriptions": [],
+                "duplicate_h1s": [], "robots_status": 200,
+                "robots": ("User-agent: *\nDisallow: /\n" if environment == "staging" else
+                           "User-agent: *\nAllow: /\nSitemap: " + origin + "/sitemap.xml\n"),
+                "redirects": {town: [301, "/plumber-" + town]
+                              for town in verify_release.REDIRECT_TOWNS},
+                "apex_redirect": [301, origin + "/"] if environment == "production" else None,
+                "server_errors_seen": [],
+            },
+        }
+
     def test_wrong_service_origin_and_mount_fail_before_http(self):
         db = Path("/var/data/quotes.db")
         with patch.dict(os.environ, {"RENDER_SERVICE_ID": "srv-wrong", "PUBLIC_BASE_URL":

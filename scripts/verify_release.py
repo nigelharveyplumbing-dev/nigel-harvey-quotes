@@ -223,7 +223,8 @@ def evaluate(result):
             and not web["duplicate_titles"] and not web["duplicate_descriptions"]
             and not web["duplicate_h1s"] and web["robots_status"] == 200
             and expected_robots in web["robots"]
-            and f"Sitemap: {origin}/sitemap.xml" in web["robots"]
+            and (identity["environment"] == "staging"
+                 or f"Sitemap: {origin}/sitemap.xml" in web["robots"])
             and all(pair == [301, "/plumber-" + town] for town, pair in web["redirects"].items())
             and (identity["environment"] != "production" or web["apex_redirect"] == [301, origin + "/"])
             and not web["server_errors_seen"])
