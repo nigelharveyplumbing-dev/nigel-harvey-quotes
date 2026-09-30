@@ -65,6 +65,9 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
 .pipeline-stage { padding:12px; border:1px solid #ccd8e0; border-radius:8px; background:#f8fafc; min-width:0; }
 .pipeline-stage h3 { margin:0 0 8px; font-size:16px; }
 .pipeline-stage .history-item { overflow-wrap:anywhere; }
+.diary-day { padding:12px; border:1px solid #ccd8e0; border-radius:8px; margin:10px 0; min-width:0; }
+.diary-day h3 { margin:0 0 8px; font-size:16px; }
+.diary-day .history-item { overflow-wrap:anywhere; }
 .tabs button { padding:12px; }
 .tab-panel { display:none; }
 .tab-panel.active { display:block; }

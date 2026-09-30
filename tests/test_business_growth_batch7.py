@@ -41,10 +41,12 @@ class Batch7Tests(unittest.TestCase):
                 self.assertEqual(lead["source_category"], "Referral")
                 self.assertEqual(lead["work_type"], "Tap")
                 self.assertEqual(lead["status"], "new")
+                self.assertIsNotNone(lead["customer_id"])
                 again = client.post("/api/quick-add/confirm", json=payload, headers=auth).json()
                 self.assertTrue(again["already_created"])
                 self.assertEqual(again["lead"]["id"], lead["id"])
                 self.assertEqual(module.database_counts()["leads"], 1)
+                self.assertEqual(module.database_counts()["customers"], 1)
                 visits = client.get("/api/appointments", headers=auth).json()
                 self.assertEqual(len(visits), 1)
                 self.assertEqual(visits[0]["lead_id"], lead["id"])
@@ -54,9 +56,27 @@ class Batch7Tests(unittest.TestCase):
                            visit_ends_at="2026-10-02T09:00")
                 self.assertEqual(client.post("/api/quick-add/confirm", json=bad, headers=auth).status_code, 422)
                 self.assertEqual(module.database_counts()["leads"], 1)
+                self.assertEqual(module.database_counts()["customers"], 1)
                 no_guess = client.post("/api/quick-add/preview", headers=auth,
                     json={"message":"Could you come Thursday morning? My tap is leaking."}).json()
                 self.assertEqual(no_guess["visit_starts_at"], "")
+                pencilled = dict(payload, idempotency_key=secrets.token_urlsafe(22),
+                                  visit_status="provisional")
+                self.assertEqual(client.post("/api/quick-add/confirm", json=pencilled,
+                    headers=auth).status_code, 422)
+                self.assertEqual(module.database_counts()["leads"], 1)
+                self.assertEqual(module.database_counts()["customers"], 1)
+                repeat_customer = dict(payload, idempotency_key=secrets.token_urlsafe(22),
+                                       visit_starts_at="", visit_ends_at="")
+                second = client.post("/api/quick-add/confirm", json=repeat_customer, headers=auth).json()
+                self.assertEqual(second["lead"]["customer_id"], lead["customer_id"])
+                self.assertEqual(module.database_counts()["customers"], 1)
+                quote = client.post("/api/quote", headers=auth, json={
+                    "customer_name":lead["name"], "customer_phone":lead["phone"],
+                    "customer_address":lead["address"], "job_description":lead["description"],
+                    "labour_cost":100, "lead_id":lead["id"]}).json()
+                self.assertEqual(quote["customer_id"], lead["customer_id"])
+                self.assertEqual(module.database_counts()["customers"], 1)
 
     def test_pipeline_prequote_visit_through_payment_and_multi_quote_precedence(self):
         user, password = secrets.token_urlsafe(12), secrets.token_urlsafe(18)
@@ -93,6 +113,13 @@ class Batch7Tests(unittest.TestCase):
                 self.assertEqual(client.post("/api/jobs", headers=auth, json=job_data).status_code, 422)
                 job_data["status"] = "scheduled"
                 client.put(f"/api/jobs/{job['id']}", headers=auth, json=job_data)
+                self.assertEqual(client.get("/api/pipeline", headers=auth).json()["stages"]["won_unscheduled"][0]["lead_id"], lead_id)
+                booking = client.post("/api/appointments", headers=auth, json={
+                    "lead_id":lead_id,"job_id":job["id"],"kind":"job","status":"confirmed",
+                    "starts_at":"2026-10-02T09:00","ends_at":"2026-10-04T17:00"})
+                self.assertEqual(booking.status_code, 200, booking.text)
+                self.assertEqual(next(a for a in client.get("/api/appointments", headers=auth).json()
+                                      if a["kind"] == "job")["ends_at"], "2026-10-04T17:00")
                 self.assertEqual(client.get("/api/pipeline", headers=auth).json()["stages"]["scheduled"][0]["lead_id"], lead_id)
                 job_data["status"] = "in_progress"
                 client.put(f"/api/jobs/{job['id']}", headers=auth, json=job_data)
@@ -121,9 +148,14 @@ class Batch7Tests(unittest.TestCase):
                 quote = client.post("/api/quote", headers=auth, json={
                     "customer_name":"Closed", "job_description":"Tap", "labour_cost":100,
                     "lead_id":lead["id"]}).json()
+                client.post("/api/appointments", headers=auth, json={
+                    "lead_id":lead["id"],"kind":"site_visit","status":"confirmed",
+                    "starts_at":"2026-10-02T10:00","ends_at":"2026-10-02T11:00"})
                 client.put(f"/api/quotes/{quote['id']}/outcome", headers=auth, json={"status":"expired"})
                 report = client.get("/api/pipeline", headers=auth).json()
                 self.assertEqual(report["stages"]["closed_lost_expired"][0]["lead_id"], lead["id"])
+                self.assertEqual(report["stages"]["visit_booked"], [])
+                self.assertEqual(client.get("/api/appointments", headers=auth).json()[0]["lead_status"], "lost")
                 orphan = client.post("/api/quote", headers=auth, json={
                     "customer_name":"Historical", "job_description":"Pipework", "labour_cost":80}).json()
                 conn = module.get_db()

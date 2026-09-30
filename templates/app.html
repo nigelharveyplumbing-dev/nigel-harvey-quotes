@@ -367,7 +367,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
       <p class="small">One view of active opportunities. Closed lost/expired quotes remain in Leads and Quotes; historical quotes are not assigned an outcome automatically.</p>
       <button type="button" class="btn-light" onclick="loadPipeline()">Refresh pipeline</button>
       <div id="pipelineBoard" class="pipeline-grid" style="margin-top:12px;">Loading...</div>
-      <details class="quote-box" style="margin-top:14px;"><summary><strong>Add or update a job</strong></summary>
+      <details id="jobEditor" class="quote-box" style="margin-top:14px;"><summary><strong>Add or update a job</strong></summary>
         <p class="small">Link an existing lead or quote. A job can exist before a quote.</p>
         <label>Job ID to update (leave blank for new)</label><input id="jobEditId" type="number" min="1">
         <label>Lead ID</label><input id="jobLeadId" type="number" min="1">
@@ -384,7 +384,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
       <p class="small">Book a site visit before quoting, or schedule a job. Times are local UK times. This diary does not contact customers automatically.</p>
       <div class="row"><button type="button" class="btn-light" onclick="shiftDiary(-7)">Previous week</button><strong id="diaryWeek"></strong><button type="button" class="btn-light" onclick="shiftDiary(7)">Next week</button></div>
       <div id="diaryList" class="history-list">Loading...</div>
-      <details class="quote-box" style="margin-top:14px;"><summary><strong>Book or update an appointment</strong></summary>
+      <details id="appointmentEditor" class="quote-box" style="margin-top:14px;"><summary><strong>Book or update an appointment</strong></summary>
         <label>Appointment ID to update (leave blank for new)</label><input id="appointmentEditId" type="number" min="1">
         <label>Lead ID</label><input id="appointmentLeadId" type="number" min="1">
         <label>Linked job ID (optional)</label><input id="appointmentJobId" type="number" min="1">

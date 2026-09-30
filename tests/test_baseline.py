@@ -227,7 +227,7 @@ class BaselineTests(unittest.TestCase):
         self.assertIsNotNone(config)
         masked = m.HTML.replace(config.group(1), "__PAYMENT_CONFIG__", 1)
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
-                         "d3cade71e1a024667d553a0a46f02083df61cb84bcaafcbaf5566cc44c414c7e")
+                         "53584a3b2ce8e9b391e5ad44f10b764fa6281ee1c29d6bf260d6e9a6abac3693")
         self.assertEqual(m.HTML.count("<style>"), 1)
         self.assertEqual(m.HTML.count("<script>"), 1)
         self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {
@@ -782,7 +782,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             })
             self.assertEqual(created.status_code, 200)
             lead = created.json()
-            self.assertEqual(set(lead), {"id", "name", "phone", "email", "address",
+            self.assertEqual(set(lead), {"id", "customer_id", "name", "phone", "email", "address",
                                          "job_type", "description", "status", "source",
                                          "created_at", "updated_at", "source_category", "work_type"})
             self.assertEqual((lead["name"], lead["phone"], lead["email"], lead["address"],

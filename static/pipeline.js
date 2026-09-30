@@ -39,6 +39,11 @@ async function previewQuickLead() {
     document.getElementById('quickAddress').value = data.address || data.postcode || '';
     document.getElementById('quickVisitStart').value = data.visit_starts_at || '';
     document.getElementById('quickVisitEnd').value = data.visit_ends_at || '';
+    document.getElementById('quickSource').value = '';
+    document.getElementById('quickWork').value = '';
+    document.getElementById('quickVisitStatus').value = 'confirmed';
+    document.getElementById('quickFollowUp').value = '';
+    document.getElementById('quickProvisionalFollow').classList.add('hidden');
     document.getElementById('quickHint').innerText = data.hint;
     document.getElementById('quickPreview').classList.remove('hidden');
   } catch (error) { alert(error.message); }
@@ -85,7 +90,10 @@ async function loadPipeline() {
           '<div class="small">' + escapeHtml(card.description) + '</div>' +
           '<div class="history-actions">' +
           (card.lead_id ? '<button type="button" class="btn-light" onclick="bookVisitForLead(' + Number(card.lead_id) + ')">Book visit</button>' : '') +
+          (card.lead_id ? '<button type="button" class="btn-light" onclick="openPipelineLead(' + Number(card.lead_id) + ')">Open lead</button>' : '') +
+          (card.lead_id ? '<button type="button" class="btn-light" onclick="quoteFromDiaryLead(' + Number(card.lead_id) + ')">Start quote</button>' : '') +
           (card.job_ids.length ? '<button type="button" class="btn-light" onclick="editPipelineJob(' + Number(card.job_ids[0]) + ')">Update job</button>' : '') +
+          (card.lead_id && card.job_ids.length ? '<button type="button" class="btn-light" onclick="bookJobForLead(' + Number(card.lead_id) + ',' + Number(card.job_ids[0]) + ')">Book job dates</button>' : '') +
           '</div></div>').join('') || '<p class="small">None</p>') + '</section>';
     }).join('');
   } catch (error) { board.innerText = 'Could not load pipeline: ' + error.message; }
@@ -94,6 +102,14 @@ async function loadPipeline() {
 function jobFromQuote(id) {
   const quote = (typeof SAVED_QUOTES !== 'undefined' ? SAVED_QUOTES : []).find(x => x.id === id);
   showTab('pipelineTab');
+  document.getElementById('jobEditor').open = true;
+  document.getElementById('jobEditId').value = '';
+  document.getElementById('jobLeadId').value = '';
+  document.getElementById('jobQuoteId').value = '';
+  document.getElementById('jobInvoiceId').value = '';
+  document.getElementById('jobTitle').value = '';
+  document.getElementById('jobNotes').value = '';
+  document.getElementById('jobStatus').value = 'awaiting_schedule';
   if (quote) {
     document.getElementById('jobLeadId').value = quote.lead_id || '';
     document.getElementById('jobQuoteId').value = quote.id;
@@ -103,6 +119,7 @@ function jobFromQuote(id) {
 function editPipelineJob(id) {
   const job = b7Jobs.find(x => x.id === id);
   if (!job) return;
+  document.getElementById('jobEditor').open = true;
   ['EditId','LeadId','QuoteId','InvoiceId','Title','Status','Notes'].forEach((key, index) => {
     document.getElementById('job' + key).value =
       [job.id, job.lead_id, job.quote_id, job.invoice_id, job.title, job.status, job.notes][index] || '';
@@ -124,9 +141,42 @@ async function savePipelineJob() {
 
 function bookVisitForLead(leadId) {
   showTab('diaryTab');
+  document.getElementById('appointmentEditor').open = true;
+  document.getElementById('appointmentEditId').value = '';
+  document.getElementById('appointmentJobId').value = '';
   document.getElementById('appointmentLeadId').value = leadId;
   document.getElementById('appointmentKind').value = 'site_visit';
+  document.getElementById('appointmentStatus').value = 'confirmed';
+  document.getElementById('appointmentFollow').classList.add('hidden');
+  ['Start','End','FollowDate','Notes'].forEach(key => { document.getElementById('appointment' + key).value = ''; });
   document.getElementById('appointmentLeadId').scrollIntoView({behavior:'smooth', block:'center'});
+}
+function bookJobForLead(leadId, jobId) {
+  showTab('diaryTab');
+  document.getElementById('appointmentEditor').open = true;
+  document.getElementById('appointmentEditId').value = '';
+  document.getElementById('appointmentLeadId').value = leadId;
+  document.getElementById('appointmentJobId').value = jobId;
+  document.getElementById('appointmentKind').value = 'job';
+  document.getElementById('appointmentStatus').value = 'confirmed';
+  document.getElementById('appointmentFollow').classList.add('hidden');
+  ['Start','End','FollowDate','Notes'].forEach(key => { document.getElementById('appointment' + key).value = ''; });
+  document.getElementById('appointmentLeadId').scrollIntoView({behavior:'smooth', block:'center'});
+}
+async function openPipelineLead(leadId) {
+  document.getElementById('leadSearch').value = '';
+  document.getElementById('leadStatusFilter').value = 'all';
+  showTab('leadsTab');
+  await loadLeads();
+  document.getElementById('lead_card_' + leadId)?.scrollIntoView({behavior:'smooth', block:'center'});
+}
+async function quoteFromDiaryLead(leadId) {
+  await loadLeads();
+  if (!SAVED_LEADS.some(lead => lead.id === leadId)) {
+    alert('Lead could not be loaded. Open Leads and try again.');
+    return;
+  }
+  startQuoteFromLead(leadId);
 }
 function shiftDiary(days) { b7WeekOffset += days; renderDiary(); }
 function b7LocalDate(day) {
@@ -148,26 +198,41 @@ function renderDiary() {
   const now = new Date();
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7) + b7WeekOffset);
   const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
-  const first = b7LocalDate(monday);
-  const last = b7LocalDate(sunday);
   document.getElementById('diaryWeek').innerText = monday.toLocaleDateString('en-GB') + ' – ' + sunday.toLocaleDateString('en-GB');
-  const visible = b7Appointments.filter(a => a.starts_at.slice(0,10) >= first && a.starts_at.slice(0,10) <= last);
   const followUps = b7Appointments.filter(a => a.status === 'provisional' && a.provisional_follow_up &&
-    a.provisional_follow_up <= b7LocalDate(new Date()));
+    a.lead_status !== 'lost' && a.provisional_follow_up <= b7LocalDate(new Date()));
+  const closedBookings = b7Appointments.filter(a => a.status !== 'cancelled' && a.lead_status === 'lost');
+  const days = Array.from({length:7}, (_, index) => {
+    const day = new Date(monday); day.setDate(monday.getDate() + index);
+    const next = new Date(day); next.setDate(day.getDate() + 1);
+    const start = b7LocalDate(day) + 'T00:00';
+    const end = b7LocalDate(next) + 'T00:00';
+    const items = b7Appointments.filter(a => a.status !== 'cancelled' && a.lead_status !== 'lost' &&
+      a.starts_at < end && a.ends_at > start);
+    return '<section class="diary-day"><h3>' + escapeHtml(day.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'short'})) +
+      (b7LocalDate(day) === b7LocalDate(new Date()) ? ' · Today' : '') + '</h3>' +
+      (items.length ? items.map(a => '<div class="history-item"><strong>' + escapeHtml(a.customer_name) +
+        '</strong> · ' + escapeHtml(a.kind.replace('_',' ')) + ' · ' + escapeHtml(a.status) +
+        '<div>' + escapeHtml(a.starts_at.replace('T',' ')) + '–' + escapeHtml(a.ends_at.replace('T',' ')) +
+        ' · Lead #' + Number(a.lead_id) + '</div><div class="small">' + escapeHtml(a.notes || '') + '</div>' +
+        '<button type="button" class="btn-light" onclick="editDiaryAppointment(' + Number(a.id) + ')">Update</button> ' +
+        '<button type="button" class="btn-light" onclick="openPipelineLead(' + Number(a.lead_id) + ')">Open lead</button> ' +
+        (a.kind === 'site_visit' ? '<button type="button" class="btn-light" onclick="quoteFromDiaryLead(' + Number(a.lead_id) + ')">Start quote</button> ' : '') +
+        '<a class="btn-link btn-secondary" target="_blank" rel="noopener" href="' + b7CalendarUrl(a) +
+        '">Add to Google Calendar</a></div>').join('') : '<p class="small">No plumbing work booked.</p>') + '</section>';
+  });
   document.getElementById('diaryList').innerHTML =
     (followUps.length ? '<p><strong>Provisional bookings to follow up:</strong> ' +
       followUps.map(a => '#' + a.id + ' ' + escapeHtml(a.customer_name)).join(', ') + '</p>' : '') +
-    (visible.map(a => '<div class="history-item"><strong>' + escapeHtml(a.customer_name) +
-      '</strong> · ' + escapeHtml(a.kind.replace('_',' ')) + ' · ' + escapeHtml(a.status) +
-      '<div>' + escapeHtml(a.starts_at.replace('T',' ')) + '–' + escapeHtml(a.ends_at.slice(11)) +
-      ' · Lead #' + Number(a.lead_id) + '</div><div class="small">' + escapeHtml(a.notes || '') + '</div>' +
-      '<button type="button" class="btn-light" onclick="editDiaryAppointment(' + Number(a.id) + ')">Update</button> ' +
-      '<a class="btn-link btn-secondary" target="_blank" rel="noopener" href="' + b7CalendarUrl(a) +
-      '">Add to Google Calendar</a></div>').join('') || '<p class="small">No appointments this week.</p>');
+    (closedBookings.length ? '<p class="small"><strong>Review bookings linked to closed leads:</strong> ' +
+      closedBookings.map(a => '#' + a.id + ' ' + escapeHtml(a.customer_name) +
+        ' <button type="button" class="btn-light" onclick="editDiaryAppointment(' + Number(a.id) + ')">Review</button>').join(', ') + '</p>' : '') +
+    days.join('');
 }
 function editDiaryAppointment(id) {
   const a = b7Appointments.find(x => x.id === id);
   if (!a) return;
+  document.getElementById('appointmentEditor').open = true;
   ['EditId','LeadId','JobId','Kind','Status','Start','End','FollowDate','Notes'].forEach((key,index) => {
     document.getElementById('appointment' + key).value =
       [a.id,a.lead_id,a.job_id,a.kind,a.status,a.starts_at,a.ends_at,a.provisional_follow_up,a.notes][index] || '';

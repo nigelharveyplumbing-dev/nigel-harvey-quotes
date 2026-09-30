@@ -36,6 +36,7 @@ def row_to_lead(row):
     source, context = parse_lead_source(row["source"] or "website")
     result = {
         "id": row["id"],
+        "customer_id": row["customer_id"],
         "name": row["name"] or "",
         "phone": row["phone"] or "",
         "email": row["email"] or "",

@@ -27,6 +27,8 @@ def validate_appointment(data):
         raise ValueError("Use local start/end date and time, with end after start; follow-up must be a date") from exc
     if data.status != "provisional" and data.provisional_follow_up:
         raise ValueError("Only provisional appointments have a provisional follow-up")
+    if data.status == "provisional" and not data.provisional_follow_up:
+        raise ValueError("Pencilled bookings need a follow-up date")
 
 
 def _row(row):
@@ -37,7 +39,8 @@ def list_appointments():
     conn = get_db()
     try:
         return [dict(row) for row in conn.execute("""SELECT a.*, l.name AS customer_name,
-            l.phone AS customer_phone, l.address AS customer_address, l.description AS lead_description
+            l.phone AS customer_phone, l.address AS customer_address,
+            l.description AS lead_description, l.status AS lead_status, l.customer_id
             FROM appointments a JOIN leads l ON l.id = a.lead_id
             ORDER BY a.starts_at, a.id""")]
     finally:
@@ -92,9 +95,10 @@ def save_job(data, now, job_id=None):
     conn = get_db()
     try:
         lead_id, quote_id, invoice_id = data.lead_id, data.quote_id, data.invoice_id
-        if lead_id and not conn.execute("SELECT 1 FROM leads WHERE id=?", (lead_id,)).fetchone():
+        lead = conn.execute("SELECT customer_id FROM leads WHERE id=?", (lead_id,)).fetchone() if lead_id else None
+        if lead_id and not lead:
             raise ValueError("Lead does not exist")
-        customer_id = None
+        customer_id = lead["customer_id"] if lead else None
         if quote_id:
             quote = conn.execute("SELECT lead_id, customer_id FROM quotes WHERE id=?", (quote_id,)).fetchone()
             if not quote or (lead_id and quote["lead_id"] and lead_id != quote["lead_id"]):
@@ -146,6 +150,8 @@ def pipeline_report():
         jobs = [dict(x) for x in conn.execute("SELECT * FROM jobs")]
         invoices = [dict(x) for x in conn.execute("SELECT id,quote_id,customer_name,status,balance_due FROM invoices")]
         visits = [dict(x) for x in conn.execute("SELECT lead_id FROM appointments WHERE kind='site_visit' AND status IN ('confirmed','provisional')")]
+        job_bookings = {x["job_id"] for x in conn.execute("""SELECT job_id FROM appointments
+            WHERE kind='job' AND status IN ('confirmed','provisional') AND job_id IS NOT NULL""")}
     finally:
         conn.close()
     cards = []
@@ -166,19 +172,24 @@ def pipeline_report():
             stage = "paid"
         elif "invoiced_unpaid" in invoice_stages:
             stage = "invoiced_unpaid"
+        elif (statuses and statuses <= {"lost", "expired"}) or (lead and lead["status"] == "lost"):
+            stage = "closed_lost_expired"
         elif "completed" in job_statuses:
             stage = "completed_uninvoiced"
         elif "in_progress" in job_statuses:
             stage = "in_progress"
-        elif "scheduled" in job_statuses:
+        elif any(job["status"] == "scheduled" and job["id"] in job_bookings for job in related_jobs):
             stage = "scheduled"
         elif "awaiting_schedule" in job_statuses or "won" in statuses or (lead and lead["status"] == "won"):
+            stage = "won_unscheduled"
+        elif "scheduled" in job_statuses:
+            # A stage label alone does not put work into the diary.
             stage = "won_unscheduled"
         elif "pending" in statuses or (lead and lead["status"] == "quoted"):
             stage = "quote_pending"
         elif lead and lead["id"] in visited_leads:
             stage = "visit_booked"
-        elif (statuses and statuses <= {"lost", "expired"}) or (lead and lead["status"] == "lost"):
+        elif job_statuses == {"cancelled"}:
             stage = "closed_lost_expired"
         else:
             stage = "new_enquiry"

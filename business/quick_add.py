@@ -68,15 +68,31 @@ def confirm(data, now, format_dt):
         if existing:
             return {"lead": get_lead_by_id(existing["id"]), "already_created": True}
         timestamp = now()
+        name, phone, address = (data.name.strip()[:180], data.phone.strip()[:80],
+                                data.address.strip()[:300])
+        customer_id = None
+        # A confirmed, identifiable customer can exist before any quote. Use
+        # this same transaction so a failed lead/visit never leaves an orphan.
+        if name and (phone or address):
+            customer = (conn.execute("SELECT id FROM customers WHERE phone=? LIMIT 1", (phone,)).fetchone()
+                        if phone else None)
+            if not customer and address:
+                customer = conn.execute("SELECT id FROM customers WHERE name=? AND address=? LIMIT 1",
+                                        (name, address)).fetchone()
+            if customer:
+                customer_id = customer["id"]
+            else:
+                customer_id = conn.execute("""INSERT INTO customers
+                    (name,address,phone,created_at,updated_at) VALUES (?,?,?,?,?)""",
+                    (name, address, phone, timestamp.isoformat(), timestamp.isoformat())).lastrowid
         cur = conn.execute("""INSERT INTO leads
             (name,phone,email,address,job_type,description,status,source,created_at,
-             created_at_sort,updated_at,source_category,work_type,quick_add_key)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (data.name.strip()[:180], data.phone.strip()[:80], data.email.strip()[:180],
-             data.address.strip()[:300], "small", data.description.strip()[:10000],
+             created_at_sort,updated_at,source_category,work_type,quick_add_key,customer_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (name, phone, data.email.strip()[:180], address, "small", data.description.strip()[:10000],
              "new", "manual", format_dt(timestamp), timestamp.isoformat(),
              timestamp.isoformat(), data.source_category or None, data.work_type or None,
-             data.idempotency_key))
+             data.idempotency_key, customer_id))
         lead_id = cur.lastrowid
         appointment_id = None
         if visit:

@@ -211,6 +211,8 @@ def init_db():
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_invoice ON jobs(invoice_id) WHERE invoice_id IS NOT NULL")
     if "quick_add_key" not in {row["name"] for row in conn.execute("PRAGMA table_info(leads)")}:
         conn.execute("ALTER TABLE leads ADD COLUMN quick_add_key TEXT")
+    if "customer_id" not in {row["name"] for row in conn.execute("PRAGMA table_info(leads)")}:
+        conn.execute("ALTER TABLE leads ADD COLUMN customer_id INTEGER")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_quick_add_key ON leads(quick_add_key) WHERE quick_add_key IS NOT NULL")
 
     conn.commit()
@@ -228,4 +230,3 @@ def database_counts():
             counts[table] = None
     conn.close()
     return counts
-

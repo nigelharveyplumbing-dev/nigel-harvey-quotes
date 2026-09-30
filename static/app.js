@@ -2318,7 +2318,7 @@ async function loadLeads() {
     const q = (document.getElementById('leadSearch')?.value || '').trim().toLowerCase();
     const status = (document.getElementById('leadStatusFilter')?.value || 'all').toLowerCase();
     const filtered = data.filter(l => {
-      const hay = `${l.name || ''} ${l.phone || ''} ${l.email || ''} ${l.address || ''} ${l.description || ''}`.toLowerCase();
+      const hay = `${l.id} ${l.name || ''} ${l.phone || ''} ${l.email || ''} ${l.address || ''} ${l.description || ''}`.toLowerCase();
       const statusOk = status === 'all' || (l.status || '').toLowerCase() === status;
       return statusOk && (!q || hay.includes(q));
     });
@@ -2327,7 +2327,7 @@ async function loadLeads() {
       return;
     }
     box.innerHTML = filtered.map(l => `
-      <div class="history-item">
+      <div class="history-item" id="lead_card_${Number(l.id)}">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
           <div><strong>${escapeHtml(l.name || 'Website lead')}</strong></div>
           <div>${renderLeadBadge(l.status)}</div>

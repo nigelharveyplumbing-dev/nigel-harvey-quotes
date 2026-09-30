@@ -11,20 +11,31 @@ explicitly approves production promotion.
   outcomes, follow-up dates, source and work type.
 - New `appointments` link to a lead. A site visit does not require a quote or
   job. Confirmed, provisional, completed and cancelled visits are explicit;
-  provisional appointments can have a follow-up date.
+  provisional appointments require a follow-up date. A start/end range can
+  span several days for a scheduled job.
 - New `jobs` link a lead or quote and, optionally, an existing invoice. They
   have awaiting schedule, scheduled, in progress and completed statuses.
   Invoiced/paid stages are derived from existing linked invoice data.
 - Pipeline cards aggregate multiple quotes under one lead. A won quote cannot
-  be downgraded by another pending/lost quote. Historical unclassified quotes
-  remain unclassified; closed lost/expired work remains visible separately.
+  be downgraded by another pending/lost quote. A job marked scheduled without
+  booked dates remains in the awaiting-schedule stage. Historical unclassified
+  quotes remain unclassified; closed lost/expired work remains visible
+  separately and does not appear as an active visit merely because an older
+  booking exists.
+- The weekly diary groups every day, including free days. A multi-day job
+  appears on each overlapping day. Closed-lead bookings are called out for
+  review instead of occupying the active workload. Cards open the lead or
+  load it directly into the existing quote builder, which already supports
+  site notes/media and quote/PDF generation.
 
 ## Quick Add
 
 Paste a message into the private app, request a conservative preview, correct
 name/phone/address/job/source/work type and optionally confirm a site visit.
-Only explicit full UK dates with a time are suggested. The confirmation writes
-one lead and optional appointment in a single SQLite transaction; a unique
+Only explicit full UK dates with a time are suggested. When a confirmed name
+and phone/address identify a customer, the confirmation links an existing
+customer or creates one before a quote exists. It writes the customer, lead
+and optional appointment in a single SQLite transaction; a unique
 submission key returns the same lead after a repeated click/request. It never
 sends the customer a message. Public enquiry capture remains unchanged.
 
@@ -36,6 +47,14 @@ There is **no automatic two-way Google Calendar sync or conflict check**:
 the deployed app has no authorised Google Calendar OAuth integration. This
 prevents silent external calendar writes or inferred availability. Full sync
 would need a separate account authorisation and safe token/storage design.
+The safe follow-up path is to obtain Nigel's explicit Calendar account
+authorisation and exact calendar choice, use minimum read/write permissions,
+store revocable tokens securely outside source control, attach Calendar event
+IDs to appointments, reconcile edits and cancellations in both directions,
+check existing calendar commitments before confirming a date, and handle
+Europe/London daylight-saving boundaries. Provisional holds need an explicit
+expiry/review policy. Test this first against an isolated calendar and staging
+data; no OAuth credentials or Calendar permissions are added in Batch 7.
 
 ## Release verification
 
@@ -56,7 +75,12 @@ the script never prints them.
 ## Verification record
 
 - Local Batch 6 baseline: 89/89 Python tests passed, production verified.
-- Batch 7 isolated tests: pending final run.
-- Staging service: `srv-das0vrflk1mc73dtb2cg`; branch/deployment pending.
+- Batch 7 initial isolated tests: 96/96 Python tests passed, plus JavaScript
+  syntax and Python import/compile checks. Re-run after the focused staging
+  corrections described above.
+- Staging service: `srv-das0vrflk1mc73dtb2cg`; initial Batch 7 deployment
+  `dep-dau5lpmk1f9s73af59d0` ran approved commit
+  `a498666e9fb3d67041db85a099bfd966c8f9fd2a`. Final correction deployment
+  and live verification remain to record.
 - Production/main, GBP, directories, credentials, analytics and Render
   environment/disk/build/start settings: unchanged by Batch 7.
