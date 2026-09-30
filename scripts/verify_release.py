@@ -32,8 +32,10 @@ REDIRECT_TOWNS = (
     "merrow", "burpham", "shalford",
 )
 SCHEMA = {
-    "quotes": {"status", "next_follow_up", "loss_reason", "lead_id", "source_category", "work_type"},
-    "leads": {"source_category", "work_type", "quick_add_key", "customer_id"},
+    "quotes": {"status", "next_follow_up", "loss_reason", "lead_id", "source_category", "work_type",
+               "additional_work_types"},
+    "leads": {"source_category", "work_type", "quick_add_key", "customer_id",
+              "additional_work_types"},
     "appointments": {"lead_id", "job_id", "kind", "status", "starts_at", "ends_at",
                      "provisional_follow_up", "notes"},
     "jobs": {"lead_id", "quote_id", "invoice_id", "customer_id", "title", "status", "notes"},

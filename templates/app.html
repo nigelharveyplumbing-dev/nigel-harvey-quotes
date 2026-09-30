@@ -56,14 +56,15 @@
         <option>MyBuilder</option><option>Locally</option><option>Bing</option><option>Yell</option>
         <option>Checkatrade</option><option>TrustATrader</option><option>Other</option>
       </select>
-      <label for="quote_work_type">Plumbing work type (optional)</label>
-      <select id="quote_work_type">
+      <label for="quote_work_type">Primary work type (headline reporting)</label>
+      <select id="quote_work_type" onchange="b7ChangePrimary('quoteAdditional','quote_work_type')">
         <option value="">Not classified</option>
         <option>Leak / repair</option><option>Tap</option><option>Toilet / cistern</option>
         <option>Shower</option><option>Bathroom plumbing</option><option>Radiator / TRV</option>
         <option>Outside tap</option><option>Pipework</option><option>Power/heating-system flush</option>
         <option>Cylinder / tank</option><option>Other</option>
       </select>
+      <div id="quoteAdditional"></div>
 
       <div class="quote-box small no-print" style="margin-bottom:12px;background:#f8fafc;">
         <strong>Simple workflow</strong><br>
@@ -97,6 +98,8 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
 
       <label for="customer_phone">Customer phone</label>
       <input id="customer_phone" placeholder="07123 456789">
+      <label for="customer_email">Customer email (optional)</label>
+      <input id="customer_email" type="email" placeholder="customer@example.com">
 
       <label for="job">Job description</label>
       <textarea id="job" placeholder="Example: Replace kitchen tap" oninput="updateLabourSuggestion(); scheduleQuoteLearning(); scheduleLabourIntelligence(); updateForgottenItemWarnings()"></textarea>
@@ -341,8 +344,9 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
           <label>Address / postcode</label><input id="quickAddress" autocomplete="off">
           <label>Job details</label><textarea id="quickDescription" rows="4"></textarea>
           <div class="grid2"><div><label>Lead source</label><select id="quickSource"><option value="">Unknown / confirm later</option><option>Google Business Profile</option><option>Google organic search</option><option>Website/direct</option><option>Referral</option><option>Repeat customer</option><option>MyBuilder</option><option>Locally</option><option>Bing</option><option>Yell</option><option>Checkatrade</option><option>TrustATrader</option><option>Other</option></select></div>
-          <div><label>Work type</label><select id="quickWork"><option value="">Not classified</option><option>Leak / repair</option><option>Tap</option><option>Toilet / cistern</option><option>Shower</option><option>Bathroom plumbing</option><option>Radiator / TRV</option><option>Outside tap</option><option>Pipework</option><option>Power/heating-system flush</option><option>Cylinder / tank</option><option>Other</option></select></div></div>
-          <p class="small">Optional site visit: leave both times blank to save an enquiry without an appointment.</p>
+          <div><label>Primary work type</label><select id="quickWork" onchange="b7ChangePrimary('quickAdditional','quickWork')"><option value="">Not classified</option><option>Leak / repair</option><option>Tap</option><option>Toilet / cistern</option><option>Shower</option><option>Bathroom plumbing</option><option>Radiator / TRV</option><option>Outside tap</option><option>Pipework</option><option>Power/heating-system flush</option><option>Cylinder / tank</option><option>Other</option></select></div></div>
+          <div id="quickAdditional"></div>
+          <p class="small"><strong>Site visit / quote survey (optional).</strong> Book a short visit to inspect the work before preparing a quote. This does not schedule the actual plumbing job. Leave both times blank to save only the enquiry.</p>
           <div class="grid2"><div><label>Visit starts</label><input id="quickVisitStart" type="datetime-local"></div><div><label>Visit ends</label><input id="quickVisitEnd" type="datetime-local"></div></div>
           <label>Visit status</label><select id="quickVisitStatus" onchange="document.getElementById('quickProvisionalFollow').classList.toggle('hidden',this.value!=='provisional')"><option value="confirmed">Confirmed</option><option value="provisional">Pencilled in</option></select>
           <div id="quickProvisionalFollow" class="hidden"><label>Follow up pencilled booking on</label><input id="quickFollowUp" type="date"></div>
@@ -382,14 +386,14 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
     </div>
     <div id="diaryTab" class="tab-panel">
       <h2>Plumbing Diary</h2>
-      <p class="small">Book a site visit before quoting, or schedule a job. Times are local UK times. This diary does not contact customers automatically.</p>
+      <p class="small">Site visits inspect work before quoting; plumbing job dates are booked separately after a quote is won. Times are local UK times. This diary does not contact customers automatically.</p>
       <div class="row"><button type="button" class="btn-light" onclick="shiftDiary(-7)">Previous week</button><strong id="diaryWeek"></strong><button type="button" class="btn-light" onclick="shiftDiary(7)">Next week</button></div>
       <div id="diaryList" class="history-list">Loading...</div>
       <details id="appointmentEditor" class="quote-box" style="margin-top:14px;"><summary><strong>Book or update an appointment</strong></summary>
         <label>Appointment ID to update (leave blank for new)</label><input id="appointmentEditId" type="number" min="1">
         <label>Lead ID</label><input id="appointmentLeadId" type="number" min="1">
-        <label>Linked job ID (optional)</label><input id="appointmentJobId" type="number" min="1">
-        <div class="grid2"><div><label>Type</label><select id="appointmentKind"><option value="site_visit">Site visit</option><option value="job">Job</option></select></div><div><label>Status</label><select id="appointmentStatus" onchange="document.getElementById('appointmentFollow').classList.toggle('hidden',this.value!=='provisional')"><option value="confirmed">Confirmed</option><option value="provisional">Pencilled in</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div></div>
+        <label>Linked job ID (required for plumbing job, leave blank for site visit)</label><input id="appointmentJobId" type="number" min="1">
+        <div class="grid2"><div><label>Type</label><select id="appointmentKind"><option value="site_visit">Site visit / quote survey</option><option value="job">Plumbing job</option></select></div><div><label>Status</label><select id="appointmentStatus" onchange="document.getElementById('appointmentFollow').classList.toggle('hidden',this.value!=='provisional')"><option value="confirmed">Confirmed</option><option value="provisional">Pencilled in</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div></div>
         <div class="grid2"><div><label>Start</label><input id="appointmentStart" type="datetime-local"></div><div><label>End</label><input id="appointmentEnd" type="datetime-local"></div></div>
         <div id="appointmentFollow" class="hidden"><label>Follow up provisional booking on</label><input id="appointmentFollowDate" type="date"></div>
         <label>Internal notes</label><textarea id="appointmentNotes" rows="3"></textarea>

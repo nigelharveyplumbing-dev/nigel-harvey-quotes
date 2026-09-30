@@ -1619,7 +1619,9 @@ function collectFormPayload() {
     lead_id: typeof CURRENT_LEAD_ID === 'undefined' ? null : CURRENT_LEAD_ID,
     source_category: document.getElementById("quote_source")?.value || "",
     work_type: document.getElementById("quote_work_type")?.value || "",
+    additional_work_types: typeof b7SelectedAdditional === 'function' ? b7SelectedAdditional('quoteAdditional', document.getElementById('quote_work_type').value) : [],
     customer_name: document.getElementById("customer_name").value,
+    customer_email: document.getElementById("customer_email").value,
     customer_address: document.getElementById("customer_address").value,
     customer_phone: document.getElementById("customer_phone").value,
     job_description: document.getElementById("job").value,
@@ -2007,10 +2009,12 @@ function fillFormFromRequest(requestData, quoteId = null) {
   CURRENT_LEAD_ID = requestData.lead_id || null;
   document.getElementById("quote_source").value = requestData.source_category || "";
   document.getElementById("quote_work_type").value = requestData.work_type || "";
+  b7SetAdditional('quoteAdditional', requestData.additional_work_types || [], requestData.work_type || '');
   document.getElementById("quote_type").value = requestData.quote_type || "small";
   document.getElementById("customer_name").value = requestData.customer_name || "";
   document.getElementById("customer_address").value = requestData.customer_address || "";
   document.getElementById("customer_phone").value = requestData.customer_phone || "";
+  document.getElementById("customer_email").value = requestData.customer_email || "";
   document.getElementById("job").value = requestData.job_description || "";
   document.getElementById("labour").value = requestData.labour_cost || "";
   document.getElementById("include_callout_charge").checked = !!requestData.include_callout_charge;
@@ -2207,7 +2211,7 @@ async function loadHistory() {
         <div><strong>#${q.id} ${escapeHtml(q.customer_name || "No customer name")}</strong> · ${renderQuoteStatus(q.status)}</div>
         <div>${escapeHtml(q.job || "")}</div>
         <div class="small">${escapeHtml(q.created_at || "")} · Total ${pounds(q.total_price)} · Profit ${pounds(q.gross_profit)} · Margin ${Number(q.margin_percent || 0).toFixed(1)}%</div>
-        <div class="small">${q.lead_id ? 'Lead #' + q.lead_id + ' · ' : ''}${escapeHtml(q.source_category || 'Linked lead source / unknown')} · ${escapeHtml(q.work_type || 'Work type not classified')}${q.next_follow_up ? ' · Follow up ' + escapeHtml(q.next_follow_up) : ''}${q.loss_reason ? ' · Lost: ' + escapeHtml(q.loss_reason) : ''}</div>
+        <div class="small">${q.lead_id ? 'Lead #' + q.lead_id + ' · ' : ''}${escapeHtml(q.source_category || 'Linked lead source / unknown')} · ${escapeHtml(q.work_type || 'Work type not classified')}${(q.additional_work_types || []).length ? ' + ' + (q.additional_work_types || []).map(escapeHtml).join(', ') : ''}${q.next_follow_up ? ' · Follow up ' + escapeHtml(q.next_follow_up) : ''}${q.loss_reason ? ' · Lost: ' + escapeHtml(q.loss_reason) : ''}</div>
         <div class="row">
           <select id="quote_status_${q.id}" aria-label="Quote status for ${escapeHtml(q.customer_name || 'quote')}">
             ${['pending','won','lost','expired','unclassified'].map(s => `<option value="${s}" ${q.status === s ? 'selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('')}
@@ -2336,9 +2340,10 @@ async function loadLeads() {
         <div class="small">${escapeHtml(l.address || '')}</div>
         <div style="margin-top:8px;">${escapeHtml(l.description || '')}</div>
         <div class="small" style="margin-top:8px;">${escapeHtml(l.created_at || '')} · ${escapeHtml((l.job_type || 'small').toUpperCase())} · ${escapeHtml(l.source || 'website')}</div>
-        <div class="small">Source: ${escapeHtml(l.source_category || 'Unknown')}${l.work_type ? ' · Work: ' + escapeHtml(l.work_type) : ''}</div>
+        <div class="small">Source: ${escapeHtml(l.source_category || 'Unknown')}${l.work_type ? ' · Primary: ' + escapeHtml(l.work_type) : ''}${(l.additional_work_types || []).length ? ' · Also: ' + l.additional_work_types.map(escapeHtml).join(', ') : ''}</div>
         <div class="row"><select id="lead_source_${l.id}" aria-label="Lead source"><option value="">Automatic source</option>${['Google Business Profile','Google organic search','Website/direct','Referral','Repeat customer','MyBuilder','Locally','Bing','Yell','Checkatrade','TrustATrader','Other'].map(s => `<option ${l.source_category === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
-        <select id="lead_work_${l.id}" aria-label="Work type"><option value="">Work type (optional)</option>${['Leak / repair','Tap','Toilet / cistern','Shower','Bathroom plumbing','Radiator / TRV','Outside tap','Pipework','Power/heating-system flush','Cylinder / tank','Other'].map(s => `<option ${l.work_type === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+        <select id="lead_work_${l.id}" aria-label="Primary work type" onchange="b7ChangePrimary('lead_additional_${l.id}','lead_work_${l.id}')"><option value="">Primary work type</option>${B7_WORK_TYPES.map(s => `<option ${l.work_type === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+        <div id="lead_additional_${l.id}">${b7AdditionalHtml('lead_additional_' + l.id, l.additional_work_types, l.work_type)}</div>
         <button type="button" class="btn-light" onclick="saveLeadClassification(${l.id})">Save source / work type</button>
         ${l.postcode || l.urgency || l.preferred_contact ? `<div class="small">${l.postcode ? 'Postcode: ' + escapeHtml(l.postcode) + ' · ' : ''}${l.urgency ? 'Urgency: ' + escapeHtml(l.urgency) + ' · ' : ''}${l.preferred_contact ? 'Prefers: ' + escapeHtml(l.preferred_contact) : ''}</div>` : ''}
         ${l.landing_page || l.referrer || l.utm_source || l.utm_campaign ? `<div class="small">${l.landing_page ? 'Landing: ' + escapeHtml(l.landing_page) + ' · ' : ''}${l.referrer ? 'Referrer: ' + escapeHtml(l.referrer) + ' · ' : ''}${l.utm_source ? 'Source: ' + escapeHtml(l.utm_source) + ' · ' : ''}${l.utm_campaign ? 'Campaign: ' + escapeHtml(l.utm_campaign) : ''}</div>` : ''}
@@ -2374,24 +2379,28 @@ function startQuoteFromLead(id) {
   if (!lead) return;
   startNewQuote();
   CURRENT_LEAD_ID = id;
-  document.getElementById('quote_source').value = '';
+  document.getElementById('quote_source').value = lead.source_category || '';
   document.getElementById('quote_work_type').value = lead.work_type || '';
+  b7SetAdditional('quoteAdditional', lead.additional_work_types || [], lead.work_type || '');
   document.getElementById('customer_name').value = lead.name || '';
   document.getElementById('customer_address').value = lead.address || '';
   document.getElementById('customer_phone').value = lead.phone || '';
+  document.getElementById('customer_email').value = lead.email || '';
   document.getElementById('quote_type').value = lead.job_type || 'small';
   document.getElementById('job').value = lead.description || '';
   toggleBathroomFields();
   updateLabourSuggestion();
   scheduleQuoteLearning();
   showTab('quotesTab');
-  setEditingStatus('Lead loaded into quote builder.', true);
+  setEditingStatus('Lead loaded into quote builder. The quote covers the work you enter; scheduling the plumbing job happens after it is won.', true);
 }
 
 async function saveLeadClassification(id) {
   const response = await fetch(`/api/leads/${id}/classification`, {method:'PUT',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({source_category:document.getElementById(`lead_source_${id}`).value,
-                         work_type:document.getElementById(`lead_work_${id}`).value})});
+                         work_type:document.getElementById(`lead_work_${id}`).value,
+                         additional_work_types:b7SelectedAdditional(`lead_additional_${id}`,
+                           document.getElementById(`lead_work_${id}`).value)})});
   if (!response.ok) { const data = await response.json(); alert(data.detail || 'Could not save classification'); return; }
   await Promise.all([loadLeads(), loadDashboard()]);
   showNotice('Lead classification saved.');
@@ -2746,6 +2755,8 @@ function startNewQuote() {
   resetQuoteFormState();
   document.getElementById("quote_source").value = "";
   document.getElementById("quote_work_type").value = "";
+  b7SetAdditional('quoteAdditional', [], '');
+  document.getElementById('customer_email').value = '';
   CURRENT_QUOTE_DATA = null;
   document.getElementById("resultCard").style.display = "none";
   document.getElementById("invoiceCard").style.display = "none";
@@ -5160,6 +5171,8 @@ function normaliseQuoteDataForEditing(data) {
     lead_id: request.lead_id || root.lead_id || null,
     source_category: request.source_category || root.source_category || "",
     work_type: request.work_type || root.work_type || "",
+    additional_work_types: request.additional_work_types || root.additional_work_types || [],
+    customer_email: request.customer_email || root.customer_email || "",
     customer_name: request.customer_name || result.customer_name || quote.customer_name || root.customer_name || "",
     customer_address: request.customer_address || result.customer_address || quote.customer_address || root.customer_address || "",
     customer_phone: request.customer_phone || result.customer_phone || quote.customer_phone || root.customer_phone || "",

@@ -52,6 +52,130 @@ class Batch7Tests(unittest.TestCase):
         self.assertEqual(result["phone"], "07595 725547")
         self.assertEqual(result["email"], "john@example.com")
 
+    def test_multi_job_quick_add_suggestions_are_review_only_and_conservative(self):
+        from business.quick_add import preview
+        message = ("Hi Nigel, can you replace our kitchen tap and also have a look at the toilet "
+                   "as the flush isn't working properly. Our address is "
+                   "17 Carroll Avenue, Guildford, Surrey, GU1 2QJ.\nBest regards,\nJohn Ashby")
+        result = preview(message)
+        self.assertEqual(result["name"], "John Ashby")
+        self.assertEqual(result["address"], "17 Carroll Avenue, Guildford, Surrey, GU1 2QJ")
+        self.assertEqual(result["suggested_work_types"], ["Tap", "Toilet / cistern"])
+        self.assertEqual(result["description"], message)
+        self.assertTrue(result["needs_review"])
+        self.assertEqual(preview("Radiator valve is leaking and the kitchen tap is dripping.")
+                         ["suggested_work_types"], ["Tap", "Radiator / TRV"])
+        for uncertain in ("Tap to continue. We have toilet paper to deliver.",
+                          "Hi Nigel, could we discuss some work soon? Regards, John Ashby"):
+            self.assertEqual(preview(uncertain)["suggested_work_types"], [])
+
+    def test_primary_additional_types_survive_visit_quote_and_reporting_without_double_count(self):
+        user, password = secrets.token_urlsafe(12), secrets.token_urlsafe(18)
+        with disposable_app(user, password) as (module, _):
+            with TestClient(module.app) as client:
+                auth = authorization(user, password)
+                message = ("Please replace the kitchen tap and repair the toilet flush. "
+                           "Our address is 17 Carroll Avenue, Guildford, Surrey, GU1 2QJ\n"
+                           "Best regards John Ashby")
+                suggested = client.post("/api/quick-add/preview", headers=auth,
+                                        json={"message": message}).json()
+                self.assertEqual(suggested["suggested_work_types"], ["Tap", "Toilet / cistern"])
+                self.assertEqual(module.database_counts()["leads"], 0)
+                payload = {"idempotency_key": secrets.token_urlsafe(22),
+                           "name": suggested["name"], "email": "john@example.test", "phone": "07123456789",
+                           "address": suggested["address"], "description": message,
+                           "source_category": "Referral", "work_type": "Tap",
+                           "additional_work_types": ["Toilet / cistern"],
+                           "visit_starts_at": "2026-10-02T10:00", "visit_ends_at": "2026-10-02T10:30"}
+                invalid = dict(payload, idempotency_key=secrets.token_urlsafe(22),
+                               additional_work_types=["Tap"])
+                self.assertEqual(client.post("/api/quick-add/confirm", headers=auth,
+                                             json=invalid).status_code, 422)
+                self.assertEqual(module.database_counts()["leads"], 0)
+                saved = client.post("/api/quick-add/confirm", headers=auth, json=payload)
+                self.assertEqual(saved.status_code, 200, saved.text)
+                lead = saved.json()["lead"]
+                self.assertEqual(lead["work_type"], "Tap")
+                self.assertEqual(lead["additional_work_types"], ["Toilet / cistern"])
+                self.assertEqual(client.get("/api/leads", headers=auth).json()[0]["additional_work_types"],
+                                 ["Toilet / cistern"])
+                self.assertEqual(module.database_counts()["quotes"], 0)
+                appointments = client.get("/api/appointments", headers=auth).json()
+                self.assertEqual(len(appointments), 1)
+                self.assertEqual((appointments[0]["kind"], appointments[0]["job_id"]),
+                                 ("site_visit", None))
+                stage = client.get("/api/pipeline", headers=auth).json()["stages"]
+                self.assertEqual(len(stage["visit_booked"]), 1)
+                self.assertEqual(stage["scheduled"], [])
+                self.assertEqual(client.post("/api/appointments", headers=auth, json={
+                    "lead_id":lead["id"], "kind":"job", "status":"confirmed",
+                    "starts_at":"2026-10-05T09:00", "ends_at":"2026-10-05T17:00"}).status_code, 422)
+                visit = dict(payload, lead_id=lead["id"], kind="site_visit", status="completed",
+                             starts_at=payload["visit_starts_at"], ends_at=payload["visit_ends_at"])
+                self.assertEqual(client.put(f"/api/appointments/{appointments[0]['id']}", headers=auth,
+                                            json=visit).status_code, 200)
+                stage = client.get("/api/pipeline", headers=auth).json()["stages"]
+                self.assertTrue(stage["visit_booked"][0]["visit_completed"])
+                quote = client.post("/api/quote", headers=auth, json={
+                    "lead_id": lead["id"], "customer_name":lead["name"],
+                    "customer_phone":lead["phone"], "customer_email":lead["email"],
+                    "customer_address":lead["address"], "job_description":lead["description"],
+                    "source_category":lead["source_category"], "work_type":lead["work_type"],
+                    "additional_work_types":lead["additional_work_types"], "labour_cost":120})
+                self.assertEqual(quote.status_code, 200, quote.text)
+                self.assertEqual(quote.json()["additional_work_types"], ["Toilet / cistern"])
+                self.assertEqual(quote.json()["request"]["customer_email"], "john@example.test")
+                self.assertEqual(client.get("/api/pipeline", headers=auth).json()["stages"]
+                                 ["quote_pending"][0]["lead_id"], lead["id"])
+                self.assertEqual(client.get("/api/business-performance", headers=auth).json()
+                                 ["enquiries"], 1)
+                report = client.get("/api/business-performance", headers=auth).json()
+                self.assertEqual(report["quotes_saved"], 1)
+                self.assertEqual(report["by_source"]["Referral"]["quotes"], 1)
+                prewon_job = client.post("/api/jobs", headers=auth, json={
+                    "lead_id":lead["id"], "quote_id":quote.json()["id"],
+                    "title":"Tap and cistern repair", "status":"awaiting_schedule"}).json()
+                booking_payload = {"lead_id":lead["id"], "job_id":prewon_job["id"],
+                                   "kind":"job", "status":"confirmed",
+                                   "starts_at":"2026-10-05T09:00", "ends_at":"2026-10-05T17:00"}
+                self.assertEqual(client.post("/api/appointments", headers=auth,
+                                             json=booking_payload).status_code, 422)
+                won = client.put(f"/api/quotes/{quote.json()['id']}/outcome", headers=auth,
+                                 json={"status":"won"})
+                self.assertEqual(won.status_code, 200, won.text)
+                self.assertEqual(client.get("/api/pipeline", headers=auth).json()["stages"]
+                                 ["won_unscheduled"][0]["lead_id"], lead["id"])
+                self.assertEqual(client.get("/api/pipeline", headers=auth).json()["stages"]["scheduled"], [])
+                self.assertEqual(client.get("/api/business-performance", headers=auth).json()
+                                 ["by_source"]["Referral"]["wins"], 1)
+                booking = client.post("/api/appointments", headers=auth, json=booking_payload)
+                self.assertEqual(booking.status_code, 200, booking.text)
+                self.assertEqual(client.get("/api/appointments", headers=auth).json()[-1]["kind"], "job")
+
+    def test_additive_work_type_migration_keeps_legacy_primary_and_quote(self):
+        user, password = secrets.token_urlsafe(12), secrets.token_urlsafe(18)
+        with disposable_app(user, password) as (module, _):
+            with TestClient(module.app) as client:
+                auth = authorization(user, password)
+                lead = client.post("/api/leads", json={"name":"Existing", "description":"Tap",
+                                                       "work_type":"Tap"}).json()
+                quote = client.post("/api/quote", headers=auth, json={
+                    "customer_name":"Existing", "job_description":"Tap", "labour_cost":100,
+                    "work_type":"Tap", "lead_id":lead["id"]}).json()
+                module.init_db(); module.init_db()
+                self.assertEqual(client.get("/api/leads", headers=auth).json()[0]["work_type"], "Tap")
+                self.assertEqual(client.get("/api/leads", headers=auth).json()[0]
+                                 ["additional_work_types"], [])
+                self.assertEqual(client.get(f"/api/quotes/{quote['id']}", headers=auth).json()
+                                 ["additional_work_types"], [])
+                self.assertEqual(module.database_counts()["quotes"], 1)
+                conn = module.get_db()
+                self.assertEqual(conn.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+                for table in ("leads", "quotes"):
+                    self.assertIn("additional_work_types", {r["name"] for r in conn.execute(
+                        f"PRAGMA table_info({table})")})
+                conn.close()
+
     @unittest.skipUnless(shutil.which("node"), "Node is required for Quick Add browser workflow")
     def test_quick_add_save_exposes_lead_visit_quote_actions_and_diary_location(self):
         source = Path(__file__).resolve().parents[1]
@@ -114,6 +238,62 @@ run().catch(e=>{console.error(e); process.exitCode=1});
             with TestClient(module.app) as client:
                 page = client.get("/app", headers=authorization("quickadd-user", "quickadd-pass"))
                 self.assertIn('id="quickNext"', page.text)
+
+    @unittest.skipUnless(shutil.which("node"), "Node is required for multi-work-type UI workflow")
+    def test_mobile_preview_suggestions_and_lead_to_quote_controls(self):
+        source = Path(__file__).resolve().parents[1]
+        script = r'''
+const assert=require('node:assert/strict'), fs=require('node:fs'), vm=require('node:vm');
+const nodes=new Map();
+function node(id) {
+  if (!nodes.has(id)) nodes.set(id,{value:'',innerHTML:'',checkedInputs:[],
+    querySelectorAll(){return this.checkedInputs},
+    classList:{add(){},remove(){}},scrollIntoView(){}});
+  return nodes.get(id);
+}
+const context={document:{getElementById:node}, crypto:{randomUUID:()=> 'b'.repeat(32)},
+  escapeHtml:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;'),
+  startNewQuote(){},toggleBathroomFields(){},updateLabourSuggestion(){},scheduleQuoteLearning(){},
+  showTab(){},setEditingStatus(){},alert:s=>{throw Error(s)}};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
+const app=fs.readFileSync(process.argv[2],'utf8');
+const start=app.indexOf('function startQuoteFromLead(id) {');
+const end=app.indexOf('\n\nasync function saveLeadClassification(',start);
+assert.ok(start>=0 && end>start);
+vm.runInContext(app.slice(start,end),context);
+async function run() {
+  const message='Hi Nigel, replace our kitchen tap and fix the toilet flush. Best regards John Ashby';
+  context.b7Post=async(url,data)=>{
+    assert.equal(url,'/api/quick-add/preview'); assert.equal(data.message,message);
+    return {name:'John Ashby',description:message,suggested_work_types:['Tap','Toilet / cistern'],hint:'Review'};
+  };
+  node('quickMessage').value=message;
+  await vm.runInContext('previewQuickLead()',context);
+  assert.equal(node('quickWork').value,'Tap');
+  assert.match(node('quickAdditional').innerHTML,/Toilet \/ cistern/);
+  assert.match(node('quickAdditional').innerHTML,/checked/);
+  node('quickAdditional').checkedInputs=[{value:'Toilet / cistern'}];
+  assert.deepEqual(Array.from(vm.runInContext("b7SelectedAdditional('quickAdditional','Tap')",context)),
+    ['Toilet / cistern']);
+  context.SAVED_LEADS=[{id:9,name:'John Ashby',phone:'07123456789',
+    email:'john@example.test',address:'17 Carroll Avenue, Guildford, Surrey, GU1 2QJ',
+    description:message,source_category:'Referral',work_type:'Tap',
+    additional_work_types:['Toilet / cistern'],job_type:'small'}];
+  vm.runInContext('startQuoteFromLead(9)',context);
+  assert.equal(node('quote_source').value,'Referral');
+  assert.equal(node('quote_work_type').value,'Tap');
+  assert.match(node('quoteAdditional').innerHTML,/checked/);
+  assert.equal(node('customer_email').value,'john@example.test');
+  assert.equal(node('customer_address').value,'17 Carroll Avenue, Guildford, Surrey, GU1 2QJ');
+  assert.equal(node('job').value,message);
+}
+run().catch(e=>{console.error(e);process.exitCode=1});
+'''
+        result = subprocess.run(["node", "-e", script, str(source / "static" / "pipeline.js"),
+                                 str(source / "static" / "app.js")], capture_output=True, text=True,
+                                timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_quick_add_preview_is_conservative_and_confirm_is_atomic_idempotent(self):
         user, password = secrets.token_urlsafe(12), secrets.token_urlsafe(18)

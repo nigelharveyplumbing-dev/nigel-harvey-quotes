@@ -9,6 +9,7 @@ from datetime import timedelta
 from business.config import PAYMENT_LINK_BASE
 from business.db import get_db
 from business.growth_tracking import LOSS_REASONS, QUOTE_STATUSES, SOURCES, WORK_TYPES
+from business.work_types import read_additional
 
 
 def row_to_quote(row):
@@ -28,6 +29,7 @@ def row_to_quote(row):
         "lead_id": row["lead_id"],
         "source_category": row["source_category"] or "",
         "work_type": row["work_type"] or "",
+        "additional_work_types": read_additional(row["additional_work_types"]),
         "request": json.loads(row["request_json"]),
         "result": json.loads(row["result_json"]),
     }
@@ -80,6 +82,7 @@ def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
     lead_id = request_data.get("lead_id")
     source = request_data.get("source_category") or None
     work_type = request_data.get("work_type") or None
+    additional = request_data.get("additional_work_types") or []
     if lead_id:
         check = get_db()
         found = check.execute("SELECT 1 FROM leads WHERE id = ?", (lead_id,)).fetchone()
@@ -97,8 +100,8 @@ def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
         INSERT INTO quotes (
             customer_id, customer_name, job, total_price, gross_profit, margin_percent,
             created_at, created_at_sort, request_json, result_json,
-            status, lead_id, source_category, work_type
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            status, lead_id, source_category, work_type, additional_work_types
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         customer_id,
         result_data.get("customer_name", ""),
@@ -110,7 +113,7 @@ def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
         result_data.get("created_at_sort", ""),
         json.dumps(request_data),
         json.dumps(result_data),
-        "pending", lead_id, source, work_type,
+        "pending", lead_id, source, work_type, json.dumps(additional),
     ))
     quote_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     if lead_id:
@@ -253,12 +256,13 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict, ups
     conn = get_db()
     request_data = {**request_data, "lead_id": lead_id,
                     "source_category": request_data.get("source_category") or existing["source_category"],
-                    "work_type": request_data.get("work_type") or existing["work_type"]}
+                    "work_type": request_data.get("work_type") or existing["work_type"],
+                    "additional_work_types": request_data.get("additional_work_types", existing["additional_work_types"])}
     conn.execute("""
         UPDATE quotes
         SET customer_id = ?, customer_name = ?, job = ?, total_price = ?, gross_profit = ?, margin_percent = ?,
             created_at = ?, created_at_sort = ?, request_json = ?, result_json = ?,
-            lead_id = ?, source_category = ?, work_type = ?
+            lead_id = ?, source_category = ?, work_type = ?, additional_work_types = ?
         WHERE id = ?
     """, (
         customer_id,
@@ -273,6 +277,7 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict, ups
         json.dumps(result_data),
         lead_id, request_data.get("source_category") or existing["source_category"] or None,
         request_data.get("work_type") or existing["work_type"] or None,
+        json.dumps(request_data["additional_work_types"]),
         quote_id,
     ))
     conn.commit()

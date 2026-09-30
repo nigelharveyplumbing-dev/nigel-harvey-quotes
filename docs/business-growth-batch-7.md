@@ -43,6 +43,23 @@ and optional appointment in a single SQLite transaction; a unique
 submission key returns the same lead after a repeated click/request. It never
 sends the customer a message. Public enquiry capture remains unchanged.
 
+### Multi-task enquiry and quote survey review
+
+The existing `work_type` remains the **primary** reporting classification.
+Additive `additional_work_types` JSON columns on leads and quotes contain only
+other controlled categories; old rows get `[]`. Headline lead/quote/outcome/
+value counts still use each record once. Quick Add suggests clear tap, toilet/
+cistern and radiator/TRV wording only, then Nigel edits the preview and confirms
+before any write. The original message remains the job description. The mobile
+form keeps the primary selector visible and puts additional checkboxes in a
+compact expandable control. Lead classification can be edited later; Start
+Quote carries primary/additional types, source, email, address and description
+to the quote builder. Saved quotes retain both types. A site visit is a short
+quote survey, not a job booking. The Diary labels these separately; a completed
+visit still appears in the quote-next pipeline stage. New plumbing job diary
+bookings require a linked won quote/job. Existing appointments remain valid.
+Google Calendar still opens only a reviewable draft from the Diary card.
+
 ## Calendar boundary
 
 The diary shows a week at a time and marks provisional follow-ups. “Add to

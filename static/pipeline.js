@@ -1,7 +1,7 @@
 /* Batch 7 private workflow: no automatic messages or calendar writes. */
 const B7_STAGES = [
   ['new_enquiry', 'New enquiries'],
-  ['visit_booked', 'Visits booked'],
+  ['visit_booked', 'Site visits / quote next'],
   ['quote_pending', 'Quotes awaiting decision'],
   ['won_unscheduled', 'Won / awaiting schedule'],
   ['scheduled', 'Scheduled jobs'],
@@ -15,6 +15,29 @@ let b7QuickKey = '';
 let b7Appointments = [];
 let b7Jobs = [];
 let b7WeekOffset = 0;
+const B7_WORK_TYPES = ['Leak / repair','Tap','Toilet / cistern','Shower','Bathroom plumbing',
+  'Radiator / TRV','Outside tap','Pipework','Power/heating-system flush','Cylinder / tank','Other'];
+
+function b7AdditionalHtml(id, selected, primary) {
+  const values = Array.isArray(selected) ? selected : [];
+  return '<details class="work-type-more"><summary>Additional work types' +
+    (values.length ? ': ' + values.map(escapeHtml).join(', ') + ' (edit)' : ' (select all that apply)') +
+    '</summary>' +
+    '<div class="work-type-grid">' + B7_WORK_TYPES.filter(value => value !== primary).map(value =>
+      '<label class="work-type-chip"><input type="checkbox" value="' + escapeHtml(value) + '" ' +
+      (values.includes(value) ? 'checked' : '') + '> ' + escapeHtml(value) + '</label>').join('') + '</div></details>';
+}
+function b7SelectedAdditional(id, primary) {
+  const node = document.getElementById(id);
+  return node && node.querySelectorAll ? Array.from(node.querySelectorAll('input:checked'))
+    .map(input => input.value).filter(value => value !== primary) : [];
+}
+function b7SetAdditional(id, selected, primary) {
+  document.getElementById(id).innerHTML = b7AdditionalHtml(id, selected, primary);
+}
+function b7ChangePrimary(id, selectId) {
+  b7SetAdditional(id, b7SelectedAdditional(id, b7Value(selectId)), b7Value(selectId));
+}
 
 function b7Value(id) { return document.getElementById(id).value.trim(); }
 function b7Number(id) { return Number(b7Value(id)) || null; }
@@ -41,7 +64,9 @@ async function previewQuickLead() {
     document.getElementById('quickVisitStart').value = data.visit_starts_at || '';
     document.getElementById('quickVisitEnd').value = data.visit_ends_at || '';
     document.getElementById('quickSource').value = '';
-    document.getElementById('quickWork').value = '';
+    const types = data.suggested_work_types || [];
+    document.getElementById('quickWork').value = types[0] || '';
+    b7SetAdditional('quickAdditional', types.slice(1), types[0] || '');
     document.getElementById('quickVisitStatus').value = 'confirmed';
     document.getElementById('quickFollowUp').value = '';
     document.getElementById('quickProvisionalFollow').classList.add('hidden');
@@ -59,7 +84,9 @@ async function saveQuickLead() {
     name:b7Value('quickName'), phone:b7Value('quickPhone'),
     email:b7Value('quickEmail'), address:b7Value('quickAddress'),
     description:b7Value('quickDescription'), source_category:b7Value('quickSource'),
-    work_type:b7Value('quickWork'), visit_starts_at:b7Value('quickVisitStart'),
+    work_type:b7Value('quickWork'),
+    additional_work_types:b7SelectedAdditional('quickAdditional', b7Value('quickWork')),
+    visit_starts_at:b7Value('quickVisitStart'),
     visit_ends_at:b7Value('quickVisitEnd'), visit_status:b7Value('quickVisitStatus'),
     provisional_follow_up:b7Value('quickVisitStatus') === 'provisional' ? b7Value('quickFollowUp') : ''
   };
@@ -84,7 +111,7 @@ function showQuickNextActions(result) {
   box.innerHTML = '<strong>Lead #' + leadId + ' saved' +
     (result.lead.name ? ' · ' + escapeHtml(result.lead.name) : '') + '</strong>' +
     '<p class="small">' + (visitId ?
-      'Site visit booked. Open it in Diary to review the time and use Add to Google Calendar for a draft you can check before saving.' :
+      'Quote survey booked, not the plumbing job. Open the visit in Diary; Add to Google Calendar creates a draft you review before saving.' :
       'Next, book a site visit or start a quote when ready. No appointment or quote was created.') + '</p>' +
     '<div class="history-actions quick-next-actions">' +
     '<button type="button" class="btn-light" onclick="openPipelineLead(' + leadId + ')">Open Lead</button>' +
@@ -123,6 +150,7 @@ async function loadPipeline() {
           (card.job_ids.length ? ' · Job #' + card.job_ids.map(Number).join(', #') : '') +
           '<div class="small">' + escapeHtml(card.description) + '</div>' +
           '<div class="history-actions">' +
+          (card.visit_completed ? '<div class="small">Visit completed · prepare quote</div>' : '') +
           (card.lead_id ? '<button type="button" class="btn-light" onclick="bookVisitForLead(' + Number(card.lead_id) + ')">Book visit</button>' : '') +
           (card.lead_id ? '<button type="button" class="btn-light" onclick="openPipelineLead(' + Number(card.lead_id) + ')">Open lead</button>' : '') +
           (card.lead_id ? '<button type="button" class="btn-light" onclick="quoteFromDiaryLead(' + Number(card.lead_id) + ')">Start quote</button>' : '') +
@@ -220,7 +248,7 @@ function b7LocalDate(day) {
 }
 function b7CalendarUrl(item) {
   const dates = item.starts_at.replace(/[-:]/g, '') + '00/' + item.ends_at.replace(/[-:]/g, '') + '00';
-  const title = (item.kind === 'site_visit' ? 'Plumbing site visit' : 'Plumbing job') + ' · ' + item.customer_name;
+  const title = (item.kind === 'site_visit' ? 'Site visit / quote survey' : 'Plumbing job') + ' · ' + item.customer_name;
   return 'https://calendar.google.com/calendar/render?action=TEMPLATE&ctz=Europe%2FLondon&dates=' +
     encodeURIComponent(dates) + '&text=' + encodeURIComponent(title) +
     '&details=' + encodeURIComponent('Lead #' + item.lead_id + ' · Check private Nigel Harvey Plumbing app for details.');
@@ -249,7 +277,7 @@ function renderDiary() {
       (items.length ? items.map(a => '<div class="history-item"' +
         (b7LocalDate(day) === a.starts_at.slice(0,10) ? ' id="diary_appointment_' + Number(a.id) + '"' : '') +
         '><strong>' + escapeHtml(a.customer_name) +
-        '</strong> · ' + escapeHtml(a.kind.replace('_',' ')) + ' · ' + escapeHtml(a.status) +
+        '</strong> · ' + (a.kind === 'site_visit' ? 'Site visit / quote survey' : 'Plumbing job') + ' · ' + escapeHtml(a.status) +
         '<div>' + escapeHtml(a.starts_at.replace('T',' ')) + '–' + escapeHtml(a.ends_at.replace('T',' ')) +
         ' · Lead #' + Number(a.lead_id) + '</div><div class="small">' + escapeHtml(a.notes || '') + '</div>' +
         '<button type="button" class="btn-light" onclick="editDiaryAppointment(' + Number(a.id) + ')">Update</button> ' +

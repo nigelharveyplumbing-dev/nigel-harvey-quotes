@@ -3,6 +3,7 @@
 from business.db import get_db
 from business.models import LeadRequest
 from business.growth_tracking import SOURCES, WORK_TYPES, inferred_source
+from business.work_types import validate_work_types, read_additional
 import json
 
 SOURCE_PREFIX = "website-context-v1:"
@@ -47,6 +48,7 @@ def row_to_lead(row):
         "source": source,
         "source_category": row["source_category"] or inferred_source(source, context),
         "work_type": row["work_type"] or "",
+        "additional_work_types": read_additional(row["additional_work_types"]),
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -54,12 +56,13 @@ def row_to_lead(row):
 
 
 def save_lead(data: LeadRequest, now_uk, format_dt):
+    validate_work_types(data.work_type, data.additional_work_types)
     now = now_uk()
     conn = get_db()
     conn.execute(
         """
-        INSERT INTO leads (name, phone, email, address, job_type, description, status, source, created_at, created_at_sort, updated_at, source_category, work_type)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO leads (name, phone, email, address, job_type, description, status, source, created_at, created_at_sort, updated_at, source_category, work_type, additional_work_types)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             (data.name or "").strip(),
@@ -75,6 +78,7 @@ def save_lead(data: LeadRequest, now_uk, format_dt):
             now.isoformat(),
             data.source_category if data.source_category in SOURCES else None,
             data.work_type if data.work_type in WORK_TYPES else None,
+            json.dumps(data.additional_work_types),
         ),
     )
     lead_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -119,14 +123,19 @@ def update_lead_status(lead_id: int, status: str, now_uk):
     return get_lead_by_id(lead_id)
 
 
-def classify_lead(lead_id, source_category, work_type, now_uk):
+def classify_lead(lead_id, source_category, work_type, now_uk, additional_work_types=None):
     if source_category and source_category not in SOURCES:
         raise ValueError("Invalid lead source")
     if work_type and work_type not in WORK_TYPES:
         raise ValueError("Invalid work type")
     conn = get_db()
-    cur = conn.execute("UPDATE leads SET source_category = ?, work_type = ?, updated_at = ? WHERE id = ?",
-                       (source_category or None, work_type or None, now_uk().isoformat(), lead_id))
+    existing = conn.execute("SELECT additional_work_types FROM leads WHERE id=?", (lead_id,)).fetchone()
+    if additional_work_types is None:
+        additional_work_types = read_additional(existing["additional_work_types"]) if existing else []
+        additional_work_types = [item for item in additional_work_types if item != work_type] if work_type else []
+    validate_work_types(work_type, additional_work_types)
+    cur = conn.execute("UPDATE leads SET source_category = ?, work_type = ?, additional_work_types=?, updated_at = ? WHERE id = ?",
+                       (source_category or None, work_type or None, json.dumps(additional_work_types), now_uk().isoformat(), lead_id))
     conn.commit()
     conn.close()
     return get_lead_by_id(lead_id) if cur.rowcount else None

@@ -1312,7 +1312,10 @@ def api_update_job(job_id: int, data: JobRequest):
 
 @app.post("/api/leads")
 def api_create_lead(data: LeadRequest):
-    lead = save_lead(data)
+    try:
+        lead = save_lead(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     send_lead_notification_email(lead)
     return JSONResponse(content=lead)
 
@@ -1328,7 +1331,8 @@ def api_update_lead_status(lead_id: int, data: LeadStatusRequest):
 @app.put("/api/leads/{lead_id}/classification")
 def api_classify_lead(lead_id: int, data: LeadClassificationRequest):
     try:
-        lead = lead_store.classify_lead(lead_id, data.source_category, data.work_type, now_uk)
+        lead = lead_store.classify_lead(lead_id, data.source_category, data.work_type, now_uk,
+                                        data.additional_work_types)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not lead:
@@ -5370,10 +5374,15 @@ def api_quote_learning(q: str = "", quote_type: str = ""):
 
 @app.post("/api/quote")
 def api_create_quote(data: QuoteRequest):
+    from business.work_types import validate_work_types
     if data.source_category and data.source_category not in growth_tracking.SOURCES:
         raise HTTPException(status_code=422, detail="Invalid lead source")
     if data.work_type and data.work_type not in growth_tracking.WORK_TYPES:
         raise HTTPException(status_code=422, detail="Invalid work type")
+    try:
+        validate_work_types(data.work_type, data.additional_work_types)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     request_data = data.model_dump()
     result_data = calculate_quote(data)
     try:
@@ -5386,10 +5395,15 @@ def api_create_quote(data: QuoteRequest):
 
 @app.put("/api/quotes/{quote_id}")
 def api_update_quote(quote_id: int, data: QuoteRequest):
+    from business.work_types import validate_work_types
     if data.source_category and data.source_category not in growth_tracking.SOURCES:
         raise HTTPException(status_code=422, detail="Invalid lead source")
     if data.work_type and data.work_type not in growth_tracking.WORK_TYPES:
         raise HTTPException(status_code=422, detail="Invalid work type")
+    try:
+        validate_work_types(data.work_type, data.additional_work_types)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     request_data = data.model_dump()
     result_data = calculate_quote(data)
     try:

@@ -54,9 +54,18 @@ def save_appointment(data, now, appointment_id=None):
         if not conn.execute("SELECT 1 FROM leads WHERE id = ?", (data.lead_id,)).fetchone():
             raise ValueError("Lead does not exist")
         if data.job_id:
-            job = conn.execute("SELECT lead_id FROM jobs WHERE id = ?", (data.job_id,)).fetchone()
+            job = conn.execute("SELECT lead_id, quote_id FROM jobs WHERE id = ?", (data.job_id,)).fetchone()
             if not job or job["lead_id"] != data.lead_id:
                 raise ValueError("Job must belong to this lead")
+        previous = (conn.execute("SELECT kind FROM appointments WHERE id=?", (appointment_id,)).fetchone()
+                    if appointment_id else None)
+        if data.kind == "job" and (appointment_id is None or (previous and previous["kind"] != "job")):
+            if not data.job_id:
+                raise ValueError("A plumbing job booking needs a linked won quote/job")
+            linked_quote = (conn.execute("SELECT status FROM quotes WHERE id=?", (job["quote_id"],)).fetchone()
+                            if job["quote_id"] else None)
+            if not linked_quote or linked_quote["status"] != "won":
+                raise ValueError("Book the plumbing job after its quote is won")
         timestamp = now().isoformat()
         values = (data.lead_id, data.job_id, data.kind, data.status,
                   data.starts_at, data.ends_at, data.provisional_follow_up or None,
@@ -149,7 +158,7 @@ def pipeline_report():
         quotes = [dict(x) for x in conn.execute("SELECT id,lead_id,customer_name,status,total_price FROM quotes")]
         jobs = [dict(x) for x in conn.execute("SELECT * FROM jobs")]
         invoices = [dict(x) for x in conn.execute("SELECT id,quote_id,customer_name,status,balance_due FROM invoices")]
-        visits = [dict(x) for x in conn.execute("SELECT lead_id FROM appointments WHERE kind='site_visit' AND status IN ('confirmed','provisional')")]
+        visits = [dict(x) for x in conn.execute("SELECT lead_id,status FROM appointments WHERE kind='site_visit' AND status IN ('confirmed','provisional','completed')")]
         job_bookings = {x["job_id"] for x in conn.execute("""SELECT job_id FROM appointments
             WHERE kind='job' AND status IN ('confirmed','provisional') AND job_id IS NOT NULL""")}
     finally:
@@ -159,6 +168,7 @@ def pipeline_report():
     for invoice in invoices:
         invoices_by_quote.setdefault(invoice["quote_id"], []).append(invoice)
     visited_leads = {visit["lead_id"] for visit in visits}
+    completed_visits = {visit["lead_id"] for visit in visits if visit["status"] == "completed"}
 
     def make_card(lead, related_quotes, related_jobs, name, description):
         related_invoices = [invoice for quote in related_quotes
@@ -199,7 +209,8 @@ def pipeline_report():
                 "invoice_ids": [invoice["id"] for invoice in related_invoices],
                 "name": name or "Unnamed customer", "description": description or "",
                 "source_category": lead["source_category"] if lead else "",
-                "work_type": lead["work_type"] if lead else ""}
+                "work_type": lead["work_type"] if lead else "",
+                "visit_completed": bool(lead and lead["id"] in completed_visits and not related_quotes)}
 
     for lead in leads:
         related_quotes = [quote for quote in quotes if quote["lead_id"] == lead["id"]]

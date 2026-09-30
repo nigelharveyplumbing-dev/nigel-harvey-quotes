@@ -39,6 +39,8 @@ class QuoteRequest(BaseModel):
     lead_id: int | None = None
     source_category: str = ""
     work_type: str = ""
+    additional_work_types: list[str] = Field(default_factory=list)
+    customer_email: str = ""
 
 
 
@@ -87,6 +89,7 @@ class LeadRequest(BaseModel):
     utm_term: str = ""
     source_category: str = ""
     work_type: str = ""
+    additional_work_types: list[str] = Field(default_factory=list)
 
 
 class LeadStatusRequest(BaseModel):
@@ -96,6 +99,7 @@ class LeadStatusRequest(BaseModel):
 class LeadClassificationRequest(BaseModel):
     source_category: str = ""
     work_type: str = ""
+    additional_work_types: list[str] | None = None
 
 
 class QuoteOutcomeRequest(BaseModel):
@@ -138,6 +142,7 @@ class QuickAddConfirmRequest(BaseModel):
     description: str = ""
     source_category: str = ""
     work_type: str = ""
+    additional_work_types: list[str] = Field(default_factory=list)
     visit_starts_at: str = ""
     visit_ends_at: str = ""
     visit_status: str = "confirmed"

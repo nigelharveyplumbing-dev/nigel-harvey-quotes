@@ -168,6 +168,7 @@ def init_db():
         "lead_id": "INTEGER",
         "source_category": "TEXT",
         "work_type": "TEXT",
+        "additional_work_types": "TEXT NOT NULL DEFAULT '[]'",
     }.items():
         if name not in quote_columns:
             conn.execute(f"ALTER TABLE quotes ADD COLUMN {name} {definition}")
@@ -175,6 +176,8 @@ def init_db():
     for name in ("source_category", "work_type"):
         if name not in lead_columns:
             conn.execute(f"ALTER TABLE leads ADD COLUMN {name} TEXT")
+    if "additional_work_types" not in lead_columns:
+        conn.execute("ALTER TABLE leads ADD COLUMN additional_work_types TEXT NOT NULL DEFAULT '[]'")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_quotes_lead_id ON quotes (lead_id)")
 
     # Batch 7 records are additive. An appointment may predate any quote, while
