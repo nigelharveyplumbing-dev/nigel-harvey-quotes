@@ -483,6 +483,9 @@ function findBestSavedMaterialMatch(name) {
 
 function enrichMaterialFromSavedDatabase(material) {
   if (!material || !material.name) return material;
+  // A spoken site-visit requirement is reviewed separately; never silently
+  // replace Nigel's generic requirement or his deliberate product choice.
+  if (material.site_survey_material_review) return material;
   const currentPrice = Number(material.manual_price || material.price || 0);
   const currentUrl = String(material.url || "").trim();
 
@@ -520,6 +523,96 @@ function enrichDraftMaterialsFromSavedDatabase(draft) {
   if (!draft || !Array.isArray(draft.materials)) return draft;
   draft.materials = draft.materials.map(item => enrichMaterialFromSavedDatabase(item));
   return draft;
+}
+
+function reconcileRequiredSurveyMaterials(draft) {
+  const actions = (CURRENT_SITE_SURVEY?.material_actions || [])
+    .filter(action => action.action === 'include_required' && String(action.material_name || '').trim());
+  if (!actions.length) return draft;
+  draft.materials = draft.materials || [];
+  const saved = MaterialSelection.savedRows(SAVED_MATERIAL_DB);
+  const transcript = [CURRENT_SITE_SURVEY?.transcript, CURRENT_SITE_SURVEY?.site_notes]
+    .filter(Boolean).join('\n');
+  actions.forEach(action => {
+    const requested = String(action.material_name).trim();
+    const requestedKey = canonicalMaterialName(requested);
+    let material = draft.materials.find(item => item.survey_requested_name === requested);
+    if (!material) material = draft.materials.find(item => {
+      const names = [item.original_rule_name, item.original_ai_name,
+        item.original_requested_name, item.name].filter(Boolean);
+      return names.some(name => {
+        const key = canonicalMaterialName(name);
+        return key === requestedKey || (key && requestedKey &&
+          (key.includes(requestedKey) || requestedKey.includes(key)));
+      });
+    });
+    if (!material) {
+      material = {name: requested, quantity: 1, required: true,
+        display_status: 'required', reason: action.reason || 'Required by the site visit.'};
+      draft.materials.push(material);
+    }
+    material.survey_requested_name = requested;
+    material.site_survey_material_review = true;
+    material.required = true;
+    material.display_status = 'required';
+    if (material.material_review?.manually_selected) return;
+    const review = MaterialSelection.review(requested, transcript, saved);
+    material.material_review = review;
+    const selected = review.selected;
+    material.name = selected?.name || requested;
+    material.supplier = selected?.supplier || '';
+    material.url = selected?.url || '';
+    material.manual_price = selected?.price || 0;
+    material.live_price = 0;
+    material.default_price = 0;
+    material.price = 0;
+    material.sku = '';
+    material.price_status = selected?.price_status || '';
+    material.data_source = selected ? 'saved_database_match' : 'site_survey_unpriced';
+    material.source = material.data_source;
+  });
+  return draft;
+}
+
+function chooseDraftMaterial(materialIndex, choiceIndex) {
+  const material = LAST_AI_QUOTE_DRAFT?.materials?.[Number(materialIndex)];
+  if (!material?.material_review) return;
+  const choice = material.material_review.choices[Number(choiceIndex)];
+  material.material_review.manually_selected = true;
+  material.material_review.selected = choice || null;
+  material.material_review.status = choice ? 'selected' : 'unmatched';
+  material.name = choice?.name || material.survey_requested_name;
+  material.supplier = choice?.supplier || '';
+  material.url = choice?.url || '';
+  material.manual_price = choice?.price || 0;
+  material.live_price = 0;
+  material.default_price = 0;
+  material.price = 0;
+  material.sku = '';
+  material.price_status = choice?.price_status || '';
+  material.data_source = choice ? 'saved_database_match' : 'site_survey_unpriced';
+  material.source = material.data_source;
+  renderAIQuoteDraft({draft: LAST_AI_QUOTE_DRAFT});
+}
+
+function searchDraftMaterialChoices(materialIndex, query) {
+  const material = LAST_AI_QUOTE_DRAFT?.materials?.[Number(materialIndex)];
+  if (!material?.material_review) return;
+  material.material_review.search = String(query || '');
+  const terms = material.material_review.search.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  if (!terms.length) {
+    material.material_review.choices = MaterialSelection.review(
+      material.survey_requested_name, '', SAVED_MATERIAL_DB).choices;
+  } else {
+    material.material_review.choices = MaterialSelection.savedRows(SAVED_MATERIAL_DB)
+      .filter(item => terms.every(term => String(item.name || '').toLowerCase().includes(term) ||
+        String(item.supplier || '').toLowerCase().includes(term)))
+      .slice(0, 10).map(item => ({name:item.name, supplier:item.supplier || '', url:item.url || '',
+        price:Number(item.last_live_price || item.last_price || item.last_manual_price || 0),
+        price_status:item.last_status || ''}));
+  }
+  renderAIQuoteDraft({draft: LAST_AI_QUOTE_DRAFT});
+  document.getElementById(`draftMaterialSearch${materialIndex}`)?.focus();
 }
 
 function materialAliasInfo(name) {
@@ -1059,8 +1152,11 @@ function updateMaterialLiveBadge(row) {
   const sku = row.dataset.sku || "";
   const imageUrl = row.dataset.imageUrl || "";
   if (/^https?:\/\//i.test(url)) {
+    const savedPrice = row.dataset.materialSource === 'saved_database_match';
+    const priceLabel = savedPrice && !/live/i.test(row.dataset.priceStatus || '')
+      ? 'Saved product — check current price' : 'Live priced';
     status.innerHTML = `
-      <span style="display:inline-block;padding:3px 7px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:700;">Live priced</span>
+      <span style="display:inline-block;padding:3px 7px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:700;">${priceLabel}</span>
       ${sku ? ` · SKU ${escapeHtml(sku)}` : ""}
       ${checkedAt ? ` · checked ${escapeHtml(new Date(checkedAt).toLocaleString())}` : ""}
       ${imageUrl ? ` · <a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener">product image</a>` : ""}
@@ -1167,6 +1263,8 @@ function addMaterial(prefill = null) {
   div.dataset.sku = prefill && prefill.sku ? String(prefill.sku) : "";
   div.dataset.imageUrl = prefill && prefill.image_url ? String(prefill.image_url) : "";
   div.dataset.checkedAt = prefill && prefill.checked_at ? String(prefill.checked_at) : "";
+  div.dataset.priceStatus = prefill && prefill.price_status ? String(prefill.price_status) : "";
+  div.dataset.materialSource = prefill && prefill.source ? String(prefill.source) : "";
 
   const qty = prefill && prefill.quantity ? prefill.quantity : 1;
   const manualPrice = prefill && prefill.manual_price != null
@@ -1186,11 +1284,14 @@ function addMaterial(prefill = null) {
 
     <label>Supplier</label>
     <select class="m-supplier">
+      <option value="">Select supplier</option>
       <option value="City Plumbing">City Plumbing</option>
       <option value="Screwfix">Screwfix</option>
       <option value="Toolstation">Toolstation</option>
       <option value="Topps Tiles">Topps Tiles</option>
       <option value="Selco">Selco</option>
+      ${prefill?.supplier && !['City Plumbing','Screwfix','Toolstation','Topps Tiles','Selco'].includes(prefill.supplier)
+        ? `<option value="${escapeHtml(prefill.supplier)}">${escapeHtml(prefill.supplier)}</option>` : ''}
     </select>
 
     <label>Product URL</label>
@@ -1210,7 +1311,8 @@ function addMaterial(prefill = null) {
   document.getElementById("materials").appendChild(div);
 
   if (prefill) {
-    div.querySelector(".m-supplier").value = prefill.supplier || "City Plumbing";
+    div.querySelector(".m-supplier").value = prefill.site_survey_material_review
+      ? (prefill.supplier || '') : (prefill.supplier || "City Plumbing");
   }
   updateMaterialLiveBadge(div);
   updateForgottenItemWarnings();
@@ -4378,6 +4480,7 @@ function prepareDraftForV125(draft) {
     });
   }
   draft = enrichDraftMaterialsFromSavedDatabase(draft);
+  draft = reconcileRequiredSurveyMaterials(draft);
   return draft;
 }
 
@@ -4754,6 +4857,37 @@ function renderBundleHealth(bundle) {
     </div>`;
 }
 
+function draftMaterialReviewHtml(material, index) {
+  const review = material.material_review;
+  if (!review) return '';
+  const selected = review.selected;
+  const choices = [...(review.choices || [])];
+  if (selected && !choices.some(item => item.name === selected.name && item.supplier === selected.supplier && item.url === selected.url)) {
+    choices.unshift(selected);
+  }
+  // Keep the rendered option indices in sync with the editable draft.
+  review.choices = choices;
+  const choicePrice = choice => choice.price > 0
+    ? `${/live/i.test(choice.price_status || '') ? 'Current' : 'Saved'} ${pounds(choice.price)}`
+    : 'Price to check';
+  const label = selected
+    ? `Suggested: ${escapeHtml(selected.name)} · ${escapeHtml(selected.supplier || 'Supplier to check')} · ${choicePrice(selected)}`
+    : choices.length ? 'Choose the correct saved product. No price has been applied yet.'
+      : 'No suitable saved product. Keep this generic item unpriced until you select or add the correct material.';
+  return `<div style="margin-top:8px;padding:10px;border:1px solid #d97706;border-radius:8px;background:#fffbeb;">
+    <strong>Site-visit material: ${escapeHtml(review.requested_name)}</strong><br>
+    <span class="small">${label}</span>
+    <label for="draftMaterialChoice${index}">Saved Materials Database product</label>
+    <select id="draftMaterialChoice${index}" onchange="chooseDraftMaterial(${index}, this.value)">
+      <option value="-1" ${selected ? '' : 'selected'}>Keep generic — select and price later</option>
+      ${choices.map((choice, i) => `<option value="${i}" ${selected && selected.name === choice.name && selected.supplier === choice.supplier && selected.url === choice.url ? 'selected' : ''}>${escapeHtml(choice.name)} · ${escapeHtml(choice.supplier || 'Supplier to check')} · ${choicePrice(choice)}</option>`).join('')}
+    </select>
+    <label for="draftMaterialSearch${index}">Search saved materials</label>
+    <input id="draftMaterialSearch${index}" value="${escapeHtml(review.search || '')}" placeholder="Product or supplier" oninput="searchDraftMaterialChoices(${index}, this.value)">
+    <span class="small">You can change this choice before applying the draft. The editable Materials list remains available afterward.</span>
+  </div>`;
+}
+
 function renderAIQuoteDraft(data) {
   const box = document.getElementById("aiQuoteResult");
   if (!box) return;
@@ -4902,6 +5036,7 @@ function renderAIQuoteDraft(data) {
             </tbody>
           </table>
         </div>
+        ${materials.map(draftMaterialReviewHtml).join('')}
       </div>
 
       <div style="margin-top:12px;"><strong>Materials</strong><br>
@@ -4999,10 +5134,12 @@ function applyAIQuoteDraft() {
       addMaterial({
         name: m.name || "",
         quantity: Number(m.quantity || 1),
-        supplier: m.supplier || "City Plumbing",
+        supplier: m.site_survey_material_review ? (m.supplier || '') : (m.supplier || "City Plumbing"),
+        site_survey_material_review: Boolean(m.site_survey_material_review),
         url: m.url || "",
         manual_price: Number(m.manual_price || m.live_price || m.default_price || 0),
         source: m.source || "",
+        price_status: m.price_status || '',
         price_source: m.price_source || "",
         sku: m.sku || "",
         image_url: m.image_url || "",

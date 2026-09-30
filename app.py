@@ -1220,6 +1220,7 @@ payment_config = json.dumps({
     "accountNumber": BANK_ACCOUNT_NUMBER,
 }).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 HTML = HTML.replace("__APP_PAYMENT_CONFIG__", payment_config)
+HTML = HTML.replace("__MATERIAL_SELECTION_JS__", (APP_UI_ROOT / "static" / "material_selection.js").read_text(encoding="utf-8"))
 HTML = HTML.replace("__APP_JS__", (APP_UI_ROOT / "static" / "app.js").read_text(encoding="utf-8"))
 HTML = HTML.replace("__PIPELINE_JS__", (APP_UI_ROOT / "static" / "pipeline.js").read_text(encoding="utf-8"))
 
