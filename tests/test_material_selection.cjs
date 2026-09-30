@@ -92,7 +92,54 @@ assert.equal(responsibilityDraft.materials[2].manual_price, 0);
 assert.match(responsibilityDraft.scope_of_work, /Customer supplies tap, pop-up waste/);
 assert.deepEqual(responsibilityDraft.customer_supplied_items, ['tap', 'pop-up waste']);
 
+// Labels observed in the actual staging analysis must not bypass the
+// customer-supply exclusion when a smart kit has priced the main products.
+const liveDraft = {scope_of_work:'Fit customer-supplied tap and pop-up waste.', materials:[
+  {name:'Kitchen mixer tap', manual_price:70, required:true},
+  {name:'Pop-up waste', manual_price:20, required:true},
+  {name:'Flexible tap connector', manual_price:5, required:true},
+]};
+context.CURRENT_SITE_SURVEY = {transcript:'The customer is supplying the tap and pop-up waste. I need a dual-flush valve and a tube of silicone.',
+  material_actions:[
+    {action:'customer_supplied', material_name:'Customer-supplied tap'},
+    {action:'customer_supplied', material_name:'Customer-supplied pop-up waste'},
+    {action:'include_required', material_name:'dual-flush valve'},
+    {action:'include_required', material_name:'silicone'},
+  ]};
+context.reconcileRequiredSurveyMaterials(liveDraft);
+assert.deepEqual(liveDraft.materials.map(x => x.name),
+  ['Flexible tap connector', 'dual-flush valve', 'silicone']);
+assert.deepEqual(liveDraft.customer_supplied_items, ['tap', 'pop-up waste']);
+assert.doesNotMatch(liveDraft.scope_of_work, /Customer supplies Customer-supplied/);
+
+const uncertainDraft = {materials:[{name:'Flexible Tap Connector', required:true,
+  display_status:'required', manual_price:15}]};
+context.CURRENT_SITE_SURVEY = {transcript:'Might need new flexis.', material_actions:[
+  {action:'site_check', material_name:'Flexible connector hoses'}]};
+context.reconcileRequiredSurveyMaterials(uncertainDraft);
+assert.equal(uncertainDraft.materials[0].required, false);
+assert.equal(uncertainDraft.materials[0].display_status, 'site_check');
+assert.equal(uncertainDraft.materials[0].include_in_quote, false);
+
+const quantityDraft = {materials:[]};
+context.CURRENT_SITE_SURVEY = {transcript:'I need two isolation valves.', material_actions:[
+  {action:'include_required', material_name:'isolation valve', quantity:2}]};
+context.SAVED_MATERIAL_DB = [{name:'15mm isolating valve', supplier:'Toolstation', last_price:4}];
+context.reconcileRequiredSurveyMaterials(quantityDraft);
+assert.equal(quantityDraft.materials.length, 1);
+assert.equal(quantityDraft.materials[0].quantity, 2);
+assert.equal(quantityDraft.materials[0].material_review.status, 'choose');
+assert.equal(quantityDraft.materials[0].material_review.choices[0].price, 4);
+context.SAVED_MATERIAL_DB = rows;
+
 // A single saved silicone has a clear suggestion, still changeable in review.
+context.CURRENT_SITE_SURVEY = {transcript:'The customer is supplying the tap and pop-up waste. I need a dual-flush valve and a tube of silicone.',
+  material_actions:[
+    {action:'customer_supplied', material_name:'tap'},
+    {action:'customer_supplied', material_name:'pop-up waste'},
+    {action:'include_required', material_name:'dual-flush valve'},
+    {action:'include_required', material_name:'silicone'},
+  ]};
 context.SAVED_MATERIAL_DB = [{name:'Silicone', supplier:'Toolstation', last_price:8}];
 const oneMatch = {materials:[]};
 context.reconcileRequiredSurveyMaterials(oneMatch);
@@ -123,7 +170,19 @@ assert.equal(applied[0].manual_price, 42.5);
 assert.equal(applied[0].supplier, 'City Plumbing');
 assert.equal(fields.materials_handling_percent.value, '30');
 
+// The optional site check must also stay out of the applied quote form.
+vm.runInContext(app.slice(app.indexOf('function isOptionalDraftMaterial('),
+  app.indexOf('function removeMaterialRowByIdentity(')), context);
+context.LAST_AI_QUOTE_DRAFT = uncertainDraft;
+context.CURRENT_SITE_SURVEY = {transcript:'Might need new flexis.', material_actions:[
+  {action:'site_check', material_name:'Flexible connector hoses'}]};
+const countBeforeSiteCheck = applied.length;
+context.applyAIQuoteDraft();
+assert.equal(applied.length, countBeforeSiteCheck);
+
 const noMatch = {materials:[]};
+context.CURRENT_SITE_SURVEY = {transcript:'I need a dual-flush valve.', material_actions:[
+  {action:'include_required', material_name:'dual-flush valve'}]};
 context.CURRENT_SITE_SURVEY.material_actions[0].material_name = 'macerator pump';
 context.reconcileRequiredSurveyMaterials(noMatch);
 assert.equal(noMatch.materials.length, 1);

@@ -3983,6 +3983,10 @@ def material_name_matches(name: str, aliases: list):
     return any(
         canonical_material_name(alias) in canonical
         or canonical in canonical_material_name(alias)
+        or ("flex" in canonical and "connector" in canonical
+            and re.search(r"\bflexis?\b|\bflexible connector hoses?\b", str(alias), re.I))
+        or ("isolation valve" in canonical or "isolating valve" in canonical)
+           and bool(re.search(r"\bisolation valves?\b", str(alias), re.I))
         for alias in aliases
         if alias
     )
@@ -3990,6 +3994,8 @@ def material_name_matches(name: str, aliases: list):
 
 def site_survey_supplied_item_matches(name: str, requested: str):
     """Match a supplied main item without swallowing separately supplied fittings."""
+    name = re.sub(r"^customer[- ]supplied\s+", "", str(name), flags=re.I)
+    requested = re.sub(r"^customer[- ]supplied\s+", "", str(requested), flags=re.I)
     requested_words = set(re.findall(r"[a-z0-9]+", requested.lower()))
     name_words = set(re.findall(r"[a-z0-9]+", name.lower()))
     if not requested_words or not requested_words <= name_words:
@@ -4003,16 +4009,25 @@ def explicit_site_survey_supply_actions(transcript: str):
     actions = []
     patterns = (
         (r"\b(?:the\s+)?customer\s+(?:is\s+)?(?:supplying|providing|supplies|will\s+supply)\s+([^.!?;\n]+)", "customer_supplied"),
-        (r"\bI\s+(?:also\s+)?need\s+((?:a\s+|an\s+|the\s+)[^.!?;\n]+)", "include_required"),
+        (r"\bI\s+(?:also\s+)?need\s+((?:a\s+|an\s+|the\s+|one\s+|two\s+|three\s+|\d+\s+)[^.!?;\n]+)", "include_required"),
+        (r"\bmight\s+need\s+([^.!?;\n]+)", "site_check"),
     )
     for pattern, action in patterns:
         for match in re.finditer(pattern, transcript or "", flags=re.I):
             for part in re.split(r"\s+and\s+|,\s*", match.group(1)):
                 name = re.sub(r"^(?:the|an|a)\s+", "", part.strip(), flags=re.I)
+                count = re.match(r"^(one|two|three|\d+)\s+", name, flags=re.I)
+                quantity = {"one": 1, "two": 2, "three": 3}.get(count.group(1).lower(),
+                           int(count.group(1)) if count and count.group(1).isdigit() else 1) if count else 1
+                if count:
+                    name = name[count.end():]
+                    if quantity > 1 and name.endswith("s"):
+                        name = name[:-1]
+                name = re.sub(r"^new\s+", "", name, flags=re.I)
                 name = re.sub(r"^tube\s+of\s+", "", name, flags=re.I).strip()
                 if not name or len(name.split()) > 7:
                     continue
-                actions.append({"material_name": name, "action": action,
+                actions.append({"material_name": name, "action": action, "quantity": quantity,
                                 "reason": "Nigel stated who supplies this item in the walkthrough.",
                                 "confidence": 99})
     return actions
@@ -4022,11 +4037,13 @@ def reconcile_site_survey_supply_actions(result: dict, transcript: str):
     explicit = explicit_site_survey_supply_actions(transcript)
     actions = list(result.get("material_actions", []) or [])
     for spoken in explicit:
-        actions = [item for item in actions if not
-                   site_survey_supplied_item_matches(item.get("material_name", ""), spoken["material_name"])]
+        actions = [item for item in actions if not (
+            site_survey_supplied_item_matches(item.get("material_name", ""), spoken["material_name"])
+            or material_name_matches(item.get("material_name", ""), [spoken["material_name"]]))]
         actions.append(spoken)
     result["material_actions"] = actions
-    customer_items = [item["material_name"] for item in actions
+    customer_items = [re.sub(r"^customer[- ]supplied\s+", "", item["material_name"], flags=re.I)
+                      for item in actions
                       if item.get("action") == "customer_supplied"]
     if customer_items:
         supplied = "Customer supplies " + ", ".join(customer_items) + "."
@@ -4561,7 +4578,8 @@ def apply_site_survey_to_draft(draft: dict, context: dict):
     actions = survey.get("material_actions", []) or []
     applied = []
 
-    supplied = [action.get("material_name", "") for action in actions
+    supplied = [re.sub(r"^customer[- ]supplied\s+", "", action.get("material_name", ""), flags=re.I)
+                for action in actions
                 if action.get("action") == "customer_supplied" and action.get("material_name")]
     if supplied:
         draft["materials"] = [item for item in draft.get("materials", []) or []
@@ -4594,9 +4612,13 @@ def apply_site_survey_to_draft(draft: dict, context: dict):
             if quote_action == "include_required":
                 item["required"] = True
                 item["display_status"] = "required"
+                if int(action.get("quantity", 1) or 1) > 1:
+                    item["quantity"] = int(action["quantity"])
             else:
                 item["required"] = False
                 item["display_status"] = "optional"
+                item["include_in_quote"] = False
+                item["optional_selected"] = False
 
             applied.append({
                 "material_name": item.get("name", name),

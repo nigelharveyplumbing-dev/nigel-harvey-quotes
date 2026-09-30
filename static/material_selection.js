@@ -3,7 +3,8 @@
 const MaterialSelection = (() => {
   const words = value => String(value || '').toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean)
-    .map(word => word.endsWith('s') && word.length > 4 ? word.slice(0, -1) : word);
+    .map(word => word.endsWith('s') && word.length > 4 ? word.slice(0, -1) : word)
+    .map(word => word === 'isolating' ? 'isolation' : word);
   const normal = value => words(value).join(' ');
   const price = row => Number(row.last_live_price || row.last_price ||
     row.last_manual_price || row.default_price || 0) || 0;

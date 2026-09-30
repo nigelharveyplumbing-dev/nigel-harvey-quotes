@@ -528,9 +528,10 @@ function enrichDraftMaterialsFromSavedDatabase(draft) {
 function reconcileRequiredSurveyMaterials(draft) {
   const customerActions = (CURRENT_SITE_SURVEY?.material_actions || [])
     .filter(action => action.action === 'customer_supplied' && String(action.material_name || '').trim());
+  const suppliedName = name => String(name || '').replace(/^customer[- ]supplied\s+/i, '').trim();
   const suppliedMatch = (materialName, requested) => {
     const words = value => new Set(String(value || '').toLowerCase().match(/[a-z0-9]+/g) || []);
-    const product = words(materialName), supplied = words(requested);
+    const product = words(suppliedName(materialName)), supplied = words(suppliedName(requested));
     if (!supplied.size || ![...supplied].every(word => product.has(word))) return false;
     return !['connector', 'tail', 'washer', 'seal', 'pipe', 'kit', 'trap']
       .some(word => product.has(word) && !supplied.has(word));
@@ -539,13 +540,34 @@ function reconcileRequiredSurveyMaterials(draft) {
     draft.materials = (draft.materials || []).filter(material => !customerActions.some(action =>
       [material.name, material.original_ai_name, material.original_rule_name]
         .filter(Boolean).some(name => suppliedMatch(name, action.material_name))));
-    draft.customer_supplied_items = customerActions.map(action => action.material_name);
+    draft.customer_supplied_items = customerActions.map(action => suppliedName(action.material_name));
     const scope = String(draft.scope_of_work || '');
     if (!(/\bcustomer\b.{0,35}\b(?:suppl|provid)/i.test(scope) &&
       draft.customer_supplied_items.every(name => scope.toLowerCase().includes(name.toLowerCase())))) {
       draft.scope_of_work = `${String(draft.scope_of_work || '').trim()} Customer supplies ${draft.customer_supplied_items.join(', ')}.`.trim();
     }
   }
+  // A site check must not be turned into a chargeable item by a kit, history,
+  // or AI draft. Nigel may explicitly opt it in after inspecting the work.
+  const optionalActions = (CURRENT_SITE_SURVEY?.material_actions || [])
+    .filter(action => ['site_check', 'keep_optional'].includes(action.action));
+  const siteCheckMatch = (product, requested) => {
+    const a = canonicalMaterialName(product), b = canonicalMaterialName(requested);
+    if (a && b && (a.includes(b) || b.includes(a))) return true;
+    return /\bflex(?:i|is|ible)\b/.test(a) && /\bconnector\b/.test(a) &&
+      /\bflex(?:i|is|ible)\b/.test(b);
+  };
+  (draft.materials || []).forEach(material => {
+    if (optionalActions.some(action => [material.name, material.original_ai_name,
+      material.original_rule_name].filter(Boolean).some(name =>
+        siteCheckMatch(name, action.material_name)))) {
+      material.required = false;
+      material.display_status = 'site_check';
+      material.site_survey_action = 'site_check';
+      material.include_in_quote = false;
+      material.optional_selected = false;
+    }
+  });
   const actions = (CURRENT_SITE_SURVEY?.material_actions || [])
     .filter(action => action.action === 'include_required' && String(action.material_name || '').trim() &&
       !customerActions.some(customer => suppliedMatch(action.material_name, customer.material_name)));
@@ -568,7 +590,7 @@ function reconcileRequiredSurveyMaterials(draft) {
       });
     });
     if (!material) {
-      material = {name: requested, quantity: 1, required: true,
+      material = {name: requested, quantity: Number(action.quantity || 1), required: true,
         display_status: 'required', reason: action.reason || 'Required by the site visit.'};
       draft.materials.push(material);
     }
@@ -576,6 +598,7 @@ function reconcileRequiredSurveyMaterials(draft) {
     material.site_survey_material_review = true;
     material.required = true;
     material.display_status = 'required';
+    if (Number(action.quantity || 1) > 1) material.quantity = Number(action.quantity);
     if (material.material_review?.manually_selected) return;
     const review = MaterialSelection.review(requested, transcript, saved);
     material.material_review = review;
