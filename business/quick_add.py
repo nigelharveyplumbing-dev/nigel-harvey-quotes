@@ -17,7 +17,7 @@ POSTCODE = re.compile(r"\b(?:GIR\s?0AA|[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2})\b", re
 EXPLICIT_DATE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(20\d{2})\s+(?:at\s+)?(\d{1,2}):(\d{2})\b", re.I)
 NAME = re.compile(r"(?im)^\s*(?:name|from)\s*:\s*([^\n,]{2,80})\s*$")
 SIGNOFF = re.compile(
-    r"(?:^|\n)\s*(?i:best regards|regards|thanks)\s*,?\s*"
+    r"(?:^|[\r\n]|[.!?][ \t]+)\s*(?i:best regards|regards|thanks)\s*,?\s*"
     r"([A-Z][A-Za-z'’-]*(?:\s+[A-Z][A-Za-z'’-]*){1,3})\s*\Z")
 ADDRESS = re.compile(r"(?im)\b(?:(?:our|my|the)\s+)?address\s*(?::|is\b)\s*([^\r\n]{3,180})")
 STREET = re.compile(

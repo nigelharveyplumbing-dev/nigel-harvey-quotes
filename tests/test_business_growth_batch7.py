@@ -69,6 +69,32 @@ class Batch7Tests(unittest.TestCase):
                           "Hi Nigel, could we discuss some work soon? Regards, John Ashby"):
             self.assertEqual(preview(uncertain)["suggested_work_types"], [])
 
+    def test_inline_sentence_signoff_requires_a_credible_closing(self):
+        from business.quick_add import preview
+
+        exact_iphone_message = ("Hi Nigel, can you replace our kitchen tap and also have a look at the "
+            "toilet as the flush isn't working properly. Our address is 17 Carroll Avenue, "
+            "Guildford, Surrey, GU1 2QJ. Best regards, John Ashby")
+        result = preview(exact_iphone_message)
+        self.assertEqual(result["name"], "John Ashby")
+        self.assertEqual(result["address"], "17 Carroll Avenue, Guildford, Surrey, GU1 2QJ")
+        self.assertEqual(result["suggested_work_types"], ["Tap", "Toilet / cistern"])
+        self.assertEqual(result["description"], exact_iphone_message)
+        self.assertTrue(result["needs_review"])
+
+        for closing in (". Best regards, John Ashby", ". Best regards John Ashby",
+                        ". Regards, John Ashby", ". Thanks, John Ashby",
+                        "! Thanks John Ashby", "? Regards John Ashby",
+                        "\nBest regards, John Ashby", "\nRegards,\nJohn Ashby"):
+            with self.subTest(closing=closing):
+                self.assertEqual(preview("Please call me" + closing)["name"], "John Ashby")
+        for ordinary in ("Hi Nigel, thanks for your help.",
+                         "Hi Nigel, could you replace a tap? Thanks for looking into it.",
+                         "I told Nigel: best regards, John Ashby",
+                         "Hi Nigel, our address is 17 Carroll Avenue. Thanks for your time"):
+            with self.subTest(ordinary=ordinary):
+                self.assertEqual(preview(ordinary)["name"], "")
+
     def test_primary_additional_types_survive_visit_quote_and_reporting_without_double_count(self):
         user, password = secrets.token_urlsafe(12), secrets.token_urlsafe(18)
         with disposable_app(user, password) as (module, _):
@@ -313,6 +339,11 @@ run().catch(e=>{console.error(e);process.exitCode=1});
                            "description": preview["description"], "source_category": "Referral",
                            "work_type": "Tap", "visit_starts_at": preview["visit_starts_at"],
                            "visit_ends_at": preview["visit_ends_at"]}
+                unidentified = {**payload, "idempotency_key": secrets.token_urlsafe(22),
+                                "name": "", "phone": "", "email": ""}
+                self.assertEqual(client.post("/api/quick-add/confirm", json=unidentified,
+                                             headers=auth).status_code, 422)
+                self.assertEqual(module.database_counts()["leads"], 0)
                 self.assertEqual(client.post("/api/quick-add/confirm", json=payload).status_code, 401)
                 created = client.post("/api/quick-add/confirm", json=payload, headers=auth)
                 self.assertEqual(created.status_code, 200, created.text)
