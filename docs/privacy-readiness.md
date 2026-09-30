@@ -16,13 +16,15 @@ This is a staged implementation record, **not a certification of UK GDPR complia
 
 ## Owner facts and decisions needed before publication
 
-1. Confirm whether the plumbing business is registered with the ICO or complete [the ICO fee self-assessment](https://ico.org.uk/fee-checker). Record the result; no application or payment was made here.
+Nigel confirmed on 30 September 2026 that he is **not currently registered with the ICO**, does **not routinely delete customer photos or recordings after jobs**, and that customers still use invoice links sent by WhatsApp. Do not infer which particular phone/cloud/WhatsApp storage services hold those files or whether an exemption applies.
+
+1. Complete [the ICO fee self-assessment](https://ico.org.uk/fee-checker) with Nigel's actual business facts. Record the result; no application or payment was made here. An answer of “not registered” does not establish whether a fee is due.
 2. Set a retention schedule for unanswered/unconverted enquiries, completed jobs, quotes, invoices, job photos, recordings/transcripts, and backups. The app currently has **no age-based deletion**. Do not promise automatic erasure in a notice without implementing and testing it. Tax/accounting obligations and disputes may warrant different periods.
 3. Confirm the actual email service and any other systems where customer conversations or photos are retained (phone, WhatsApp, cloud photo storage, bookkeeping, accounting, payment processor). Confirm who else has access.
 4. Review Render, Google, OpenAI, email and WhatsApp provider terms/data-processing arrangements and relevant international transfers. The app's configured integrations do not prove legal transfer safeguards.
 5. Agree how customers are told about recording a visit and using AI processing of site-survey images/audio. Avoid recording other people or private household information unless needed.
 6. Confirm a business contact route for privacy requests. The public draft currently lists the existing business email/phone only and deliberately omits a residential street address.
-7. Agree the production cutover for old numbered invoice and quote links. Those links would cease to work anonymously under the staged fix. Reissue new token links to customers with live outstanding documents before cutover. Avoid enabling the legacy numbered links publicly just for convenience.
+7. **Confirmed active customer dependency:** invoice links previously sent by WhatsApp still need to open. The proposed production cutover would make those old numbered links require staff login. Identify all outstanding shared links, send the corresponding new token links to those customers before cutover, and agree the timing with Nigel. Do not deploy this security change to production or disable old links until this reissue plan has been reviewed and performed. Avoid enabling the legacy numbered links publicly just for convenience.
 
 ## Operational checks and procedures
 
