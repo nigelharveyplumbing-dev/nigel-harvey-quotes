@@ -14,7 +14,25 @@ EMAIL = re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b")
 POSTCODE = re.compile(r"\b(?:GIR\s?0AA|[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2})\b", re.I)
 EXPLICIT_DATE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(20\d{2})\s+(?:at\s+)?(\d{1,2}):(\d{2})\b", re.I)
 NAME = re.compile(r"(?im)^\s*(?:name|from)\s*:\s*([^\n,]{2,80})\s*$")
-ADDRESS = re.compile(r"(?im)^\s*address\s*:\s*([^\n]{3,180})\s*$")
+SIGNOFF = re.compile(
+    r"(?:^|\n)\s*(?i:best regards|regards|thanks)\s*,?\s*"
+    r"([A-Z][A-Za-z'’-]*(?:\s+[A-Z][A-Za-z'’-]*){1,3})\s*\Z")
+ADDRESS = re.compile(r"(?im)\b(?:(?:our|my|the)\s+)?address\s*(?::|is\b)\s*([^\r\n]{3,180})")
+STREET = re.compile(
+    r"(?im)^\s*(\d{1,4}[A-Za-z]?\s+[^\r\n]{3,160}\b(?:Road|Rd|Street|St|Avenue|Ave|"
+    r"Lane|Ln|Close|Drive|Way|Crescent|Place|Terrace|Gardens|Court|Hill|Rise|Mews)\b"
+    r"[^\r\n]*\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2})\s*$")
+
+
+def suggested_address(message):
+    match = ADDRESS.search(message) or STREET.search(message)
+    if not match:
+        return ""
+    address = match[1].strip(" ,.;")
+    postcode = POSTCODE.search(address)
+    if not postcode and not re.match(r"^(?:\d+[A-Za-z]?\b|flat\s+\d+\b)", address, re.I):
+        return ""
+    return (address[:postcode.end()] if postcode else address).strip(" ,.;")
 
 
 def preview(message):
@@ -24,8 +42,7 @@ def preview(message):
     phone = PHONE.search(message)
     email = EMAIL.search(message)
     postcode = POSTCODE.search(message)
-    name = NAME.search(message)
-    address = ADDRESS.search(message)
+    name = NAME.search(message) or SIGNOFF.search(message)
     explicit = EXPLICIT_DATE.search(message)
     starts_at = ends_at = ""
     if explicit:
@@ -37,7 +54,7 @@ def preview(message):
         except ValueError:
             pass
     return {"name": name[1].strip() if name else "", "phone": phone[0].strip() if phone else "",
-            "email": email[0] if email else "", "address": address[1].strip() if address else "",
+            "email": email[0] if email else "", "address": suggested_address(message),
             "postcode": postcode[0].upper().replace(" ", "") if postcode else "",
             "description": message, "visit_starts_at": starts_at, "visit_ends_at": ends_at,
             "needs_review": True,

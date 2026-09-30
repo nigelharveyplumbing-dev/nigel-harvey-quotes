@@ -32,6 +32,10 @@ explicitly approves production promotion.
 
 Paste a message into the private app, request a conservative preview, correct
 name/phone/address/job/source/work type and optionally confirm a site visit.
+Common address wording and signed customer names can be suggested, but uncertain
+fields remain blank. After save, a persistent panel links directly to the lead,
+visit booking or booked Diary visit, and the linked quote builder. A booked
+visit's Calendar action remains a separate reviewable draft in its Diary card.
 Only explicit full UK dates with a time are suggested. When a confirmed name
 and phone/address identify a customer, the confirmation links an existing
 customer or creates one before a quote exists. It writes the customer, lead
@@ -47,6 +51,8 @@ There is **no automatic two-way Google Calendar sync or conflict check**:
 the deployed app has no authorised Google Calendar OAuth integration. This
 prevents silent external calendar writes or inferred availability. Full sync
 would need a separate account authorisation and safe token/storage design.
+Booksy/unified external availability is benched as a future idea; Batch 7 has
+no Booksy connection, import or availability check.
 The safe follow-up path is to obtain Nigel's explicit Calendar account
 authorisation and exact calendar choice, use minimum read/write permissions,
 store revocable tokens securely outside source control, attach Calendar event

@@ -349,6 +349,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
           <button type="button" class="btn-blue" id="quickSave" onclick="saveQuickLead()">Confirm and save lead</button>
         </div>
       </details>
+      <section id="quickNext" class="quote-box hidden" role="status" aria-live="polite" style="margin:14px 0;"></section>
       <div class="lead-filter-row">
         <input id="leadSearch" placeholder="Search leads by name, phone, email, address or job" oninput="loadLeads()">
         <select id="leadStatusFilter" onchange="loadLeads()">

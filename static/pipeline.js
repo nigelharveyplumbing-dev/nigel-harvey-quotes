@@ -32,6 +32,7 @@ function b7Post(url, data, method) {
 async function previewQuickLead() {
   try {
     const data = await b7Post('/api/quick-add/preview', {message:b7Value('quickMessage')});
+    document.getElementById('quickNext').classList.add('hidden');
     b7QuickKey = crypto.randomUUID();
     ['Name','Phone','Email','Description'].forEach(key => {
       document.getElementById('quick' + key).value = data[key.toLowerCase()] || '';
@@ -46,6 +47,7 @@ async function previewQuickLead() {
     document.getElementById('quickProvisionalFollow').classList.add('hidden');
     document.getElementById('quickHint').innerText = data.hint;
     document.getElementById('quickPreview').classList.remove('hidden');
+    document.getElementById('quickPreview').scrollIntoView({behavior:'smooth', block:'start'});
   } catch (error) { alert(error.message); }
 }
 
@@ -68,10 +70,42 @@ async function saveQuickLead() {
     document.getElementById('quickPreview').classList.add('hidden');
     document.getElementById('quickMessage').value = '';
     await loadLeads();
+    showQuickNextActions(result);
     showNotice((result.already_created ? 'Existing lead returned' : 'Lead saved') +
       ' #' + result.lead.id + (result.appointment_id ? ' with site visit' : '') + '.');
   } catch (error) { alert(error.message); }
   finally { button.disabled = false; }
+}
+
+function showQuickNextActions(result) {
+  const leadId = Number(result.lead.id);
+  const visitId = Number(result.appointment_id) || 0;
+  const box = document.getElementById('quickNext');
+  box.innerHTML = '<strong>Lead #' + leadId + ' saved' +
+    (result.lead.name ? ' · ' + escapeHtml(result.lead.name) : '') + '</strong>' +
+    '<p class="small">' + (visitId ?
+      'Site visit booked. Open it in Diary to review the time and use Add to Google Calendar for a draft you can check before saving.' :
+      'Next, book a site visit or start a quote when ready. No appointment or quote was created.') + '</p>' +
+    '<div class="history-actions quick-next-actions">' +
+    '<button type="button" class="btn-light" onclick="openPipelineLead(' + leadId + ')">Open Lead</button>' +
+    (visitId ? '<button type="button" class="btn-blue" onclick="openQuickVisit(' + visitId + ')">View Visit in Diary</button>' :
+      '<button type="button" class="btn-blue" onclick="bookVisitForLead(' + leadId + ')">Book Site Visit</button>') +
+    '<button type="button" class="btn-light" onclick="quoteFromDiaryLead(' + leadId + ')">Start Quote</button></div>';
+  box.classList.remove('hidden');
+  box.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+async function openQuickVisit(appointmentId) {
+  showTab('diaryTab');
+  await loadDiary();
+  const visit = b7Appointments.find(a => a.id === appointmentId);
+  if (!visit) return;
+  const monday = day => new Date(day.getFullYear(), day.getMonth(),
+    day.getDate() - ((day.getDay() + 6) % 7));
+  const date = new Date(visit.starts_at.slice(0,10) + 'T12:00:00');
+  b7WeekOffset = Math.round((monday(date) - monday(new Date())) / 86400000);
+  renderDiary();
+  document.getElementById('diary_appointment_' + appointmentId)?.scrollIntoView({behavior:'smooth', block:'center'});
 }
 
 async function loadPipeline() {
@@ -177,6 +211,7 @@ async function quoteFromDiaryLead(leadId) {
     return;
   }
   startQuoteFromLead(leadId);
+  document.getElementById('quotesTab').scrollIntoView({behavior:'smooth', block:'start'});
 }
 function shiftDiary(days) { b7WeekOffset += days; renderDiary(); }
 function b7LocalDate(day) {
@@ -211,7 +246,9 @@ function renderDiary() {
       a.starts_at < end && a.ends_at > start);
     return '<section class="diary-day"><h3>' + escapeHtml(day.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'short'})) +
       (b7LocalDate(day) === b7LocalDate(new Date()) ? ' · Today' : '') + '</h3>' +
-      (items.length ? items.map(a => '<div class="history-item"><strong>' + escapeHtml(a.customer_name) +
+      (items.length ? items.map(a => '<div class="history-item"' +
+        (b7LocalDate(day) === a.starts_at.slice(0,10) ? ' id="diary_appointment_' + Number(a.id) + '"' : '') +
+        '><strong>' + escapeHtml(a.customer_name) +
         '</strong> · ' + escapeHtml(a.kind.replace('_',' ')) + ' · ' + escapeHtml(a.status) +
         '<div>' + escapeHtml(a.starts_at.replace('T',' ')) + '–' + escapeHtml(a.ends_at.replace('T',' ')) +
         ' · Lead #' + Number(a.lead_id) + '</div><div class="small">' + escapeHtml(a.notes || '') + '</div>' +

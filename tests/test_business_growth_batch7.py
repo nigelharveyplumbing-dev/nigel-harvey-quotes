@@ -2,9 +2,12 @@
 
 import base64
 import secrets
+import shutil
 import sqlite3
+import subprocess
 import unittest
 from datetime import datetime
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from local_browser_server import disposable_app
@@ -16,6 +19,102 @@ def authorization(user, password):
 
 
 class Batch7Tests(unittest.TestCase):
+    def test_quick_add_recognises_address_and_signed_name_only_with_clear_evidence(self):
+        from business.quick_add import preview
+
+        example = ("Hi Nigel, regarding our conversation our address is "
+                   "17 Carroll Avenue, Guildford, Surrey, GU1 2QJ\nBest regards John Ashby")
+        address = "17 Carroll Avenue, Guildford, Surrey, GU1 2QJ"
+        for message in (example,
+                        "My address is " + address + "\nBest regards,\nJohn Ashby",
+                        "The address is " + address + "\nRegards John Ashby",
+                        "Address is " + address + "\nRegards,\nJohn Ashby",
+                        "Address: " + address + "\nThanks John Ashby",
+                        address + "\nThanks,\nJohn Ashby"):
+            with self.subTest(message=message):
+                result = preview(message)
+                self.assertEqual(result["name"], "John Ashby")
+                self.assertEqual(result["address"], address)
+                self.assertEqual(result["postcode"], "GU12QJ")
+                self.assertEqual(result["description"], message)
+                self.assertTrue(result["needs_review"])
+        for message in ("Hi Nigel, my tap is leaking. Thanks for your help",
+                        "Hi Nigel\nThe address is near Guildford\nRegards,\nPlease call me",
+                        "I discussed 17 taps with Nigel. Best regards to your team"):
+            with self.subTest(uncertain=message):
+                result = preview(message)
+                self.assertEqual(result["name"], "")
+                self.assertEqual(result["address"], "")
+        result = preview("Hi Nigel\nName: John Ashby\nAddress: 17 Carroll Avenue\n"
+                         "Call 07595 725547 or email john@example.com")
+        self.assertEqual(result["name"], "John Ashby")
+        self.assertEqual(result["address"], "17 Carroll Avenue")
+        self.assertEqual(result["phone"], "07595 725547")
+        self.assertEqual(result["email"], "john@example.com")
+
+    @unittest.skipUnless(shutil.which("node"), "Node is required for Quick Add browser workflow")
+    def test_quick_add_save_exposes_lead_visit_quote_actions_and_diary_location(self):
+        source = Path(__file__).resolve().parents[1]
+        script = r'''
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const nodes = new Map(), tabs = [], notices = [];
+function node(id) {
+  if (!nodes.has(id)) {
+    const classes = new Set(['hidden']);
+    nodes.set(id, {value:'', innerHTML:'', classList:{add:c=>classes.add(c),
+      remove:c=>classes.delete(c), contains:c=>classes.has(c)},
+      scrollIntoView(){this.scrolled=true}});
+  }
+  return nodes.get(id);
+}
+const context = {document:{getElementById:node}, crypto:{randomUUID:()=> 'a'.repeat(32)},
+  escapeHtml:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;'),
+  loadLeads:async()=>{}, showTab:id=>tabs.push(id), showNotice:s=>notices.push(s),
+  alert:s=>{throw Error(s)}};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+async function run() {
+  vm.runInContext("b7QuickKey = 'a'.repeat(32)", context);
+  context.b7Post = async()=>({lead:{id:42,name:'John Ashby'},appointment_id:7});
+  node('quickName').value='John Ashby'; node('quickDescription').value='Original message';
+  await vm.runInContext('saveQuickLead()', context);
+  const next=node('quickNext');
+  assert.equal(next.classList.contains('hidden'),false);
+  assert.equal(next.scrolled,true);
+  assert.match(next.innerHTML,/Open Lead/);
+  assert.match(next.innerHTML,/View Visit in Diary/);
+  assert.match(next.innerHTML,/Start Quote/);
+  assert.match(next.innerHTML,/Google Calendar.*draft/);
+  assert.doesNotMatch(next.innerHTML,/Book Site Visit/);
+  assert.equal(node('quickMessage').value,'');
+  assert.equal(notices.length,1);
+  vm.runInContext("b7Appointments = [{id:7,starts_at:'2026-10-02T10:00'}]",context);
+  context.loadDiary=async()=>{}; context.renderDiary=()=>{};
+  await vm.runInContext('openQuickVisit(7)',context);
+  assert.equal(tabs.at(-1),'diaryTab');
+  assert.equal(node('diary_appointment_7').scrolled,true);
+  context.SAVED_LEADS=[{id:42}];
+  context.startQuoteFromLead=id=>{context.quotedLead=id};
+  await vm.runInContext('quoteFromDiaryLead(42)',context);
+  assert.equal(context.quotedLead,42);
+  assert.equal(node('quotesTab').scrolled,true);
+  vm.runInContext("showQuickNextActions({lead:{id:43,name:'Jane Smith'}})",context);
+  assert.match(next.innerHTML,/Book Site Visit/);
+  assert.match(next.innerHTML,/Start Quote/);
+  assert.doesNotMatch(next.innerHTML,/View Visit in Diary/);
+}
+run().catch(e=>{console.error(e); process.exitCode=1});
+'''
+        result = subprocess.run(["node", "-e", script, str(source / "static" / "pipeline.js")],
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with disposable_app("quickadd-user", "quickadd-pass") as (module, _):
+            with TestClient(module.app) as client:
+                page = client.get("/app", headers=authorization("quickadd-user", "quickadd-pass"))
+                self.assertIn('id="quickNext"', page.text)
+
     def test_quick_add_preview_is_conservative_and_confirm_is_atomic_idempotent(self):
         user, password = secrets.token_urlsafe(12), secrets.token_urlsafe(18)
         with disposable_app(user, password) as (module, _):
