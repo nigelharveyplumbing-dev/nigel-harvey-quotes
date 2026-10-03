@@ -1,0 +1,5 @@
+# Standalone Step 4 lab only. Never used by production requirements.
+-r requirements-voice-test.txt
+websockets==16.0
+espeakng-loader==0.2.4
+# Local audio fixture synthesis also requires the ffmpeg executable.

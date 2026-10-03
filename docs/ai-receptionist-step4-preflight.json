@@ -1,0 +1,283 @@
+{
+  "status": "prepared_no_live_requests",
+  "synthetic_only": true,
+  "plan": {
+    "models": [
+      "gpt-realtime-2.1-mini",
+      "gpt-realtime-2.1"
+    ],
+    "synthetic_cases": 14,
+    "planned_trials": 28,
+    "planned_paid_responses": 60,
+    "max_output_tokens_per_response": 768,
+    "trials": [
+      {
+        "case": "normal",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0562996"
+      },
+      {
+        "case": "normal",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.196728"
+      },
+      {
+        "case": "talk-over",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.331572"
+      },
+      {
+        "case": "talk-over",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0951006"
+      },
+      {
+        "case": "uk-name",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0561996"
+      },
+      {
+        "case": "uk-name",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.196408"
+      },
+      {
+        "case": "surrey-postcode",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.194552"
+      },
+      {
+        "case": "surrey-postcode",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0556196"
+      },
+      {
+        "case": "international-phone",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0558996"
+      },
+      {
+        "case": "international-phone",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.195448"
+      },
+      {
+        "case": "incomplete",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.192248"
+      },
+      {
+        "case": "incomplete",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0548996"
+      },
+      {
+        "case": "returning-style",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0561996"
+      },
+      {
+        "case": "returning-style",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.196408"
+      },
+      {
+        "case": "uncontrolled-leak",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.194680"
+      },
+      {
+        "case": "uncontrolled-leak",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0556596"
+      },
+      {
+        "case": "water-electrics",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0548596"
+      },
+      {
+        "case": "water-electrics",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.192120"
+      },
+      {
+        "case": "gas-smell",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.189944"
+      },
+      {
+        "case": "gas-smell",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0541796"
+      },
+      {
+        "case": "co-alarm",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0546996"
+      },
+      {
+        "case": "co-alarm",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.191608"
+      },
+      {
+        "case": "appointment-preference",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.195064"
+      },
+      {
+        "case": "appointment-preference",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0557796"
+      },
+      {
+        "case": "corrected-phone",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0959006"
+      },
+      {
+        "case": "corrected-phone",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.334132"
+      },
+      {
+        "case": "unsafe-request",
+        "model": "gpt-realtime-2.1",
+        "reservation_bound_usd": "0.192184"
+      },
+      {
+        "case": "unsafe-request",
+        "model": "gpt-realtime-2.1-mini",
+        "reservation_bound_usd": "0.0548796"
+      }
+    ],
+    "planning_bound_gbp": "4.811590500",
+    "planning_bound_usd": "3.8492724",
+    "working_limit_gbp": "4.85",
+    "user_limit_gbp": "5.00",
+    "rate_date": "2026-10-03",
+    "planning_conversion": "\u00a31.25 per USD including a conservative VAT/fee loading; not a quoted exchange rate"
+  },
+  "caller_audio": {
+    "synthetic_only": true,
+    "generator": "local eSpeak NG en-gb-x-rp, 175 wpm; espeakng-loader 0.2.4",
+    "limitation": "Robotic synthetic caller audio; not evidence of performance across human UK accents.",
+    "files": [
+      {
+        "filename": "normal-1.wav",
+        "sha256": "06654d6bfdc3ece37a173119845f9eeaa800d2a59c0823d6297ad738dc2971e2",
+        "seconds": 13.601375,
+        "script_sha256": "460eec7b4fcafeee15a09d9279f866e8c556a45bbfe4e035124ab2deaabf12f1"
+      },
+      {
+        "filename": "talk-over-1.wav",
+        "sha256": "b132355ea9cb703394b44f135dc67a0724898f298194f91381f0069c63a613c5",
+        "seconds": 1.2408333333333332,
+        "script_sha256": "74e5ae9f9b1d35f69d020cf388508e96d5d51de3759679de766ec56275d2e6cd"
+      },
+      {
+        "filename": "talk-over-2.wav",
+        "sha256": "9b8f847d5fddbbe319457b290de2edd103f76989f704b08549c4135e6218d090",
+        "seconds": 10.1435,
+        "script_sha256": "243ea5f75759e0e351c6dd2989d8d3438485615b35a9084be4c1b4b8fd7a2c8f"
+      },
+      {
+        "filename": "uk-name-1.wav",
+        "sha256": "9fe473aec6cdab1299900add22e25a781ef44e82f2251e27935bd13f30b1c055",
+        "seconds": 13.186541666666667,
+        "script_sha256": "e29afcbbd082ead5e85a3edd6d671aca8ca65153600be7b6c916f10642fb54af"
+      },
+      {
+        "filename": "surrey-postcode-1.wav",
+        "sha256": "561df37ca091980ccbff98cef1ea9a2596a8ec65d41fc69089b04644ca793f95",
+        "seconds": 10.263583333333333,
+        "script_sha256": "8417f3bb977395de96b27172c4f1cb6db3854181d4e98f6055facd515670edd2"
+      },
+      {
+        "filename": "international-phone-1.wav",
+        "sha256": "3a7edbac5cd10251bb5c5d6c7ee8df3e8335ccc25b044fdfc7bcc409aa727771",
+        "seconds": 11.654791666666666,
+        "script_sha256": "ad2b0905e7b977f64b02cffe135140192d4bb451824b44bd4fa656c0b2a557cc"
+      },
+      {
+        "filename": "incomplete-1.wav",
+        "sha256": "2479f466dd5f323350ba5c59dea736833c34fcca1f0bf6edf72d926683e198ad",
+        "seconds": 6.656791666666667,
+        "script_sha256": "afacd2b5b07e099563dbf3c44812e7ce25dd1ca93bff3ab084905ac82bc4c3f1"
+      },
+      {
+        "filename": "returning-style-1.wav",
+        "sha256": "4ae38d949a4414918c5add244adc2e56621369be3ac9f7c0d1d628170b78c139",
+        "seconds": 13.189375,
+        "script_sha256": "472a8a8fde4c89bf66405d575002fa82be0094cf65baad6b156a61087636f232"
+      },
+      {
+        "filename": "uncontrolled-leak-1.wav",
+        "sha256": "55009151d797a74796c61c1d90a313b4faa0ec620658f961e021376a2916a440",
+        "seconds": 10.453625,
+        "script_sha256": "7b79810d271ef6d3412a79b829a24bc96a8c9373d406339d6fc068f8bc804a69"
+      },
+      {
+        "filename": "water-electrics-1.wav",
+        "sha256": "0855d97efdf3ca2981b9ee4727b7d5e36c4d13d18099eea5e5020a21e4effdfc",
+        "seconds": 6.488583333333334,
+        "script_sha256": "063f8bdb09b8f9e3edd1d70f0d94a49a5d281b5f59e48a609dba1923d06d3e57"
+      },
+      {
+        "filename": "gas-smell-1.wav",
+        "sha256": "be61f362dd8ae824742aa833c70defcb8d63334e695d66441acf6b4251563293",
+        "seconds": 3.0727083333333334,
+        "script_sha256": "edeaa56eec2c833f1150b59e2ce9b7fe9fc51aa50fade2e946c9157a5c39b2e8"
+      },
+      {
+        "filename": "co-alarm-1.wav",
+        "sha256": "6da0e2e87a8a5c3dac9a2ba6a2f361acf6aba254352ab21866ddd223feab6f88",
+        "seconds": 5.6814583333333335,
+        "script_sha256": "f0b780e92f1a73ea82545c6f479056f37d0580d7534e0cf29d748e73f5e9dbc0"
+      },
+      {
+        "filename": "appointment-preference-1.wav",
+        "sha256": "5577bf1388fc445f81da0205f7ad364622c9f806310c6c53c17bcde3a3e850fd",
+        "seconds": 11.077083333333333,
+        "script_sha256": "4d94aaab16c75c9dde718d6375f5a86d93fc8b3571edafb411c46ef9032a4260"
+      },
+      {
+        "filename": "corrected-phone-1.wav",
+        "sha256": "36a745795ca390d6145ca3bc4a1cac08c65bbbf578887676f5cca84c5bde46f6",
+        "seconds": 8.216666666666667,
+        "script_sha256": "a9214c5d4e274a7b623366424e2ee9ae0dfd901b378021016a7f1708bf691695"
+      },
+      {
+        "filename": "corrected-phone-2.wav",
+        "sha256": "15732f4f3bbd935ced31f0d93c2d6bd13cc98dacc5eb60049abc8d99b7aa211e",
+        "seconds": 3.6342916666666665,
+        "script_sha256": "a835d4bc7b4f987e79642802aa4bc88acd8857ebf51c536195b249131906e15a"
+      },
+      {
+        "filename": "unsafe-request-1.wav",
+        "sha256": "1450af79e50f4f747923664b20db8da6d36008661eebc2b7dbc5cd61aa027ea8",
+        "seconds": 6.5075,
+        "script_sha256": "1a78ca1d0804ffa1e285d68c53578ada60ecb6d506844dd58c18ae1356568f08"
+      }
+    ]
+  },
+  "results": [],
+  "comparison": {
+    "status": "not_measured",
+    "recommendation": null,
+    "reason": "No completed live API trials; offline checks are not model measurements."
+  },
+  "paid_api_requests_this_run": 0,
+  "production_changes": false,
+  "limitations": [
+    "One robotic caller voice; no claim of human accent coverage.",
+    "Virtual playback; no measurement of browser speaker or microphone latency.",
+    "Keyword screens require listening and semantic safety review.",
+    "No live app, database, telephony, messages or booking tools are connected."
+  ],
+  "ledger_planning_gbp": "0.00",
+  "live_blockers": [
+    "Secure OpenAI API credentials are not configured"
+  ]
+}
