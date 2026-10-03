@@ -73,7 +73,8 @@ def block_external_connections():
 @contextmanager
 def disposable_app(username: str, password: str,
                    public_base_url: str = "", environment: str = "",
-                   bank_settings: dict | None = None):
+                   bank_settings: dict | None = None,
+                   voice_settings: dict | None = None):
     if not username or not password:
         raise ValueError("Test-only Basic Auth credentials are required")
     with tempfile.TemporaryDirectory(prefix="stage6-local-") as temporary:
@@ -116,7 +117,16 @@ def disposable_app(username: str, password: str,
             "BANK_SORT_CODE": "00-00-00",
             "BANK_ACCOUNT_NUMBER": "00000000",
             "SHOW_BANK_DETAILS_ON_QUOTES": "0",
+            "VOICE_ENABLED": "0",
+            "VOICE_WEBHOOK_SECRET": "",
+            "VOICE_ENCRYPTION_KEY": "",
+            "VOICE_SANDBOX_ROOT": str(root),
         }
+        if voice_settings is not None:
+            allowed = {"VOICE_ENABLED", "VOICE_WEBHOOK_SECRET", "VOICE_ENCRYPTION_KEY"}
+            if not set(voice_settings).issubset(allowed):
+                raise ValueError("Unsupported synthetic voice test setting")
+            overrides.update(voice_settings)
         if bank_settings is not None:
             for key in ("BANK_NAME", "BANK_ACCOUNT_NAME", "BANK_SORT_CODE",
                         "BANK_ACCOUNT_NUMBER"):
@@ -145,7 +155,17 @@ def disposable_app(username: str, password: str,
                       if route.path not in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
                       for method in getattr(route, "methods", [])]
             expected = [tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())]
-            if len(routes) != len(set(routes)) or set(routes) != set(expected) or len(routes) != 80:
+            if voice_settings and voice_settings.get("VOICE_ENABLED") == "1":
+                expected += [
+                    ("POST", "/integrations/voice/v1/enquiries"),
+                    ("GET", "/api/voice/calls"),
+                    ("GET", "/api/voice/calls/{call_id}"),
+                    ("DELETE", "/api/voice/calls/{call_id}/transcript"),
+                    ("POST", "/api/voice/maintenance/expire"),
+                    ("GET", "/api/voice/notifications"),
+                    ("POST", "/api/voice/notifications/{notification_id}/retry"),
+                ]
+            if len(routes) != len(set(routes)) or set(routes) != set(expected):
                 raise RuntimeError("Route inventory changed")
             yield module, root
         finally:

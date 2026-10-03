@@ -1,0 +1,2 @@
+# Private synthetic foundation only; no voice provider SDKs.
+-r requirements-test.txt

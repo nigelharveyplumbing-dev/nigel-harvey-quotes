@@ -221,6 +221,11 @@ def init_db():
     conn.commit()
     conn.close()
 
+    from business.voice_security import enabled
+    if enabled():
+        from business.voice_store import init_voice_schema
+        init_voice_schema()
+
 
 def database_counts():
     conn = get_db()

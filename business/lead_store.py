@@ -201,6 +201,8 @@ def delete_lead_by_id(lead_id: int, confirmed_site_visits: int | None = None):
         conn.execute("DELETE FROM appointments WHERE lead_id=? AND kind='site_visit' AND job_id IS NULL",
                      (lead_id,))
         customer_id = conn.execute("SELECT customer_id FROM leads WHERE id=?", (lead_id,)).fetchone()[0]
+        from business.voice_store import redact_lead_calls
+        redact_lead_calls(conn, lead_id)
         conn.execute("DELETE FROM leads WHERE id=?", (lead_id,))
         if info["customer_contact_will_be_deleted"]:
             conn.execute("DELETE FROM customers WHERE id=?", (customer_id,))

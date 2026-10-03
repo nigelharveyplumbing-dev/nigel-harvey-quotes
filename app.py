@@ -122,6 +122,11 @@ def is_cross_site_write(request: Request):
 
 @app.middleware("http")
 async def protect_app_routes(request: Request, call_next):
+    # Only this exact machine route bypasses staff Basic Auth. Its own HMAC
+    # guard is mandatory; it is registered only in an isolated simulation app.
+    from business.voice_security import enabled, INTAKE_PATH
+    if enabled() and request.method == "POST" and request.url.path == INTAKE_PATH:
+        return await call_next(request)
     if not is_staging_environment() and is_public_route(request):
         return await call_next(request)
     if not check_basic_auth(request):
@@ -5769,3 +5774,15 @@ def api_customer_history(customer_id: int):
     if not history:
         raise HTTPException(status_code=404, detail="Customer not found")
     return history
+
+
+# Disabled by default. Registration fails closed if someone tries to enable
+# this private synthetic foundation in production or against live storage.
+from business.voice_security import enabled as voice_enabled
+if voice_enabled():
+    from business.voice_security import settings as voice_settings
+    voice_settings()
+    from business.voice_api import router as voice_router
+    # Keep the route inventory flat, as required by this app's auth audit.
+    # APIRoutes already carry their validation and response configuration.
+    app.router.routes.extend(voice_router.routes)

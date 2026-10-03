@@ -1,0 +1,1100 @@
+{
+  "synthetic_only": true,
+  "extractor": "annotated scripted fixtures; no AI API or audio",
+  "scenarios": [
+    {
+      "name": "normal",
+      "conversation": [
+        [
+          "Receptionist",
+          "Hello, I'm the AI receptionist for Nigel Harvey Plumbing. This private test uses fictional details. I'll take an enquiry for Nigel."
+        ],
+        [
+          "Caller",
+          "I'm Alex Example, on 07700 900123. My kitchen tap drips at 1 Example Lane, TE1 1ST. Tuesday afternoon would suit; I can send a photo."
+        ],
+        [
+          "Receptionist",
+          "I've noted the details for Nigel to review. Any preferred time is a request; no appointment has been booked."
+        ]
+      ],
+      "event_results": [
+        {
+          "id": 1,
+          "lead_id": 1,
+          "result": "created"
+        }
+      ],
+      "call": {
+        "id": 1,
+        "root_call_id": "sim-normal",
+        "lead_id": 1,
+        "sequence": 1,
+        "outcome": "completed",
+        "urgency": "routine",
+        "transfer_requested": 0,
+        "content": {
+          "facts": {
+            "name": "Alex Example",
+            "name_confirmed": true,
+            "callback_phone": "07700 900123",
+            "callback_confirmed": true,
+            "address": "1 Example Lane",
+            "postcode": "TE1 1ST",
+            "description": "Dripping kitchen tap",
+            "additional_details": "",
+            "appointment_preference": "Tuesday afternoon",
+            "appointment_confirmed": false,
+            "photos_useful": true,
+            "urgency": "routine",
+            "urgency_reason": "",
+            "summary": "Alex Example; Dripping kitchen tap; 1 Example Lane; TE1 1ST; Preferred: Tuesday afternoon; Priority: routine"
+          },
+          "normalised_phone": "+447700900123",
+          "presented_phone": "",
+          "normalised_presented_phone": null,
+          "customer_match": "matched",
+          "guidance": "",
+          "notice_version": "synthetic-notice-v1",
+          "prompt_version": "offline-policy-v1",
+          "model_version": "scripted-extractor-v1",
+          "leg_id": "",
+          "review_required": true,
+          "synthetic": true
+        }
+      },
+      "lead": {
+        "id": 1,
+        "customer_id": 1,
+        "name": "Alex Example",
+        "phone": "07700 900123",
+        "email": "",
+        "address": "1 Example Lane",
+        "job_type": "small",
+        "description": "Dripping kitchen tap\nPreferred appointment (not booked): Tuesday afternoon",
+        "status": "new",
+        "source": "phone/AI",
+        "source_category": "Other",
+        "work_type": "",
+        "additional_work_types": [],
+        "created_at": "2026-10-03T21:05:45.583036+00:00",
+        "updated_at": "2026-10-03T21:05:45.583036+00:00",
+        "postcode": "TE1 1ST",
+        "urgency": "routine"
+      },
+      "transcript_retention_days": 30,
+      "call_content_retention_days": 90
+    },
+    {
+      "name": "incomplete-no-details",
+      "conversation": [
+        [
+          "Receptionist",
+          "Hello, I'm the AI receptionist for Nigel Harvey Plumbing. This private test uses fictional details. I'll take an enquiry for Nigel."
+        ],
+        [
+          "Caller",
+          "Hello?"
+        ],
+        [
+          "Receptionist",
+          "What plumbing work or problem would you like Nigel to help with?"
+        ]
+      ],
+      "event_results": [
+        {
+          "id": 2,
+          "lead_id": null,
+          "result": "created"
+        },
+        {
+          "id": 2,
+          "lead_id": null,
+          "result": "updated"
+        }
+      ],
+      "call": {
+        "id": 2,
+        "root_call_id": "sim-incomplete-no-details",
+        "lead_id": null,
+        "sequence": 2,
+        "outcome": "incomplete",
+        "urgency": "routine",
+        "transfer_requested": 0,
+        "content": {
+          "facts": {
+            "name": "",
+            "name_confirmed": false,
+            "callback_phone": "",
+            "callback_confirmed": false,
+            "address": "",
+            "postcode": "",
+            "description": "",
+            "additional_details": "",
+            "appointment_preference": "",
+            "appointment_confirmed": false,
+            "photos_useful": null,
+            "urgency": "routine",
+            "urgency_reason": "",
+            "summary": "Priority: routine"
+          },
+          "normalised_phone": null,
+          "presented_phone": "",
+          "normalised_presented_phone": null,
+          "customer_match": "unconfirmed",
+          "guidance": "",
+          "notice_version": "synthetic-notice-v1",
+          "prompt_version": "offline-policy-v1",
+          "model_version": "scripted-extractor-v1",
+          "leg_id": "",
+          "review_required": true,
+          "synthetic": true
+        }
+      },
+      "lead": null,
+      "transcript_retention_days": 30,
+      "call_content_retention_days": 90
+    },
+    {
+      "name": "incomplete-enquiry",
+      "conversation": [
+        [
+          "Receptionist",
+          "Hello, I'm the AI receptionist for Nigel Harvey Plumbing. This private test uses fictional details. I'll take an enquiry for Nigel."
+        ],
+        [
+          "Caller",
+          "My toilet keeps running. I'm Sam Sample, on 07700 900124."
+        ],
+        [
+          "Receptionist",
+          "What is the address of the work, please?"
+        ]
+      ],
+      "event_results": [
+        {
+          "id": 3,
+          "lead_id": 2,
+          "result": "created"
+        },
+        {
+          "id": 3,
+          "lead_id": 2,
+          "result": "updated"
+        }
+      ],
+      "call": {
+        "id": 3,
+        "root_call_id": "sim-incomplete-enquiry",
+        "lead_id": 2,
+        "sequence": 2,
+        "outcome": "incomplete",
+        "urgency": "routine",
+        "transfer_requested": 0,
+        "content": {
+          "facts": {
+            "name": "Sam Sample",
+            "name_confirmed": true,
+            "callback_phone": "07700 900124",
+            "callback_confirmed": true,
+            "address": "",
+            "postcode": "",
+            "description": "Toilet keeps running",
+            "additional_details": "",
+            "appointment_preference": "",
+            "appointment_confirmed": false,
+            "photos_useful": null,
+            "urgency": "routine",
+            "urgency_reason": "",
+            "summary": "Sam Sample; Toilet keeps running; Priority: routine"
+          },
+          "normalised_phone": "+447700900124",
+          "presented_phone": "",
+          "normalised_presented_phone": null,
+          "customer_match": "new",
+          "guidance": "",
+          "notice_version": "synthetic-notice-v1",
+          "prompt_version": "offline-policy-v1",
+          "model_version": "scripted-extractor-v1",
+          "leg_id": "",
+          "review_required": true,
+          "synthetic": true
+        }
+      },
+      "lead": {
+        "id": 2,
+        "customer_id": null,
+        "name": "Sam Sample",
+        "phone": "07700 900124",
+        "email": "",
+        "address": "",
+        "job_type": "small",
+        "description": "Toilet keeps running",
+        "status": "new",
+        "source": "phone/AI",
+        "source_category": "Other",
+        "work_type": "",
+        "additional_work_types": [],
+        "created_at": "2026-10-03T21:05:45.619245+00:00",
+        "updated_at": "2026-10-03T21:05:45.623872+00:00",
+        "postcode": "",
+        "urgency": "routine"
+      },
+      "transcript_retention_days": 30,
+      "call_content_retention_days": 90
+    },
+    {
+      "name": "returning-customer",
+      "conversation": [
+        [
+          "Receptionist",
+          "Hello, I'm the AI receptionist for Nigel Harvey Plumbing. This private test uses fictional details. I'll take an enquiry for Nigel."
+        ],
+        [
+          "Caller",
+          "Alex Example again. Best number is +44 7700 900123. Please replace a radiator valve at 1 Example Lane, TE1 1ST."
+        ],
+        [
+          "Receptionist",
+          "I've noted the details for Nigel to review. Any preferred time is a request; no appointment has been booked."
+        ]
+      ],
+      "event_results": [
+        {
+          "id": 4,
+          "lead_id": 3,
+          "result": "created"
+        }
+      ],
+      "call": {
+        "id": 4,
+        "root_call_id": "sim-returning-customer",
+        "lead_id": 3,
+        "sequence": 1,
+        "outcome": "completed",
+        "urgency": "routine",
+        "transfer_requested": 0,
+        "content": {
+          "facts": {
+            "name": "Alex Example",
+            "name_confirmed": true,
+            "callback_phone": "+44 7700 900123",
+            "callback_confirmed": true,
+            "address": "1 Example Lane",
+            "postcode": "TE1 1ST",
+            "description": "Replace radiator valve",
+            "additional_details": "",
+            "appointment_preference": "",
+            "appointment_confirmed": false,
+            "photos_useful": null,
+            "urgency": "routine",
+            "urgency_reason": "",
+            "summary": "Alex Example; Replace radiator valve; 1 Example Lane; TE1 1ST; Priority: routine"
+          },
+          "normalised_phone": "+447700900123",
+          "presented_phone": "",
+          "normalised_presented_phone": null,
+          "customer_match": "matched",
+          "guidance": "",
+          "notice_version": "synthetic-notice-v1",
+          "prompt_version": "offline-policy-v1",
+          "model_version": "scripted-extractor-v1",
+          "leg_id": "",
+          "review_required": true,
+          "synthetic": true
+        }
+      },
+      "lead": {
+        "id": 3,
+        "customer_id": 1,
+        "name": "Alex Example",
+        "phone": "+44 7700 900123",
+        "email": "",
+        "address": "1 Example Lane",
+        "job_type": "small",
+        "description": "Replace radiator valve",
+        "status": "new",
+        "source": "phone/AI",
+        "source_category": "Other",
+        "work_type": "",
+        "additional_work_types": [],
+        "created_at": "2026-10-03T21:05:45.628840+00:00",
+        "updated_at": "2026-10-03T21:05:45.628840+00:00",
+        "postcode": "TE1 1ST",
+        "urgency": "routine"
+      },
+      "transcript_retention_days": 30,
+      "call_content_retention_days": 90
+    },
+    {
+      "name": "uncontrolled-water",
+      "conversation": [
+        [
+          "Receptionist",
+          "Hello, I'm the AI receptionist for Nigel Harvey Plumbing. This private test uses fictional details. I'll take an enquiry for Nigel."
+        ],
+        [
+          "Caller",
+          "I'm Alex Example at 1 Example Lane, TE1 1ST, on 07700 900123. There is a burst pipe and uncontrolled water flooding the kitchen."
+        ],
+        [
+          "Receptionist",
+          "If you know where the water stop tap is and can reach it safely, turn off the water. Keep away from damaged ceilings. I'll flag this as urgent for Nigel; a response is not guaranteed."
+        ],
+        [
+          "Receptionist",
+          "I've noted the details for Nigel to review. Any preferred time is a request; no appointment has been booked."
+        ]
+      ],
+      "event_results": [
+        {
+          "id": 5,
+          "lead_id": 4,
+          "result": "created"
+        }
+      ],
+      "call": {
+        "id": 5,
+        "root_call_id": "sim-uncontrolled-water",
+        "lead_id": 4,
+        "sequence": 1,
+        "outcome": "completed",
+        "urgency": "urgent",
+        "transfer_requested": 1,
+        "content": {
+          "facts": {
+            "name": "Alex Example",
+            "name_confirmed": true,
+            "callback_phone": "07700 900123",
+            "callback_confirmed": true,
+            "address": "1 Example Lane",
+            "postcode": "TE1 1ST",
+            "description": "Burst pipe; uncontrolled water flooding the kitchen",
+            "additional_details": "",
+            "appointment_preference": "",
+            "appointment_confirmed": false,
+            "photos_useful": null,
+            "urgency": "urgent",
+            "urgency_reason": "",
+            "summary": "Alex Example; Burst pipe; uncontrolled water flooding the kitchen; 1 Example Lane; TE1 1ST; Priority: urgent"
+          },
+          "normalised_phone": "+447700900123",
+          "presented_phone": "",
+          "normalised_presented_phone": null,
+          "customer_match": "matched",
+          "guidance": "If you know where the water stop tap is and can reach it safely, turn off the water. Keep away from damaged ceilings. I'll flag this as urgent for Nigel; a response is not guaranteed.",
+          "notice_version": "synthetic-notice-v1",
+          "prompt_version": "offline-policy-v1",
+          "model_version": "scripted-extractor-v1",
+          "leg_id": "",
+          "review_required": true,
+          "synthetic": true
+        }
+      },
+      "lead": {
+        "id": 4,
+        "customer_id": 1,
+        "name": "Alex Example",
+        "phone": "07700 900123",
+        "email": "",
+        "address": "1 Example Lane",
+        "job_type": "small",
+        "description": "Burst pipe; uncontrolled water flooding the kitchen",
+        "status": "new",
+        "source": "phone/AI",
+        "source_category": "Other",
+        "work_type": "",
+        "additional_work_types": [],
+        "created_at": "2026-10-03T21:05:45.632816+00:00",
+        "updated_at": "2026-10-03T21:05:45.632816+00:00",
+        "postcode": "TE1 1ST",
+        "urgency": "urgent"
+      },
+      "transcript_retention_days": 30,
+      "call_content_retention_days": 90
+    },
+    {
+      "name": "water-near-electrics",
+      "conversation": [
+        [
+          "Receptionist",
+          "Hello, I'm the AI receptionist for Nigel Harvey Plumbing. This private test uses fictional details. I'll take an enquiry for Nigel."
+        ],
+        [
+          "Caller",
+          "Alex Example, 07700 900123, 1 Example Lane, TE1 1ST. Water is leaking through the ceiling onto a light fitting."
+        ],
+        [
+          "Receptionist",
+          "Keep away from the water and affected electrics. Do not touch switches or equipment while standing in water. Switch off the supply only if you can do so safely without approaching the danger. If there is immediate danger, call 999. I'll flag this for Nigel; a response is not guaranteed."
+        ],
+        [
+          "Receptionist",
+          "I've noted the details for Nigel to review. Any preferred time is a request; no appointment has been booked."
+        ]
+      ],
+      "event_results": [
+        {
+          "id": 6,
+          "lead_id": 5,
+          "result": "created"
+        }
+      ],
+      "call": {
+        "id": 6,
+        "root_call_id": "sim-water-near-electrics",
+        "lead_id": 5,
+        "sequence": 1,
+        "outcome": "completed",
+        "urgency": "electrical_water",
+        "transfer_requested": 1,
+        "content": {
+          "facts": {
+            "name": "Alex Example",
+            "name_confirmed": true,
+            "callback_phone": "07700 900123",
+            "callback_confirmed": true,
+            "address": "1 Example Lane",
+            "postcode": "TE1 1ST",
+            "description": "Water leaking through ceiling onto light fitting",
+            "additional_details": "",
+            "appointment_preference": "",
+            "appointment_confirmed": false,
+            "photos_useful": null,
+            "urgency": "electrical_water",
+            "urgency_reason": "",
+            "summary": "Alex Example; Water leaking through ceiling onto light fitting; 1 Example Lane; TE1 1ST; Priority: electrical_water"
+          },
+          "normalised_phone": "+447700900123",
+          "presented_phone": "",
+          "normalised_presented_phone": null,
+          "customer_match": "matched",
+          "guidance": "Keep away from the water and affected electrics. Do not touch switches or equipment while standing in water. Switch off the supply only if you can do so safely without approaching the danger. If there is immediate danger, call 999. I'll flag this for Nigel; a response is not guaranteed.",
+          "notice_version": "synthetic-notice-v1",
+          "prompt_version": "offline-policy-v1",
+          "model_version": "scripted-extractor-v1",
+          "leg_id": "",
+          "review_required": true,
+          "synthetic": true
+        }
+      },
+      "lead": {
+        "id": 5,
+        "customer_id": 1,
+        "name": "Alex Example",
+        "phone": "07700 900123",
+        "email": "",
+        "address": "1 Example Lane",
+        "job_type": "small",
+        "description": "Water leaking through ceiling onto light fitting",
+        "status": "new",
+        "source": "phone/AI",
+        "source_category": "Other",
+        "work_type": "",
+        "additional_work_types": [],
+        "created_at": "2026-10-03T21:05:45.637685+00:00",
+        "updated_at": "2026-10-03T21:05:45.637685+00:00",
+        "postcode": "TE1 1ST",
+        "urgency": "electrical_water"
+      },
+      "transcript_retention_days": 30,
+      "call_content_retention_days": 90
+    },
+    {
+      "name": "gas-emergency",
+      "conversation": [
+        [
+          "Receptionist",
+          "Hello, I'm the AI receptionist for Nigel Harvey Plumbing. This private test uses fictional details. I'll take an enquiry for Nigel."
+        ],
+        [
+          "Caller",
+          "I smell gas in the kitchen."
+        ],
+        [
+          "Receptionist",
+          "Please leave the affected area for fresh air and call the National Gas Emergency Service on 0800 111 999 from a safe place. Do not operate electrical switches or use flames. If anyone is seriously unwell or there is immediate danger, call 999. Do not wait for Nigel."
+        ]
+      ],
+      "event_results": [
+        {
+          "id": 7,
+          "lead_id": 6,
+          "result": "created"
+        }
+      ],
+      "call": {
+        "id": 7,
+        "root_call_id": "sim-gas-emergency",
+        "lead_id": 6,
+        "sequence": 1,
+        "outcome": "emergency_redirect",
+        "urgency": "gas_co",
+        "transfer_requested": 0,
+        "content": {
+          "facts": {
+            "name": "",
+            "name_confirmed": false,
+            "callback_phone": "",
+            "callback_confirmed": false,
+            "address": "",
+            "postcode": "",
+            "description": "Smell gas in kitchen",
+            "additional_details": "",
+            "appointment_preference": "",
+            "appointment_confirmed": false,
+            "photos_useful": null,
+            "urgency": "gas_co",
+            "urgency_reason": "",
+            "summary": "Smell gas in kitchen; Priority: gas_co"
+          },
+          "normalised_phone": null,
+          "presented_phone": "",
+          "normalised_presented_phone": null,
+          "customer_match": "unconfirmed",
+          "guidance": "Please leave the affected area for fresh air and call the National Gas Emergency Service on 0800 111 999 from a safe place. Do not operate electrical switches or use flames. If anyone is seriously unwell or there is immediate danger, call 999. Do not wait for Nigel.",
+          "notice_version": "synthetic-notice-v1",
+          "prompt_version": "offline-policy-v1",
+          "model_version": "scripted-extractor-v1",
+          "leg_id": "",
+          "review_required": true,
+          "synthetic": true
+        }
+      },
+      "lead": {
+        "id": 6,
+        "customer_id": null,
+        "name": "",
+        "phone": "",
+        "email": "",
+        "address": "",
+        "job_type": "small",
+        "description": "Smell gas in kitchen",
+        "status": "new",
+        "source": "phone/AI",
+        "source_category": "Other",
+        "work_type": "",
+        "additional_work_types": [],
+        "created_at": "2026-10-03T21:05:45.642831+00:00",
+        "updated_at": "2026-10-03T21:05:45.642831+00:00",
+        "postcode": "",
+        "urgency": "gas_co"
+      },
+      "transcript_retention_days": 30,
+      "call_content_retention_days": 90
+    },
+    {
+      "name": "co-emergency",
+      "conversation": [
+        [
+          "Receptionist",
+          "Hello, I'm the AI receptionist for Nigel Harvey Plumbing. This private test uses fictional details. I'll take an enquiry for Nigel."
+        ],
+        [
+          "Caller",
+          "Our carbon monoxide alarm is sounding and someone feels seriously unwell."
+        ],
+        [
+          "Receptionist",
+          "Please leave the affected area for fresh air and call the National Gas Emergency Service on 0800 111 999 from a safe place. Do not operate electrical switches or use flames. If anyone is seriously unwell or there is immediate danger, call 999. Do not wait for Nigel."
+        ]
+      ],
+      "event_results": [
+        {
+          "id": 8,
+          "lead_id": 7,
+          "result": "created"
+        }
+      ],
+      "call": {
+        "id": 8,
+        "root_call_id": "sim-co-emergency",
+        "lead_id": 7,
+        "sequence": 1,
+        "outcome": "emergency_redirect",
+        "urgency": "gas_co",
+        "transfer_requested": 0,
+        "content": {
+          "facts": {
+            "name": "",
+            "name_confirmed": false,
+            "callback_phone": "",
+            "callback_confirmed": false,
+            "address": "",
+            "postcode": "",
+            "description": "Carbon monoxide alarm sounding; occupant feels seriously unwell",
+            "additional_details": "",
+            "appointment_preference": "",
+            "appointment_confirmed": false,
+            "photos_useful": null,
+            "urgency": "gas_co",
+            "urgency_reason": "",
+            "summary": "Carbon monoxide alarm sounding; occupant feels seriously unwell; Priority: gas_co"
+          },
+          "normalised_phone": null,
+          "presented_phone": "",
+          "normalised_presented_phone": null,
+          "customer_match": "unconfirmed",
+          "guidance": "Please leave the affected area for fresh air and call the National Gas Emergency Service on 0800 111 999 from a safe place. Do not operate electrical switches or use flames. If anyone is seriously unwell or there is immediate danger, call 999. Do not wait for Nigel.",
+          "notice_version": "synthetic-notice-v1",
+          "prompt_version": "offline-policy-v1",
+          "model_version": "scripted-extractor-v1",
+          "leg_id": "",
+          "review_required": true,
+          "synthetic": true
+        }
+      },
+      "lead": {
+        "id": 7,
+        "customer_id": null,
+        "name": "",
+        "phone": "",
+        "email": "",
+        "address": "",
+        "job_type": "small",
+        "description": "Carbon monoxide alarm sounding; occupant feels seriously unwell",
+        "status": "new",
+        "source": "phone/AI",
+        "source_category": "Other",
+        "work_type": "",
+        "additional_work_types": [],
+        "created_at": "2026-10-03T21:05:45.647309+00:00",
+        "updated_at": "2026-10-03T21:05:45.647309+00:00",
+        "postcode": "",
+        "urgency": "gas_co"
+      },
+      "transcript_retention_days": 30,
+      "call_content_retention_days": 90
+    },
+    {
+      "name": "appointment-preference",
+      "conversation": [
+        [
+          "Receptionist",
+          "Hello, I'm the AI receptionist for Nigel Harvey Plumbing. This private test uses fictional details. I'll take an enquiry for Nigel."
+        ],
+        [
+          "Caller",
+          "I'm Alex Example, 07700 900123, 1 Example Lane, TE1 1ST. Can you fit an outside tap tomorrow after 4?"
+        ],
+        [
+          "Receptionist",
+          "I've noted the details for Nigel to review. Any preferred time is a request; no appointment has been booked."
+        ]
+      ],
+      "event_results": [
+        {
+          "id": 9,
+          "lead_id": 8,
+          "result": "created"
+        }
+      ],
+      "call": {
+        "id": 9,
+        "root_call_id": "sim-appointment-preference",
+        "lead_id": 8,
+        "sequence": 1,
+        "outcome": "completed",
+        "urgency": "routine",
+        "transfer_requested": 0,
+        "content": {
+          "facts": {
+            "name": "Alex Example",
+            "name_confirmed": true,
+            "callback_phone": "07700 900123",
+            "callback_confirmed": true,
+            "address": "1 Example Lane",
+            "postcode": "TE1 1ST",
+            "description": "Fit outside tap",
+            "additional_details": "",
+            "appointment_preference": "Tomorrow after 4 (date and AM/PM not confirmed)",
+            "appointment_confirmed": false,
+            "photos_useful": null,
+            "urgency": "routine",
+            "urgency_reason": "",
+            "summary": "Alex Example; Fit outside tap; 1 Example Lane; TE1 1ST; Preferred: Tomorrow after 4 (date and AM/PM not confirmed); Priority: routine"
+          },
+          "normalised_phone": "+447700900123",
+          "presented_phone": "",
+          "normalised_presented_phone": null,
+          "customer_match": "matched",
+          "guidance": "",
+          "notice_version": "synthetic-notice-v1",
+          "prompt_version": "offline-policy-v1",
+          "model_version": "scripted-extractor-v1",
+          "leg_id": "",
+          "review_required": true,
+          "synthetic": true
+        }
+      },
+      "lead": {
+        "id": 8,
+        "customer_id": 1,
+        "name": "Alex Example",
+        "phone": "07700 900123",
+        "email": "",
+        "address": "1 Example Lane",
+        "job_type": "small",
+        "description": "Fit outside tap\nPreferred appointment (not booked): Tomorrow after 4 (date and AM/PM not confirmed)",
+        "status": "new",
+        "source": "phone/AI",
+        "source_category": "Other",
+        "work_type": "",
+        "additional_work_types": [],
+        "created_at": "2026-10-03T21:05:45.651749+00:00",
+        "updated_at": "2026-10-03T21:05:45.651749+00:00",
+        "postcode": "TE1 1ST",
+        "urgency": "routine"
+      },
+      "transcript_retention_days": 30,
+      "call_content_retention_days": 90
+    },
+    {
+      "name": "details-over-several-turns",
+      "conversation": [
+        [
+          "Receptionist",
+          "Hello, I'm the AI receptionist for Nigel Harvey Plumbing. This private test uses fictional details. I'll take an enquiry for Nigel."
+        ],
+        [
+          "Caller",
+          "My toilet needs repairing."
+        ],
+        [
+          "Receptionist",
+          "What name should I put on the enquiry?"
+        ],
+        [
+          "Caller",
+          "I'm Jo Fiction."
+        ],
+        [
+          "Receptionist",
+          "What is the best number for Nigel to call you back on?"
+        ],
+        [
+          "Caller",
+          "07700 900125 is my callback number."
+        ],
+        [
+          "Receptionist",
+          "What is the address of the work, please?"
+        ],
+        [
+          "Caller",
+          "2 Example Lane, TE1 1ST."
+        ],
+        [
+          "Receptionist",
+          "I've noted the details for Nigel to review. Any preferred time is a request; no appointment has been booked."
+        ]
+      ],
+      "event_results": [
+        {
+          "id": 10,
+          "lead_id": 9,
+          "result": "created"
+        },
+        {
+          "id": 10,
+          "lead_id": 9,
+          "result": "updated"
+        },
+        {
+          "id": 10,
+          "lead_id": 9,
+          "result": "updated"
+        },
+        {
+          "id": 10,
+          "lead_id": 9,
+          "result": "updated"
+        }
+      ],
+      "call": {
+        "id": 10,
+        "root_call_id": "sim-details-over-several-turns",
+        "lead_id": 9,
+        "sequence": 4,
+        "outcome": "completed",
+        "urgency": "routine",
+        "transfer_requested": 0,
+        "content": {
+          "facts": {
+            "name": "Jo Fiction",
+            "name_confirmed": true,
+            "callback_phone": "07700 900125",
+            "callback_confirmed": true,
+            "address": "2 Example Lane",
+            "postcode": "TE1 1ST",
+            "description": "Toilet repair",
+            "additional_details": "",
+            "appointment_preference": "",
+            "appointment_confirmed": false,
+            "photos_useful": null,
+            "urgency": "routine",
+            "urgency_reason": "",
+            "summary": "Jo Fiction; Toilet repair; 2 Example Lane; TE1 1ST; Priority: routine"
+          },
+          "normalised_phone": "+447700900125",
+          "presented_phone": "",
+          "normalised_presented_phone": null,
+          "customer_match": "new",
+          "guidance": "",
+          "notice_version": "synthetic-notice-v1",
+          "prompt_version": "offline-policy-v1",
+          "model_version": "scripted-extractor-v1",
+          "leg_id": "",
+          "review_required": true,
+          "synthetic": true
+        }
+      },
+      "lead": {
+        "id": 9,
+        "customer_id": null,
+        "name": "Jo Fiction",
+        "phone": "07700 900125",
+        "email": "",
+        "address": "2 Example Lane",
+        "job_type": "small",
+        "description": "Toilet repair",
+        "status": "new",
+        "source": "phone/AI",
+        "source_category": "Other",
+        "work_type": "",
+        "additional_work_types": [],
+        "created_at": "2026-10-03T21:05:45.655539+00:00",
+        "updated_at": "2026-10-03T21:05:45.665148+00:00",
+        "postcode": "TE1 1ST",
+        "urgency": "routine"
+      },
+      "transcript_retention_days": 30,
+      "call_content_retention_days": 90
+    }
+  ],
+  "duplicate_final_event": {
+    "id": 10,
+    "lead_id": 9,
+    "result": "duplicate"
+  },
+  "simulated_notifications": [
+    {
+      "message_id": "voice-1-1",
+      "call_id": 1,
+      "lead_id": 1,
+      "urgency": "routine",
+      "outcome": "completed",
+      "facts": {
+        "name": "Alex Example",
+        "name_confirmed": true,
+        "callback_phone": "07700 900123",
+        "callback_confirmed": true,
+        "address": "1 Example Lane",
+        "postcode": "TE1 1ST",
+        "description": "Dripping kitchen tap",
+        "additional_details": "",
+        "appointment_preference": "Tuesday afternoon",
+        "appointment_confirmed": false,
+        "photos_useful": true,
+        "urgency": "routine",
+        "urgency_reason": "",
+        "summary": "Alex Example; Dripping kitchen tap; 1 Example Lane; TE1 1ST; Preferred: Tuesday afternoon; Priority: routine"
+      }
+    },
+    {
+      "message_id": "voice-3-1",
+      "call_id": 3,
+      "lead_id": 2,
+      "urgency": "routine",
+      "outcome": "incomplete",
+      "facts": {
+        "name": "Sam Sample",
+        "name_confirmed": true,
+        "callback_phone": "07700 900124",
+        "callback_confirmed": true,
+        "address": "",
+        "postcode": "",
+        "description": "Toilet keeps running",
+        "additional_details": "",
+        "appointment_preference": "",
+        "appointment_confirmed": false,
+        "photos_useful": null,
+        "urgency": "routine",
+        "urgency_reason": "",
+        "summary": "Sam Sample; Toilet keeps running; Priority: routine"
+      }
+    },
+    {
+      "message_id": "voice-4-1",
+      "call_id": 4,
+      "lead_id": 3,
+      "urgency": "routine",
+      "outcome": "completed",
+      "facts": {
+        "name": "Alex Example",
+        "name_confirmed": true,
+        "callback_phone": "+44 7700 900123",
+        "callback_confirmed": true,
+        "address": "1 Example Lane",
+        "postcode": "TE1 1ST",
+        "description": "Replace radiator valve",
+        "additional_details": "",
+        "appointment_preference": "",
+        "appointment_confirmed": false,
+        "photos_useful": null,
+        "urgency": "routine",
+        "urgency_reason": "",
+        "summary": "Alex Example; Replace radiator valve; 1 Example Lane; TE1 1ST; Priority: routine"
+      }
+    },
+    {
+      "message_id": "voice-5-1",
+      "call_id": 5,
+      "lead_id": 4,
+      "urgency": "urgent",
+      "outcome": "completed",
+      "facts": {
+        "name": "Alex Example",
+        "name_confirmed": true,
+        "callback_phone": "07700 900123",
+        "callback_confirmed": true,
+        "address": "1 Example Lane",
+        "postcode": "TE1 1ST",
+        "description": "Burst pipe; uncontrolled water flooding the kitchen",
+        "additional_details": "",
+        "appointment_preference": "",
+        "appointment_confirmed": false,
+        "photos_useful": null,
+        "urgency": "urgent",
+        "urgency_reason": "",
+        "summary": "Alex Example; Burst pipe; uncontrolled water flooding the kitchen; 1 Example Lane; TE1 1ST; Priority: urgent"
+      }
+    },
+    {
+      "message_id": "voice-6-1",
+      "call_id": 6,
+      "lead_id": 5,
+      "urgency": "electrical_water",
+      "outcome": "completed",
+      "facts": {
+        "name": "Alex Example",
+        "name_confirmed": true,
+        "callback_phone": "07700 900123",
+        "callback_confirmed": true,
+        "address": "1 Example Lane",
+        "postcode": "TE1 1ST",
+        "description": "Water leaking through ceiling onto light fitting",
+        "additional_details": "",
+        "appointment_preference": "",
+        "appointment_confirmed": false,
+        "photos_useful": null,
+        "urgency": "electrical_water",
+        "urgency_reason": "",
+        "summary": "Alex Example; Water leaking through ceiling onto light fitting; 1 Example Lane; TE1 1ST; Priority: electrical_water"
+      }
+    },
+    {
+      "message_id": "voice-7-1",
+      "call_id": 7,
+      "lead_id": 6,
+      "urgency": "gas_co",
+      "outcome": "emergency_redirect",
+      "facts": {
+        "name": "",
+        "name_confirmed": false,
+        "callback_phone": "",
+        "callback_confirmed": false,
+        "address": "",
+        "postcode": "",
+        "description": "Smell gas in kitchen",
+        "additional_details": "",
+        "appointment_preference": "",
+        "appointment_confirmed": false,
+        "photos_useful": null,
+        "urgency": "gas_co",
+        "urgency_reason": "",
+        "summary": "Smell gas in kitchen; Priority: gas_co"
+      }
+    },
+    {
+      "message_id": "voice-8-1",
+      "call_id": 8,
+      "lead_id": 7,
+      "urgency": "gas_co",
+      "outcome": "emergency_redirect",
+      "facts": {
+        "name": "",
+        "name_confirmed": false,
+        "callback_phone": "",
+        "callback_confirmed": false,
+        "address": "",
+        "postcode": "",
+        "description": "Carbon monoxide alarm sounding; occupant feels seriously unwell",
+        "additional_details": "",
+        "appointment_preference": "",
+        "appointment_confirmed": false,
+        "photos_useful": null,
+        "urgency": "gas_co",
+        "urgency_reason": "",
+        "summary": "Carbon monoxide alarm sounding; occupant feels seriously unwell; Priority: gas_co"
+      }
+    },
+    {
+      "message_id": "voice-9-1",
+      "call_id": 9,
+      "lead_id": 8,
+      "urgency": "routine",
+      "outcome": "completed",
+      "facts": {
+        "name": "Alex Example",
+        "name_confirmed": true,
+        "callback_phone": "07700 900123",
+        "callback_confirmed": true,
+        "address": "1 Example Lane",
+        "postcode": "TE1 1ST",
+        "description": "Fit outside tap",
+        "additional_details": "",
+        "appointment_preference": "Tomorrow after 4 (date and AM/PM not confirmed)",
+        "appointment_confirmed": false,
+        "photos_useful": null,
+        "urgency": "routine",
+        "urgency_reason": "",
+        "summary": "Alex Example; Fit outside tap; 1 Example Lane; TE1 1ST; Preferred: Tomorrow after 4 (date and AM/PM not confirmed); Priority: routine"
+      }
+    },
+    {
+      "message_id": "voice-10-1",
+      "call_id": 10,
+      "lead_id": 9,
+      "urgency": "routine",
+      "outcome": "completed",
+      "facts": {
+        "name": "Jo Fiction",
+        "name_confirmed": true,
+        "callback_phone": "07700 900125",
+        "callback_confirmed": true,
+        "address": "2 Example Lane",
+        "postcode": "TE1 1ST",
+        "description": "Toilet repair",
+        "additional_details": "",
+        "appointment_preference": "",
+        "appointment_confirmed": false,
+        "photos_useful": null,
+        "urgency": "routine",
+        "urgency_reason": "",
+        "summary": "Jo Fiction; Toilet repair; 2 Example Lane; TE1 1ST; Priority: routine"
+      }
+    }
+  ],
+  "counts": {
+    "customers": 1,
+    "leads": 9,
+    "voice_calls": 10,
+    "voice_events": 15,
+    "voice_notifications": 9,
+    "quotes": 0,
+    "invoices": 0,
+    "appointments": 0,
+    "jobs": 0
+  }
+}

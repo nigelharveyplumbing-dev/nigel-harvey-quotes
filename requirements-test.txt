@@ -1,3 +1,5 @@
 -r requirements.txt
 httpx
 pypdf
+cryptography==46.0.0
+phonenumbers==9.0.40
