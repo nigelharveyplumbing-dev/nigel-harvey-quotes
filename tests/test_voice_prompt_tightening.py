@@ -4,13 +4,14 @@ import re
 import unittest
 
 from business.voice_prompts import (PILOT_MODEL, PROMPT_VERSION, MAX_OUTPUT_TOKENS,
-                                   NORMAL_WORD_LIMIT, EMERGENCY_WORD_LIMIT, RECEPTIONIST_PROMPT)
+                                   NORMAL_WORD_LIMIT, EMERGENCY_WORD_LIMIT, RECEPTIONIST_PROMPT,
+                                   CAPTURE_PROMPT, CAPTURE_CLARIFICATIONS)
 from business.voice_policy import GAS_GUIDANCE, GAS_WORK_GUIDANCE, ELECTRICAL_GUIDANCE, WATER_GUIDANCE
 
 
 class PromptTighteningTests(unittest.TestCase):
     def test_explicit_ordinary_target_and_entire_turn_ceiling(self):
-        self.assertEqual(PROMPT_VERSION, "private-pilot-policy-v3")
+        self.assertEqual(PROMPT_VERSION, "private-pilot-policy-v4")
         self.assertEqual(NORMAL_WORD_LIMIT, 30)
         for rule in ("normally be 10-20 words", "HARD MAXIMUM: 30 words",
                      "entire ordinary turn", "never pad a reply"):
@@ -83,6 +84,45 @@ class PromptTighteningTests(unittest.TestCase):
         self.assertNotRegex(GAS_GUIDANCE.lower(), r"isolate|turn off|switch off|stop tap|meter")
         self.assertIn("otherwise leave it alone", ELECTRICAL_GUIDANCE)
         self.assertIn("safely", WATER_GUIDANCE)
+
+    def test_emergency_endpoint_has_no_business_or_transfer_appendix(self):
+        for rule in ("complete essential safety message, then STOP",
+                     "do not append a Gas Safe/business explanation",
+                     "not to wait for Nigel remains essential",
+                     "existing brief refusal and Gas Safe registered engineer direction",
+                     "later short\nturn", "do not append transfer consent",
+                     "do not bundle urgency, appointment and\nphoto requests",
+                     "repeat the AI introduction after interruption"):
+            self.assertIn(rule, RECEPTIONIST_PROMPT)
+
+    def test_conversation_and_capture_share_caller_hazard_classification(self):
+        self.assertIn(CAPTURE_CLARIFICATIONS, RECEPTIONIST_PROMPT)
+        self.assertTrue(CAPTURE_PROMPT.endswith(CAPTURE_CLARIFICATIONS))
+        for rule in ("hazards actually reported by the CALLER",
+                     "WITHOUT a reported gas/CO emergency remain routine",
+                     "Routine urgency never permits gas work",
+                     "WITHOUT\na reported electrical hazard is urgent, not electrical_water",
+                     "Generic advice to\nkeep away from electrics does not establish that hazard",
+                     "do not downgrade it for brevity"):
+            self.assertIn(rule, CAPTURE_PROMPT)
+
+    def test_capture_uncertainty_and_interruption_preserve_full_facts(self):
+        for rule in ("not inferred from a town", "leave postcode empty",
+                     "prioritise that single clarification",
+                     "Only explicitly corrected facts replace earlier ones",
+                     "full heard caller conversation", "including surname",
+                     "Do not invent relationships, customer history or confirmations"):
+            self.assertIn(rule, CAPTURE_PROMPT)
+
+    def test_candidate_capture_binding_restores_historical_prompt(self):
+        # Prompt-only binding: no schema, network, extraction-parser or lab edits.
+        from voice_lab import realtime
+        from voice_lab.hardening import candidate_modules
+        original = realtime.CAPTURE_INSTRUCTIONS
+        self.assertTrue(CAPTURE_PROMPT.startswith(original + "\n"))
+        with candidate_modules():
+            self.assertEqual(realtime.CAPTURE_INSTRUCTIONS, CAPTURE_PROMPT)
+        self.assertEqual(realtime.CAPTURE_INSTRUCTIONS, original)
 
 
 if __name__ == "__main__":

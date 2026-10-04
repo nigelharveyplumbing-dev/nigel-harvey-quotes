@@ -1,0 +1,186 @@
+{
+  "status": "approval_required_no_paid_requests",
+  "synthetic_only": true,
+  "source_report_sha256": "861ea823803ab038110065f50b3b9d5eed4edb228c411613bc20d153254dca75",
+  "prompt_version": "private-pilot-policy-v4",
+  "prompt_sha256": "8727abe37dbd3c5f1f160cd1d8006472ae94977cf6136da238feccce5d5edd1c",
+  "capture_prompt_sha256": "eca658447fa203aee3c30fefd30c52cbb7b605998a4129ebf72a6a2db3f510a8",
+  "model": "gpt-realtime-2.1",
+  "voice": "marin",
+  "reasoning_effort": "low",
+  "max_output_tokens": 768,
+  "core_cases": [
+    "normal",
+    "uk-name",
+    "surrey-postcode",
+    "gas-work-decline",
+    "gas-smell",
+    "co-alarm",
+    "uncontrolled-leak",
+    "water-electrics"
+  ],
+  "optional_cases": [
+    "corrected-phone",
+    "talk-over"
+  ],
+  "cases": [
+    {
+      "case": "normal",
+      "required": true,
+      "audio_files": [
+        "normal-1.wav"
+      ],
+      "response_bounds_gbp": [
+        "0.13766500",
+        "0.1722250"
+      ],
+      "full_trial_bound_gbp": "0.30989000",
+      "step45_measured_planning_gbp": "0.05554500"
+    },
+    {
+      "case": "uk-name",
+      "required": true,
+      "audio_files": [
+        "uk-name-1.wav"
+      ],
+      "response_bounds_gbp": [
+        "0.13746500",
+        "0.1720250"
+      ],
+      "full_trial_bound_gbp": "0.30949000",
+      "step45_measured_planning_gbp": "0.054803000"
+    },
+    {
+      "case": "surrey-postcode",
+      "required": true,
+      "audio_files": [
+        "surrey-postcode-1.wav"
+      ],
+      "response_bounds_gbp": [
+        "0.13630500",
+        "0.17086500"
+      ],
+      "full_trial_bound_gbp": "0.30717000",
+      "step45_measured_planning_gbp": "0.041573000"
+    },
+    {
+      "case": "gas-work-decline",
+      "required": true,
+      "audio_files": [
+        "gas-work-decline-1.wav"
+      ],
+      "response_bounds_gbp": [
+        "0.13510500",
+        "0.16966500"
+      ],
+      "full_trial_bound_gbp": "0.30477000",
+      "step45_measured_planning_gbp": "0.05345500"
+    },
+    {
+      "case": "gas-smell",
+      "required": true,
+      "audio_files": [
+        "gas-smell-1.wav"
+      ],
+      "response_bounds_gbp": [
+        "0.1334250",
+        "0.16798500"
+      ],
+      "full_trial_bound_gbp": "0.30141000",
+      "step45_measured_planning_gbp": "0.06415500"
+    },
+    {
+      "case": "co-alarm",
+      "required": true,
+      "audio_files": [
+        "co-alarm-1.wav"
+      ],
+      "response_bounds_gbp": [
+        "0.13446500",
+        "0.1690250"
+      ],
+      "full_trial_bound_gbp": "0.30349000",
+      "step45_measured_planning_gbp": "0.06647500"
+    },
+    {
+      "case": "uncontrolled-leak",
+      "required": true,
+      "audio_files": [
+        "uncontrolled-leak-1.wav"
+      ],
+      "response_bounds_gbp": [
+        "0.13638500",
+        "0.17094500"
+      ],
+      "full_trial_bound_gbp": "0.30733000",
+      "step45_measured_planning_gbp": "0.05516500"
+    },
+    {
+      "case": "water-electrics",
+      "required": true,
+      "audio_files": [
+        "water-electrics-1.wav"
+      ],
+      "response_bounds_gbp": [
+        "0.13478500",
+        "0.16934500"
+      ],
+      "full_trial_bound_gbp": "0.30413000",
+      "step45_measured_planning_gbp": "0.04959500"
+    },
+    {
+      "case": "corrected-phone",
+      "required": false,
+      "audio_files": [
+        "corrected-phone-1.wav",
+        "corrected-phone-2.wav"
+      ],
+      "response_bounds_gbp": [
+        "0.13550500",
+        "0.17178500",
+        "0.20634500"
+      ],
+      "full_trial_bound_gbp": "0.51363500",
+      "step45_measured_planning_gbp": "0.053586000"
+    },
+    {
+      "case": "talk-over",
+      "required": false,
+      "audio_files": [
+        "talk-over-1.wav",
+        "talk-over-2.wav"
+      ],
+      "response_bounds_gbp": [
+        "0.13270500",
+        "0.17158500",
+        "0.20614500"
+      ],
+      "full_trial_bound_gbp": "0.51043500",
+      "step45_measured_planning_gbp": "0.052661000"
+    }
+  ],
+  "instruction_and_tool_bytes": 9485,
+  "capture_prompt_bytes": 2374,
+  "budget": {
+    "core_all_responses_bound_gbp": "2.44768000",
+    "proposed_additional_limit_gbp": "2.45",
+    "prior_reported_combined_planning_gbp": "1.9092057500",
+    "maximum_combined_after_approved_limit_gbp": "4.3592057500",
+    "working_limit_gbp": "4.85",
+    "hard_limit_gbp": "5.00",
+    "all_ten_cases_bound_gbp": "3.47175000",
+    "gbp_per_usd_with_loading": "1.25",
+    "official_rates_checked": "2026-10-04",
+    "historical_core_planning_gbp": "0.440766000"
+  },
+  "execution_gates": [
+    "Approval for the stated additional ceiling is required; the earlier Step 4.5 \u00a31 allowance is not reset or reused.",
+    "Read, lock, reconcile and preserve both original journals including partial paid work before final-run preparation; the report alone cannot reconcile them.",
+    "New namespaced response labels and separate v4 report; never replay earlier paid responses or overwrite their evidence.",
+    "After core cases settle, start each optional case only if its entire conservative trial bound fits both approved additional and cumulative limits.",
+    "Reserve each response before sending it, reconcile provider usage, stop on unknown/exceeded usage; no retry after failure.",
+    "Verify exact Mac audio bytes against the paid manifest; use existing clips, no regeneration.",
+    "No telephony, Twilio, production, database or booking tools.",
+    "Implement/review the narrowly selected runner extension after approval; the historical Step 4.5 main deliberately refuses paid journals."
+  ]
+}

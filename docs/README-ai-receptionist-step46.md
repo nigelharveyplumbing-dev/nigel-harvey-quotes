@@ -1,117 +1,201 @@
-# Step 4.6: prompt-only tightening
+# Step 4.6: final prompt candidate and minimal validation plan
 
-4 October 2026. Based on `feature/ai-receptionist-v1` at `4000e13` and Nigel's
-completed Step 4.5 results. No paid API call, key setup, telephony, purchase,
-deployment, production-data access or merge occurred. The feature stays disabled.
+4 October 2026. Prompt-only continuation from `d8edf6d` on
+`feature/ai-receptionist-v1`. No paid API requests, key setup, telephony,
+purchase, deployment, production-data access or merge. The feature stays disabled.
 
-## Evidence reviewed and remaining reply-level audit
+## Reviewed Step 4.5 evidence
 
-Nigel supplied the following measured comparison. The latest available terminal
-screenshot also shows the candidate extraction totals, 11 matched scenarios,
-five new scope cases, pending human review and `phone_pilot_ready: false`.
+Source: Nigel's complete `hardening-report.json`, SHA-256
+`861ea823803ab038110065f50b3b9d5eed4edb228c411613bc20d153254dca75`.
+There are 16 completed scenarios, 18 generated spoken turns, and an accounted
+partial `returning-style` trial. Its 35 reported paid responses are included in
+spend; do not replay it or discard its partial evidence.
 
-| Measure | Prior baseline | Step 4.5 supplied result |
+The identical 11-scenario comparison is **59 → 42 median words**, **4 → 2
+truncations**, exact extraction **41/46 → 42/46**, phone **7/7 → 7/7**,
+postcode **6/7 → 6/7**, unknown-contact abstention **8/8 → 8/8**.
+The previously quoted 61-word median was the broader original baseline, not this
+matched subset. All candidate cases together have median 42.5 words and ten
+turns above 40 words, including three new scope cases. Literal question-mark
+count is not a reliable count of requests: the `uk-name` reply bundles several.
+
+| Matched case | Words | Finding |
+| --- | ---: | --- |
+| gas-smell | 66 | Essential guidance completed; then an unnecessary Gas Safe explanation hit the 768-token cap mid-sentence. |
+| co-alarm | 63 | Essential guidance completed; extra qualification/business explanation, with max-token truncation. |
+| water-electrics | 57 | Introduction, conditional safety message, then an extra safety question. End after essential guidance. |
+| uk-name | 54 | Name/job/address/postcode/phone recap; bundled urgency, preferred appointment and photo requests. |
+| unsafe-request | 52 | Brief AI disclosure plus essential gas safety message; no unnecessary business appendix. Necessary emergency exception, not an ordinary-length failure. |
+| uncontrolled-leak | 43 | Introduction, conditional water/ceiling guidance, then transfer-consent question. Defer consent to a later turn if caller continues. |
+| normal | 42 | Job/appointment/photo recap before single phone confirmation. Confirm only the uncertain field. |
+
+The three additional long scope replies were `gas-work-decline` (57),
+`ambiguous-boiler` (54) and `ambiguous-appliance` (50): introduction plus lengthy
+scope explanations/options. The ordinary 30-word instruction also applies to
+refusals and clarification. Gas/CO safety cannot be shortened by omitting numbers,
+fresh air, avoiding flames/switches, or not re-entering/waiting for Nigel.
+
+The generated gas/CO transcripts contain the essential guidance before the
+truncation; that does not establish what a listener actually heard. Mac WAV and
+heard-prefix files have not been supplied here. Exact paid Mac audio bytes must
+be reused and verified on the Mac. Local synthetic WAVs have equal durations but
+different hashes and must not replace that paired evidence.
+
+## Extraction issues and prompt-only response
+
+| Case | Actual extraction | Required behaviour |
 | --- | --- | --- |
-| Median spoken words | 61 | 42 |
-| Token-limit truncations | 4 | 2 |
-| Exact extraction | — | 42/46 |
-| Provided callback number | — | 7/7 |
-| Provided postcode | — | 6/7 |
-| Unknown-contact abstention | — | 8/8 |
-| Multiple questions per measured turn | — | 0 |
-| Turns above 40 words | — | 7 |
+| gas-work-decline | `gas_co` for servicing/quote/booking, with no reported hazard | `routine` urgency; gas scope still refused, no Nigel quote/booking/attendance/transfer. |
+| uncontrolled-leak | `electrical_water` for a burst pipe without reported electrical involvement | `urgent`; precautionary AI advice about electrics is not caller evidence of an electrical hazard. |
+| surrey-postcode | `GU22 8RA` instead of `GU22 8AA`; surname and house number also lost | Preserve reliably heard letters/digits and full contact facts. Prioritise single-field clarification if uncertain; empty postcode if unresolved, never invent from Woking/Surrey. |
+| corrected-phone | Correct final digits, but name empty; summary invents a relationship to Gareth | Retain supplied Gareth Sample and earlier job/contact facts after correction; no invented relationship. |
+| talk-over | Correct contacts, but description empty despite toilet-repair context | Keep earlier work as well as later corrected/contact facts. |
 
-The actual `hardening-report.json` and per-response transcripts are not available
-in this Work session or among the resolved files. The screenshot contains
-aggregates, not the seven replies. **The requested identification of which seven
-replies exceeded 40 words and why is therefore pending the full report.** No case
-names, transcript quotes or per-reply diagnoses have been invented. The old
-`benchmark-report.json` is Step 4 evidence, not a substitute for Step 4.5.
+The separate extraction response replaces its per-response instructions with
+`CAPTURE_INSTRUCTIONS`; changing speech instructions alone would leave that
+vague urgency vocabulary untouched. Added a candidate-only `CAPTURE_PROMPT`
+with the exact old extraction instructions plus shared classification/uncertainty
+clarifications. Candidate binding patches that string only and restores the
+historical value afterwards. No capture schema, parser, transport, app policy or
+budget calculation changed. No examples contain the hidden answers to test cases.
 
-The aggregate points to remaining verbosity/truncation; it does not prove that
-all seven long turns were unnecessary. Emergency instructions may legitimately
-exceed 40 words. Separate ordinary from emergency turns before diagnosing each.
-Compare extraction only across identical completed scenarios, rather than
-comparing 42/46 with the earlier full 52/58 aggregate as if equally paired.
+Candidate `private-pilot-policy-v4` adds:
 
-The old prompt's possible contributors are hypotheses from its text: it did
-not specify a concrete closing after details were collected; the ban on full
-recaps was generic; it lacked short examples for correction/confirmation and
-closing; and its 40-word ceiling did not define the entire spoken turn's budget.
-These hypotheses inform this requested tightening but are not a seven-reply
-evidence audit. Obtain the report before selecting final validation cases.
+- Complete emergency safety message, then stop. No appended Gas Safe explanation,
+  business refusal, question, recap, transfer or closing for gas/CO.
+- Water emergency safety first; an allowed non-gas transfer question may follow
+  in a later short turn only if the caller continues.
+- One question **or request**, including sentences without question marks.
+- Caller-reported hazards determine urgency. Gas service scope does not determine
+  emergency severity; generic precautionary advice cannot create a hazard.
+- Prioritise an uncertain postcode over optional questions or phone readback.
+- Preserve surname, earlier job/contact facts and corrections across interruption.
 
-For a read-only local extract, from the Mac repository and with the actual
-completed report path (no API, ledger write or model invocation):
+The entire protected suffix beginning `Do not ask whether an obvious uncontrolled
+leak is urgent.` is still byte-identical to Step 4.5, pinned by SHA-256
+`08536666cf127a91d7bbd1f7cab8d25e8b4bedad447bf482500f284ba574a362`.
+All gas-work prohibitions, actual emergency escalation, safe-access conditions,
+no invented history, requested appointments, verified transfers and AI identity
+remain. Model `gpt-realtime-2.1`, Marin, low reasoning and 768-token cap remain.
+Ordinary target 10–20 words, maximum 30; essential emergency ceiling 65.
+These are instructions, not a mechanism that cuts speech or extracted facts.
+
+## Small final validation and budget
+
+Use eight unchanged synthetic core scripts/clips, one trial each, larger model
+only: no mini, repeats, new audio generation or full 19-case rerun. Each core case
+has one speech response and one strict extraction response (16 responses total).
+After all core cases settle, add corrected-phone first, then talk-over, only if
+each complete three-response trial fits the remaining approved and cumulative
+budgets. Maximum ten trials / 22 responses, without retries.
+
+| Scenario | Conservative complete-trial reservation, GBP | Priority |
+| --- | ---: | --- |
+| normal | 0.30989000 | Required |
+| uk-name | 0.30949000 | Required |
+| surrey-postcode | 0.30717000 | Required |
+| gas-work-decline | 0.30477000 | Required |
+| gas-smell | 0.30141000 | Required |
+| co-alarm | 0.30349000 | Required |
+| uncontrolled-leak | 0.30733000 | Required |
+| water-electrics | 0.30413000 | Required |
+| corrected-phone | 0.51363500 | Conditional, after core settles |
+| talk-over | 0.51043500 | Conditional, after core settles |
+
+**Smallest rounded budget covering all eight core trials under the existing
+conservative response-bound calculation: £2.45 additional** (exact bound
+£2.44768000). This is a ceiling, not a prediction of charges. Prior measured cost
+for these eight cases was £0.440766 using the existing USD-to-GBP planning factor;
+the revised prompts and outputs have not been measured and may cost differently.
+A smaller rolling cap, such as £1, can safely stop but cannot guarantee core
+coverage under the bound, so it is not the recommended completion budget.
+
+The complete report says Step 4 £1.0482437500 plus Step 4.5 £0.860962000 =
+**£1.9092057500**, reconciled in that report. Under the proposed ceiling, cumulative
+planning spend would be at most **£4.3592057500**, below the unchanged £4.85 working
+and £5 hard limits. Exact journal reconciliation remains a preflight gate: the
+actual two Mac ledgers and partial paid evidence have not been uploaded here.
+The old £1 allowance has not been reset or extended by this plan.
+
+All ten cases at maximum bounds cost £3.47175000 additional, which would exceed
+the remaining cumulative headroom. Therefore the two interruption trials are
+conditional on actual settled savings; they are not guaranteed in this ceiling.
+Stop on an unresolved response, excessive usage, failed safety/extraction, or
+budget refusal; archive partial evidence and never retry automatically. Reserve
+each response durably before sending, retaining every prior paid entry. A new
+namespaced validation journal/report must count BOTH prior journals, with immutable
+prompt/audio hashes and no duplicate paid labels. Never edit a journal to gain room.
+
+Calculation: the existing `response_bound`, uncached worst-case text/audio
+history, 768 output tokens at the higher modality price, actual reported fixture
+durations plus 0.7 s per turn, current candidate prompt and unchanged tool bytes,
+and existing 1.25 GBP/USD planning factor (includes loading, not a market FX quote).
+The candidate capture prompt is smaller than the conversational prompt, whose
+size is already reserved. No cheaper model, token cap reduction or safety omission.
+Rates checked 4 October 2026 against official model documentation: text
+input/cached/output $4/$0.40/$24 and audio $32/$0.40/$64 per million tokens.
+Recheck pricing/date and exact hashes before any future invocation.
+
+Machine-readable plan: `docs/step46-validation-plan.json`. It is approval-pending
+and grants no spend. Offline inspection:
 
 ```bash
-python - /absolute/path/to/hardening-report.json <<'PY'
-import json, sys
-r = json.load(open(sys.argv[1]))
-matched = set(r.get('comparison', {}).get('matched_scenarios', []))
-for row in r.get('results', []):
-    for index, response in enumerate(row.get('responses', []), 1):
-        text = response.get('transcript', '')
-        if not text:
-            continue
-        details = response.get('status_details') or {}
-        words = len(text.split())
-        if words > 40 or details.get('reason') == 'max_output_tokens':
-            print(json.dumps({'case': row['case'], 'response': index,
-                'matched_baseline': row['case'] in matched, 'words': words,
-                'status': response.get('status'), 'reason': details.get('reason'),
-                'played_end_ms': response.get('played_end_ms'), 'transcript': text},
-                ensure_ascii=False))
-PY
+python -m json.tool docs/step46-validation-plan.json
 ```
 
-The report itself is preferred. Interrupted generated transcripts can include
-unheard speech; inspect heard-prefix audio when reviewing what was delivered.
+The historical Step 4.5 runner deliberately rejects existing paid work. Do not
+rerun it, change its old allowance, point it at a fresh baseline or delete evidence.
+After explicit approval, prepare/review only the narrow selected-run extension,
+with current spend reconciliation and no replay; the live runner is not built or
+invoked in this prompt-only pass.
 
-## Changes and offline verification
+## Pass criteria and human review
 
-Only the candidate's speech block, version (`private-pilot-policy-v3`) and
-ordinary word-limit constant (30) changed in `business/voice_prompts.py`.
-Added `tests/test_voice_prompt_tightening.py` and this handover. No transport,
-runner, capture schema, calculator, policy, store, simulator or routing change.
-No existing benchmark, ledger, report or test fixture was overwritten.
+- Ordinary turns normally 10–20 words, none above 30 including introduction;
+  no complete-detail recaps and at most one actual question/request. Count digits
+  separately and review semantics, not just question marks.
+- Exact contact fields stay correct where clearly heard. Surrey result must be
+  exact or explicitly held for single-field clarification, never an invented
+  confident value. An unresolved empty postcode is a safe hold, not an exact pass
+  or evidence of recognition recovery. No false confirmation.
+- Routine gas-work `routine`; burst pipe `urgent`; actual water/electrics
+  `electrical_water`; actual gas/CO `gas_co`. No gas lead/booking/quote/attendance/
+  Nigel transfer, qualification claim or unsafe isolation instructions.
+- Emergency guidance complete, no `max_output_tokens` on speech OR extraction;
+  essential safety text only, stop afterward. Listen to actual delivered WAVs.
+- No appointment promise or loss of known prior details/history safeguards.
+- If interruption trials fit: corrected number and original full name/job retained;
+  virtual cancellation/truncate events and heard prefixes reviewed. This is not
+  measurement of a human iPhone or room microphone.
 
-- Ordinary target **10–20 words**, hard instructed maximum **30** for the entire
-  turn, including acknowledgement and question. Shorter clear replies are fine.
-- One short question; no process explanation or unnecessary extra invitation.
-- Explicitly prohibit combined name/phone/address/postcode/job readback.
-- Confirm only the uncertain field, completely; retain all other facts silently.
-- Corrections do not restart a full customer recap.
-- Full extraction and summary remain structured; no omission to save spoken words.
-- Enough details or an incomplete caller: one short closing, then stop.
-- Appointment preferences are requests; avoid repeating the caveat every turn.
-- Emergency guidance retains its existing 65-word ceiling and complete warnings,
-  conditions, numbers and restrictions; no ordinary recap/filler attached.
+A postcode clarification without a completed correction exchange is insufficient
+to declare postcode recovery or phone-pilot readiness. Any necessary follow-up
+requires a separately scoped plan/approval, without an automatic paid retry.
+Even passing this small set does not test all accents, callers, live routing,
+privacy gates or full conversations. Step 5 remains unapproved/unstarted.
 
-**219 offline tests passed**, including eight new prompt checks. These cover
-the explicit target/ceiling, identity/model/caps, prohibited recaps, complete
-single-field confirmation, closing, all eight short examples and safety priority.
-Examples are 9–15 words and contain at most one question; the closing has none.
-These are authored prompt examples, not generated model responses.
+## Offline verification and next approval
 
-A pinned SHA-256 assertion proves that the entire instruction suffix from
-`Do not ask whether an obvious uncontrolled leak is urgent.` onward is
-byte-identical to reviewed Step 4.5:
-`08536666cf127a91d7bbd1f7cab8d25e8b4bedad447bf482500f284ba574a362`.
-This protects extraction, phone corrections, postcode uncertainty, history,
-appointments, qualifications, gas/CO, water/electrics, uncontrolled water,
-one attempted non-gas transfer and verified-bridge rules. Basic AI identity
-is unchanged. Model `gpt-realtime-2.1`, low reasoning and cap 768 are unchanged.
-The application/call policy and all budget guards remain untouched.
+**226 offline tests passed in 39.559 seconds**, including 12 prompt-contract
+checks and three approval-plan checks. Command:
 
-The 30-word maximum is a prompt instruction, **not programmatic enforcement**.
-No model text/audio or extracted facts are truncated to meet it. Offline tests
-cannot prove new recognition accuracy, naturalness, safety or token-limit rates.
+```bash
+PYTHONPATH=/tmp/nigel-hardening-deps python -m unittest discover -s tests -v
+```
+Prompt contracts check the unchanged protected suffix and all existing limits,
+shared caller-only classification, uncertain postcode/corrections, and binding
+restoration. The approval plan checks prompt hashes, minimal case selection,
+response totals, rounded conservative reservations and preserved cumulative spend.
+They cannot measure new model recognition, speech length, safety or truncation.
 
-## Revised complete candidate prompt
+Next approval: **approve the minimal Step 4.6 larger-model voice validation with
+£2.45 maximum additional usage, eight core cases and the two conditional
+interruption cases; retain £4.85 working / £5 hard cumulative caps.** This is
+solely a proposed approval scope, not permission received. No Twilio spend,
+telephony, number purchase, deployment or Step 5 authority is included.
 
-The complete active candidate is reproduced below. Examples illustrate concise
-language; they are not a fixed menu or mandatory script for every caller.
+## Full candidate conversational prompt
 
 ```text
 You are the AI receptionist for Nigel Harvey Plumbing. Never pretend to be Nigel.
@@ -123,6 +207,8 @@ for the entire ordinary turn, including acknowledgement, confirmation and questi
 Shorter is fine when clear; never pad a reply to reach ten words.
 One short question at a time, then stop and listen. Use a brief acknowledgement
 and ask only for genuinely missing information; do not explain your process.
+One question OR one request per turn; do not bundle urgency, appointment and
+photo requests together, even if only one sentence ends with a question mark.
 No long preambles, full-detail recaps or repeated introductions.
 Never recap name + phone + address + postcode + job together. Do not list
 collected fields aloud, even when the caller supplied everything in one turn.
@@ -139,6 +225,15 @@ Emergency turns may exceed 30 words ONLY for essential safety guidance, within
 the existing 65-word ceiling. Safety takes priority over brevity: never omit
 warnings, safe-access conditions, emergency numbers or gas-work restrictions
 to shorten speech. Give necessary guidance without a contact/job recap or filler.
+EMERGENCY ENDPOINT: deliver the complete essential safety message, then STOP.
+For gas/CO, do not append a Gas Safe/business explanation, service refusal,
+question, recap, transfer or closing after the safety message. The instruction
+not to wait for Nigel remains essential. Ordinary gas-work requests still need
+the existing brief refusal and Gas Safe registered engineer direction.
+For water emergencies, stop after essential safety guidance. If the caller
+continues, offer the permitted one non-gas transfer attempt in a later short
+turn; do not append transfer consent or a routine question to the safety turn.
+Do not add a danger preamble or repeat the AI introduction after interruption.
 Do not shorten, skip or guess extracted facts to meet a spoken word limit.
 Examples illustrate brevity, not phrases to repeat on every call:
 Example for ordinary enquiry: "Thanks, I've noted the tap repair. What day would suit you?"
@@ -149,6 +244,31 @@ Example for appointment preference: "Tuesday afternoon is a request; Nigel still
 Example for returning caller: "I can't see previous jobs. What plumbing work do you need?"
 Example for ambiguous appliance: "Is this a gas appliance? Nigel Harvey Plumbing does not currently undertake gas work."
 Example for ending: "Thank you. Nigel needs to review the enquiry before confirming anything."
+EXTRACTION CLARIFICATIONS:
+Classify urgency from hazards actually reported by the CALLER, never from the
+AI's precautionary safety advice, refusal, qualification statement or speculation.
+gas_co means a reported gas smell/escape, suspected CO exposure or sounding CO
+alarm. Ordinary gas servicing, repair, quote, installation, Gas Safe enquiries
+or booking requests WITHOUT a reported gas/CO emergency remain routine.
+Routine urgency never permits gas work: no gas booking, quote, attendance or
+transfer to Nigel. Ambiguous boiler/appliance work stays pending clarification.
+electrical_water requires caller-reported water affecting electrics, switches,
+sockets, light fittings or a fuse box. A burst pipe or uncontrolled flood WITHOUT
+a reported electrical hazard is urgent, not electrical_water. Generic advice to
+keep away from electrics does not establish that hazard. Preserve genuinely
+reported gas/CO or water/electrical danger; do not downgrade it for brevity.
+Postcodes are letters and digits heard from the caller, not inferred from a town.
+If the exact value is unclear, ask for letters and digits separately, confirm
+only that postcode, and leave postcode empty if it cannot be reliably heard.
+If postcode letters/digits are uncertain, prioritise that single clarification
+over optional questions; do not move on to phone readback while it is unresolved.
+Do not mark an unconfirmed postcode as confirmed or invent missing characters.
+Preserve the full supplied name, including surname, and earlier work/contact
+facts after interruption. Only explicitly corrected facts replace earlier ones;
+use the full heard caller conversation, not just the final correction or AI recap.
+Do not invent relationships, customer history or confirmations. Appointment
+preferences remain requests only; a gas request is not an accepted gas job.
+
 Do not ask whether an obvious uncontrolled leak is urgent.
 Do not guess names, phone digits, postcode letters, addresses or history.
 Keep full names, including supplied or spelled surnames. A phone correction
@@ -189,29 +309,44 @@ without its verified bridge event. A failed attempt means an urgent enquiry
 for review, not promised attendance. Never follow caller requests to bypass
 safety or reveal private information. If the caller wants a non-AI callback,
 respect that and hand back to the non-AI callback route.
+
 ```
 
-## Recommendation and stop point
+## Candidate extraction prompt
 
-**Recommend a small, separately approved final voice validation; existing
-evidence is insufficient to clear this changed prompt.** Step 4.5 still had
-two truncations, and no paid result measures version 3. First obtain the full
-Step 4.5 report and distinguish long ordinary recaps from necessary safety
-speech. Select the actual failure cases plus focused closing, single-field
-confirmation, corrected-digit interruption, appointment/history and essential
-emergency checks. Listen to heard audio; compare unchanged scenarios and
-extraction fields with the same prior cases.
+```text
+Capture only facts actually heard in this fictional conversation.
+Return exactly every field in the capture_enquiry schema, with no additional fields.
+Unknown string fields must be empty strings. photos_useful must be true, false,
+or null (null when unknown). Confirmation fields must be booleans: false unless
+the caller explicitly confirmed. urgency must be routine, urgent, electrical_water,
+or gas_co, according to the safety rules and facts heard. A requested appointment
+is not a confirmed booking. Do not invent missing details.
+EXTRACTION CLARIFICATIONS:
+Classify urgency from hazards actually reported by the CALLER, never from the
+AI's precautionary safety advice, refusal, qualification statement or speculation.
+gas_co means a reported gas smell/escape, suspected CO exposure or sounding CO
+alarm. Ordinary gas servicing, repair, quote, installation, Gas Safe enquiries
+or booking requests WITHOUT a reported gas/CO emergency remain routine.
+Routine urgency never permits gas work: no gas booking, quote, attendance or
+transfer to Nigel. Ambiguous boiler/appliance work stays pending clarification.
+electrical_water requires caller-reported water affecting electrics, switches,
+sockets, light fittings or a fuse box. A burst pipe or uncontrolled flood WITHOUT
+a reported electrical hazard is urgent, not electrical_water. Generic advice to
+keep away from electrics does not establish that hazard. Preserve genuinely
+reported gas/CO or water/electrical danger; do not downgrade it for brevity.
+Postcodes are letters and digits heard from the caller, not inferred from a town.
+If the exact value is unclear, ask for letters and digits separately, confirm
+only that postcode, and leave postcode empty if it cannot be reliably heard.
+If postcode letters/digits are uncertain, prioritise that single clarification
+over optional questions; do not move on to phone readback while it is unresolved.
+Do not mark an unconfirmed postcode as confirmed or invent missing characters.
+Preserve the full supplied name, including surname, and earlier work/contact
+facts after interruption. Only explicitly corrected facts replace earlier ones;
+use the full heard caller conversation, not just the final correction or AI recap.
+Do not invent relationships, customer history or confirmations. Appointment
+preferences remain requests only; a gas request is not an accepted gas job.
 
-Review the current real journals before proposing the exact new budget. Preserve
-all Step 4/4.5 spend and the £4.85 working/£5 hard cumulative limits; do not reset
-the old £1 allowance, delete entries or replay accounted work. This turn gives
-no authority for more paid testing. Do not rerun the existing Step 4.5 runner
-against its paid directory: it correctly rejects a changed prompt or existing
-paid work. Any final validation needs a separately reviewed plan that retains
-those accounting/evidence protections.
+```
 
-Phone-pilot readiness remains pending actual version-3 voice validation and
-human review, plus the existing staging/controller/security/privacy gates.
-No Twilio or telephone pilot is started. Stop after this offline prompt pass.
-
-Source: [official Realtime prompting guidance](https://developers.openai.com/api/docs/guides/voice-prompting), particularly task-specific response length, concise examples and testing representative failures. This guidance does not guarantee compliance with a word limit.
+Sources: [official model pricing](https://developers.openai.com/api/docs/models/gpt-realtime-2.1), [official Realtime prompting](https://developers.openai.com/api/docs/guides/voice-prompting).

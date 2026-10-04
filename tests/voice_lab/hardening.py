@@ -12,7 +12,7 @@ from statistics import median
 from unittest.mock import patch
 
 from business.voice_policy import service_scope
-from business.voice_prompts import PILOT_MODEL, RECEPTIONIST_PROMPT
+from business.voice_prompts import PILOT_MODEL, RECEPTIONIST_PROMPT, CAPTURE_PROMPT
 from voice_lab import audio, realtime, scoring
 from voice_lab.budget import BudgetStop, GBP_PER_USD_WITH_LOADING, SOFT_LIMIT, HARD_LIMIT, Ledger
 from voice_lab.cases import CASES, MODELS, case
@@ -167,6 +167,7 @@ def candidate_modules():
 
     with ExitStack() as stack:
         for module, name, value in ((realtime, "INSTRUCTIONS", RECEPTIONIST_PROMPT),
+                                   (realtime, "CAPTURE_INSTRUCTIONS", CAPTURE_PROMPT),
                                    (realtime, "MODELS", (PILOT_MODEL,)),
                                    (realtime, "validate_resolved", validate),
                                    (scoring, "CASES", VALIDATION_CASES)):
