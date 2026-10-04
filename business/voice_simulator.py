@@ -6,7 +6,8 @@ snapshot contract a future voice adapter will use. No network or audio I/O.
 """
 from datetime import datetime, timedelta, timezone
 from business.voice_models import VoiceEvent, VoiceFacts
-from business.voice_policy import NOTICE, triage
+from business.voice_policy import NOTICE, triage, service_scope
+from business.voice_contacts import contact_question
 
 
 class Conversation:
@@ -20,7 +21,7 @@ class Conversation:
         self.finished = False
         self.transfer_attempts = 0
 
-    def caller(self, utterance, extracted=None):
+    def caller(self, utterance, extracted=None, *, phone_uncertain=False, postcode_uncertain=False):
         if self.finished:
             raise ValueError("Conversation already ended")
         self.turns.append(("Caller", utterance))
@@ -37,8 +38,19 @@ class Conversation:
         if urgency == "gas_co":
             self.finished = True
             return self.snapshot("emergency_redirect")
+        if service_scope(utterance + " " + self.facts["description"]) == "gas_work_not_offered":
+            self.finished = True
+            return self.snapshot("completed")
+        if service_scope(utterance + " " + self.facts["description"]) == "appliance_clarification_required":
+            return self.snapshot("in_progress")
         if transfer and not self.transfer_attempts:
             self.transfer_attempts = 1  # Simulated request only, never a dial.
+        confirmation = contact_question(self.facts, phone_uncertain=phone_uncertain,
+                                        postcode_uncertain=postcode_uncertain)
+        if confirmation and "confirm_" + confirmation[0] not in self.asked:
+            self.asked.add("confirm_" + confirmation[0])
+            self.turns.append(("Receptionist", confirmation[1]))
+            return self.snapshot("in_progress")
         questions = (
             ("description", "What plumbing work or problem would you like Nigel to help with?"),
             ("name", "What name should I put on the enquiry?"),

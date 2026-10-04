@@ -39,7 +39,7 @@ class VoiceEvent(BaseModel):
     facts: VoiceFacts
     transcript: str = Field(default="", max_length=24000)
     notice_version: Literal["synthetic-notice-v1"] = "synthetic-notice-v1"
-    prompt_version: Literal["offline-policy-v1"] = "offline-policy-v1"
+    prompt_version: Literal["offline-policy-v1", "offline-policy-v2"] = "offline-policy-v2"
     model_version: Literal["scripted-extractor-v1"] = "scripted-extractor-v1"
 
     @field_validator("started_at", "ended_at")

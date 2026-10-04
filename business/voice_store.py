@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from business.db import get_db as app_get_db
 from business.phone_numbers import normalise_uk_phone
 from business.voice_security import settings, seal, unseal
-from business.voice_policy import triage, PRIORITY
+from business.voice_policy import triage, service_scope, PRIORITY
 
 TRANSCRIPT_SECONDS = 30 * 86400
 CALL_CONTENT_SECONDS = 90 * 86400
@@ -120,6 +120,8 @@ def ingest(event, nonce, now=None):
             if call and call["outcome"] != "in_progress":
                 raise ValueError("Final call cannot be reopened")
             facts = payload["facts"]
+            if facts["appointment_confirmed"]:
+                raise ValueError("Voice enquiries cannot confirm appointments")
             old_content = unseal(call["content"]) if call and call["content"] else {}
             old_facts = old_content.get("facts", {})
             for field, value in facts.items():
@@ -135,10 +137,16 @@ def ingest(event, nonce, now=None):
             if call and PRIORITY[call["urgency"]] > PRIORITY[urgency]:
                 urgency, guidance, transfer = triage("", call["urgency"])
             facts["urgency"] = urgency
+            scope = service_scope(facts["description"] + " " + facts["additional_details"] + " " + caller_text, urgency)
+            if (old_content.get("service_scope") == "gas_emergency_redirect" or
+                    (old_content.get("service_scope") == "gas_work_not_offered" and scope == "plumbing")):
+                scope = old_content["service_scope"]
+            if scope != "plumbing":
+                transfer = False
             customer_id, match = _customer_match(conn, facts)
             lead_id = call["lead_id"] if call else None
             values = _lead_values(facts, now)
-            if facts["description"] and lead_id is None:
+            if facts["description"] and lead_id is None and scope == "plumbing":
                 stamp = values["updated_at"]
                 cursor = conn.execute("""INSERT INTO leads
                     (name,phone,email,address,job_type,description,status,source,created_at,
@@ -147,7 +155,7 @@ def ingest(event, nonce, now=None):
                     (values["name"], values["phone"], values["address"], values["description"], values["source"],
                      stamp, stamp, stamp, customer_id))
                 lead_id = cursor.lastrowid
-            elif lead_id:
+            elif lead_id and scope == "plumbing":
                 saved = conn.execute("SELECT * FROM leads WHERE id=?", (lead_id,)).fetchone()
                 if saved is None:
                     raise ValueError("Linked lead was deleted; redact the call before retrying")
@@ -167,6 +175,7 @@ def ingest(event, nonce, now=None):
                        "presented_phone": event.presented_phone or old_content.get("presented_phone", ""),
                        "normalised_presented_phone": normalise_uk_phone(event.presented_phone or old_content.get("presented_phone", "")),
                        "customer_match": match, "guidance": guidance, "lead_values": values,
+                       "service_scope": scope, "gas_work_permitted": False,
                        "notice_version": event.notice_version, "prompt_version": event.prompt_version,
                        "model_version": event.model_version, "leg_id": event.leg_id,
                        "review_required": True, "synthetic": True}
@@ -189,9 +198,10 @@ def ingest(event, nonce, now=None):
             if event.transcript and call["transcript_deleted_at"] is None and now < call["transcript_expires"]:
                 conn.execute("INSERT OR REPLACE INTO voice_transcripts VALUES(?,?,?)",
                              (call_id, seal(event.transcript), call["transcript_expires"]))
-            if lead_id or urgency != "routine" or (facts["callback_phone"] and event.outcome == "incomplete"):
+            if lead_id or urgency != "routine" or scope != "plumbing" or (facts["callback_phone"] and event.outcome == "incomplete"):
                 _queue(conn, call_id, event.sequence, {"call_id": call_id, "lead_id": lead_id,
-                       "urgency": urgency, "outcome": event.outcome, "facts": facts}, now)
+                       "urgency": urgency, "outcome": event.outcome, "facts": facts,
+                       "service_scope": scope, "attendance_request": scope == "plumbing"}, now)
             result = "created" if event.sequence == 1 else "updated"
         call_id = call["id"]
         conn.execute("INSERT INTO voice_events VALUES(?,?,?,?,?,?,?)",
