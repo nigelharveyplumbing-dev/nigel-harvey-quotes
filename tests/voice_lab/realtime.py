@@ -17,6 +17,32 @@ from voice_lab.scoring import score
 RATE = 24000
 BYTES_PER_SECOND = RATE * 2
 SESSION_TIMEOUT = 150
+CAPTURE_INSTRUCTIONS = """Capture only facts actually heard in this fictional conversation.
+Return exactly every field in the capture_enquiry schema, with no additional fields.
+Unknown string fields must be empty strings. photos_useful must be true, false,
+or null (null when unknown). Confirmation fields must be booleans: false unless
+the caller explicitly confirmed. urgency must be routine, urgent, electrical_water,
+or gas_co, according to the safety rules and facts heard. A requested appointment
+is not a confirmed booking. Do not invent missing details."""
+
+
+class ExtractionError(ValueError):
+    """Only our static diagnostic messages may be persisted, never provider errors."""
+
+
+def capture_facts(response):
+    if response["status"] != "completed":
+        raise ExtractionError("Capture response did not complete")
+    calls = [item for item in response["output"] if item.get("type") == "function_call"
+             and item.get("name") == "capture_enquiry"]
+    if len(calls) != 1:
+        raise ExtractionError("Model did not produce exactly one capture function call")
+    try:
+        facts = json.loads(calls[0]["arguments"])
+    except (KeyError, TypeError, ValueError):
+        raise ExtractionError("Capture arguments were not valid JSON") from None
+    validate_facts(facts)
+    return facts
 
 
 def session_config(model):
@@ -141,7 +167,7 @@ class Trial:
         response = {"max_output_tokens": MAX_OUTPUT_TOKENS, "output_modalities": ["text"] if extraction else ["audio"],
             "tool_choice": {"type": "function", "name": "capture_enquiry"} if extraction else "none"}
         if extraction:
-            response["instructions"] = "Capture only facts actually heard in this fictional conversation. Unknown fields must be empty. Do not invent missing details."
+            response["instructions"] = CAPTURE_INSTRUCTIONS
         await self.send({"type": "response.create", "response": response})
         await self.wait(lambda: len(self.responses) > previous_count)
         return self.responses[-1]
@@ -187,35 +213,17 @@ class Trial:
                 await self.wait(lambda: self.active["done"])
                 await self.start_response(f"{case['id']}:{self.model}:capture", extraction=True)
                 await self.wait(lambda: self.active["done"])
-                outputs = self.active["output"]
-                calls = [item for item in outputs if item.get("type") == "function_call" and item.get("name") == "capture_enquiry"]
-                if len(calls) != 1:
-                    raise ValueError("Model did not produce exactly one capture function call")
-                facts = json.loads(calls[0]["arguments"])
-                properties = CAPTURE_TOOL["parameters"]["properties"]
-                if not isinstance(facts, dict) or set(facts) != set(properties):
-                    raise ValueError("Model extraction did not match the bounded contract")
-                validate_facts(facts)
+                # Retain paid evidence BEFORE extraction validation can fail.
+                evidence = self.archive(case, output_directory)
+                facts = capture_facts(self.active)
                 spoken = "\n".join(r["transcript"] for r in self.responses)
                 report = {"case": case["id"], "model": self.model, "status": "completed",
                     "resolved_model": resolved.get("model"), "settings": session_config(self.model), "facts": facts,
                     "spoken_transcript": spoken, "interruptions": self.interruptions,
                     "latency_ms": [r["latency_ms"] for r in self.responses if r["latency_ms"] is not None],
-                    "usage_usd": sum(r["usage_usd"] for r in self.responses), "responses": [],
+                    "usage_usd": sum(r["usage_usd"] for r in self.responses), "responses": evidence,
+                    "capture_instruction_version": 2,
                     "scores": score(case, facts, spoken), "transport": "WebSocket PCM with virtual playback"}
-                directory = Path(output_directory) / case["id"] / self.model
-                directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-                for index, response in enumerate(self.responses):
-                    item = {key: response[key] for key in ("status", "status_details", "usage", "usage_usd", "latency_ms", "transcript", "played_end_ms")}
-                    if response["audio"]:
-                        path = directory / f"response-{index + 1}.wav"
-                        write_wav(path, response["audio"])
-                        item["audio_file"] = str(path)
-                        if response["played_end_ms"] is not None:
-                            played = directory / f"response-{index + 1}-heard-prefix.wav"
-                            write_wav(played, response["audio"][:int(response["played_end_ms"] * BYTES_PER_SECOND / 1000)])
-                            item["virtual_heard_prefix_file"] = str(played)
-                    report["responses"].append(item)
                 report["generated_transcript_warning"] = "Transcript includes unplayed audio; safety and interruption review must use heard-prefix audio where present."
                 report["model_failures"] = [r["status"] for r in self.responses if r["status"] not in {"completed", "cancelled"}]
                 return report
@@ -224,6 +232,30 @@ class Trial:
             if self.listener:
                 self.listener.cancel()
                 await asyncio.gather(self.listener, return_exceptions=True)
+
+    def archive(self, case, output_directory):
+        # Whitelist model evidence; socket events and authentication never leave memory.
+        directory = Path(output_directory) / case["id"] / self.model
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        rows = []
+        for index, response in enumerate(self.responses):
+            row = {key: response.get(key) for key in (
+                "status", "status_details", "usage", "usage_usd", "latency_ms",
+                "transcript", "played_end_ms", "output")}
+            if response["audio"]:
+                path = directory / f"response-{index + 1}.wav"
+                write_wav(path, response["audio"])
+                row["audio_file"] = str(path)
+                if response["played_end_ms"] is not None:
+                    played = directory / f"response-{index + 1}-heard-prefix.wav"
+                    write_wav(played, response["audio"][:int(response["played_end_ms"] * BYTES_PER_SECOND / 1000)])
+                    row["virtual_heard_prefix_file"] = str(played)
+            rows.append(row)
+        # The runner's atomic, private writer has no provider or application dependency.
+        from run_voice_api_benchmark import save_report
+        save_report(directory / "paid-evidence.json", {"case": case["id"], "model": self.model,
+            "synthetic_only": True, "capture_instruction_version": 2, "responses": rows})
+        return rows
 
 
 async def run_trial(case, model, key, ledger, audio_directory, output_directory):
@@ -240,15 +272,15 @@ async def run_trial(case, model, key, ledger, audio_directory, output_directory)
 def validate_facts(facts):
     properties = CAPTURE_TOOL["parameters"]["properties"]
     if not isinstance(facts, dict) or set(facts) != set(properties):
-        raise ValueError("Invalid extraction keys")
+        raise ExtractionError("Invalid extraction keys")
     for key, spec in properties.items():
         value = facts[key]
         if spec["type"] == "string":
             if not isinstance(value, str) or len(value) > 2000:
-                raise ValueError("Invalid extraction string")
+                raise ExtractionError("Invalid extraction string: " + key)
             if "enum" in spec and value not in spec["enum"]:
-                raise ValueError("Invalid urgency")
+                raise ExtractionError("Invalid urgency")
         elif spec["type"] == "boolean" and type(value) is not bool:
-            raise ValueError("Invalid confirmation")
+            raise ExtractionError("Invalid confirmation: " + key)
         elif isinstance(spec["type"], list) and value is not None and type(value) is not bool:
-            raise ValueError("Invalid photo preference")
+            raise ExtractionError("Invalid photo preference")

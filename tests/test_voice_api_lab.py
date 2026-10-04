@@ -7,17 +7,18 @@ import os
 import tempfile
 import time
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
-from run_voice_api_benchmark import check_budget, main, plan
+from run_voice_api_benchmark import check_budget, live, main, plan, resume_report, save_report
 from voice_lab.audio import read_wav, verify_manifest, write_wav
 from voice_lab.budget import BudgetStop, Ledger, SOFT_LIMIT, response_bound, usage_cost, verify_rate_date
-from voice_lab.cases import CASES, CAPTURE_TOOL, MODELS, paired_order
-from voice_lab.realtime import Trial, session_config, validate_facts, validate_resolved
+from voice_lab.cases import CASES, CAPTURE_TOOL, INSTRUCTIONS, MODELS, paired_order
+from voice_lab.realtime import (CAPTURE_INSTRUCTIONS, ExtractionError, Trial, capture_facts,
+                                session_config, validate_facts, validate_resolved)
 from voice_lab.scoring import score, summary
 
 
@@ -32,6 +33,28 @@ def fixtures(directory):
                 "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                 "script_sha256": hashlib.sha256(script.encode()).hexdigest()})
     (directory / "manifest.json").write_text(json.dumps(manifest))
+
+
+def valid_facts():
+    facts = {key: "" if spec["type"] == "string" else None if isinstance(spec["type"], list) else False
+             for key, spec in CAPTURE_TOOL["parameters"]["properties"].items()}
+    facts["urgency"] = "routine"
+    return facts
+
+
+def stopped_fixture(directory, ledger):
+    fixtures(directory / "audio")
+    manifest, durations = verify_manifest(directory / "audio")
+    planned = plan(durations)
+    model = MODELS[0]
+    for suffix in ("turn-1", "capture"):
+        index = ledger.reserve(f"normal:{model}:{suffix}", "0.1")
+        ledger.settle(index, "0.003")
+    report = {"status": "stopped_on_error", "synthetic_only": True, "plan": planned,
+        "caller_audio": manifest, "results": [], "stopped_trial": {"case": "normal", "model": model,
+        "error_class": "ValueError"}, "unresolved_usage": False}
+    save_report(directory / "benchmark-report.json", report)
+    return report, planned, manifest
 
 
 class AccountingTests(unittest.TestCase):
@@ -108,6 +131,109 @@ class AccountingTests(unittest.TestCase):
 
 
 class FixtureAndReportingTests(unittest.TestCase):
+    def test_resume_preflight_preserves_accounted_work_and_reports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            ledger = Ledger(directory / "spending-ledger.json")
+            stopped_fixture(directory, ledger)
+            ledger.close()
+            original_ledger = (directory / "spending-ledger.json").read_bytes()
+            original_report = (directory / "benchmark-report.json").read_bytes()
+            with patch.dict(os.environ, {}, clear=True), patch("socket.socket", side_effect=AssertionError("network forbidden")):
+                report = main(["--private-dir", str(directory), "--resume"])
+                self.assertEqual(report["status"], "resume_preflight_passed_no_live_requests")
+                self.assertEqual(report["paid_api_requests_this_run"], 0)
+                self.assertEqual(report["resume"]["remaining_trials"], 27)
+                self.assertEqual(report["resume"]["skipped_accounted_trials"], 1)
+                self.assertFalse(report["accounted_failed_trials"][0]["extraction_scored"])
+                self.assertLess(Decimal(report["resume"]["combined_bound_gbp"]), SOFT_LIMIT)
+                self.assertEqual(report["results"], [])
+                blocked = main(["--private-dir", str(directory), "--live"])
+                self.assertEqual(blocked["status"], "blocked_before_live_requests")
+            self.assertEqual((directory / "spending-ledger.json").read_bytes(), original_ledger)
+            self.assertEqual((directory / "benchmark-report.json").read_bytes(), original_report)
+
+    def test_resume_rejects_incomplete_duplicate_unresolved_or_changed_evidence(self):
+        for corruption in ("missing", "duplicate", "unresolved", "audio", "plan", "unrecorded"):
+            with self.subTest(corruption=corruption), tempfile.TemporaryDirectory() as tmp:
+                directory = Path(tmp)
+                ledger = Ledger(directory / "spending-ledger.json")
+                try:
+                    report, planned, manifest = stopped_fixture(directory, ledger)
+                    if corruption == "missing":
+                        ledger.data["entries"].pop()
+                    elif corruption == "duplicate":
+                        ledger.data["entries"].append(ledger.data["entries"][0].copy())
+                    elif corruption == "unresolved":
+                        ledger.data["entries"][0]["state"] = "in_flight"
+                    elif corruption == "audio":
+                        manifest = {**manifest, "synthetic_only": False}
+                    elif corruption == "plan":
+                        planned = {**planned, "max_output_tokens_per_response": 1024}
+                    else:
+                        ledger.data["entries"][0]["label"] = "another-paid-request"
+                    with self.assertRaises(BudgetStop):
+                        resume_report(directory / "benchmark-report.json", planned, manifest, ledger)
+                finally:
+                    ledger.close()
+
+    def test_complete_resumed_batch_offline_keeps_failures_and_is_not_replayed(self):
+        from unittest.mock import AsyncMock
+
+        async def fake_trial(case, model, key, ledger, audio, output):
+            for suffix in [f"turn-{i + 1}" for i in range(len(case["turns"]))] + ["capture"]:
+                index = ledger.reserve(f"{case['id']}:{model}:{suffix}", "0.01")
+                ledger.settle(index, "0.0003")
+            facts = {**valid_facts(), **case["expected"]}
+            return {"case": case["id"], "model": model, "status": "completed",
+                    "scores": score(case, facts, "synthetic offline response"), "usage_usd": 0.0006}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            ledger = Ledger(directory / "spending-ledger.json")
+            stopped_fixture(directory, ledger)
+            ledger.close()
+            original_report = (directory / "benchmark-report.json").read_bytes()
+            original_entries = json.loads((directory / "spending-ledger.json").read_text())["entries"]
+            runner = AsyncMock(side_effect=fake_trial)
+            with patch.dict(os.environ, {"VOICE_API_TEST_ENABLED": "1", "OPENAI_API_KEY": "offline-placeholder"}, clear=True), \
+                    patch("socket.socket.connect", side_effect=AssertionError("network forbidden")), \
+                    patch("run_voice_api_benchmark.verify_rate_date"), patch("voice_lab.realtime.run_trial", runner), \
+                    redirect_stdout(io.StringIO()):
+                report = main(["--private-dir", str(directory), "--resume", "--live"])
+                self.assertEqual(runner.await_count, 27)
+                self.assertEqual(len(report["results"]), 27)
+                self.assertEqual(report["incomplete_pairs"], ["normal"])
+                self.assertEqual(len(report["accounted_failed_trials"]), 1)
+                self.assertEqual(report["comparison"]["models"][MODELS[1]]["phone_total"], 9)
+                self.assertEqual(report["comparison"]["models"][MODELS[1]]["postcode_total"], 9)
+                again = main(["--private-dir", str(directory), "--resume", "--live"])
+                self.assertEqual(again["resume"]["remaining_trials"], 0)
+                self.assertEqual(runner.await_count, 27)
+            self.assertEqual((directory / "benchmark-report.before-resume.json").read_bytes(), original_report)
+            entries = json.loads((directory / "spending-ledger.json").read_text())["entries"]
+            self.assertEqual(entries[:2], original_entries)
+            self.assertEqual(len(entries), 60)
+
+    def test_capture_unknown_types_remain_strict_and_diagnostic(self):
+        response = {"status": "completed", "output": [{"type": "function_call", "name": "capture_enquiry",
+            "arguments": json.dumps(valid_facts())}]}
+        self.assertEqual(capture_facts(response), valid_facts())
+        for facts, message in (({**valid_facts(), "photos_useful": ""}, "Invalid photo preference"),
+                               ({**valid_facts(), "callback_confirmed": ""}, "Invalid confirmation: callback_confirmed"),
+                               ({**valid_facts(), "urgency": ""}, "Invalid urgency"),
+                               ({"name": "Example"}, "Invalid extraction keys")):
+            response["output"][0]["arguments"] = json.dumps(facts)
+            with self.subTest(message=message), self.assertRaisesRegex(ExtractionError, message):
+                capture_facts(response)
+        for response in ({"status": "incomplete", "output": []}, {"status": "completed", "output": []},
+                         {"status": "completed", "output": [{"type": "function_call", "name": "capture_enquiry", "arguments": "{"}]}):
+            with self.assertRaises(ExtractionError):
+                capture_facts(response)
+        # Existing text reservation already bounds the replacement instructions;
+        # no extra allowance or cap increase is needed.
+        self.assertLess(len(CAPTURE_INSTRUCTIONS.encode()), len(INSTRUCTIONS.encode()))
+
     def test_paired_order_identical_cases(self):
         pairs = list(paired_order())
         self.assertEqual(len(pairs), 28)
@@ -191,6 +317,68 @@ class FixtureAndReportingTests(unittest.TestCase):
 
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_resume_does_not_replay_accounted_trial(self):
+        from unittest.mock import AsyncMock
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            ledger = Ledger(directory / "spending-ledger.json")
+            try:
+                _, planned, manifest = stopped_fixture(directory, ledger)
+                report, skipped, _ = resume_report(directory / "benchmark-report.json", planned, manifest, ledger)
+                # Stop at the next trial without any provider call. Verify the
+                # billed mini trial is never sent to the transport.
+                runner = AsyncMock(side_effect=BudgetStop("offline stop"))
+                with patch("voice_lab.realtime.run_trial", runner), patch("socket.socket", side_effect=AssertionError("network forbidden")):
+                    await live(report, ledger, "not-a-key", directory / "audio", directory / "responses",
+                               directory / "benchmark-report.json", skipped)
+                runner.assert_awaited_once()
+                self.assertEqual(runner.call_args.args[:2], (CASES[0], MODELS[1]))
+                self.assertEqual(len(ledger.data["entries"]), 2)
+            finally:
+                ledger.close()
+
+    async def test_paid_evidence_survives_capture_failure_and_has_no_socket_headers(self):
+        class Socket:
+            async def close(self):
+                pass
+        class OfflineTrial(Trial):
+            async def listen(self):
+                await asyncio.Event().wait()
+            async def send(self, event):
+                if event["type"] == "session.update":
+                    self.events.append({"type": "session.updated", "session": event["session"]})
+            async def caller_audio(self, path):
+                pass
+            async def start_response(self, label, extraction=False):
+                index = self.ledger.reserve(label, "0.1")
+                self.ledger.settle(index, "0.003")
+                response = {"done": True, "status": "completed", "status_details": None,
+                    "usage": {}, "usage_usd": 0.003, "latency_ms": None, "first_audio": None,
+                    "played_end_ms": None, "audio": bytes(480), "transcript": "Synthetic tap enquiry",
+                    "output": [{"type": "function_call", "name": "capture_enquiry",
+                                "arguments": json.dumps({**valid_facts(), "photos_useful": ""})}] if extraction else []}
+                self.active = response
+                self.responses.append(response)
+                return response
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            ledger = Ledger(directory / "ledger.json")
+            try:
+                trial = OfflineTrial(Socket(), MODELS[0], ledger)
+                trial.events = [{"type": "session.created"}, {"type": "private-test-header", "Authorization": "never-export-this"}]
+                with self.assertRaisesRegex(ExtractionError, "Invalid photo preference"):
+                    await trial.run(CASES[0], directory, directory / "responses")
+                evidence = directory / "responses" / "normal" / MODELS[0] / "paid-evidence.json"
+                text = evidence.read_text()
+                self.assertNotIn("Authorization", text)
+                self.assertNotIn("never-export-this", text)
+                self.assertEqual(len(json.loads(text)["responses"]), 2)
+                self.assertEqual(evidence.stat().st_mode & 0o777, 0o600)
+                self.assertTrue((evidence.parent / "response-1.wav").exists())
+                self.assertTrue(all(e["state"] == "reported" for e in ledger.data["entries"]))
+            finally:
+                ledger.close()
+
     async def test_interrupt_truncates_virtual_unheard_audio(self):
         class Socket:
             def __init__(self):

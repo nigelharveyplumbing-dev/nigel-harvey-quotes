@@ -64,8 +64,8 @@ def summary(rows):
             if field in result["exact_checks"]:
                 expected = next(case for case in CASES if case["id"] == row["case"])["expected"]
                 if expected.get(field):
-                    item[prefix + "total"] += 1
-                    item[prefix + "correct"] += int(result["exact_checks"][field])
+                    item[prefix + "_total"] += 1
+                    item[prefix + "_correct"] += int(result["exact_checks"][field])
                 else:
                     item["unknown_contact_checks_total"] += 1
                     item["unknown_contact_checks_correct"] += int(result["exact_checks"][field])

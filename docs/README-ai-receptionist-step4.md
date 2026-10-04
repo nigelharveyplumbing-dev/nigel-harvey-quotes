@@ -1,4 +1,56 @@
-# Step 4: private voice benchmark — prepared, live testing blocked
+# Step 4: private voice benchmark
+
+## 4 October 2026: first Mac attempt and safe resume fix
+
+The user reports a reconciled first paid mini `normal` trial at commit
+`5e8b856`: two reported journal entries, zero completed trials, `ValueError`.
+The original report retained neither the error message nor capture arguments.
+The exact rejected field cannot be recovered from that report. Offline review
+identified contradictory instructions (unknown fields "empty" although some
+require booleans/null/an enum); those instructions are now explicit by type.
+Validation remains strict: invalid facts are never coerced, defaulted or scored.
+This resolves a plausible cause, not a confirmed reconstruction of model output.
+
+Paid response audio and output are now saved to `paid-evidence.json` before
+capture validation. A capture failure still stops the batch, now with a static
+diagnostic and evidence path. Incomplete capture responses also stop. No provider
+exception text, authentication headers or socket event stream is exported.
+An offline resumed-batch test additionally found and fixed missing underscores
+in phone/postcode summary counter keys, a separate reporting failure.
+
+`--resume` validates the original plan, caller manifest and all reported ledger
+labels together, skips completed/accounted failed trials, and budgets only the
+remaining trials PLUS ALL existing spend. Unknown, duplicate, incomplete or
+unresolved accounting blocks the run. No paid work is retried automatically.
+For the user's reported state, 27 trials remain; the mini normal trial stays
+unscored and its model pair is incomplete. Historical lost evidence cannot be
+reconstructed. The original report is backed up before a live resume. Offline
+resume writes a separate `benchmark-resume-preflight.json`, preserving both
+the original report and ledger. Running without `--resume` when paid entries
+exist is blocked. Do not delete/reset the journal or regenerate caller clips.
+
+No production code, budget constants, models, caller cases or audio were changed.
+Working/hard limits remain **£4.85 / £5.00**. The replacement extraction prompt
+fits within the existing instruction reservation. Offline suite: **21 passed**
+(15 original plus six regressions), including a mocked full 27-trial resume and
+second resume with zero replays. These are offline fixtures, not model results.
+No additional paid requests were made while preparing this fix.
+
+From the existing Mac virtual environment, verify without network use:
+
+```sh
+python -m unittest discover -s tests -p test_voice_api_lab.py -v
+python tests/run_voice_api_benchmark.py --private-dir /tmp/nigel-voice-lab --resume
+```
+
+Check `resume_preflight_passed_no_live_requests`, one skipped trial, 27 remaining,
+and `combined_bound_gbp <= 4.85` in the resume preflight. For an authorized
+local live resume, use the existing hidden-key environment wrapper with
+`--live --resume`. Keep its `SSL_CERT_FILE=certifi.where()` setup. The key must
+exist only in the benchmark child's `OPENAI_API_KEY` environment, never a file
+or command argument. Pricing older than three days still blocks live use.
+
+## Original preparation record (3 October 2026)
 
 Status on 3 October 2026: **no authenticated voice API trials have run**.
 Secure OpenAI API credentials are absent. The OpenAI Developers plugin was

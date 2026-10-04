@@ -58,9 +58,60 @@ def save_report(path, report):
     temporary.replace(path)
 
 
-async def live(report, ledger, key, audio_directory, output_directory, report_path):
-    from voice_lab.realtime import run_trial
+def resume_report(path, planned, manifest, ledger):
+    """Skip only trials proved accounted for by BOTH the report and journal."""
+    try:
+        report = json.loads(path.read_text())
+        if (report.get("synthetic_only") is not True or report.get("caller_audio") != manifest
+                or report["plan"] != planned
+                or report["status"] not in {"stopped_on_error", "partial", "live_trials_completed_human_review_required"}):
+            raise ValueError()
+        known = {(case["id"], model): case for case, model in paired_order()}
+        skipped = set()
+        for row in report["results"]:
+            pair = (row["case"], row["model"])
+            if pair not in known or pair in skipped or row["status"] != "completed":
+                raise ValueError()
+            skipped.add(pair)
+        failures = list(report.get("accounted_failed_trials", []))
+        stopped = report.get("stopped_trial")
+        if stopped and not any((f["case"], f["model"]) == (stopped["case"], stopped["model"]) for f in failures):
+            failures.append({**stopped, "status": "accounted_failed_not_replayed",
+                "extraction_scored": False,
+                "reason": "Paid trial failed; retained as a failure, never retried automatically."})
+        for row in failures:
+            pair = (row["case"], row["model"])
+            if pair not in known or pair in skipped:
+                raise ValueError()
+            skipped.add(pair)
+        expected_labels = set()
+        for pair in skipped:
+            prefix = ":".join(pair)
+            expected_labels.update(f"{prefix}:turn-{i + 1}" for i in range(len(known[pair]["turns"])))
+            expected_labels.add(prefix + ":capture")
+        labels = [entry["label"] for entry in ledger.data["entries"]]
+        if (ledger.data["uncertain"] or any(e["state"] != "reported" for e in ledger.data["entries"])
+                or len(labels) != len(set(labels)) or set(labels) != expected_labels):
+            raise ValueError()
+        report["accounted_failed_trials"] = failures
+        report.pop("stopped_trial", None)
+        pending = [row for row in planned["trials"] if (row["case"], row["model"]) not in skipped]
+        remaining = sum((Decimal(row["reservation_bound_usd"]) for row in pending), Decimal(0))
+        report["resume"] = {"skipped_accounted_trials": len(skipped), "remaining_trials": len(pending),
+            "remaining_bound_gbp": str(remaining * GBP_PER_USD_WITH_LOADING),
+            "existing_spend_gbp": str(ledger.planning_gbp),
+            "combined_bound_gbp": str(remaining * GBP_PER_USD_WITH_LOADING + ledger.planning_gbp),
+            "working_limit_gbp": str(SOFT_LIMIT), "hard_limit_gbp": str(HARD_LIMIT)}
+        return report, skipped, {"planning_bound_gbp": report["resume"]["remaining_bound_gbp"]}
+    except (OSError, KeyError, TypeError, ValueError):
+        raise BudgetStop("Report/audio/ledger mismatch or unresolved usage; no automatic replay or ledger reset") from None
+
+
+async def live(report, ledger, key, audio_directory, output_directory, report_path, skipped=()):
+    from voice_lab.realtime import ExtractionError, run_trial
     for case, model in paired_order():
+        if (case["id"], model) in skipped:
+            continue
         try:
             row = await run_trial(case, model, key, ledger, audio_directory, output_directory)
         except Exception as exc:
@@ -69,6 +120,9 @@ async def live(report, ledger, key, audio_directory, output_directory, report_pa
             report["status"] = "stopped_on_error"
             report["stopped_trial"] = {"case": case["id"], "model": model,
                                       "error_class": type(exc).__name__}
+            if isinstance(exc, ExtractionError):
+                report["stopped_trial"]["diagnostic"] = str(exc)
+                report["stopped_trial"]["evidence_file"] = str(output_directory / case["id"] / model / "paid-evidence.json")
             break
         report["results"].append(row)
         report["status"] = "partial"
@@ -82,6 +136,8 @@ async def live(report, ledger, key, audio_directory, output_directory, report_pa
     report["comparison"] = summary(report["results"])
     report["ledger_planning_gbp"] = str(ledger.planning_gbp)
     report["unresolved_usage"] = ledger.data["uncertain"] or any(e["state"] == "in_flight" for e in ledger.data["entries"])
+    report["incomplete_pairs"] = [case["id"] for case in CASES if
+        {row["model"] for row in report["results"] if row["case"] == case["id"]} != set(MODELS)]
 
 
 def main(argv=None):
@@ -91,6 +147,7 @@ def main(argv=None):
     parser.add_argument("--generate-audio", action="store_true", help="Free local synthesis only")
     parser.add_argument("--live", action="store_true", help="Explicit opt-in to budgeted paid API trials")
     parser.add_argument("--prompt-key", action="store_true", help="Locally prompt without echo; never put keys in chat")
+    parser.add_argument("--resume", action="store_true", help="Check existing report/journal and skip accounted trials; never retry them")
     args = parser.parse_args(argv)
     private = args.private_dir.resolve()
     repository = Path(__file__).resolve().parents[1]
@@ -112,30 +169,48 @@ def main(argv=None):
                               "No live app, database, telephony, messages or booking tools are connected."]}
     report_path = private / "benchmark-report.json"
     ledger = Ledger(private / "spending-ledger.json")
+    destination = private / "benchmark-resume-preflight.json" if args.resume or ledger.data["entries"] else report_path
+    skipped = set()
     try:
+        budget_plan = planned
+        if args.resume:
+            report, skipped, budget_plan = resume_report(report_path, planned, manifest, ledger)
+            check_budget(budget_plan, ledger)
+        elif ledger.data["entries"]:
+            raise BudgetStop("Existing paid work: use --resume; report and ledger will not be overwritten")
         report["ledger_planning_gbp"] = str(ledger.planning_gbp)
         if not args.live:
+            if args.resume:
+                report["status"] = "resume_preflight_passed_no_live_requests"
+                report["paid_api_requests_this_run"] = 0
             report["live_blockers"] = [] if os.getenv("OPENAI_API_KEY") else ["Secure OpenAI API credentials are not configured"]
         else:
             verify_rate_date()
-            check_budget(planned, ledger)
+            check_budget(budget_plan, ledger)
             if os.getenv("VOICE_API_TEST_ENABLED") != "1":
                 raise BudgetStop("Set VOICE_API_TEST_ENABLED=1 explicitly for this standalone lab")
             key = getpass.getpass("OpenAI API key (hidden, local process only): ") if args.prompt_key else os.getenv("OPENAI_API_KEY", "")
             if not key:
                 raise BudgetStop("Secure API credential missing; no paid requests made")
+            if args.resume:
+                backup = private / "benchmark-report.before-resume.json"
+                if not backup.exists():
+                    save_report(backup, json.loads(report_path.read_text()))
+            destination = report_path
             report["paid_api_requests_this_run"] = None  # Fill from usage, never infer successful billing.
-            asyncio.run(live(report, ledger, key, audio, private / "responses", report_path))
+            save_report(report_path, report)
+            asyncio.run(live(report, ledger, key, audio, private / "responses", report_path, skipped))
     except BudgetStop as exc:
         report["status"] = "blocked_before_live_requests"
         report["live_blockers"] = [str(exc)]
     finally:
         report["comparison"] = summary(report["results"])
-        save_report(report_path, report)
+        save_report(destination, report)
         ledger.close()
     print(json.dumps({"status": report["status"], "planned_trials": planned["planned_trials"],
                       "planning_bound_gbp": planned["planning_bound_gbp"],
-                      "measured_trials": len(report["results"]), "report": str(report_path)}))
+                      "measured_trials": len(report["results"]), "report": str(destination),
+                      "resume": report.get("resume")}))
     return report
 
 
