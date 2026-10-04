@@ -94,7 +94,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     private = args.private_dir.resolve()
     repository = Path(__file__).resolve().parents[1]
-    if private == repository or repository in private.parents or private == Path("/var/data") or Path("/var/data") in private.parents:
+    production_data = Path("/var/data").resolve()
+    if private == repository or repository in private.parents or private == production_data or production_data in private.parents:
         parser.error("Private output must be outside the repository and production data directory")
     private.mkdir(parents=True, exist_ok=True, mode=0o700)
     audio = private / "audio"

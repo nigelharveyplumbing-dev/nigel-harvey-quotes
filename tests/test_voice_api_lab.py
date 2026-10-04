@@ -1,11 +1,13 @@
 """Offline safety and accounting tests: no actual model requests or billing."""
 import asyncio
 import hashlib
+import io
 import json
 import os
 import tempfile
 import time
 import unittest
+from contextlib import redirect_stderr
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -153,8 +155,26 @@ class FixtureAndReportingTests(unittest.TestCase):
                 self.assertEqual(report["results"], [])
 
     def test_production_directory_rejected(self):
-        with self.assertRaises(SystemExit):
-            main(["--private-dir", "/var/data/voice"])
+        real_resolve = Path.resolve
+
+        def macos_resolve(path, *args, **kwargs):
+            # Simulate macOS's /var -> /private/var alias on every platform.
+            # Other paths, including the repository, resolve normally.
+            if path == Path("/var/data") or Path("/var/data") in path.parents:
+                return Path("/private") / path.relative_to("/")
+            return real_resolve(path, *args, **kwargs)
+
+        for resolver in (real_resolve, macos_resolve):
+            for directory in ("/var/data", "/var/data/voice"):
+                with self.subTest(resolver=resolver.__name__, directory=directory):
+                    stderr = io.StringIO()
+                    with patch.object(Path, "resolve", autospec=True, side_effect=resolver), \
+                            patch.object(Path, "mkdir", side_effect=AssertionError("Filesystem creation must not be reached")) as mkdir, \
+                            redirect_stderr(stderr), self.assertRaises(SystemExit) as rejected:
+                        main(["--private-dir", directory])
+                    self.assertEqual(rejected.exception.code, 2)
+                    self.assertIn("production data directory", stderr.getvalue())
+                    mkdir.assert_not_called()
 
     def test_scoring_unknowns_not_invented_and_review_not_faked(self):
         case = next(c for c in CASES if c["id"] == "incomplete")
