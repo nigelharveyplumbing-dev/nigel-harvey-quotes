@@ -1259,6 +1259,10 @@ function updateMaterialLiveBadge(row) {
 async function refreshMaterialRowPrice(button) {
   const row = button.closest(".material-row");
   if (!row) return;
+  if (selectedComparisonPrice(row) !== null) {
+    await compareMaterialTradePrices(button);
+    return;
+  }
   const url = String(row.querySelector(".m-url")?.value || "").trim();
   const name = String(row.querySelector(".m-name")?.value || "").trim();
   const supplier = String(row.querySelector(".m-supplier")?.value || "").trim();
@@ -1406,6 +1410,7 @@ function addMaterial(prefill = null) {
     div.querySelector(".m-supplier").value = prefill.site_survey_material_review
       ? (prefill.supplier || '') : (prefill.supplier || "City Plumbing");
   }
+  if (prefill?.selected_comparison_price > 0) rememberComparisonPrice(div, prefill.selected_comparison_price);
   updateMaterialLiveBadge(div);
   updateForgottenItemWarnings();
   updateSupplierPreferenceNotes();
@@ -1419,6 +1424,21 @@ function tradePriceLabel(item) {
   return ({public_live:'Live public price', cached_public:'Cached public price',
     cached_unverified:'Cached price — source unverified', manual:'Manual price',
     unavailable:'Price unavailable'})[item.price_provenance] || 'Unverified price';
+}
+
+function rememberComparisonPrice(row, price) {
+  row.selectedTradePrice = {name:row.querySelector('.m-name').value,
+    supplier:row.querySelector('.m-supplier').value, url:row.querySelector('.m-url').value,
+    price:Number(price)};
+}
+
+function selectedComparisonPrice(row) {
+  const selected = row.selectedTradePrice;
+  if (!selected || selected.name !== row.querySelector('.m-name').value ||
+      selected.supplier !== row.querySelector('.m-supplier').value ||
+      selected.url !== row.querySelector('.m-url').value ||
+      selected.price !== Number(row.querySelector('.m-manual').value)) return null;
+  return selected.price;
 }
 
 function safeTradeProductUrl(value) {
@@ -1497,6 +1517,7 @@ function useComparedTradePrice(button, index) {
   row.querySelector('.m-supplier').value = item.supplier;
   row.querySelector('.m-url').value = item.url;
   row.querySelector('.m-manual').value = Number(item.price_inc_vat).toFixed(2);
+  rememberComparisonPrice(row, item.price_inc_vat);
   row.dataset.priceStatus = 'Public price selected';
   row.dataset.liveProduct = '1';
   row.dataset.sku = item.sku || '';
@@ -1504,7 +1525,7 @@ function useComparedTradePrice(button, index) {
   row.dataset.checkedAt = item.checked_at || '';
   row.tradeComparisonToken = null;
   row.tradePriceResults = [];
-  row.querySelector('.trade-price-results').textContent = 'Selected public price including VAT. Quantity is unchanged; check it represents packs. Existing Update price and quote calculation may fetch a newer price.';
+  row.querySelector('.trade-price-results').textContent = 'Selected public price including VAT is held for this quote. Quantity is unchanged; check it represents packs. Update price reopens comparison for an explicit selection.';
   updateMaterialLiveBadge(row);
   showNotice('Supplier and public price selected. Review quantity and calculate the quote when ready.');
 }
@@ -1899,6 +1920,7 @@ function collectFormPayload() {
       manual_price: parseFloat(row.querySelector(".m-manual").value || 0)
     };
     const chargedMaterial = applyChargingRuleToMaterial(baseMaterial);
+    if (selectedComparisonPrice(row) !== null) chargedMaterial.selected_comparison_price = selectedComparisonPrice(row);
     materials.push(chargedMaterial);
   });
 
@@ -5533,6 +5555,7 @@ function normaliseQuoteDataForEditing(data) {
     supplier: m.supplier || "",
     url: m.url || "",
     manual_price: m.manual_price || m.full_unit_price || m.unit_price_used || m.price || 0,
+    selected_comparison_price: m.selected_comparison_price ?? null,
     quote_charge_override: m.quote_charge_override,
     material_type: m.material_type || "chargeable",
     charge_method: m.charge_method || "full",

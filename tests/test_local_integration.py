@@ -295,6 +295,7 @@ const context = {
   scheduleLabourIntelligence: () => {}, updateForgottenItemWarnings: () => {},
   updateSupplierPreferenceNotes: () => {},
   applyChargingRuleToMaterial: material => material,
+  selectedComparisonPrice: () => null,
   setEditingStatus: () => {}, setQuoteButtonMode: () => {},
   renderQuoteResult: () => {}, loadHistory: async () => {},
   loadCustomers: async () => {}, loadDashboard: async () => {},

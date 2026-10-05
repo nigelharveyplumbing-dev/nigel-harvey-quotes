@@ -8,6 +8,7 @@ class MaterialItem(BaseModel):
     supplier: str = ""
     url: str = ""
     manual_price: float = 0
+    selected_comparison_price: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     quote_charge_override: float | None = None
     material_type: str = "chargeable"
     charge_method: str = "full"

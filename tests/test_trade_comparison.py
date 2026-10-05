@@ -72,6 +72,8 @@ class TradeComparisonTests(unittest.TestCase):
         self.assertFalse(any(x["is_best_price"] for x in comparison.annotate([a, b])))
         self.assertIsNone(item(title=TITLE + " Pack of 10", numberOfItems=2)["pack_quantity"])
         self.assertIsNone(item(title=TITLE + " Kit")["pack_quantity"])
+        self.assertIsNone(item(numberOfItems=0)["pack_quantity"])
+        self.assertIsNone(item(numberOfItems=-1)["pack_quantity"])
 
     def test_size_finish_connection_and_type_conflicts(self):
         for title in (TITLE.replace("15mm", "22mm"), TITLE.replace("Chrome", "White"),
@@ -227,6 +229,44 @@ class TradeComparisonTests(unittest.TestCase):
 
 
 class TradeComparisonHTTPTests(unittest.TestCase):
+    def test_selected_price_survives_create_edit_without_legacy_lookup(self):
+        username, password = secrets.token_urlsafe(12), secrets.token_urlsafe(20)
+        with disposable_app(username, password) as (app, _), TestClient(app.app) as client:
+            auth = {"Authorization": "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode()}
+            payload = {"customer_name": "Synthetic comparison test", "materials": [
+                {"name": TITLE, "quantity": 3, "supplier": "Screwfix", "url": URL,
+                 "manual_price": 12, "selected_comparison_price": 12}]}
+            with patch.object(app, "fetch_tracked_price", return_value=(1, "live")) as legacy:
+                created = client.post('/api/quote', json=payload, headers=auth)
+                self.assertEqual(created.status_code, 200, created.text)
+                data = created.json()
+                result = data['result']
+                line = result['material_lines'][0]
+                self.assertEqual(line['full_unit_price'], 12)
+                self.assertEqual(line['quantity'], 3)
+                self.assertEqual(line['supplier'], 'Screwfix')
+                self.assertEqual(line['price_source'], 'selected_public')
+                self.assertEqual(result['internal_handling_percent'], 25)
+                self.assertEqual(result['total_price'], 45)
+                saved = client.get(f"/api/quotes/{data['id']}", headers=auth).json()
+                self.assertEqual(saved['request']['materials'][0]['selected_comparison_price'], 12)
+                updated = client.put(f"/api/quotes/{data['id']}", json=saved['request'], headers=auth)
+                self.assertEqual(updated.status_code, 200, updated.text)
+                legacy.assert_not_called()
+                payload['materials'][0].pop('selected_comparison_price')
+                ordinary = client.post('/api/quote', json=payload, headers=auth)
+                self.assertEqual(ordinary.json()['result']['material_lines'][0]['full_unit_price'], 1)
+                legacy.assert_called_once()
+
+    def test_invalid_selected_price_rejected(self):
+        username, password = secrets.token_urlsafe(12), secrets.token_urlsafe(20)
+        with disposable_app(username, password) as (app, _), TestClient(app.app) as client:
+            auth = {"Authorization": "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode()}
+            for amount in (0, -1):
+                result = client.post('/api/quote', headers=auth, json={"materials": [
+                    {"selected_comparison_price": amount}]})
+                self.assertEqual(result.status_code, 422)
+
     def test_authenticated_read_only_comparison_and_failed_merchants(self):
         username, password = secrets.token_urlsafe(12), secrets.token_urlsafe(20)
         with disposable_app(username, password) as (app, _), TestClient(app.app) as client:

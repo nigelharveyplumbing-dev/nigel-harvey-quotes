@@ -175,6 +175,10 @@ try {
   await comparisonRow.getByRole('button', { name: 'Use this product and price' }).click();
   assert.equal(await comparisonRow.locator('.m-manual').inputValue(), '9.60');
   assert.equal(await comparisonRow.locator('.m-supplier').inputValue(), 'Toolstation');
+  assert.equal((await page.evaluate(() => collectFormPayload())).materials.at(-1).selected_comparison_price, 9.6);
+  await comparisonRow.getByRole('button', {name:'Update price', exact:true}).click();
+  await comparisonRow.getByRole('button', {name:'Use this product and price'}).click();
+  assert.equal((await page.evaluate(() => collectFormPayload())).materials.at(-1).selected_comparison_price, 9.6);
   assert.equal(await comparisonRow.locator('.m-qty').inputValue(), '2');
   assert.equal(await page.locator('#materials_handling_percent').inputValue(), '25');
   // Restore the original synthetic material before the existing quote checks.

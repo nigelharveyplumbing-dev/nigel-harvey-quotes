@@ -11,7 +11,7 @@ The production code already has four merchant search adapters: City Plumbing, Sc
 
 `app.fetch_tracked_price` tries a public scrape, then a saved live/last price, then the manually entered fallback. Successful and fallback lookups update the cache and price history; quotes also retain their request/result data. The cache records last price, last live price, last manual price, status, last check and last successful live time.
 
-`business/quote_calculation.py` owns quantity, partial/consumable charging, job markup and procurement arithmetic. The default handling percentage is **25%**, with existing selectable percentages and existing site-survey overrides unchanged. Customer documents, quote/invoice persistence, supply responsibility and material-selection rules are untouched.
+`business/quote_calculation.py` owns quantity, partial/consumable charging, job markup and procurement arithmetic. The default handling percentage is **25%**, with existing selectable percentages and existing site-survey overrides unchanged. Existing customer document and database formats, supply responsibility and material-selection rules are preserved. An optional selected-comparison-price field is retained in the existing quote JSON; no database migration is needed.
 
 ### Findings
 
@@ -52,7 +52,7 @@ Supplier choice remains manual. **Use this product and price** changes only the 
 - Delivery, minimum orders, collection travel/time, branch-specific stock and total basket costs are not included. This is a best comparable product price among observed offers, not a guaranteed cheapest delivered basket.
 - Discovery is bounded to three candidates per merchant, plus an optional anchor; blocked or client-rendered pages can produce incomplete coverage. No live merchant scraping was exercised from the restricted local test environment.
 - Pages lacking authoritative identity, package or VAT evidence may show no confirmed comparison. Manual product selection and the existing price workflows remain available.
-- Choosing a comparison price does not lock the price for a later quote. Existing Update price and quote calculation retain their original live/cache/manual precedence and may obtain a different/newer amount, including the legacy VAT limitation described above. Review the generated quote before sending.
+- A chosen comparison price is held through quote creation and editing using an optional `selected_comparison_price` field. Those rows skip the legacy lookup; ordinary rows keep the existing live/cache/manual precedence. Existing partial-consumable charging and all quantity/job/handling arithmetic still apply. Update price on a selected row reopens comparison for an explicit replacement. Changing product identity or the entered price clears the selection when collecting the form. The amount remains a selected public reference, not a fresh live winner on a later quote.
 
 ## Legitimate additional source investigation
 
@@ -97,3 +97,11 @@ git diff --check
 The real Playwright browser runner reports **INCOMPLETE locally: no preinstalled Chromium**. A tests-only GitHub Actions workflow installs Chromium in an isolated runner and executes `python -B tests/run_stage6_local.py`, including the original browser workflows plus a new synthetic comparison interaction. The workflow has read-only repository permissions and no deployment steps. Its outcome must be checked before marking the full release gate passed.
 
 No merge, production deployment, production database write, migration or automatic rollout is authorised. After all required checks pass, Nigel must approve the concrete implementation before any merge or production deployment.
+
+## Staging validation preflight and follow-up fix
+
+Staging service `srv-das0vrflk1mc73dtb2cg` currently tracks `privacy/gdpr-readiness`, auto-deploy off, live commit `25a3bc99388f15f7e8d5c10b8da9d0bd7438a057` (deployment `dep-daunp5rncjis73fl63gg`). It has its own persistent disk. The feature branch has not been deployed or validated there yet. The Render connector can trigger deployment but cannot change the configured branch; triggering it in this state would deploy the old privacy branch. Dashboard access is needed to configure the feature branch before any staging deployment.
+
+Preflight found and fixed a release blocker: comparison selection previously set only the manual fallback, allowing the legacy lookup to replace its gross amount. New tests prove selected price, quantity, supplier and default 25% handling survive creation and editing without calling that lookup, while ordinary material rows still call it. The browser harness also checks the selected field reaches the request and Update price reopens comparison. Invalid nonpositive/nonfinite selected amounts are rejected. Nonpositive structured pack counts now fail closed.
+
+Production approval remains **NOT READY** until full browser regression and the requested 10–15-material staging basket, merchant-page reconciliation, quote workflow and before/after staging database integrity checks have completed. No material has a staging PASS yet.

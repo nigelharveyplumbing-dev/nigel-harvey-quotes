@@ -135,8 +135,9 @@ def _package(product, title):
     if value is not None:
         try:
             count = int(str(value))
-            if count > 0:
-                counts.add(count)
+            if count <= 0:
+                return None
+            counts.add(count)
         except ValueError:
             return None
     for pattern in (r"\bpack\s*(?:of\s*)?(\d+)\b", r"\b(\d+)\s*(?:pack|pk)\b"):

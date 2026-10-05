@@ -230,6 +230,13 @@ class BaselineTests(unittest.TestCase):
         masked = re.sub(r'function tradePriceLabel\(item\) \{.*?(?=function renderMaterialSearchResults\()', '', masked, flags=re.S)
         masked = masked.replace('    <button type="button" class="btn-light" style="margin-top:8px;" onclick="compareMaterialTradePrices(this)">Best Trade Price — compare suppliers</button>\n', '')
         masked = masked.replace('    <div class="trade-price-results" aria-live="polite"></div>\n', '')
+        for addition in (
+            '  if (selectedComparisonPrice(row) !== null) {\n    await compareMaterialTradePrices(button);\n    return;\n  }\n',
+            '  if (prefill?.selected_comparison_price > 0) rememberComparisonPrice(div, prefill.selected_comparison_price);\n',
+            '    if (selectedComparisonPrice(row) !== null) chargedMaterial.selected_comparison_price = selectedComparisonPrice(row);\n',
+            '    selected_comparison_price: m.selected_comparison_price ?? null,\n',
+        ):
+            masked = masked.replace(addition, '')
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
                          "fbcdb03af239d67051ccb898cf023648f97dc6b98e06f785129e443c2ee6ca81")
         self.assertEqual(m.HTML.count("<style>"), 1)

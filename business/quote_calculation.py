@@ -24,7 +24,10 @@ def calculate_quote(data: QuoteRequest, *, fetch_tracked_price, safe_float,
 
     for item in data.materials:
         url = item.url.strip() if item.url else ""
-        tracked_price, price_source = fetch_tracked_price(url, item.name, item.supplier, item.manual_price) if url else (None, "manual")
+        if item.selected_comparison_price is not None:
+            tracked_price, price_source = item.selected_comparison_price, "selected_public"
+        else:
+            tracked_price, price_source = fetch_tracked_price(url, item.name, item.supplier, item.manual_price) if url else (None, "manual")
 
         # Full product price is remembered separately.
         full_unit_price = safe_float(tracked_price, None) if tracked_price is not None else safe_float(item.manual_price, 0)
@@ -57,6 +60,8 @@ def calculate_quote(data: QuoteRequest, *, fetch_tracked_price, safe_float,
             "learned_average_quantity": getattr(item, "learned_average_quantity", None),
             "learned_used_count": getattr(item, "learned_used_count", None),
         })
+        if item.selected_comparison_price is not None:
+            material_lines[-1]["selected_comparison_price"] = item.selected_comparison_price
 
     tiling_extra_materials = 0.0
     if data.quote_type == "bathroom" and data.tiling and not data.customer_supplies_tiles:
