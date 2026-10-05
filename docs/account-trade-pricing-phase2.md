@@ -17,7 +17,7 @@ are intentionally absent: they have not been obtained from approved API specs.
 |---|---|---|---|
 | Wolseley | iHub account prices and stock; Get Price V2 includes terms prices; Get Stock V2; Get Branch V3. OAuth 2 client credentials. | Contact Connect/eBusiness, discuss requirements, provide account number privately and technical lead email, obtain portal registration approval, test app/product approval, key/secret and IP approval; test and agree go-live before production app approval. Request read-price/stock products only, never Submit Order. | Exact price/stock response fields, VAT/rate, price-unit/pack semantics, branch/warehouse stock meanings, rate limits, credentials, permitted request methods/URLs and required scopes. All require approved YAML/API documentation. |
 | Wolseley My Prices | Official guide describes selectable product categories/information fields, purchased-product history over 36 months, emailed CSV within 48 hours to the account login's email. | Nigel exports using his own existing account and supplies the real file for inspection. | Exact columns, delimiter/encoding, decimal format, pack/unit, VAT, identifiers, generation time and price validity in Nigel's file. No schema guessed from the guide. |
-| City Plumbing / PTS | Combined websites offer account trade prices; account help describes custom pricing, downloadable statements/credit notes/invoices and branch-provided quotes. | Ask existing account manager/customer services for an explicitly permitted machine-readable account-price export/feed/API and sample/schema. | No public developer specification or documented account-price CSV/feed located in the researched official pages. Statements, invoice downloads and a public trade price guide are not current personal price feeds. |
+| City Plumbing / PTS | Combined websites offer account trade prices; account help describes custom pricing, downloadable financial records and branch quotes. City's official Commusoft partnership page explicitly documents live parts pricing integration. | Ask existing account manager/digital team whether the documented partner route can be approved for Nigel's own app, or request an explicitly permitted machine-readable account-price export/feed and schema. | The Commusoft partnership does not grant this app access. No public developer specification or account-price CSV schema located. Financial downloads and public trade guides are not current personal price feeds. |
 | Williams | Official site offers a trade account, quotation/account facilities and Trade Support for account help. | Ask existing account manager/Trade Support for permitted account-price export/feed/API plus schema/sample and usage terms. | No publicly documented account-price API/export found. Public product amounts cannot establish Nigel's account prices. |
 
 Sources checked on 5 October 2026:
@@ -30,6 +30,7 @@ Sources checked on 5 October 2026:
 - [City / PTS](https://www.cityplumbing.co.uk/content/pts)
 - [City account options](https://www.cityplumbing.co.uk/content/create-an-account)
 - [City FAQ](https://www.cityplumbing.co.uk/content/help-and-advice/faqs)
+- [City's documented Commusoft live-pricing partnership](https://www.cityplumbing.co.uk/content/commusoft)
 - [Williams site](https://www.tradeonlyplumbing.co.uk/)
 - [Williams account/support contact](https://www.tradeonlyplumbing.co.uk/contact-us)
 
@@ -169,7 +170,11 @@ Staging integration and data writes require the owner's subsequent approval.
 
 ## Validation and remaining gate
 
-35 new foundation tests plus all 169 main tests: **204 Python tests passed**.
+37 new foundation tests plus all 169 main tests: **206 local Python tests passed**.
+These include malformed-row batch atomicity and empty import/missing currency.
+Hosted CI at the initial architecture commit passed 204 tests and the full
+Chromium workflows. The final exact-head 206-test CI result is recorded in the
+draft PR; pending while writing this documentation.
 Existing Node comparison and material-selection tests passed. Tests cover source
 precedence, cached-vs-live, stale/unknown age, VAT, pack and identifier conflicts,
 source scope, stock exclusion, PTS deduplication, malformed canonical records,
@@ -192,7 +197,8 @@ Next owner actions:
    privately provide the account details to Wolseley; obtain authorized test
    price/stock YAML, permission/scopes, credentials, sample responses and IP
    approval. Do not paste secrets into this repository or reports.
-3. Obtain City/PTS and Williams confirmation of permitted price export/feed/API
+3. Ask City about its documented partner integration route; obtain City/PTS and
+   Williams confirmation of permitted price export/feed/API
    options with sample/schema and permitted usage. Do not assume that login
    passwords authorize automated extraction.
 4. Review freshness/retention/backup/UI selection policy; approve staging only

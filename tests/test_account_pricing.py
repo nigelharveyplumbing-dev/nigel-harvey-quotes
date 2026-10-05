@@ -239,6 +239,23 @@ class CanonicalImportTests(unittest.TestCase):
                 self.store([r])
             self.assertEqual(before, self.path.read_bytes())
 
+    def test_malformed_row_rejects_entire_batch_without_partial_insert(self):
+        good = record(source="account_cached")
+        bad = replace(good, supplier_sku="malformed-row", price="nan")
+        before = self.path.read_bytes()
+        with self.assertRaises(ValueError):
+            self.store([good, bad])
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.counts(), (0, 0))
+
+    def test_empty_import_and_missing_currency_are_rejected(self):
+        with self.assertRaises(ValueError):
+            self.store(records=[])
+        raw = asdict(record(source="account_cached")); del raw["currency"]
+        with self.assertRaisesRegex(ValueError, "currency"):
+            pricing.record_from_mapping(raw, now=NOW)
+        self.assertEqual(self.counts(), (0, 0))
+
     def test_revalidates_forged_normalized_gross_price(self):
         self.store([replace(record(source="account_cached"), price_inc_vat="0.01")])
         rows = pricing.read_account_records(self.path, supplier="Wolseley", source_ref=REF, now=NOW)
