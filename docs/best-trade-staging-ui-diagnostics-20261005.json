@@ -1,0 +1,105 @@
+{
+  "diagnostics": {
+    "version": "141.0.7390.37",
+    "origin": "https://nigel-harvey-quotes-staging.onrender.com",
+    "utc": "2026-10-05T19:17:01.576Z",
+    "anonymous": {
+      "navigation_status": 401,
+      "http_status": 401,
+      "www_authenticate": "Basic"
+    },
+    "authenticated": {
+      "status": 200,
+      "csp": null,
+      "final_url": "https://nigel-harvey-quotes-staging.onrender.com/app",
+      "dashboard_rendered": true,
+      "page_errors": []
+    }
+  },
+  "database": {
+    "status": "PASS",
+    "checked_at": "2026-10-05T19:33:09.103278+00:00",
+    "integrity_check": "ok",
+    "foreign_key_check": [],
+    "schema_unchanged": true,
+    "all_original_rows_unchanged": true,
+    "backup_sha256": "b94218f035d361e1402084111d57fdbdf8b38551e0f8d46c902b5afe58e43051",
+    "tables": {
+      "app_backups": {
+        "before": 20,
+        "after": 22,
+        "added": 2,
+        "removed_or_changed_original": 0
+      },
+      "appointments": {
+        "before": 0,
+        "after": 0,
+        "added": 0,
+        "removed_or_changed_original": 0
+      },
+      "customers": {
+        "before": 4,
+        "after": 5,
+        "added": 1,
+        "removed_or_changed_original": 0
+      },
+      "invoice_photos": {
+        "before": 0,
+        "after": 0,
+        "added": 0,
+        "removed_or_changed_original": 0
+      },
+      "invoices": {
+        "before": 3,
+        "after": 3,
+        "added": 0,
+        "removed_or_changed_original": 0
+      },
+      "jobs": {
+        "before": 0,
+        "after": 0,
+        "added": 0,
+        "removed_or_changed_original": 0
+      },
+      "leads": {
+        "before": 2,
+        "after": 2,
+        "added": 0,
+        "removed_or_changed_original": 0
+      },
+      "material_price_cache": {
+        "before": 0,
+        "after": 1,
+        "added": 1,
+        "removed_or_changed_original": 0
+      },
+      "material_price_history": {
+        "before": 0,
+        "after": 1,
+        "added": 1,
+        "removed_or_changed_original": 0
+      },
+      "quote_intelligence": {
+        "before": 6,
+        "after": 7,
+        "added": 1,
+        "removed_or_changed_original": 0
+      },
+      "quotes": {
+        "before": 6,
+        "after": 7,
+        "added": 1,
+        "removed_or_changed_original": 0
+      },
+      "sqlite_sequence": {
+        "before": 7,
+        "after": 9,
+        "added": 6,
+        "removed_or_changed_original": 4
+      }
+    },
+    "synthetic_quote_id": 7,
+    "data_deleted": false,
+    "production_database_accessed": false
+  }
+}

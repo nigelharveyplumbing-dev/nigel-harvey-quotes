@@ -1,6 +1,8 @@
 # Best Trade Price release followup — 5 October 2026
 
-**Recommendation: NOT READY for production. PR #2 remains draft and unapproved.** The public offer/parser blockers are resolved for the tested City Plumbing and Selco pages. A genuine two-merchant comparison and its quote persistence now pass on staging. Real staging browser interaction remains blocked by the validation environment; automatic discovery is also incomplete. No production changes or merge occurred.
+**Later UI gate:** The remaining browser blocker was resolved in a clean authenticated environment. See [the real staging UI gate](best-trade-staging-ui-gate-20261005.md), which recommends READY for Nigel's approval within the now-accepted public-price scope. The report below preserves the earlier validation state.
+
+**Recommendation at this earlier checkpoint: NOT READY for production. PR #2 remains draft and unapproved.** The public offer/parser blockers are resolved for the tested City Plumbing and Selco pages. A genuine two-merchant comparison and its quote persistence now pass on staging. Real staging browser interaction remains blocked by the validation environment; automatic discovery is also incomplete. No production changes or merge occurred.
 
 ## Deployment, tests and restoration
 
