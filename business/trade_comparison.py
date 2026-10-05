@@ -401,7 +401,11 @@ def compare_prices(query, *, anchor_url="", cache_rows=()):
     query = re.sub(r"\s+", " ", query).strip()
     if len(query) < 3 or len(query) > 220:
         raise ValueError("Enter a product description between 3 and 220 characters.")
-    if anchor_url and (not supplier_for_url(anchor_url) or not merchant_search._looks_like_product_url(anchor_url, supplier_for_url(anchor_url))):
+    supplier = supplier_for_url(anchor_url) if anchor_url else ""
+    # Selco public product links also use root-level slugs. Inspection still
+    # requires the main Product identity and offer; a slug cannot prove either.
+    selco_slug = supplier == "Selco" and not urlsplit(anchor_url).fragment and bool(re.fullmatch(r'/[a-z0-9]+(?:-[a-z0-9]+){2,}/?', urlsplit(anchor_url).path))
+    if anchor_url and (not supplier or not (selco_slug or merchant_search._looks_like_product_url(anchor_url, supplier))):
         raise ValueError("Use a supported merchant's HTTPS product URL.")
     suppliers = list(merchant_search.LIVE_MERCHANTS)
     with ThreadPoolExecutor(max_workers=4) as pool:

@@ -284,6 +284,16 @@ class TradeComparisonTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 comparison.compare_prices(query, anchor_url=url)
 
+    def test_selco_root_slug_can_be_inspected_but_does_not_prove_a_price(self):
+        url = 'https://www.selcobw.com/chrome-compression-equal-elbow-15mm'
+        with patch.object(comparison, '_merchant_offers', side_effect=lambda supplier, *_: ([], {'supplier': supplier})) as checks:
+            result = comparison.compare_prices('Chrome compression equal elbow 15mm', anchor_url=url)
+        self.assertEqual(checks.call_count, 4)
+        self.assertEqual(result['results'], [])
+        for invalid in ('http://www.selcobw.com/chrome-compression-equal-elbow-15mm', 'https://evil.example/chrome-compression-equal-elbow-15mm', url + '#other', 'https://www.selcobw.com/search?q=elbow'):
+            with self.assertRaises(ValueError):
+                comparison.compare_prices(TITLE, anchor_url=invalid)
+
     @unittest.skipUnless(shutil.which("node"), "Node is unavailable")
     def test_comparison_ui(self):
         result = subprocess.run(["node", str(Path(__file__).with_suffix(".cjs"))],
