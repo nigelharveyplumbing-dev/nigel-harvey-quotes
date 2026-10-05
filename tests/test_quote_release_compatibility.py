@@ -1,13 +1,25 @@
 """Legacy release replay must neither invent full prices nor change quote data."""
 import copy
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("verify_quote_calculations",
     Path(__file__).resolve().parents[1] / "scripts" / "verify_quote_calculations.py")
 verify = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(verify)
+_original_path = list(sys.path)
+_existing_business = {key for key in sys.modules
+                      if key == "business" or key.startswith("business.")}
+try:
+    spec.loader.exec_module(verify)
+finally:
+    # Keep the pure model/calculator references, but do not preload production
+    # package/config modules before baseline tests import their disposable copy.
+    sys.path[:] = _original_path
+    for _key in list(sys.modules):
+        if (_key == "business" or _key.startswith("business.")) and _key not in _existing_business:
+            del sys.modules[_key]
 
 
 class QuoteReleaseCompatibilityTests(unittest.TestCase):
