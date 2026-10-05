@@ -242,6 +242,144 @@ class TradeComparisonTests(unittest.TestCase):
                     "referenceQuantity": {"value": 1, "unitCode": "MTR"}}}
         self.assertIsNone(item(offers=offer)['price'])
 
+    def city_page(self, title='Drayton TRV4 15mm Angled TRV White/Chrome 07 05 0150', price='23.23', sku='818209', brand='Drayton', mpn='07 05 0150', postfix='each, Inc. VAT'):
+        url = 'https://www.cityplumbing.co.uk/p/current-product/p/' + sku
+        html = page(url=url, title=title, price=price, vat=None, brand='', mpn='', sku=sku, numberOfItems=None)
+        html = html.replace(', "availability": "https://schema.org/InStock"', '')
+        html += '<div data-test-id="product-code">' + sku + '</div>'
+        html += '<div data-test-id="price"><div data-test-id="main-through-price">Was £26.03</div><h2>£' + price + '</h2><div>Log in / register for Trade price</div><span data-test-id="main-price-postfix">' + postfix + '</span><div>VAT: Ex Inc</div></div>'
+        html += '<div data-test-id="product-specifications"><span>Supplier Part Number</span><span>' + mpn + '</span><span>Brand Name</span><span>' + brand + '</span></div>'
+        return html, url
+
+    def test_city_current_trv_offer_identity_pack_vat(self):
+        html, url = self.city_page()
+        result = comparison.inspect_product(html, url, 'City Plumbing')
+        self.assertEqual((result['brand'], result['mpn'], result['pack_quantity'], result['price_inc_vat']), ('Drayton', '07 05 0150', 1, 23.23))
+        self.assertEqual(result['vat_basis'], 'inc_vat')
+        self.assertEqual(result['availability'], 'unknown')
+
+    def test_city_current_k2_is_not_k1_or_other_model(self):
+        html, url = self.city_page(title='Stelrad Softline Compact K2 Double Panel Radiator 600mm x 1000mm 80602210.', price='101.96', sku='422363', brand='Stelrad', mpn='80602210')
+        result = comparison.inspect_product(html, url, 'City Plumbing')
+        self.assertEqual((result['mpn'], result['price_inc_vat']), ('80602210', 101.96))
+        self.assertFalse(comparison.equivalent(result, {**result, 'mpn':'80601110', 'name':result['name'].replace('K2', 'K1')}))
+
+    def test_city_ex_vat_conversion_requires_own_postfix(self):
+        html, url = self.city_page(price='10.00', postfix='each, Ex. VAT')
+        self.assertEqual(comparison.inspect_product(html, url, 'City Plumbing')['price_inc_vat'], 12)
+        for bad in ('each', 'VAT: Ex Inc', 'Prices exclude VAT'):
+            html, url = self.city_page(postfix=bad)
+            result = comparison.inspect_product(html, url, 'City Plumbing')
+            self.assertIsNone(result['price_inc_vat'])
+            self.assertIsNone(result['pack_quantity'])
+
+    def test_city_wrong_code_and_unrelated_toggle_cannot_authenticate(self):
+        html, url = self.city_page()
+        html = html.replace('<div data-test-id="product-code">818209', '<div data-test-id="product-code">999999')
+        result = comparison.inspect_product(html, url, 'City Plumbing')
+        self.assertEqual(result['mpn'], '')
+        self.assertIsNone(result['price_inc_vat'])
+
+    def test_city_was_price_and_conflicting_vat_rejected(self):
+        html, url = self.city_page()
+        html = html.replace('<h2>£23.23', '<h2>£26.03')
+        self.assertIsNone(comparison.inspect_product(html, url, 'City Plumbing')['price_inc_vat'])
+        html, url = self.city_page()
+        html += '<p>£23.23 Ex VAT</p>'
+        self.assertEqual(comparison.inspect_product(html, url, 'City Plumbing')['vat_basis'], 'conflict')
+
+    def selco_page(self):
+        url = 'https://www.selcobw.com/chrome-compression-equal-elbow-15mm'
+        title = 'Chrome Compression Equal Elbow 15mm'
+        product = {'@type':'Product', 'url':url, 'name':title, 'sku':'344710921', 'offers':{'@type':'Offer','url':url,'price':'3.72','priceCurrency':'GBP','availability':'http://schema.org/InStock','priceValidUntil':'2020-10-05'}}
+        html = '<div class="ProductDetail-container-13z"><h1>' + title + '</h1><p class="Sku-root-v0w">Item Code: 344710921</p><div data-test-id="ProductDetail.Actions"><div class="PriceBox-root-RD8 PriceBox-detailVariant-1TS"><span class="PriceBox-itemExVat-skf">£3.10 Ex VAT</span><span class="PriceBox-itemIncVat-vQr">£3.72 Inc VAT</span></div></div></div>'
+        html += '<script type="application/ld+json">' + json.dumps(product) + '</script>'
+        return html, url
+
+    def test_selco_fresh_price_box_independent_of_expired_schema(self):
+        html, url = self.selco_page()
+        result = comparison.inspect_product(html, url, 'Selco')
+        self.assertEqual((result['price_inc_vat'], result['vat_basis'], result['pack_quantity']), (3.72, 'inc_vat', 1))
+        self.assertEqual(result['price_evidence'], 'current_product_price_box')
+        self.assertEqual(result['availability'], 'unknown')
+        self.assertFalse(comparison.annotate([result])[0]['is_best_price'])
+
+    def test_selco_only_bound_product_pair_can_supply_price(self):
+        html, url = self.selco_page()
+        for bad in (html.replace('Item Code: 344710921', 'Item Code: 999'), html.replace('£3.10 Ex VAT', '£1.00 Ex VAT'), html.replace('PriceBox-detailVariant-1TS', 'delivery-price'), html.replace('<h1>Chrome Compression Equal Elbow 15mm', '<h1>Different elbow'), html.replace('£3.72 Inc VAT', '£3.72')):
+            self.assertIsNone(comparison.inspect_product(bad + '<aside>Delivery £1.00 Inc VAT</aside>', url, 'Selco')['price_inc_vat'])
+
+    def test_fresh_displayed_price_never_revives_unavailable_schema_stock(self):
+        html, url = self.selco_page()
+        for state in ('OutOfStock', 'SoldOut', 'PreOrder', 'BackOrder'):
+            result = comparison.inspect_product(html.replace('InStock', state), url, 'Selco')
+            self.assertEqual(result['price_inc_vat'], 3.72)
+            result.update(brand='Acme', mpn='V15')
+            self.assertFalse(result['is_best_price'] if 'is_best_price' in result else any(x['is_best_price'] for x in comparison.annotate([result, item('Toolstation')], result)))
+            self.assertIn(result['availability'], ('out_of_stock', 'preorder', 'backorder'))
+
+    def test_declared_utf8_response_is_not_misdecoded(self):
+        content = '<meta charset="utf-8"><p>£3.72 Inc VAT</p>'.encode('utf-8')
+        response = SimpleNamespace(status_code=200, headers={}, content=content, text=content.decode('latin-1'))
+        with patch.object(comparison.requests, 'get', return_value=response):
+            actual, _ = comparison.fetch_page('https://www.selcobw.com/chrome-compression-equal-elbow-15mm', 'Selco')
+        self.assertIn('£3.72', actual)
+        self.assertNotIn('Â', actual)
+
+    def test_selco_account_bulk_or_other_currency_cannot_fallback(self):
+        html, url = self.selco_page()
+        for extra in ('"validForMemberTier":"VIP",', '"eligibleQuantity":{"value":10},', '"priceSpecification":{"unitCode":"MTR"},'):
+            bad = html.replace('"@type": "Offer",', '"@type": "Offer",' + extra)
+            self.assertIsNone(comparison.inspect_product(bad, url, 'Selco')['price_inc_vat'])
+        self.assertIsNone(comparison.inspect_product(html.replace('"GBP"', '"EUR"'), url, 'Selco')['price_inc_vat'])
+
+    def test_toolstation_mpn_bound_to_selected_product_accordion(self):
+        url = 'https://www.toolstation.com/drayton-trv4/p55827'
+        html = page(url=url, title='Drayton TRV4 15mm Angled', price='25.79', vat=None, brand='Drayton', mpn='', sku='55827', numberOfItems=None)
+        html += '<main id="main-content"><select><option selected value="55827">15mm Angled - (55827) - Each - £25.79</option></select><div>£25.79 ex. VAT £21.49</div><div id="accordion-content-technical-specification"><table><tr><td>Manufacturer ID</td><td>07 05 0150</td></tr></table></div></main>'
+        result = comparison.inspect_product(html, url, 'Toolstation')
+        city, city_url = self.city_page()
+        other = comparison.inspect_product(city, city_url, 'City Plumbing')
+        self.assertTrue(comparison.equivalent(result, other))
+        ranked = comparison.annotate([result, other], other)
+        self.assertEqual(ranked[0]['supplier'], 'City Plumbing')
+        self.assertTrue(ranked[0]['is_best_price'])
+        self.assertEqual(result['saving_vs_best'], 2.56)
+        bad = html.replace('value="55827"', 'value="61277"')
+        self.assertEqual(comparison.inspect_product(bad, url, 'Toolstation')['mpn'], '')
+
+    def test_screwfix_unavailable_does_not_attempt_network(self):
+        with patch.object(comparison, 'fetch_page') as fetch:
+            offers, status = comparison._merchant_offers('Screwfix', TITLE, URL)
+        fetch.assert_not_called()
+        self.assertEqual(offers, [])
+        self.assertEqual(status['status'], 'unavailable')
+        self.assertIn('HTTP 403', status['reason'])
+
+    def test_selected_product_precedes_search_and_navigation_not_inspected(self):
+        url = 'https://www.toolstation.com/valve/p12345'
+        def fetch(target, *args):
+            if target == url:
+                return page(url=url, sku='12345', title=TITLE), url
+            return '<a href="/plumbing/c15">Plumbing</a>', target
+        with patch.object(comparison, 'fetch_page', side_effect=fetch) as mocked:
+            offers, status = comparison._merchant_offers('Toolstation', TITLE, url)
+        self.assertEqual(mocked.call_args_list[0].args[0], url)
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(status['status'], 'search_incomplete')
+        self.assertEqual(mocked.call_count, 2)
+
+    def test_second_product_url_validated_and_never_establishes_identity(self):
+        for value in ('https://127.0.0.1/p/12345', 'https://www.toolstation.com/plumbing/c15', 'https://www.toolstation.com/search?q=valve', 'http://www.toolstation.com/valve/p12345'):
+            with self.assertRaises(ValueError):
+                comparison.compare_prices(TITLE, anchor_url=URL, comparison_url=value)
+        with self.assertRaises(ValueError):
+            comparison.compare_prices(TITLE, comparison_url='https://www.toolstation.com/valve/p12345')
+        other = 'https://www.toolstation.com/valve/p12345'
+        with patch.object(comparison, '_merchant_offers', side_effect=lambda supplier, *_: ([item(supplier, mpn='OTHER' if supplier=='Toolstation' else 'V15')], {'supplier':supplier})):
+            result = comparison.compare_prices(TITLE, anchor_url=URL, comparison_url=other)
+        self.assertFalse(next(x for x in result['results'] if x['supplier']=='Toolstation')['is_best_price'])
+
     def test_public_url_allowlist(self):
         for url in ("http://www.screwfix.com/p/12345", "https://127.0.0.1/p/12345",
                     "https://screwfix.com.evil.test/p/12345", "https://evil.screwfix.com/p/12345",
@@ -357,7 +495,7 @@ class TradeComparisonHTTPTests(unittest.TestCase):
                     return SimpleNamespace(status_code=403, text="", headers={})
                 config = comparison.merchant_search.LIVE_MERCHANTS[supplier]
                 base = 'https://www.' + config["allowed_hosts"][0]
-                target = base + ('/p/12345' if supplier != 'Toolstation' else '/acme/p12345')
+                target = base + ('/acme/p12345' if supplier == 'Toolstation' else '/p/acme/p/123456' if supplier == 'City Plumbing' else '/p/12345')
                 if '/search' in url:
                     html = '<script type="application/ld+json">' + json.dumps({"@type": "Product", "name": TITLE, "url": target}) + '</script>'
                 else:
@@ -374,4 +512,5 @@ class TradeComparisonHTTPTests(unittest.TestCase):
                 self.assertEqual(next(x for x in data['merchants'] if x['supplier'] == 'Selco')['status'], 'unavailable')
                 self.assertEqual(client.get('/api/best-trade-prices', params={"q": "a"}, headers=auth).status_code, 400)
                 self.assertTrue(all(call.kwargs["allow_redirects"] is False for call in fetch.call_args_list))
+                self.assertFalse(any(comparison.supplier_for_url(call.args[0]) == 'Screwfix' for call in fetch.call_args_list))
             self.assertEqual(snapshot(), before, "Comparison altered existing data")

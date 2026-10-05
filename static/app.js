@@ -1397,6 +1397,9 @@ function addMaterial(prefill = null) {
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${manualPrice}">
 
     <div class="material-live-status small" style="margin-top:8px;"></div>
+    <label class="small" style="display:block;margin-top:8px;">Other merchant product URL (optional, for incomplete searches)
+      <input type="url" class="m-compare-url" placeholder="https://…" autocomplete="off">
+    </label>
     <button type="button" class="btn-light" style="margin-top:8px;" onclick="compareMaterialTradePrices(this)">Best Trade Price — compare suppliers</button>
     <div class="trade-price-results" aria-live="polite"></div>
     <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
@@ -1453,6 +1456,7 @@ async function compareMaterialTradePrices(button) {
   const box = row.querySelector('.trade-price-results');
   const query = row.querySelector('.m-name').value.trim();
   const productUrl = row.querySelector('.m-url').value.trim();
+  const comparisonUrl = row.querySelector('.m-compare-url')?.value.trim() || '';
   if (query.length < 3) { showNotice('Enter a specific product name first.'); return; }
   const token = {};
   row.tradeComparisonToken = token;
@@ -1460,21 +1464,21 @@ async function compareMaterialTradePrices(button) {
   button.disabled = true;
   box.textContent = 'Checking equivalent products at City Plumbing, Screwfix, Toolstation and Selco…';
   try {
-    const params = new URLSearchParams({q:query, url:productUrl});
+    const params = new URLSearchParams({q:query, url:productUrl, compare_url:comparisonUrl});
     const response = await fetch('/api/best-trade-prices?' + params);
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || 'Price comparison failed.');
     if (row.tradeComparisonToken !== token) return;
-    if (row.querySelector('.m-name').value.trim() !== query || row.querySelector('.m-url').value.trim() !== productUrl) {
+    if (row.querySelector('.m-name').value.trim() !== query || row.querySelector('.m-url').value.trim() !== productUrl || (row.querySelector('.m-compare-url')?.value.trim() || '') !== comparisonUrl) {
       box.textContent = 'Material changed during search. Compare again for this product.';
       return;
     }
     row.tradePriceResults = data.results || [];
-    row.tradeComparisonInput = {query, productUrl};
+    row.tradeComparisonInput = {query, productUrl, comparisonUrl};
     box.innerHTML = `<p class="small">${escapeHtml(data.note || '')}</p>` +
       row.tradePriceResults.map((item, index) => {
         const url = safeTradeProductUrl(item.url);
-        const selectable = item.price_provenance === 'public_live' && Number(item.price_inc_vat) > 0 &&
+        const selectable = item.price_provenance === 'public_live' && Number(item.price_inc_vat) > 0 && Number(item.pack_quantity) > 0 && !item.identity_conflict &&
           !['out_of_stock','preorder','backorder'].includes(item.availability) && url;
         const price = Number(item.price_inc_vat) > 0
           ? `${pounds(item.price_inc_vat)} inc VAT per pack${item.pack_quantity ? ' (' + Number(item.pack_quantity) + ' item' + (item.pack_quantity === 1 ? '' : 's') + ')' : ''}`
@@ -1494,7 +1498,8 @@ async function compareMaterialTradePrices(button) {
       }).join('') + (row.tradePriceResults.length ? '' : '<p>No confirmed product prices found. Use the merchant links or enter a manual price.</p>') +
       '<p class="small">' + (data.merchants || []).map(item => {
         const url = safeTradeProductUrl(item.search_url);
-        return url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.supplier)}: ${escapeHtml(item.status)}</a>` : '';
+        const label = escapeHtml(item.supplier) + ': ' + escapeHtml(item.status);
+        return (url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${label}</a>` : label) + (item.reason ? ' — ' + escapeHtml(item.reason) : '');
       }).join(' · ') + '</p>';
   } catch (error) {
     if (row.tradeComparisonToken === token) box.textContent = error.message || 'Price comparison failed.';
@@ -1506,12 +1511,12 @@ async function compareMaterialTradePrices(button) {
 function useComparedTradePrice(button, index) {
   const row = button.closest('.material-row');
   const input = row.tradeComparisonInput;
-  if (!input || row.querySelector('.m-name').value.trim() !== input.query || row.querySelector('.m-url').value.trim() !== input.productUrl) {
+  if (!input || row.querySelector('.m-name').value.trim() !== input.query || row.querySelector('.m-url').value.trim() !== input.productUrl || (row.querySelector('.m-compare-url')?.value.trim() || '') !== input.comparisonUrl) {
     showNotice('Material changed. Compare again before choosing a price.');
     return;
   }
   const item = row.tradePriceResults?.[index];
-  if (!item || item.price_provenance !== 'public_live' || !(Number(item.price_inc_vat) > 0) ||
+  if (!item || item.price_provenance !== 'public_live' || !(Number(item.price_inc_vat) > 0) || !(Number(item.pack_quantity) > 0) || item.identity_conflict ||
       !safeTradeProductUrl(item.url) || ['out_of_stock','preorder','backorder'].includes(item.availability)) return;
   row.querySelector('.m-name').value = item.name;
   row.querySelector('.m-supplier').value = item.supplier;

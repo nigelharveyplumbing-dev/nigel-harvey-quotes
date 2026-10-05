@@ -1557,11 +1557,12 @@ def search_live_merchant_products(query: str, suppliers=None, per_supplier: int 
 
 
 @app.get("/api/best-trade-prices")
-def api_best_trade_prices(request: Request, q: str = "", url: str = ""):
+def api_best_trade_prices(request: Request, q: str = "", url: str = "", compare_url: str = ""):
     if not check_basic_auth(request):
         raise HTTPException(status_code=401, detail="Authentication required")
     try:
-        result = trade_comparison.compare_prices(q, anchor_url=url, cache_rows=material_store.list_material_price_cache())
+        result = trade_comparison.compare_prices(q, anchor_url=url, comparison_url=compare_url,
+                                                 cache_rows=material_store.list_material_price_cache())
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     return JSONResponse(result, headers={"Cache-Control": "no-store"})

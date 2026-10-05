@@ -153,6 +153,8 @@ try {
   // Exercise the comparison with synthetic public prices; no merchant request
   // leaves the browser or the disposable server.
   const comparisonRow = page.locator('.material-row').last();
+  await comparisonRow.locator('.m-url').fill('https://www.cityplumbing.co.uk/p/synthetic-valve/p/123456');
+  await comparisonRow.getByLabel('Other merchant product URL', {exact:false}).fill('https://www.toolstation.com/synthetic-valve/p12345');
   await page.route('**/api/best-trade-prices?**', route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({
       note: 'Public prices; delivery not included.', merchants: [], results: [{
@@ -167,6 +169,7 @@ try {
     }),
   }));
   await comparisonRow.getByRole('button', { name: /Best Trade Price/ }).click();
+  assert.ok(browserDiagnostics.apiRequests.includes('GET /api/best-trade-prices'));
   await comparisonRow.getByText(/BEST PRICE/).waitFor();
   assert.equal(await comparisonRow.locator('.m-manual').inputValue(), '10');
   assert.equal(await comparisonRow.locator('.m-qty').inputValue(), '2');
