@@ -249,7 +249,7 @@ try {
   await page.locator('#invoicePhotoGallery img').first().waitFor();
   const invoicePdf = await context.request.get(`${origin}/api/invoices/${invoice.id}/pdf`);
   assert.equal(invoicePdf.status(), 200);
-  assert.match(invoicePdf.headers()['content-disposition'] || '', /invoice.*\.pdf/i);
+  assert.equal(invoicePdf.headers()['content-disposition'], `attachment; filename="${invoice.invoice_number}.pdf"`);
   assert.equal((await invoicePdf.body()).subarray(0, 4).toString(), '%PDF');
   assert.equal((await anonymous.request.get(`${origin}/api/invoices/${invoice.id}/pdf`)).status(), 200);
   assert.equal((await anonymous.request.get(`${origin}/api/quotes/${quote.id}/pdf`)).status(), 200);
