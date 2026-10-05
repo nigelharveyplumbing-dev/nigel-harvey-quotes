@@ -12,10 +12,16 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+_existing_business_modules = {key for key in sys.modules if key == "business" or key.startswith("business.")}
 try:
     from business import trade_comparison as comparison
 finally:
     sys.path.pop(0)
+    # Keep pure helpers as local references, without preloading the production
+    # package before baseline tests import their disposable application copy.
+    for _key in list(sys.modules):
+        if (_key == "business" or _key.startswith("business.")) and _key not in _existing_business_modules:
+            del sys.modules[_key]
 from fastapi.testclient import TestClient
 from local_browser_server import disposable_app
 
@@ -77,6 +83,8 @@ class TradeComparisonTests(unittest.TestCase):
                                               item(title="Acme 15mm endfeed elbow")))
         self.assertFalse(comparison.equivalent(item(title="Acme potable vessel 3 bar"),
                                               item(title="Acme heating vessel 6 bar")))
+        self.assertFalse(comparison.equivalent(item(title='Acme 1/2 inch valve'),
+                                              item(title='Acme 3/4 inch valve')))
 
     def test_gtin_checksum_and_conflicting_gtins(self):
         self.assertEqual(comparison.valid_gtin("4006381333931"), "04006381333931")
@@ -128,6 +136,8 @@ class TradeComparisonTests(unittest.TestCase):
         self.assertIsNone(item(offers={"price": 1, "priceCurrency": "GBP", "url": "https://www.screwfix.com/p/other/54321"})["price"])
         parsed = comparison.inspect_product(page(url="https://www.screwfix.com/p/other/54321"), URL, "Screwfix")
         self.assertIsNone(parsed["price"])
+        variant = comparison.inspect_product(page(url=URL + '?variant=other'), URL + '?variant=chosen', 'Screwfix')
+        self.assertIsNone(variant['price'])
 
     def test_missing_url_only_allowed_when_single_product_matches_heading(self):
         self.assertEqual(item(url="")["price"], 12)
@@ -160,6 +170,12 @@ class TradeComparisonTests(unittest.TestCase):
     def test_invalid_values_rejected(self):
         for value in ("NaN", "Infinity", -1, 0, 100000, None, "bad"):
             self.assertIsNone(comparison.money(value))
+
+    def test_per_length_unit_price_is_not_pack_offer(self):
+        offer = {"@type": "Offer", "price": 10, "priceCurrency": "GBP",
+                 "priceSpecification": {"valueAddedTaxIncluded": True,
+                    "referenceQuantity": {"value": 1, "unitCode": "MTR"}}}
+        self.assertIsNone(item(offers=offer)['price'])
 
     def test_public_url_allowlist(self):
         for url in ("http://www.screwfix.com/p/12345", "https://127.0.0.1/p/12345",

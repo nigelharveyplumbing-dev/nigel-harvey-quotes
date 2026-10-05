@@ -10,7 +10,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from urllib.parse import quote_plus, urljoin, urlsplit
+from urllib.parse import parse_qsl, quote_plus, urlencode, urljoin, urlsplit
 
 import requests
 from bs4 import BeautifulSoup
@@ -47,7 +47,9 @@ def identifier(value):
 
 def canonical_url(url):
     parsed = urlsplit(str(url or ""))
-    return f"https://{parsed.hostname}{parsed.path.rstrip('/')}" if parsed.hostname else ""
+    query = urlencode(sorted((key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+                             if not key.lower().startswith("utm_") and key.lower() not in {"gclid", "fbclid"}))
+    return (f"https://{parsed.hostname}{parsed.path.rstrip('/')}" + ("?" + query if query else "")) if parsed.hostname else ""
 
 
 def supplier_for_url(url):
@@ -197,6 +199,13 @@ def inspect_product(html, url, supplier):
         if isinstance(specification, dict):
             if specification.get("validForMemberTier"):
                 continue
+            unit = specification.get("referenceQuantity") or specification
+            if isinstance(unit, dict):
+                code = str(unit.get("unitCode") or unit.get("unitText") or "").upper()
+                if code and code not in {"C62", "H87", "EA", "EACH"}:
+                    continue
+                if unit is not specification and str(unit.get("value")) != "1":
+                    continue
             vat = specification.get("valueAddedTaxIncluded")
             explicit = "inc_vat" if vat is True else "ex_vat" if vat is False else "unknown"
             if explicit != "unknown":
@@ -230,6 +239,7 @@ def equivalent(left, right):
                     r"\d+\s*[x×]\s*\d+(?:\s*[x×]\s*\d+)?",
                     r"\b(?:white|chrome|black|anthracite)\b", r"\b(?:angled|straight)\b",
                     r"\b(?:compression|endfeed|pushfit)\b", r"\d+(?:\.\d+)?\s*bar\b",
+                    r'\b\d+\s*/\s*\d+\s*(?:inch|in\b|bsp|\")',
                     r"\b(?:potable|heating)\b", r"\b(?:plastic|brass|copper|steel)\b"):
         a = {normal(x) for x in re.findall(pattern, left.get("name", ""), re.I)}
         b = {normal(x) for x in re.findall(pattern, right.get("name", ""), re.I)}
