@@ -288,5 +288,6 @@
   ["GET", "/api/pipeline"],
   ["POST", "/api/quick-add/preview"],
   ["POST", "/api/quick-add/confirm"],
-  ["GET", "/api/leads/{lead_id}/deletion-check"]
+  ["GET", "/api/leads/{lead_id}/deletion-check"],
+  ["GET", "/api/best-trade-prices"]
 ]

@@ -1,0 +1,206 @@
+{
+  "gate": "PASS",
+  "finished_at": "2026-10-05T19:26:18.650Z",
+  "quote_id": 7,
+  "comparison": {
+    "results": [
+      {
+        "name": "Drayton TRV4 15mm Angled TRV White/Chrome 07 05 0150",
+        "supplier": "City Plumbing",
+        "url": "https://www.cityplumbing.co.uk/p/drayton-trv4-15mm-angled-trv-whitechrome-07-05-0150/p/818209",
+        "brand": "Drayton",
+        "mpn": "07 05 0150",
+        "gtin": "",
+        "pack_quantity": 1,
+        "price": 23.23,
+        "vat_basis": "inc_vat",
+        "price_inc_vat": 23.23,
+        "currency": "GBP",
+        "availability": "unknown",
+        "price_provenance": "public_live",
+        "checked_at": "2026-10-05T19:24:39+00:00",
+        "identity_conflict": false,
+        "sku": "818209",
+        "price_evidence": "structured_offer",
+        "is_best_price": true,
+        "saving_vs_best": 0,
+        "comparison_group": 1,
+        "comparison_reason": "Same manufacturer product and pack",
+        "compared_merchants": 2
+      },
+      {
+        "name": "Drayton TRV4 Classic Thermostatic Radiator Valve 15mm Angled",
+        "supplier": "Toolstation",
+        "url": "https://www.toolstation.com/drayton-trv4-classic-thermostatic-radiator-valve/p55827",
+        "brand": "Drayton",
+        "mpn": "07 05 0150",
+        "gtin": "",
+        "pack_quantity": 1,
+        "price": 25.79,
+        "vat_basis": "inc_vat",
+        "price_inc_vat": 25.79,
+        "currency": "GBP",
+        "availability": "in_stock",
+        "price_provenance": "public_live",
+        "checked_at": "2026-10-05T19:24:38+00:00",
+        "identity_conflict": false,
+        "sku": "55827",
+        "price_evidence": "structured_offer",
+        "is_best_price": false,
+        "saving_vs_best": 2.56,
+        "comparison_group": 1,
+        "comparison_reason": "Same manufacturer product and pack",
+        "compared_merchants": 2
+      },
+      {
+        "name": "STAGING UI REFERENCE ONLY - Drayton TRV4 Classic Thermostatic Radiator Valve 15mm Angled",
+        "supplier": "Toolstation",
+        "url": "https://www.toolstation.com/drayton-trv4-classic-thermostatic-radiator-valve/p55827",
+        "price": 25.79,
+        "price_provenance": "cached_public",
+        "checked_at": "2026-10-05T19:00:49+00:00",
+        "record_updated_at": "2026-10-05T19:00:49+00:00",
+        "vat_basis": "unknown",
+        "price_inc_vat": null,
+        "currency": "unknown",
+        "is_best_price": false,
+        "saving_vs_best": null,
+        "comparison_group": null,
+        "comparison_reason": "Reference price or VAT/price not confirmed"
+      },
+      {
+        "name": "STAGING UI REFERENCE ONLY - Drayton TRV4 Classic Thermostatic Radiator Valve 15mm Angled",
+        "supplier": "Toolstation",
+        "url": "https://www.toolstation.com/drayton-trv4-classic-thermostatic-radiator-valve/p55827",
+        "price": 25.79,
+        "price_provenance": "manual",
+        "checked_at": null,
+        "record_updated_at": "2026-10-05T19:00:49+00:00",
+        "vat_basis": "unknown",
+        "price_inc_vat": null,
+        "currency": "unknown",
+        "is_best_price": false,
+        "saving_vs_best": null,
+        "comparison_group": null,
+        "comparison_reason": "Reference price or VAT/price not confirmed"
+      }
+    ],
+    "merchants": [
+      {
+        "supplier": "City Plumbing",
+        "status": "search_incomplete",
+        "products_checked": 1,
+        "reason": "Search supplies no reliable product links",
+        "search_url": "https://www.cityplumbing.co.uk/search?q=Drayton+TRV4"
+      },
+      {
+        "supplier": "Screwfix",
+        "status": "unavailable",
+        "products_checked": 0,
+        "search_url": "",
+        "reason": "Live comparison unavailable: public retrieval is not reliably permitted (staging HTTP 403)."
+      },
+      {
+        "supplier": "Toolstation",
+        "status": "search_incomplete",
+        "products_checked": 1,
+        "reason": "Search supplies no reliable product links",
+        "search_url": "https://www.toolstation.com/search?q=Drayton+TRV4"
+      },
+      {
+        "supplier": "Selco",
+        "status": "unavailable",
+        "products_checked": 0,
+        "reason": "",
+        "search_url": "https://www.selcobw.com/search?q=Drayton+TRV4"
+      }
+    ],
+    "cached_manual_use_buttons": 0,
+    "manual_input_did_not_win": true
+  },
+  "selected": {
+    "supplier": "City Plumbing",
+    "url": "https://www.cityplumbing.co.uk/p/drayton-trv4-15mm-angled-trv-whitechrome-07-05-0150/p/818209",
+    "price": "23.23",
+    "quantity": "2",
+    "handling_percent": "25",
+    "handling_enabled": true
+  },
+  "reopened": {
+    "supplier": "City Plumbing",
+    "url": "https://www.cityplumbing.co.uk/p/drayton-trv4-15mm-angled-trv-whitechrome-07-05-0150/p/818209",
+    "price": "23.23",
+    "quantity": "2",
+    "handling_percent": "25",
+    "handling_enabled": true
+  },
+  "quote_phases": {
+    "created": {
+      "total": 158.07,
+      "materials": 58.08,
+      "materials_base": 46.46,
+      "handling_percent": 25,
+      "handling_amount": 11.62,
+      "material_lines": [
+        {
+          "name": "Drayton TRV4 15mm Angled TRV White/Chrome 07 05 0150",
+          "quantity": 2,
+          "supplier": "City Plumbing",
+          "url": "https://www.cityplumbing.co.uk/p/drayton-trv4-15mm-angled-trv-whitechrome-07-05-0150/p/818209",
+          "manual_price": 23.23,
+          "full_unit_price": 23.23,
+          "unit_price_used": 23.23,
+          "line_total": 46.46,
+          "live_price_used": false,
+          "price_source": "selected_public",
+          "material_type": "chargeable",
+          "charge_method": "full",
+          "quantity_source": "rule",
+          "learned_average_quantity": null,
+          "learned_used_count": null,
+          "selected_comparison_price": 23.23
+        }
+      ]
+    },
+    "edited": {
+      "total": 158.07,
+      "materials": 58.08,
+      "materials_base": 46.46,
+      "handling_percent": 25,
+      "handling_amount": 11.62,
+      "material_lines": [
+        {
+          "name": "Drayton TRV4 15mm Angled TRV White/Chrome 07 05 0150",
+          "quantity": 2,
+          "supplier": "City Plumbing",
+          "url": "https://www.cityplumbing.co.uk/p/drayton-trv4-15mm-angled-trv-whitechrome-07-05-0150/p/818209",
+          "manual_price": 23.23,
+          "full_unit_price": 23.23,
+          "unit_price_used": 23.23,
+          "line_total": 46.46,
+          "live_price_used": false,
+          "price_source": "selected_public",
+          "material_type": "chargeable",
+          "charge_method": "full",
+          "quantity_source": "rule",
+          "learned_average_quantity": null,
+          "learned_used_count": null,
+          "selected_comparison_price": 23.23
+        }
+      ]
+    }
+  },
+  "page_errors": [],
+  "failed_requests": [],
+  "bad_responses": [],
+  "screenshots": [
+    "best-trade-ui-gate-comparison.png",
+    "best-trade-ui-gate-selected.png",
+    "best-trade-ui-gate-reopened.png",
+    "best-trade-ui-gate-edited.png"
+  ],
+  "harness_corrections": [
+    "Historical reference fixture initially absent; no quote created in attempt1.",
+    "Expected quote total corrected to existing Python calculation rounding 158.07; app calculations unchanged."
+  ]
+}

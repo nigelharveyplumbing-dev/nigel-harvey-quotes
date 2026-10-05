@@ -85,16 +85,28 @@ try {
   const anonymous = await browser.newContext();
   await anonymous.route('**/*', localRoute);
   const challengePage = await anonymous.newPage();
-  const challenge = await challengePage.goto(`${origin}/app`);
+  // Chromium can surface a refused Basic Auth navigation as a network error.
+  // Verify the HTTP challenge separately and accept only that exact error.
+  async function expectAuthChallenge(page) {
+    try {
+      const response = await page.goto(`${origin}/app`);
+      assert.equal(response.status(), 401);
+    } catch (error) {
+      assert.match(error.message, /net::ERR_INVALID_AUTH_CREDENTIALS/);
+    }
+  }
+  const challenge = await anonymous.request.get(`${origin}/app`);
   assert.equal(challenge.status(), 401);
   assert.match(challenge.headers()['www-authenticate'] || '', /Basic/i);
+  await expectAuthChallenge(challengePage);
   assert.equal((await anonymous.request.get(`${origin}/api/dashboard`)).status(), 401);
 
   const wrong = await browser.newContext({ httpCredentials: {
     username: credentials.username, password: `${credentials.password}-incorrect`,
   } });
   await wrong.route('**/*', localRoute);
-  assert.equal((await (await wrong.newPage()).goto(`${origin}/app`)).status(), 401);
+  assert.equal((await wrong.request.get(`${origin}/app`)).status(), 401);
+  await expectAuthChallenge(await wrong.newPage());
 
   const context = await browser.newContext({
     httpCredentials: credentials,
@@ -138,6 +150,45 @@ try {
   await page.locator('.material-row .m-name').last().fill('Synthetic valve');
   await page.locator('.material-row .m-qty').last().fill('2');
   await page.locator('.material-row .m-manual').last().fill('10');
+  // Exercise the comparison with synthetic public prices; no merchant request
+  // leaves the browser or the disposable server.
+  const comparisonRow = page.locator('.material-row').last();
+  await comparisonRow.locator('.m-url').fill('https://www.cityplumbing.co.uk/p/synthetic-valve/p/123456');
+  await comparisonRow.getByLabel('Other merchant product URL', {exact:false}).fill('https://www.toolstation.com/synthetic-valve/p12345');
+  await page.route('**/api/best-trade-prices?**', route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({
+      note: 'Public prices; delivery not included.', merchants: [], results: [{
+        name: 'Synthetic valve', supplier: 'Toolstation',
+        url: 'https://www.toolstation.com/synthetic-valve/p12345',
+        price_provenance: 'public_live', price: 8, price_inc_vat: 9.6,
+        vat_basis: 'ex_vat', pack_quantity: 1, availability: 'in_stock',
+        is_best_price: true, comparison_group: 1,
+        comparison_reason: 'Same manufacturer product and pack',
+      }, {name: 'Synthetic valve', supplier: 'Screwfix', price: 1,
+        price_provenance: 'manual', vat_basis: 'unknown', is_best_price: false}],
+    }),
+  }));
+  await comparisonRow.getByRole('button', { name: /Best Trade Price/ }).click();
+  assert.ok(browserDiagnostics.apiRequests.includes('GET /api/best-trade-prices'));
+  await comparisonRow.getByText(/BEST PRICE/).waitFor();
+  assert.equal(await comparisonRow.locator('.m-manual').inputValue(), '10');
+  assert.equal(await comparisonRow.locator('.m-qty').inputValue(), '2');
+  assert.equal(await page.locator('#materials_handling_percent').inputValue(), '25');
+  assert.equal(await comparisonRow.getByRole('button', { name: 'Use this product and price' }).count(), 1);
+  await comparisonRow.getByRole('button', { name: 'Use this product and price' }).click();
+  assert.equal(await comparisonRow.locator('.m-manual').inputValue(), '9.60');
+  assert.equal(await comparisonRow.locator('.m-supplier').inputValue(), 'Toolstation');
+  assert.equal((await page.evaluate(() => collectFormPayload())).materials.at(-1).selected_comparison_price, 9.6);
+  await comparisonRow.getByRole('button', {name:'Update price', exact:true}).click();
+  await comparisonRow.getByRole('button', {name:'Use this product and price'}).click();
+  assert.equal((await page.evaluate(() => collectFormPayload())).materials.at(-1).selected_comparison_price, 9.6);
+  assert.equal(await comparisonRow.locator('.m-qty').inputValue(), '2');
+  assert.equal(await page.locator('#materials_handling_percent').inputValue(), '25');
+  // Restore the original synthetic material before the existing quote checks.
+  await comparisonRow.locator('.m-url').fill('');
+  await comparisonRow.locator('.m-manual').fill('10');
+  await comparisonRow.locator('.m-supplier').selectOption('');
+  await page.unroute('**/api/best-trade-prices?**');
   const createdRequest = page.waitForResponse(response => response.url() === `${origin}/api/quote`
     && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Generate Quote' }).click();
@@ -184,7 +235,7 @@ try {
   await page.locator('#invoiceList').getByText('Paid', { exact: true }).first().waitFor();
 
   // A synthetic image goes through the browser file input and normal upload UI.
-  await invoiceRow.getByRole('button', { name: 'Open', exact: true }).click();
+  await invoiceRow.getByRole('button', { name: 'Preview Invoice', exact: true }).click();
   const paymentDisplay = await page.locator('#i_payment_link_box').innerText();
   assert.ok(paymentDisplay.includes('Test Bank'));
   assert.ok(paymentDisplay.includes('Synthetic Test Account'));
@@ -205,7 +256,7 @@ try {
   await page.locator('#invoicePhotoGallery img').first().waitFor();
   const invoicePdf = await context.request.get(`${origin}/api/invoices/${invoice.id}/pdf`);
   assert.equal(invoicePdf.status(), 200);
-  assert.match(invoicePdf.headers()['content-disposition'] || '', /invoice.*\.pdf/i);
+  assert.equal(invoicePdf.headers()['content-disposition'], `attachment; filename="${invoice.invoice_number}.pdf"`);
   assert.equal((await invoicePdf.body()).subarray(0, 4).toString(), '%PDF');
   assert.equal((await anonymous.request.get(`${origin}/api/invoices/${invoice.id}/pdf`)).status(), 200);
   assert.equal((await anonymous.request.get(`${origin}/api/quotes/${quote.id}/pdf`)).status(), 200);
