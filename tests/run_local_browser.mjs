@@ -85,16 +85,28 @@ try {
   const anonymous = await browser.newContext();
   await anonymous.route('**/*', localRoute);
   const challengePage = await anonymous.newPage();
-  const challenge = await challengePage.goto(`${origin}/app`);
+  // Chromium can surface a refused Basic Auth navigation as a network error.
+  // Verify the HTTP challenge separately and accept only that exact error.
+  async function expectAuthChallenge(page) {
+    try {
+      const response = await page.goto(`${origin}/app`);
+      assert.equal(response.status(), 401);
+    } catch (error) {
+      assert.match(error.message, /net::ERR_INVALID_AUTH_CREDENTIALS/);
+    }
+  }
+  const challenge = await anonymous.request.get(`${origin}/app`);
   assert.equal(challenge.status(), 401);
   assert.match(challenge.headers()['www-authenticate'] || '', /Basic/i);
+  await expectAuthChallenge(challengePage);
   assert.equal((await anonymous.request.get(`${origin}/api/dashboard`)).status(), 401);
 
   const wrong = await browser.newContext({ httpCredentials: {
     username: credentials.username, password: `${credentials.password}-incorrect`,
   } });
   await wrong.route('**/*', localRoute);
-  assert.equal((await (await wrong.newPage()).goto(`${origin}/app`)).status(), 401);
+  assert.equal((await wrong.request.get(`${origin}/app`)).status(), 401);
+  await expectAuthChallenge(await wrong.newPage());
 
   const context = await browser.newContext({
     httpCredentials: credentials,
