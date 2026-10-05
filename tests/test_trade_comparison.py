@@ -36,6 +36,8 @@ def page(url=URL, title=TITLE, price="12.00", vat=True, **changes):
              "priceSpecification": {"valueAddedTaxIncluded": vat}}
     product = {"@type": "Product", "name": title, "url": url, "brand": {"name": "Acme"},
                "mpn": "V15", "sku": "merchant-sku", "offers": offer}
+    if not any(word in title.lower() for word in ("pack", "kit", "bundle", "set")):
+        product["numberOfItems"] = 1
     product.update(changes)
     return '<h1>' + title + '</h1><script type="application/ld+json">' + json.dumps(product) + '</script>'
 
@@ -112,6 +114,52 @@ class TradeComparisonTests(unittest.TestCase):
         self.assertEqual(parsed["vat_basis"], "inc_vat")
         other = comparison.inspect_product(page(vat=None) + '<footer>Prices exclude VAT</footer><p>£1.00 Ex VAT</p>', URL, "Screwfix")
         self.assertEqual(other["vat_basis"], "unknown")
+
+    def test_vat_prefix_never_applies_to_preceding_amount(self):
+        html = page(price="8.05", vat=None) + '<div>£8.05 ex. VAT £6.71</div>'
+        self.assertEqual(comparison.inspect_product(html, URL, 'Screwfix')['vat_basis'], 'unknown')
+        html = page(price="6.71", vat=None) + '<div>£8.05 ex. VAT £6.71</div>'
+        self.assertEqual(comparison.inspect_product(html, URL, 'Screwfix')['vat_basis'], 'ex_vat')
+
+    def toolstation_page(self, gross="8.05", net="6.71", pack="Each", selected="12212", **changes):
+        url = 'https://www.toolstation.com/jg-speedfit-isolating-valve/p12212'
+        html = page(url=url, title='JG Speedfit Isolating Valve 15mm', price=gross, vat=None,
+                    brand='JG Speedfit', mpn='', sku='12212', numberOfItems=changes.pop('numberOfItems', None), **changes)
+        was = changes.pop('was', '')
+        html += '<div><span>£' + gross + '</span>' + ('<span>was £' + was + '</span>' if was else '') + '<span>ex. VAT £' + net + '</span></div>'
+        html += '<select><option selected value="' + selected + '">15mm - (' + selected + ') - ' + pack + ' - £' + gross + '</option></select>'
+        return comparison.inspect_product(html, url, 'Toolstation')
+
+    def test_toolstation_real_dual_vat_layout_is_gross_not_double_taxed(self):
+        parsed = self.toolstation_page()
+        self.assertEqual(parsed['vat_basis'], 'inc_vat')
+        self.assertEqual(parsed['price_inc_vat'], 8.05)
+        self.assertEqual(parsed['pack_quantity'], 1)
+        self.assertFalse(comparison.annotate([parsed])[0]['is_best_price'])
+
+    def test_toolstation_pack_title_omission_uses_selected_sku_pack(self):
+        parsed = self.toolstation_page(gross='1.35', net='1.12', pack='2 Pack')
+        self.assertEqual(parsed['pack_quantity'], 2)
+        self.assertEqual(parsed['price_inc_vat'], 1.35)
+
+    def test_toolstation_sale_uses_current_selected_price_not_was_price(self):
+        parsed = self.toolstation_page(gross='15.59', net='12.99', was='19.49')
+        self.assertEqual(parsed['vat_basis'], 'inc_vat')
+        self.assertEqual(parsed['price_inc_vat'], 15.59)
+
+    def test_toolstation_wrong_selected_variant_or_implausible_vat_is_unranked(self):
+        wrong = self.toolstation_page(selected='39149')
+        self.assertIsNone(wrong['pack_quantity'])
+        self.assertIsNone(wrong['price_inc_vat'])
+        wrong = self.toolstation_page(net='1.00')
+        self.assertIsNone(wrong['price_inc_vat'])
+        self.assertFalse(comparison.annotate([wrong])[0]['is_best_price'])
+
+    def test_toolstation_selected_pack_conflict_is_rejected(self):
+        self.assertIsNone(self.toolstation_page(pack='2 Pack', numberOfItems=1)['pack_quantity'])
+        parsed = self.toolstation_page(pack='2 Pack', name='Other product')
+        self.assertTrue(parsed['identity_conflict'])
+        self.assertIsNone(parsed['price_inc_vat'])
 
     def test_conflicting_vat_evidence_not_ranked(self):
         parsed = comparison.inspect_product(page(vat=True) + '<p>£12.00 Ex VAT</p>', URL, "Screwfix")

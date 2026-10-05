@@ -118,17 +118,56 @@ def product_nodes(soup):
 
 def _vat_for_amount(soup, amount):
     # Require VAT text attached to THIS amount, never a footer VAT toggle.
-    text = soup.get_text(" ", strip=True)
+    texts = {node.get_text(" ", strip=True) for node in soup.find_all(["p", "span", "div", "dd", "dt", "td", "strong"])
+             if len(node.get_text(" ", strip=True)) <= 250}
     bases = set()
-    pattern = r"£\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:each\s*[,·]?\s*)?(inc(?:l(?:uding)?)?|ex(?:cl(?:uding)?)?)\.?\s*VAT"
-    for price, kind in re.findall(pattern, text, re.I):
-        if money(price) == amount:
-            bases.add("inc_vat" if kind.lower().startswith("inc") else "ex_vat")
+    amount_pattern = r"(\d+(?:,\d{3})*(?:\.\d{1,2})?)"
+    kind_pattern = r"(inc(?:l(?:uding)?)?|ex(?:cl(?:uding)?)?)\.?\s*VAT"
+    # A label followed by another amount belongs to that following amount.
+    # E.g. Toolstation: £8.05 ex. VAT £6.71, not £8.05 excluding VAT.
+    pattern = r"£\s*" + amount_pattern + r"\s*(?:each\s*[,·]?\s*)?" + kind_pattern + r"(?!\s*£)"
+    for text in texts:
+        for price, kind in re.findall(pattern, text, re.I):
+            if money(price) == amount:
+                bases.add("inc_vat" if kind.lower().startswith("inc") else "ex_vat")
+        for kind, price in re.findall(kind_pattern + r"\s*£\s*" + amount_pattern, text, re.I):
+            if money(price) == amount:
+                bases.add("inc_vat" if kind.lower().startswith("inc") else "ex_vat")
     return bases.pop() if len(bases) == 1 else "unknown"
 
 
-def _package(product, title):
-    counts = set()
+def _toolstation_variant(soup, product, amount=None):
+    """Bind visible selected selling pack/price to this merchant SKU, not siblings."""
+    selected = soup.select('select option[selected]')
+    sku = str(product.get("sku") or "")
+    if len(selected) != 1 or not sku or selected[0].get("value") != sku:
+        return None, "unknown"
+    text = selected[0].get_text(" ", strip=True)
+    match = re.search(r"\(\s*" + re.escape(sku) + r"\s*\)\s*-\s*(Each|\d+\s+Pack)\s*-\s*£\s*(\d+\.\d{2})\s*$", text, re.I)
+    if not match:
+        return None, "unknown"
+    pack = 1 if match[1].lower() == "each" else int(match[1].split()[0])
+    if pack <= 0:
+        return None, "unknown"
+    gross = money(match[2])
+    if amount is None or amount != gross:
+        return pack, "unknown"
+    # The selected gross and labelled net must appear together in a small price
+    # container. Do not infer VAT from the site's footer or unrelated products.
+    for node in soup.find_all(["div", "p", "span"]):
+        value = node.get_text(" ", strip=True)
+        if len(value) > 100:
+            continue
+        pair = re.fullmatch(r"£\s*(\d+\.\d{2})(?:\s+was\s+£\s*\d+\.\d{2})?\s+ex\.?\s*VAT\s+£\s*(\d+\.\d{2})", value, re.I)
+        if pair and money(pair[1]) == gross:
+            net = money(pair[2])
+            if net and abs(net * Decimal("1.20") - gross) <= Decimal("0.01"):
+                return pack, "inc_vat"
+    return pack, "unknown"
+
+
+def _package(product, title, display_pack=None):
+    counts = {display_pack} if display_pack is not None else set()
     value = product.get("numberOfItems")
     if isinstance(value, dict):
         value = value.get("value")
@@ -172,7 +211,12 @@ def inspect_product(html, url, supplier):
     mpn = str(product.get("mpn") or "")
     gtin = next((valid_gtin(product.get(key)) for key in ("gtin14", "gtin13", "gtin12", "gtin8", "gtin")
                  if valid_gtin(product.get(key))), "")
-    pack = _package(product, title)
+    display_pack = _toolstation_variant(soup, product)[0] if supplier == "Toolstation" else None
+    pack = _package(product, title, display_pack)
+    # A Toolstation title often omits its multi-pack. Without a selected SKU
+    # selling-unit control, do not silently assume a single item.
+    if supplier == "Toolstation" and display_pack is None and not product.get("numberOfItems"):
+        pack = None
     offers = product.get("offers") or []
     offers = offers if isinstance(offers, list) else [offers]
     amounts = []
@@ -196,6 +240,10 @@ def inspect_product(html, url, supplier):
         if not amount or currency != "GBP":
             continue
         basis = _vat_for_amount(soup, amount)
+        if supplier == "Toolstation":
+            _, variant_basis = _toolstation_variant(soup, product, amount)
+            if variant_basis != "unknown":
+                basis = variant_basis if basis in (variant_basis, "unknown") else "conflict"
         specification = offer.get("priceSpecification") or {}
         if isinstance(specification, dict):
             if specification.get("validForMemberTier"):
