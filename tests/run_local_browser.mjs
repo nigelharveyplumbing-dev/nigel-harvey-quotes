@@ -228,7 +228,7 @@ try {
   await page.locator('#invoiceList').getByText('Paid', { exact: true }).first().waitFor();
 
   // A synthetic image goes through the browser file input and normal upload UI.
-  await invoiceRow.getByRole('button', { name: 'Open', exact: true }).click();
+  await invoiceRow.getByRole('button', { name: 'Preview Invoice', exact: true }).click();
   const paymentDisplay = await page.locator('#i_payment_link_box').innerText();
   assert.ok(paymentDisplay.includes('Test Bank'));
   assert.ok(paymentDisplay.includes('Synthetic Test Account'));
