@@ -161,6 +161,21 @@ class TradeComparisonTests(unittest.TestCase):
         self.assertTrue(parsed['identity_conflict'])
         self.assertIsNone(parsed['price_inc_vat'])
 
+    def test_toolstation_single_variant_requires_bound_main_sku_and_pack(self):
+        url = 'https://www.toolstation.com/mcalpine-wm11-washing-machine-trap/p90786'
+        html = page(url=url, title='McAlpine WM11 trap', price='14.29', vat=None, sku='90786', numberOfItems=None)
+        main = '<main id="main-content"><p>Product code: 90786</p><p>Pack size: Each</p><div>£14.29 ex. VAT £11.91</div></main>'
+        parsed = comparison.inspect_product(html + main, url, 'Toolstation')
+        self.assertEqual((parsed['pack_quantity'], parsed['price_inc_vat']), (1, 14.29))
+        for invalid in (main.replace('90786', '12345'), main.replace('Pack size: Each', 'Pack size: Kit'), main.replace('</main>', '<select></select></main>')):
+            self.assertIsNone(comparison.inspect_product(html + invalid, url, 'Toolstation')['pack_quantity'])
+
+    def test_toolstation_review_state_is_not_a_product_variant(self):
+        url = 'https://www.toolstation.com/elbow/p77358'
+        self.assertEqual(comparison.canonical_url(url + '?bvstate=pg:3/ct:r'), comparison.canonical_url(url))
+        self.assertNotEqual(comparison.canonical_url(url + '?variant=other'), comparison.canonical_url(url))
+        self.assertNotEqual(comparison.canonical_url(URL + '?bvstate=other'), comparison.canonical_url(URL))
+
     def test_conflicting_vat_evidence_not_ranked(self):
         parsed = comparison.inspect_product(page(vat=True) + '<p>£12.00 Ex VAT</p>', URL, "Screwfix")
         self.assertEqual(parsed["vat_basis"], "conflict")

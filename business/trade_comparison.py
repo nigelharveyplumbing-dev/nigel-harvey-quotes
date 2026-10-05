@@ -48,7 +48,8 @@ def identifier(value):
 def canonical_url(url):
     parsed = urlsplit(str(url or ""))
     query = urlencode(sorted((key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
-                             if not key.lower().startswith("utm_") and key.lower() not in {"gclid", "fbclid"}))
+                             if not key.lower().startswith("utm_") and key.lower() not in {"gclid", "fbclid"}
+                             and not (parsed.hostname in {"toolstation.com", "www.toolstation.com"} and key.lower() == "bvstate")))
     return (f"https://{parsed.hostname}{parsed.path.rstrip('/')}" + ("?" + query if query else "")) if parsed.hostname else ""
 
 
@@ -140,16 +141,29 @@ def _toolstation_variant(soup, product, amount=None):
     """Bind visible selected selling pack/price to this merchant SKU, not siblings."""
     selected = soup.select('select option[selected]')
     sku = str(product.get("sku") or "")
-    if len(selected) != 1 or not sku or selected[0].get("value") != sku:
-        return None, "unknown"
-    text = selected[0].get_text(" ", strip=True)
-    match = re.search(r"\(\s*" + re.escape(sku) + r"\s*\)\s*-\s*(Each|\d+\s+Pack)\s*-\s*£\s*(\d+\.\d{2})\s*$", text, re.I)
-    if not match:
-        return None, "unknown"
-    pack = 1 if match[1].lower() == "each" else int(match[1].split()[0])
+    if selected:
+        if len(selected) != 1 or not sku or selected[0].get("value") != sku:
+            return None, "unknown"
+        text = selected[0].get_text(" ", strip=True)
+        match = re.search(r"\(\s*" + re.escape(sku) + r"\s*\)\s*-\s*(Each|\d+\s+Pack)\s*-\s*£\s*(\d+\.\d{2})\s*$", text, re.I)
+        if not match:
+            return None, "unknown"
+        pack_text, gross = match[1], money(match[2])
+    else:
+        # Single-variant pages have no selector. Require the main product's
+        # visible SKU and unambiguous selling-pack label; never read sidebars.
+        main = soup.select_one('#main-content')
+        if not main or main.select('select') or not sku:
+            return None, "unknown"
+        labels = {node.get_text(" ", strip=True) for node in main.find_all(['p', 'span'])}
+        codes = {m[1] for value in labels if (m := re.fullmatch(r'Product code:\s*(\d+)', value))}
+        packs = {m[1] for value in labels if (m := re.fullmatch(r'Pack size:\s*(Each|\d+\s+Pack)', value, re.I))}
+        if codes != {sku} or len(packs) != 1:
+            return None, "unknown"
+        pack_text, gross = next(iter(packs)), amount
+    pack = 1 if pack_text.lower() == "each" else int(pack_text.split()[0])
     if pack <= 0:
         return None, "unknown"
-    gross = money(match[2])
     if amount is None or amount != gross:
         return pack, "unknown"
     # The selected gross and labelled net must appear together in a small price
