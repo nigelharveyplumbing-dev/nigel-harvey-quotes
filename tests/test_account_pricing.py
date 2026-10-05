@@ -1,4 +1,7 @@
-"""Synthetic canonical fixtures; no real account identifiers, prices or secrets."""
+"""City-first synthetic canonical fixtures; not a guessed City export format.
+
+No real account identifiers, prices or secrets. Wolseley remains optional.
+"""
 import copy
 import hashlib
 import importlib
@@ -28,7 +31,7 @@ REF = "a" * 32
 OTHER_REF = "b" * 32
 
 
-def record(supplier="Wolseley", source="account_live", price="10.00", **changes):
+def record(supplier="City Plumbing", source="account_live", price="10.00", **changes):
     row = dict(supplier=supplier, source_ref=REF if source.startswith("account_") else "",
         supplier_sku="synthetic-sku", name="Synthetic Acme Valve V15 15mm Chrome Angled",
         gtin="", brand="Acme", mpn="V15", pack_quantity=1, price=price,
@@ -167,6 +170,60 @@ class AccountComparisonTests(unittest.TestCase):
         self.assertFalse(compare(record(price="0.001"))[0]["eligible"])
 
 
+class CityAccountPriorityTests(unittest.TestCase):
+    def test_city_cache_and_city_public_are_separate_offers_with_same_identity(self):
+        account = record(source="account_cached", price="8", supplier_sku="city-sku")
+        public = record(source="public_live", price="10", supplier_sku="city-sku")
+        a, p = compare(account, public)
+        self.assertTrue(pricing.exact_match(account, public))
+        self.assertEqual(a["record"].source_type, "account_cached")
+        self.assertEqual(p["record"].source_type, "public_live")
+        self.assertTrue(a["preferred_for_supplier"])
+        self.assertFalse(a["is_best_price"] or p["is_best_price"])
+        self.assertEqual(a["record"].price, "8")
+        self.assertEqual(p["record"].price, "10")
+
+    def test_city_cached_account_alongside_toolstation_never_live_best(self):
+        city = record(source="account_cached", price="8", imported_at=NOW.isoformat())
+        toolstation = record("Toolstation", "public_live", "12", supplier_sku="ts-sku")
+        a, p = compare(city, toolstation)
+        self.assertTrue(pricing.exact_match(city, toolstation))
+        self.assertTrue(a["requires_cached_confirmation"])
+        self.assertEqual(a["imported_at"], NOW.isoformat())
+        self.assertEqual(a["age_seconds"], 60)
+        self.assertFalse(a["is_best_price"] or p["is_best_price"])
+
+    def test_stale_city_account_returns_current_public_comparison(self):
+        stale = record(source="account_cached", price="1", checked_at=(NOW-timedelta(days=8)).isoformat())
+        a, city, ts = compare(stale, record(source="public_live", price="10"),
+                             record("Toolstation", "public_live", "12"))
+        self.assertEqual(a["freshness"], "stale")
+        self.assertFalse(a["preferred_for_supplier"] or a["is_best_price"])
+        self.assertTrue(city["is_best_price"])
+        self.assertEqual(ts["saving_vs_best"], "2.00")
+
+    def test_city_ex_vat_pack_keeps_original_and_normalized_amounts(self):
+        city = record(source="account_cached", price="20", vat_basis="ex_vat",
+                      vat_rate="0.20", pack_quantity=10)
+        self.assertEqual((city.price, city.vat_basis, city.price_inc_vat), ("20", "ex_vat", "24.00"))
+        self.assertEqual(city.pack_quantity, 10)
+        self.assertFalse(pricing.exact_match(city, record("Toolstation", "public_live", pack_quantity=1)))
+
+    def test_city_unknown_vat_never_assumed_from_public_alternative(self):
+        a, public, _ = compare(record(source="account_cached", price="1", vat_basis="unknown"),
+                               record(source="public_live", price="10"),
+                               record("Toolstation", "public_live", "12"))
+        self.assertIsNone(a["record"].price_inc_vat)
+        self.assertFalse(a["eligible"])
+        self.assertTrue(public["is_best_price"])
+
+    def test_city_gtin_and_exact_mpn_confirm_despite_different_merchant_skus(self):
+        city = record(source="account_cached", gtin="4006381333931", supplier_sku="city-sku")
+        ts = record("Toolstation", "public_live", gtin="04006381333931", supplier_sku="ts-sku")
+        self.assertTrue(pricing.exact_match(city, ts))
+        self.assertFalse(pricing.exact_match(city, replace(ts, mpn="V16")))
+
+
 class CanonicalImportTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -176,7 +233,7 @@ class CanonicalImportTests(unittest.TestCase):
 
     def store(self, rows=None, content=b"synthetic canonical evidence", **changes):
         options = dict(content=content, records=rows or [record(source="account_cached")],
-            supplier="Wolseley", source_ref=REF, imported_at=NOW.isoformat())
+            supplier="City Plumbing", source_ref=REF, imported_at=NOW.isoformat())
         options.update(changes)
         return pricing.store_validated_import(self.path, **options)
 
@@ -258,7 +315,7 @@ class CanonicalImportTests(unittest.TestCase):
 
     def test_revalidates_forged_normalized_gross_price(self):
         self.store([replace(record(source="account_cached"), price_inc_vat="0.01")])
-        rows = pricing.read_account_records(self.path, supplier="Wolseley", source_ref=REF, now=NOW)
+        rows = pricing.read_account_records(self.path, supplier="City Plumbing", source_ref=REF, now=NOW)
         self.assertEqual(rows[0].price_inc_vat, "10.00")
         self.assertEqual(rows[0].imported_at, NOW.isoformat())
         self.assertEqual(rows[0].checked_at, (NOW-timedelta(minutes=1)).isoformat())
@@ -271,7 +328,7 @@ class CanonicalImportTests(unittest.TestCase):
                 "CREATE TABLE material_price_history(id INTEGER PRIMARY KEY, price TEXT);"
                 "INSERT INTO material_price_history VALUES(1, '12.00');")
         before = hashlib.sha256(self.path.read_bytes()).hexdigest()
-        rows = pricing.read_account_records(self.path, supplier="Wolseley", source_ref=REF, now=NOW)
+        rows = pricing.read_account_records(self.path, supplier="City Plumbing", source_ref=REF, now=NOW)
         compare(*rows, record("Toolstation", "public_live", "12"))
         self.assertEqual(hashlib.sha256(self.path.read_bytes()).hexdigest(), before)
         with sqlite3.connect(self.path) as db:
@@ -283,7 +340,7 @@ class CanonicalImportTests(unittest.TestCase):
                     record(source="account_cached", supplier_sku="old-only")])
         self.store([record(source="account_cached", price="12")], content=b"new snapshot",
                    imported_at=(NOW+timedelta(seconds=1)).isoformat())
-        rows = pricing.read_account_records(self.path, supplier="Wolseley", source_ref=REF,
+        rows = pricing.read_account_records(self.path, supplier="City Plumbing", source_ref=REF,
                                            now=NOW+timedelta(seconds=2))
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].price, "12")
@@ -291,7 +348,7 @@ class CanonicalImportTests(unittest.TestCase):
 
     def test_account_read_scope_does_not_leak_other_sources(self):
         self.store()
-        self.assertEqual(pricing.read_account_records(self.path, supplier="Wolseley", source_ref=OTHER_REF, now=NOW), [])
+        self.assertEqual(pricing.read_account_records(self.path, supplier="City Plumbing", source_ref=OTHER_REF, now=NOW), [])
 
     def test_store_creation_cannot_target_existing_quote_database(self):
         before = self.path.read_bytes()
@@ -303,12 +360,12 @@ class CanonicalImportTests(unittest.TestCase):
     def test_missing_read_path_cannot_create_database(self):
         missing = Path(self.tmp.name)/"missing.sqlite"
         with self.assertRaises(sqlite3.OperationalError):
-            pricing.read_account_records(missing, supplier="Wolseley", source_ref=REF, now=NOW)
+            pricing.read_account_records(missing, supplier="City Plumbing", source_ref=REF, now=NOW)
         self.assertFalse(missing.exists())
 
     def test_unknown_price_evidence_is_preserved_not_invented(self):
         self.store([record(source="account_cached", vat_basis="unknown", unit_basis="unknown", expires_at=None)])
-        rows = pricing.read_account_records(self.path, supplier="Wolseley", source_ref=REF, now=NOW)
+        rows = pricing.read_account_records(self.path, supplier="City Plumbing", source_ref=REF, now=NOW)
         self.assertIsNone(rows[0].price_inc_vat)
         self.assertEqual(rows[0].freshness(NOW), "unknown")
 

@@ -6,6 +6,17 @@ deployment authorized. Based on main `8ab4f6494de3823b4150fc611e698a91295faa56`
 (the same application tree as approved `bb7790b`). PR #3's separate release-tool
 fix is not included. Production PR #2 behaviour remains intact.
 
+## Current owner priority — City Plumbing / PTS
+
+Nigel has a City Plumbing trade account and no Wolseley account. City/PTS is the
+first operational path. Wolseley remains an optional future connector; no
+Wolseley account, export or onboarding is required for this PR. Williams is
+paused until City is validated. Keep the generic foundation and public system.
+
+See [City account route and implementation gates](city-account-pricing-route.md)
+for the verified export/partner features, owner actions and City UI/quote design.
+No City parser columns or live endpoints have been invented.
+
 ## Official merchant evidence
 
 Only merchant-owned public documentation was researched. No registrations,
@@ -47,8 +58,8 @@ its explicitly called functions in disposable storage.
 
 The internal read-only connector Protocol exposes `read_prices_and_stock` for
 supplier SKUs scoped by a local source reference. This is an application boundary,
-not a claimed Wolseley API schema or operational connector. City/PTS and Williams
-will implement the same boundary only when a permitted documented route exists.
+not a claimed Wolseley API schema or operational connector. City/PTS will implement the same boundary once its permitted route is confirmed.
+Williams remains paused; Wolseley is optional and is not a prerequisite.
 
 Canonical records preserve:
 
@@ -89,8 +100,9 @@ the requested source, so removed or cheaper historical SKUs cannot reappear.
 Readers use SQLite `mode=ro` and `query_only`; comparison itself performs no I/O.
 
 This is the validated ingestion **boundary**, not an implemented merchant CSV
-importer. `inspect_wolseley_csv` deliberately fails closed pending the owner's
-actual export. No CSV headers/dialect or VAT mapping have been invented. CSV
+importer. The optional `inspect_wolseley_csv` guard remains closed; no Wolseley
+file is required. The City importer requires a real owner-provided City format
+first. No CSV headers/dialect or VAT mapping have been invented. CSV
 format-specific validation/regressions are therefore pending. No live API
 response persistence has been built; it requires the actual API contract.
 
@@ -170,11 +182,12 @@ Staging integration and data writes require the owner's subsequent approval.
 
 ## Validation and remaining gate
 
-37 new foundation tests plus all 169 main tests: **206 local Python tests passed**.
-These include malformed-row batch atomicity and empty import/missing currency.
-Hosted CI at the initial architecture commit passed 204 tests and the full
-Chromium workflows. The final exact-head 206-test CI result is recorded in the
-draft PR; pending while writing this documentation.
+43 foundation tests plus all 169 main tests: **212 local Python tests passed**.
+The canonical synthetic fixtures are City-first; six additional cases cover
+City cached vs City/Toolstation public sources, stale fallback, VAT, packs and
+exact identity. Malformed-row batch atomicity and duplicate imports remain tested.
+Pre-pivot head `12b01d6` passed all 206 tests and complete Chromium in hosted CI.
+Final pivot-head CI/Chromium status is recorded in PR #4 when available.
 Existing Node comparison and material-selection tests passed. Tests cover source
 precedence, cached-vs-live, stale/unknown age, VAT, pack and identifier conflicts,
 source scope, stock exclusion, PTS deduplication, malformed canonical records,
@@ -188,19 +201,20 @@ Chromium gate must pass in hosted CI at the exact draft PR head. The architectur
 does not alter rendered UI, so that workflow tests existing app regressions,
 not a nonexistent Phase 2 UI. No staging validation claimed.
 
-Next owner actions:
+Next owner actions (City first):
 
-1. Supply a real Wolseley My Prices export (credentials/account numbers may be
-   removed; preserve actual headers/product/price/unit/VAT/date data), plus the
-   reliable export generation time and any price-unit/VAT instructions.
-2. Approve Wolseley onboarding/contact separately, identify technical lead and
-   privately provide the account details to Wolseley; obtain authorized test
-   price/stock YAML, permission/scopes, credentials, sample responses and IP
-   approval. Do not paste secrets into this repository or reports.
-3. Ask City about its documented partner integration route; obtain City/PTS and
-   Williams confirmation of permitted price export/feed/API
-   options with sample/schema and permitted usage. Do not assume that login
-   passwords authorize automated extraction.
-4. Review freshness/retention/backup/UI selection policy; approve staging only
-   after the real format/connector and complete tests are ready. No production
-   deploy or merge without explicit subsequent approval.
+1. Use the existing City account to view account pricing and check whether its
+   favourites/order/pricing screens offer an export. No new merchant account is
+   needed; branch-only access may need linking through City Customer Service.
+2. Ask the existing City branch/account manager for a permitted current account-
+   price CSV/XLS export or price file, with explicit VAT, selling pack and date.
+   If unavailable, City's documented emailed branch PDF quote can supply a
+   representative basket for inspection; it is not a live price feed.
+3. Obtain a real file and its reliable generation/validity date, then implement
+   only that observed format. No importer or account-price selection is enabled
+   before these provenance/identity/unit checks and the full acceptance tests.
+4. If live access is wanted, ask City about the documented Commusoft partnership
+   and permission for Nigel's custom app. No registration, subscription, trial,
+   supplier contact or credential use is authorized by this research step.
+5. No Wolseley file/account is required. Williams stays paused. No staging or
+   production deploy or merge without explicit subsequent approval.
