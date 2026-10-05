@@ -138,6 +138,38 @@ try {
   await page.locator('.material-row .m-name').last().fill('Synthetic valve');
   await page.locator('.material-row .m-qty').last().fill('2');
   await page.locator('.material-row .m-manual').last().fill('10');
+  // Exercise the comparison with synthetic public prices; no merchant request
+  // leaves the browser or the disposable server.
+  const comparisonRow = page.locator('.material-row').last();
+  await page.route('**/api/best-trade-prices?**', route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({
+      note: 'Public prices; delivery not included.', merchants: [], results: [{
+        name: 'Synthetic valve', supplier: 'Toolstation',
+        url: 'https://www.toolstation.com/synthetic-valve/p12345',
+        price_provenance: 'public_live', price: 8, price_inc_vat: 9.6,
+        vat_basis: 'ex_vat', pack_quantity: 1, availability: 'in_stock',
+        is_best_price: true, comparison_group: 1,
+        comparison_reason: 'Same manufacturer product and pack',
+      }, {name: 'Synthetic valve', supplier: 'Screwfix', price: 1,
+        price_provenance: 'manual', vat_basis: 'unknown', is_best_price: false}],
+    }),
+  }));
+  await comparisonRow.getByRole('button', { name: /Best Trade Price/ }).click();
+  await comparisonRow.getByText(/BEST PRICE/).waitFor();
+  assert.equal(await comparisonRow.locator('.m-manual').inputValue(), '10');
+  assert.equal(await comparisonRow.locator('.m-qty').inputValue(), '2');
+  assert.equal(await page.locator('#materials_handling_percent').inputValue(), '25');
+  assert.equal(await comparisonRow.getByRole('button', { name: 'Use this product and price' }).count(), 1);
+  await comparisonRow.getByRole('button', { name: 'Use this product and price' }).click();
+  assert.equal(await comparisonRow.locator('.m-manual').inputValue(), '9.60');
+  assert.equal(await comparisonRow.locator('.m-supplier').inputValue(), 'Toolstation');
+  assert.equal(await comparisonRow.locator('.m-qty').inputValue(), '2');
+  assert.equal(await page.locator('#materials_handling_percent').inputValue(), '25');
+  // Restore the original synthetic material before the existing quote checks.
+  await comparisonRow.locator('.m-url').fill('');
+  await comparisonRow.locator('.m-manual').fill('10');
+  await comparisonRow.locator('.m-supplier').selectOption('');
+  await page.unroute('**/api/best-trade-prices?**');
   const createdRequest = page.waitForResponse(response => response.url() === `${origin}/api/quote`
     && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Generate Quote' }).click();

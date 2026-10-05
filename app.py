@@ -976,6 +976,7 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     return invoice_store.update_invoice_by_id(invoice_id, data, row_to_invoice, safe_float, upsert_customer)
 
 from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search, website_contact, public_layout, growth_tracking
+from business import trade_comparison
 
 def get_dashboard():
     return dashboard_reporting.get_dashboard(get_db, now_uk)
@@ -1553,6 +1554,17 @@ def search_live_merchant_products(query: str, suppliers=None, per_supplier: int 
         scrape_live_price=scrape_live_price,
         upsert_material_price_cache=upsert_material_price_cache)
 
+
+
+@app.get("/api/best-trade-prices")
+def api_best_trade_prices(request: Request, q: str = "", url: str = ""):
+    if not check_basic_auth(request):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    try:
+        result = trade_comparison.compare_prices(q, anchor_url=url, cache_rows=material_store.list_material_price_cache())
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/live-product-search")

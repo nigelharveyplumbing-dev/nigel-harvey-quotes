@@ -848,7 +848,7 @@ class StagingAccessTests(unittest.TestCase):
         routes = [(method, route) for route in m.app.routes
                   if route.path not in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
                   for method in getattr(route, "methods", [])]
-        self.assertEqual(len(routes), 80)
+        self.assertEqual(len(routes), 81)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "appointment_id": "1", "job_id": "1",
                       "material_id": "1", "photo_id": "1", "filename": "sample.db",

@@ -131,10 +131,10 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
-        self.assertEqual(len(routes), 80)
+        self.assertEqual(len(routes), 81)
         self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 10)
         self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
-        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 65)
+        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 66)
         self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
         self.assertEqual(self.module.PUBLIC_ROUTE_KEYS,
                          PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES)
@@ -226,6 +226,10 @@ class BaselineTests(unittest.TestCase):
         config = re.search(r'const APP_PAYMENT_CONFIG = (\{.*?\});', m.HTML)
         self.assertIsNotNone(config)
         masked = m.HTML.replace(config.group(1), "__PAYMENT_CONFIG__", 1)
+        # Preserve the original hash outside the separately tested addition.
+        masked = re.sub(r'function tradePriceLabel\(item\) \{.*?(?=function renderMaterialSearchResults\()', '', masked, flags=re.S)
+        masked = masked.replace('    <button type="button" class="btn-light" style="margin-top:8px;" onclick="compareMaterialTradePrices(this)">Best Trade Price — compare suppliers</button>\n', '')
+        masked = masked.replace('    <div class="trade-price-results" aria-live="polite"></div>\n', '')
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
                          "fbcdb03af239d67051ccb898cf023648f97dc6b98e06f785129e443c2ee6ca81")
         self.assertEqual(m.HTML.count("<style>"), 1)
@@ -241,7 +245,7 @@ class BaselineTests(unittest.TestCase):
             "/api/pipeline", "/api/quick-add/preview", "/api/quick-add/confirm",
             "/api/dashboard/monthly-profit", "/api/intelligence", "/api/invoices",
             "/api/invoices/", "/api/labour-intelligence", "/api/leads", "/api/leads/",
-            "/api/live-product-refresh", "/api/live-product-search", "/api/material-prices",
+            "/api/live-product-refresh", "/api/live-product-search", "/api/best-trade-prices", "/api/material-prices",
             "/api/material-prices/", "/api/material-prices/refresh", "/api/material-search",
             "/api/quote", "/api/quote-learning", "/api/quotes", "/api/quotes/",
             "/api/site-survey", "/api/supplier-preference", "/api/supplier-preferences",
@@ -270,7 +274,7 @@ class BaselineTests(unittest.TestCase):
         m = self.module
         private = {tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         private -= PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES
-        self.assertEqual(len(private), 65)
+        self.assertEqual(len(private), 66)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "appointment_id": "1", "job_id": "1",
                       "material_id": "1", "photo_id": "1", "filename": "sample.db"}

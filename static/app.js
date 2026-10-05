@@ -1393,6 +1393,8 @@ function addMaterial(prefill = null) {
     <input class="m-manual" type="number" step="0.01" placeholder="0" value="${manualPrice}">
 
     <div class="material-live-status small" style="margin-top:8px;"></div>
+    <button type="button" class="btn-light" style="margin-top:8px;" onclick="compareMaterialTradePrices(this)">Best Trade Price — compare suppliers</button>
+    <div class="trade-price-results" aria-live="polite"></div>
     <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
       <button type="button" class="btn-light refresh-material-price" onclick="refreshMaterialRowPrice(this)">Update price</button>
       <button type="button" class="btn-red" onclick="this.closest('.material-row').remove(); refreshAfterBundleChange()">Remove</button>
@@ -1412,6 +1414,100 @@ function addMaterial(prefill = null) {
 
 
 let MATERIAL_SEARCH_TIMER = null;
+
+function tradePriceLabel(item) {
+  return ({public_live:'Live public price', cached_public:'Cached public price',
+    cached_unverified:'Cached price — source unverified', manual:'Manual price',
+    unavailable:'Price unavailable'})[item.price_provenance] || 'Unverified price';
+}
+
+function safeTradeProductUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password ? url.href : '';
+  } catch { return ''; }
+}
+
+async function compareMaterialTradePrices(button) {
+  const row = button.closest('.material-row');
+  const box = row.querySelector('.trade-price-results');
+  const query = row.querySelector('.m-name').value.trim();
+  const productUrl = row.querySelector('.m-url').value.trim();
+  if (query.length < 3) { showNotice('Enter a specific product name first.'); return; }
+  const token = {};
+  row.tradeComparisonToken = token;
+  row.tradePriceResults = [];
+  button.disabled = true;
+  box.textContent = 'Checking equivalent products at City Plumbing, Screwfix, Toolstation and Selco…';
+  try {
+    const params = new URLSearchParams({q:query, url:productUrl});
+    const response = await fetch('/api/best-trade-prices?' + params);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Price comparison failed.');
+    if (row.tradeComparisonToken !== token) return;
+    if (row.querySelector('.m-name').value.trim() !== query || row.querySelector('.m-url').value.trim() !== productUrl) {
+      box.textContent = 'Material changed during search. Compare again for this product.';
+      return;
+    }
+    row.tradePriceResults = data.results || [];
+    row.tradeComparisonInput = {query, productUrl};
+    box.innerHTML = `<p class="small">${escapeHtml(data.note || '')}</p>` +
+      row.tradePriceResults.map((item, index) => {
+        const url = safeTradeProductUrl(item.url);
+        const selectable = item.price_provenance === 'public_live' && Number(item.price_inc_vat) > 0 &&
+          !['out_of_stock','preorder','backorder'].includes(item.availability) && url;
+        const price = Number(item.price_inc_vat) > 0
+          ? `${pounds(item.price_inc_vat)} inc VAT per pack${item.pack_quantity ? ' (' + Number(item.pack_quantity) + ' item' + (item.pack_quantity === 1 ? '' : 's') + ')' : ''}`
+          : item.price ? `${pounds(item.price)} · VAT basis unconfirmed` : 'Price unavailable';
+        return `<div style="margin-top:8px;padding:10px;border:1px solid #ddd;border-radius:8px;">
+          ${item.is_best_price ? '<strong style="color:#166534">BEST PRICE · confirmed equivalent group ' + Number(item.comparison_group) + '</strong><br>' : ''}
+          <strong>${escapeHtml(item.name || '')}</strong><br>
+          <span class="small">${escapeHtml(item.supplier || '')} · ${escapeHtml(price)}<br>
+          ${escapeHtml(tradePriceLabel(item))}${item.checked_at ? ' · checked ' + escapeHtml(item.checked_at) : ' · price check date unknown'}
+          ${item.record_updated_at ? '<br>Record updated ' + escapeHtml(item.record_updated_at) : ''}<br>
+          ${escapeHtml(item.comparison_reason || '')}${item.mpn ? ' · MPN ' + escapeHtml(item.mpn) : ''}<br>
+          ${escapeHtml(({in_stock:'In stock — branch not checked',out_of_stock:'Out of stock',preorder:'Pre-order',backorder:'Back order'})[item.availability] || 'Stock unknown')}
+          ${item.saving_vs_best > 0 ? '<br>' + pounds(item.saving_vs_best) + ' more per pack than best equivalent' : ''}</span>
+          ${url ? `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">View merchant product</a></p>` : ''}
+          ${selectable ? `<button type="button" class="btn-light" onclick="useComparedTradePrice(this, ${index})">Use this product and price</button>` : ''}
+        </div>`;
+      }).join('') + (row.tradePriceResults.length ? '' : '<p>No confirmed product prices found. Use the merchant links or enter a manual price.</p>') +
+      '<p class="small">' + (data.merchants || []).map(item => {
+        const url = safeTradeProductUrl(item.search_url);
+        return url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.supplier)}: ${escapeHtml(item.status)}</a>` : '';
+      }).join(' · ') + '</p>';
+  } catch (error) {
+    if (row.tradeComparisonToken === token) box.textContent = error.message || 'Price comparison failed.';
+  } finally {
+    if (row.tradeComparisonToken === token) button.disabled = false;
+  }
+}
+
+function useComparedTradePrice(button, index) {
+  const row = button.closest('.material-row');
+  const input = row.tradeComparisonInput;
+  if (!input || row.querySelector('.m-name').value.trim() !== input.query || row.querySelector('.m-url').value.trim() !== input.productUrl) {
+    showNotice('Material changed. Compare again before choosing a price.');
+    return;
+  }
+  const item = row.tradePriceResults?.[index];
+  if (!item || item.price_provenance !== 'public_live' || !(Number(item.price_inc_vat) > 0) ||
+      !safeTradeProductUrl(item.url) || ['out_of_stock','preorder','backorder'].includes(item.availability)) return;
+  row.querySelector('.m-name').value = item.name;
+  row.querySelector('.m-supplier').value = item.supplier;
+  row.querySelector('.m-url').value = item.url;
+  row.querySelector('.m-manual').value = Number(item.price_inc_vat).toFixed(2);
+  row.dataset.priceStatus = 'Public price selected';
+  row.dataset.liveProduct = '1';
+  row.dataset.sku = item.sku || '';
+  row.dataset.imageUrl = '';
+  row.dataset.checkedAt = item.checked_at || '';
+  row.tradeComparisonToken = null;
+  row.tradePriceResults = [];
+  row.querySelector('.trade-price-results').textContent = 'Selected public price including VAT. Quantity is unchanged; check it represents packs. Existing Update price and quote calculation may fetch a newer price.';
+  updateMaterialLiveBadge(row);
+  showNotice('Supplier and public price selected. Review quantity and calculate the quote when ready.');
+}
 
 function renderMaterialSearchResults(results) {
   const resultsBox = document.getElementById("searchResults");
