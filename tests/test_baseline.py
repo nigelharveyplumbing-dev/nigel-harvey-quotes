@@ -235,6 +235,7 @@ class BaselineTests(unittest.TestCase):
             '  if (prefill?.selected_comparison_price > 0) rememberComparisonPrice(div, prefill.selected_comparison_price);\n',
             '    if (selectedComparisonPrice(row) !== null) chargedMaterial.selected_comparison_price = selectedComparisonPrice(row);\n',
             '    selected_comparison_price: m.selected_comparison_price ?? null,\n',
+            'source === "selected_public" ? \'<span class="badge">selected public price</span>\' : ',
         ):
             masked = masked.replace(addition, '')
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),

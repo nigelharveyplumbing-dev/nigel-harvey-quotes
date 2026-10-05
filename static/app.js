@@ -2028,7 +2028,7 @@ function renderQuoteResult(data) {
         const source = x.price_source || (x.live_price_used ? "live" : "manual");
         const badge = source === "live"
           ? '<span class="badge green">live</span>'
-          : (source === "cached" ? '<span class="badge green">cached live</span>' : '<span class="badge">manual</span>');
+          : (source === "selected_public" ? '<span class="badge">selected public price</span>' : source === "cached" ? '<span class="badge green">cached live</span>' : '<span class="badge">manual</span>');
         return `<div>${escapeHtml(x.name || "")} × ${x.quantity} @ ${pounds(x.unit_price_used || 0)} each — ${pounds(x.line_total)} ${badge}</div>`;
       }).join("")
     : "<div>No materials added.</div>";
