@@ -804,10 +804,33 @@ def search_live_merchant_products(query: str, suppliers=None, per_supplier: int 
                 "match_score": 0,
             })
 
+    # Best-price comparison metadata. Only strict product matches with a
+    # positive live price participate. Public merchant pages are deliberately
+    # labelled public_live: authenticated/account-specific prices must never be
+    # implied unless a future merchant integration can prove that provenance.
+    comparable = [
+        item for item in results
+        if not item.get("search_only")
+        and item.get("strict_match")
+        and safe_float(item.get("live_price", 0), 0) > 0
+    ]
+    best_price = min(
+        (safe_float(item.get("live_price", 0), 0) for item in comparable),
+        default=0,
+    )
+    for item in results:
+        price = safe_float(item.get("live_price", 0), 0)
+        item["price_provenance"] = "public_live" if price > 0 and not item.get("search_only") else "unavailable"
+        item["is_best_price"] = bool(best_price and price > 0 and abs(price - best_price) < 0.005)
+        item["saving_vs_best"] = round(max(0, price - best_price), 2) if best_price and price > 0 else 0
+
+    # Put confirmed priced matches first, cheapest first. Match score remains
+    # the tie-breaker; strict matching above prevents price from promoting an
+    # incompatible product.
     results.sort(key=lambda item: (
         1 if item.get("search_only") else 0,
-        -safe_float(item.get("match_score", 0), 0),
         0 if safe_float(item.get("live_price", 0), 0) > 0 else 1,
         safe_float(item.get("live_price", 0), 0) or 999999,
+        -safe_float(item.get("match_score", 0), 0),
     ))
     return results[:20]
