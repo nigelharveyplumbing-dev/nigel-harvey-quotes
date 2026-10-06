@@ -1,4 +1,4 @@
-"""Dormant Phase 2 foundation; no app imports, routes, network calls or startup DDL.
+"""Phase 2 foundation; no network calls or automatic startup DDL.
 
 Canonical records are NOT a guessed merchant CSV schema. A real export and
 approved mapping are required before implementing any merchant file reader.
@@ -108,6 +108,10 @@ class PriceRecord:
     availability: str
     currency: str
     imported_at: str | None = None
+    selling_unit: str = ""
+    capture_source: str = ""
+    checked_precision: str = "time"
+    stock_note: str = ""
 
     def identity(self):
         return {key: getattr(self, key) for key in ("name", "gtin", "brand", "mpn", "pack_quantity")}
@@ -171,11 +175,18 @@ def record_from_mapping(row, *, now):
     imported = timestamp(row["imported_at"]) if row.get("imported_at") is not None else None
     if imported is not None and (imported < checked or imported > now):
         raise ValueError("Invalid import time")
+    precision = row.get("checked_precision", "time")
+    if precision not in {"date", "time"}:
+        raise ValueError("Invalid checked-time precision")
     return PriceRecord(supplier, source_ref, sku, name, gtin, brand, mpn, pack,
         str(amount), basis, str(rate) if rate is not None else None,
         str(gross.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)) if gross is not None else None,
         unit, source, checked.isoformat(), expires.isoformat() if expires else None, stock, "GBP",
-        imported.isoformat() if imported else None)
+        imported.isoformat() if imported else None,
+        text(row.get("selling_unit"), "selling unit", optional=True),
+        text(row.get("capture_source"), "capture source", optional=True),
+        precision,
+        text(row.get("stock_note"), "stock note", optional=True))
 
 
 def exact_match(left, right):

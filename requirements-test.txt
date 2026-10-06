@@ -1,3 +1,4 @@
 -r requirements.txt
 httpx
+httpx2
 pypdf

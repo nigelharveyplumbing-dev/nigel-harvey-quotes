@@ -285,6 +285,140 @@ try {
   assert.equal((await anonymous.request.get(`${origin}/api/invoices`)).status(), 401);
   assert.equal((await anonymous.request.get(`${origin}/api/material-prices`)).status(), 401);
 
+  // City captures: actual mobile preview/save/select/create/reopen/edit UI.
+  // Product identity is real; prices are deliberately sanitized.
+  await page.getByRole('button', { name: 'Quotes', exact: true }).click();
+  await page.getByRole('button', { name: 'Start Fresh Quote', exact: true }).click();
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('#customer_name').fill('Synthetic City Capture Customer');
+  await page.locator('#job').fill('Synthetic account-price persistence check');
+  await page.locator('#labour').fill('0');
+  await page.locator('#include_callout_charge').uncheck();
+  await page.locator('#include_travel_charge').uncheck();
+  await page.getByRole('button', { name: '+ Blank Material Row' }).click();
+  let cityRow = page.locator('.material-row').last();
+  const productName = 'Wednesbury Plain Copper Tube 15mm × 3m X015L-3';
+  await cityRow.locator('.m-name').fill(productName);
+  await cityRow.locator('.m-qty').fill('2');
+  await cityRow.locator('.m-supplier').selectOption('Selco');
+  await cityRow.locator('.m-manual').fill('20');
+  await cityRow.getByRole('button', {name:'City account prices — add / update / choose'}).click();
+  await cityRow.getByText('Add or update a checked City price', {exact:true}).click();
+  await cityRow.locator('.city-code').fill('313813');
+  await cityRow.locator('.city-name').fill(productName);
+  await cityRow.locator('.city-price').fill('6.00');
+  await cityRow.getByText('Optional manufacturer identifiers shown by City', {exact:true}).click();
+  await cityRow.locator('.city-brand').fill('Wednesbury');
+  await cityRow.locator('.city-mpn').fill('X015L-3');
+  await cityRow.getByRole('button', {name:'Preview checked price',exact:true}).click();
+  await cityRow.locator('.city-preview').getByText(/nothing saved yet/).waitFor();
+  assert.equal((await (await context.request.get(origin + '/api/city-account-prices')).json()).results.length,0);
+  assert.equal(await cityRow.locator('.m-supplier').inputValue(),'Selco');
+  assert.equal(await cityRow.locator('.m-manual').inputValue(),'20');
+  await cityRow.getByRole('button', {name:'Save confirmed owner capture',exact:true}).click();
+  await cityRow.locator('.city-saved-results .city-account-card').waitFor();
+  let savedCapture = (await (await context.request.get(origin + '/api/city-account-prices')).json()).results[0];
+  assert.equal(savedCapture.price,'6.00');
+  assert.equal(savedCapture.price_inc_vat,'7.20');
+  assert.equal(savedCapture.availability,'unknown');
+  assert.equal(savedCapture.is_best_price,false);
+  assert.match(await cityRow.locator('.city-saved-results').innerText(),/£6.00 ex VAT · £7.20 inc VAT/);
+  assert.ok(!(await cityRow.locator('.city-saved-results').innerText()).includes('BEST PRICE'));
+  await cityRow.getByRole('button', {name:'Preview checked price',exact:true}).click();
+  await cityRow.getByRole('button', {name:'Save confirmed owner capture',exact:true}).click();
+  await cityRow.locator('.city-preview').getByText(/Identical capture already saved; age unchanged/).waitFor();
+
+  // Public network prices are isolated fixtures; the saved account card was
+  // obtained through the real authenticated capture endpoint above.
+  const publicOffers = ['City Plumbing','Toolstation','Selco'].map((supplier,index) => ({
+    name:productName,supplier,sku:supplier==='City Plumbing'?'313813':'synthetic-sku',
+    brand:'Wednesbury',mpn:'X015L-3',pack_quantity:1,
+    price:9+index,price_inc_vat:10.8+index*1.2,vat_basis:'ex_vat',
+    availability:'in_stock',price_provenance:'public_live',
+    url:supplier==='City Plumbing'?'https://www.cityplumbing.co.uk/p/tube/p/313813':
+      supplier==='Toolstation'?'https://www.toolstation.com/tube/p12345':'https://www.selcobw.com/tube',
+    is_best_price:index===0,comparison_group:1,checked_at:new Date().toISOString()
+  }));
+  const comparedCapture = {...savedCapture,cheapest_observed:true,
+    public_comparisons:publicOffers.map(p => ({supplier:p.supplier,price_inc_vat:p.price_inc_vat,
+      saving_using_account:(p.price_inc_vat-7.2).toFixed(2)}))};
+  await page.route('**/api/best-trade-prices?**', route => route.fulfill({
+    status:200,contentType:'application/json',body:JSON.stringify({
+      results:publicOffers,account_results:[comparedCapture],
+      merchants:[{supplier:'Screwfix',status:'unavailable'}],note:'Synthetic offline public comparison'
+    })
+  }));
+  await cityRow.getByRole('button', {name:/Best Trade Price/}).click();
+  const accountCard=cityRow.locator('.trade-price-results .city-account-card');
+  await accountCard.waitFor();
+  assert.match(await accountCard.innerText(),/CHEAPEST OBSERVED — CACHED ACCOUNT PRICE/);
+  assert.match(await accountCard.innerText(),/£3.60 less/);
+  assert.ok(!(await accountCard.innerText()).includes('BEST PRICE'));
+  assert.equal(await cityRow.locator('.m-supplier').inputValue(),'Selco');
+  await accountCard.getByRole('button',{name:'Use cached City account price'}).click();
+  assert.equal(await cityRow.locator('.m-manual').inputValue(),'20');
+  await accountCard.locator('.city-cached-confirm').check();
+  await accountCard.getByRole('button',{name:'Use cached City account price'}).click();
+  assert.equal(await cityRow.locator('.m-supplier').inputValue(),'City Plumbing');
+  assert.equal(await cityRow.locator('.m-manual').inputValue(),'7.20');
+  assert.equal(await cityRow.locator('.m-url').inputValue(),'');
+  assert.equal(await cityRow.locator('.m-qty').inputValue(),'2');
+  assert.equal(await page.locator('#materials_handling_percent').inputValue(),'25');
+  let selectedPayload=await page.evaluate(() => collectFormPayload());
+  assert.equal(selectedPayload.materials.at(-1).selected_account_price.source_type,'account_cached');
+  assert.equal(selectedPayload.materials.at(-1).selected_comparison_price,undefined);
+  await page.unroute('**/api/best-trade-prices?**');
+  const cityCreate=page.waitForResponse(r=>r.url()===origin+'/api/quote' && r.request().method()==='POST');
+  await page.getByRole('button',{name:'Generate Quote',exact:true}).click();
+  const cityCreateResponse=await cityCreate;
+  assert.equal(cityCreateResponse.status(),200);
+  const cityQuote=await cityCreateResponse.json();
+  assert.equal(cityQuote.result.total_price,18);
+  assert.equal(cityQuote.result.internal_handling_percent,25);
+  assert.equal(cityQuote.result.material_lines.at(-1).full_unit_price,7.2);
+  assert.equal(cityQuote.result.material_lines.at(-1).price_source,'account_cached');
+  await page.locator('#historyList .history-item').filter({hasText:'Synthetic City Capture Customer'})
+    .getByRole('button',{name:'Edit',exact:true}).click();
+  cityRow=page.locator('.material-row').last();
+  await cityRow.locator('.material-live-status').getByText(/City Plumbing account price — cached/).waitFor();
+  assert.equal(Number(await cityRow.locator('.m-manual').inputValue()),7.2);
+  assert.equal(await cityRow.locator('.m-qty').inputValue(),'2');
+  assert.equal(await page.locator('#materials_handling_percent').inputValue(),'25');
+  const lookupsBefore=browserDiagnostics.apiRequests.filter(r=>r.includes('/api/live-product-refresh')).length;
+  await cityRow.getByRole('button',{name:'Update price',exact:true}).click();
+  assert.equal(Number(await cityRow.locator('.m-manual').inputValue()),7.2);
+  assert.equal(browserDiagnostics.apiRequests.filter(r=>r.includes('/api/live-product-refresh')).length,lookupsBefore);
+  await cityRow.getByRole('button',{name:'Update City 313813',exact:true}).click();
+  await cityRow.locator('.city-price').fill('9.00');
+  await cityRow.getByRole('button',{name:'Preview checked price',exact:true}).click();
+  await cityRow.getByRole('button',{name:'Save confirmed owner capture',exact:true}).click();
+  await cityRow.locator('.city-preview').getByText(/Owner capture saved/).waitFor();
+  assert.equal(Number(await cityRow.locator('.m-manual').inputValue()),7.2);
+  await cityRow.locator('.m-qty').fill('3');
+  const cityEdit=page.waitForResponse(r=>r.url()===origin+'/api/quotes/'+cityQuote.id && r.request().method()==='PUT');
+  await page.getByRole('button',{name:/Update Quote|Generate Quote/}).click();
+  const editedCity=await cityEdit;
+  assert.equal(editedCity.status(),200);
+  const editedResult=await editedCity.json();
+  assert.equal(editedResult.result.total_price,27);
+  assert.equal(editedResult.result.material_lines.at(-1).full_unit_price,7.2);
+  assert.equal(editedResult.request.materials.at(-1).selected_account_price.price,'6.00');
+  assert.equal(editedResult.request.materials.at(-1).quantity,3);
+  assert.equal(editedResult.request.materials_handling_percent,25);
+  // Reference-only stale captures are rendered but cannot be selected.
+  const staleDate=new Date(Date.now()-8*86400000).toISOString().slice(0,10);
+  assert.equal((await context.request.post(origin+'/api/city-account-prices',{data:{records:[{
+    city_code:'119745',product_name:'Wednesbury Plain Copper Tube 22mm × 3m X022L-3',
+    brand:'Wednesbury',mpn:'X022L-3',ex_vat_price:'6.00',selling_unit:'each',
+    pack_quantity:1,checked_at:staleDate
+  }]}})).status(),200);
+  await cityRow.getByRole('button',{name:'City account prices — add / update / choose'}).click();
+  const staleCard=cityRow.locator('.city-saved-results .city-account-card').filter({hasText:'119745'});
+  await staleCard.waitFor();
+  assert.match(await staleCard.innerText(),/STALE/);
+  assert.equal(await staleCard.getByRole('button',{name:'Use cached City account price'}).count(),0);
+  await page.setViewportSize({width:1280,height:900});
+
   // Delete the saved quote through its visible UI and verify the private API.
   await page.getByRole('button', { name: 'Quotes', exact: true }).click();
   await page.locator('#historyList .history-item').filter({ hasText: 'Synthetic Browser Customer' })

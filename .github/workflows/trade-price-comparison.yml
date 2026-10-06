@@ -48,5 +48,6 @@ jobs:
           export CODEX_PRIMARY_RUNTIME_NODE_MODULES="$RUNNER_TEMP/comparison-browser/node_modules"
           export STAGE6_TEST_PYTHON="$(command -v python)"
           node --check static/app.js
+          node --check static/city_account_prices.js
           node --check tests/run_local_browser.mjs
           python -B tests/run_stage6_local.py

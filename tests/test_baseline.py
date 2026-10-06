@@ -131,10 +131,10 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
-        self.assertEqual(len(routes), 81)
+        self.assertEqual(len(routes), 84)
         self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 10)
         self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
-        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 66)
+        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 69)
         self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
         self.assertEqual(self.module.PUBLIC_ROUTE_KEYS,
                          PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES)
@@ -226,6 +226,21 @@ class BaselineTests(unittest.TestCase):
         config = re.search(r'const APP_PAYMENT_CONFIG = (\{.*?\});', m.HTML)
         self.assertIsNotNone(config)
         masked = m.HTML.replace(config.group(1), "__PAYMENT_CONFIG__", 1)
+        # Mask only the deliberately added City-capture UI. Its behavior has
+        # separate Python, Node and full Chromium coverage; the rest stays frozen.
+        city_js = (Path(m.__file__).parent / "static/city_account_prices.js").read_text()
+        masked = masked.replace(city_js + "\n", "", 1)
+        masked = re.sub(r'  const account = selectedAccountPrice\(row\);.*?(?=  const url = String\(row.querySelector)', '', masked, flags=re.S)
+        for addition in (
+            '  if (selectedAccountPrice(row)) {\n    await openCityAccountPrices(button);\n    return;\n  }\n',
+            '    <button type="button" class="btn-light" style="margin-top:8px;" onclick="openCityAccountPrices(this)">City account prices — add / update / choose</button>\n',
+            '    <div class="city-account-panel" aria-live="polite"></div>\n',
+            '  if (prefill?.selected_account_price) rememberAccountPrice(div, prefill.selected_account_price);\n',
+            '    if (selectedAccountPrice(row)) chargedMaterial.selected_account_price = selectedAccountPrice(row);\n',
+            '    selected_account_price: m.selected_account_price ?? null,\n',
+            'source === "account_cached" ? \'<span class="badge">cached City account price</span>\' : ',
+        ):
+            masked = masked.replace(addition, '')
         # Preserve the original hash outside the separately tested addition.
         masked = re.sub(r'function tradePriceLabel\(item\) \{.*?(?=function renderMaterialSearchResults\()', '', masked, flags=re.S)
         masked = masked.replace('    <button type="button" class="btn-light" style="margin-top:8px;" onclick="compareMaterialTradePrices(this)">Best Trade Price — compare suppliers</button>\n', '')
@@ -255,6 +270,7 @@ class BaselineTests(unittest.TestCase):
             "/api/dashboard/monthly-profit", "/api/intelligence", "/api/invoices",
             "/api/invoices/", "/api/labour-intelligence", "/api/leads", "/api/leads/",
             "/api/live-product-refresh", "/api/live-product-search", "/api/best-trade-prices", "/api/material-prices",
+            "/api/city-account-prices", "/api/city-account-prices/preview",
             "/api/material-prices/", "/api/material-prices/refresh", "/api/material-search",
             "/api/quote", "/api/quote-learning", "/api/quotes", "/api/quotes/",
             "/api/site-survey", "/api/supplier-preference", "/api/supplier-preferences",
@@ -283,7 +299,7 @@ class BaselineTests(unittest.TestCase):
         m = self.module
         private = {tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         private -= PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES
-        self.assertEqual(len(private), 66)
+        self.assertEqual(len(private), 69)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "appointment_id": "1", "job_id": "1",
                       "material_id": "1", "photo_id": "1", "filename": "sample.db"}

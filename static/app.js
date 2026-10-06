@@ -1237,6 +1237,11 @@ function updateMaterialLiveBadge(row) {
   if (!row) return;
   const status = row.querySelector(".material-live-status");
   if (!status) return;
+  const account = selectedAccountPrice(row);
+  if (account) {
+    status.innerHTML = `<strong>City Plumbing account price — cached</strong> · City ${escapeHtml(account.supplier_sku)} · ${pounds(account.price)} ex VAT / ${pounds(account.price_inc_vat)} inc VAT · ${escapeHtml(account.selling_unit)} / ${Number(account.pack_quantity)}<br>${escapeHtml(cityCaptureAge(account))} · Current stock unconfirmed`;
+    return;
+  }
   const url = String(row.querySelector(".m-url")?.value || "").trim();
   const checkedAt = row.dataset.checkedAt || "";
   const sku = row.dataset.sku || "";
@@ -1259,6 +1264,10 @@ function updateMaterialLiveBadge(row) {
 async function refreshMaterialRowPrice(button) {
   const row = button.closest(".material-row");
   if (!row) return;
+  if (selectedAccountPrice(row)) {
+    await openCityAccountPrices(button);
+    return;
+  }
   if (selectedComparisonPrice(row) !== null) {
     await compareMaterialTradePrices(button);
     return;
@@ -1402,6 +1411,8 @@ function addMaterial(prefill = null) {
     </label>
     <button type="button" class="btn-light" style="margin-top:8px;" onclick="compareMaterialTradePrices(this)">Best Trade Price — compare suppliers</button>
     <div class="trade-price-results" aria-live="polite"></div>
+    <button type="button" class="btn-light" style="margin-top:8px;" onclick="openCityAccountPrices(this)">City account prices — add / update / choose</button>
+    <div class="city-account-panel" aria-live="polite"></div>
     <div class="history-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
       <button type="button" class="btn-light refresh-material-price" onclick="refreshMaterialRowPrice(this)">Update price</button>
       <button type="button" class="btn-red" onclick="this.closest('.material-row').remove(); refreshAfterBundleChange()">Remove</button>
@@ -1414,6 +1425,7 @@ function addMaterial(prefill = null) {
       ? (prefill.supplier || '') : (prefill.supplier || "City Plumbing");
   }
   if (prefill?.selected_comparison_price > 0) rememberComparisonPrice(div, prefill.selected_comparison_price);
+  if (prefill?.selected_account_price) rememberAccountPrice(div, prefill.selected_account_price);
   updateMaterialLiveBadge(div);
   updateForgottenItemWarnings();
   updateSupplierPreferenceNotes();
@@ -1430,6 +1442,7 @@ function tradePriceLabel(item) {
 }
 
 function rememberComparisonPrice(row, price) {
+  row.selectedCityAccount = null;
   row.selectedTradePrice = {name:row.querySelector('.m-name').value,
     supplier:row.querySelector('.m-supplier').value, url:row.querySelector('.m-url').value,
     price:Number(price)};
@@ -1474,6 +1487,7 @@ async function compareMaterialTradePrices(button) {
       return;
     }
     row.tradePriceResults = data.results || [];
+    row.cityComparedResults = data.account_results || [];
     row.tradeComparisonInput = {query, productUrl, comparisonUrl};
     box.innerHTML = `<p class="small">${escapeHtml(data.note || '')}</p>` +
       row.tradePriceResults.map((item, index) => {
@@ -1495,7 +1509,7 @@ async function compareMaterialTradePrices(button) {
           ${url ? `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">View merchant product</a></p>` : ''}
           ${selectable ? `<button type="button" class="btn-light" onclick="useComparedTradePrice(this, ${index})">Use this product and price</button>` : ''}
         </div>`;
-      }).join('') + (row.tradePriceResults.length ? '' : '<p>No confirmed product prices found. Use the merchant links or enter a manual price.</p>') +
+      }).join('') + cityAccountCards(row.cityComparedResults, 'useComparedCityAccountPrice') + (row.tradePriceResults.length ? '' : '<p>No confirmed public product prices found. Cached account prices remain separate references.</p>') +
       '<p class="small">' + (data.merchants || []).map(item => {
         const url = safeTradeProductUrl(item.search_url);
         const label = escapeHtml(item.supplier) + ': ' + escapeHtml(item.status);
@@ -1926,6 +1940,7 @@ function collectFormPayload() {
     };
     const chargedMaterial = applyChargingRuleToMaterial(baseMaterial);
     if (selectedComparisonPrice(row) !== null) chargedMaterial.selected_comparison_price = selectedComparisonPrice(row);
+    if (selectedAccountPrice(row)) chargedMaterial.selected_account_price = selectedAccountPrice(row);
     materials.push(chargedMaterial);
   });
 
@@ -2033,7 +2048,7 @@ function renderQuoteResult(data) {
         const source = x.price_source || (x.live_price_used ? "live" : "manual");
         const badge = source === "live"
           ? '<span class="badge green">live</span>'
-          : (source === "selected_public" ? '<span class="badge">selected public price</span>' : source === "cached" ? '<span class="badge green">cached live</span>' : '<span class="badge">manual</span>');
+          : (source === "account_cached" ? '<span class="badge">cached City account price</span>' : source === "selected_public" ? '<span class="badge">selected public price</span>' : source === "cached" ? '<span class="badge green">cached live</span>' : '<span class="badge">manual</span>');
         return `<div>${escapeHtml(x.name || "")} × ${x.quantity} @ ${pounds(x.unit_price_used || 0)} each — ${pounds(x.line_total)} ${badge}</div>`;
       }).join("")
     : "<div>No materials added.</div>";
@@ -5561,6 +5576,7 @@ function normaliseQuoteDataForEditing(data) {
     url: m.url || "",
     manual_price: m.manual_price || m.full_unit_price || m.unit_price_used || m.price || 0,
     selected_comparison_price: m.selected_comparison_price ?? null,
+    selected_account_price: m.selected_account_price ?? null,
     quote_charge_override: m.quote_charge_override,
     material_type: m.material_type || "chargeable",
     charge_method: m.charge_method || "full",

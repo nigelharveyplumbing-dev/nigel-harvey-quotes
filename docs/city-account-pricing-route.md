@@ -1,170 +1,156 @@
-# City Plumbing / PTS account-pricing route
+# City Plumbing / PTS owner-captured account pricing
 
-5 October 2026 — draft PR #4, City-first owner priority.
+6 October 2026 — draft PR #4, feature/account-trade-pricing-phase2.
+No merge, deployment, merchant login reuse or unattended account scraping.
 
-Nigel owns a City Plumbing trade account and does not own a Wolseley account.
-Wolseley is optional future work, not a prerequisite for this PR. Williams is
-paused until City is validated. No new merchant account, paid software, trial,
-registration, supplier contact, credential use, merge or deployment was made.
+## Real evidence and initial data
 
-## Verified official capabilities
+Nigel supplied 23 personalised prices from the official City iOS app. All are
+GBP, each, ex VAT. Nigel confirmed the capture date as 6 October 2026; no exact
+time was supplied. Date-only evidence is retained explicitly, normalized to
+the start of that UK date for conservative age checks. Import time is separate.
+The initial private JSON file is an app-owned owner-capture format, not an
+invented City CSV export or live feed.
 
-| Requested capability | What the official material establishes | What remains unconfirmed |
-|---|---|---|
-| Own account prices | City's account-specific pricing page describes personal pricing through its website/app. PTS and City have combined websites. | Nigel's actual product prices, account template, cash/credit account type and whether branch access is already linked online. |
-| Downloadable price list / CSV / XLS / product-price feed | A public Trade Price Guide exists; no current personal-price CSV/XLS export or public customer API schema was located. | Whether Nigel's account has a download button or his branch can produce a permitted machine-readable price file. A public catalogue is not his account export. |
-| Saved/favourite product lists | City's Favourites/Joblist feature supports saved lists, editing, duplication, sharing and repeat orders. | Export format/download capability and whether any export carries personal prices, selling units or VAT. Sharing is not evidence of CSV export. |
-| Order history | Account dashboard/app supports viewing/filtering past purchases, tracking and reordering. | CSV/XLS export of order lines and included fields. Even a genuine historical paid amount is not today's account price. |
-| Quote files | City's tools page documents online branch quote requests and an emailed PDF reply. | Machine-readable quote export, exact fields, selling pack and validity in Nigel's actual file. No PDF parser implemented. |
-| Invoices / statements / credit notes | Account-management pages document financial-document downloads. | Product-price export. Financial records must remain historical references unless City explicitly confirms current price evidence. |
-| Contract purchasing reports | City's Integrated Solutions page describes an MI/KPI portal where contract customers can generate reports from captured purchasing data. | Eligibility for Nigel's ordinary trade account, any download format, and current account-product pricing. This is a contract-sector reporting offer, not evidence of an available personal price feed. |
-| Commusoft live integration | Both City's partnership page and Commusoft's integration page confirm connecting a City account for real-time parts pricing within Commusoft. | Permission, commercial terms or technical contract for Nigel's custom app, availability of read-only merchant price/stock access, and any approved export/reuse from Commusoft. |
-| Account-data/API request process | City provides branch/customer-service routes. Commusoft's public developer documentation describes keys for existing Commusoft private apps and OAuth partner onboarding. | No City self-service developer onboarding/API-key process found. A Commusoft key accesses Commusoft data; it does not automatically authorize direct City API calls or re-export of City pricing. |
-| Other approved third parties | Commusoft is the named City-confirmed live-price route found in the researched official sources. | No additional City-approved price connector was established; generic claims by unrelated software vendors are not adopted. |
+The private dataset contains City codes, supplied descriptions and prices,
+manufacturer/brand, 21 supplied MPN/model tokens, and two empty MPNs (950278 and
+793487). All GTINs are empty. A supplied model token is not an invented GTIN or
+manufacturer alias. Current City public pages may use other model identifiers:
+conflicts remain unconfirmed until independently resolved. Each means one
+selling item: a 3m pipe is priced for the whole 3m length, not per metre.
 
-Public pages were researched only. No authenticated City/PTS page was scraped,
-no session/cookie requests were made, and no undocumented endpoint was probed.
-Research absence is not proof a private export or partner feed does not exist.
-The public Digital Service Hub landing page returned HTTP 503 to the research
-fetch; its individual account, order and tools pages were readable. No access
-restriction was bypassed and no conclusions were guessed from the failed page.
+Original ex-VAT decimal prices are preserved; a separate inc-VAT selling-item
+amount is calculated at 20%, rounded half-up to pennies. Every row is
+account_cached with city_app_owner_capture provenance. Availability is always
+unknown; an optional stock note is point-in-time evidence, never current stock.
+The real account amounts and private file/database are not committed to this
+public repository. Fixtures use the real identities and deliberately altered
+prices. No merchant account number, owner details, credentials or tokens occur.
 
-Official sources checked:
+## Implemented owner workflow
 
-- [City account-specific benefits](https://www.cityplumbing.co.uk/content/elevate-your-installation-business/exclusive-benefits)
-- [PTS / combined account websites](https://www.cityplumbing.co.uk/content/pts)
+Each material row has "City account prices — add / update / choose".
+
+1. Find a saved capture by City code or exact product description.
+2. Recheck the amount in Nigel's City app. Add/update code, product name,
+   ex-VAT price, each/explicit pack size, checked date/time (UK time), and optional
+   stock note. Brand, MPN/model and GTIN fields are optional, never synthesized.
+   Existing-row Update prepopulates identifiers without advancing price age.
+3. Preview normalized prices, units, dates and the whole initial JSON batch.
+   Preview does not create or modify any database.
+4. "Save confirmed owner capture" explicitly commits a validated batch.
+   Critical malformed rows reject the whole batch. Identical rows collapse;
+   conflicting duplicates fail. Repeat imports/updates do not append duplicates
+   or refresh age. Older or superseded evidence cannot silently replace newer
+   evidence. New updates retain every other active product and append history.
+5. The phone-friendly cached card shows City code, original ex-VAT price,
+   normalized inc-VAT price, each/pack, checked date/age and stock uncertainty.
+   Seven days is an internal conservative stale limit, not City validity.
+   Stale rows remain references; new selection is blocked until rechecked.
+
+The endpoints GET/POST /api/city-account-prices and POST
+/api/city-account-prices/preview inherit the existing Basic Auth and origin
+checks. Responses are no-store. There are no new credentials, merchant requests,
+background refreshes, account-registration actions or external writes.
+
+## Comparison and quote contract
+
+Existing public merchant cards, live eligibility, BEST PRICE counts and
+Screwfix-unavailable handling remain intact. Account cards are an additive,
+separate account_results response. A fresh cached price can show "CHEAPEST
+OBSERVED — CACHED ACCOUNT PRICE (not live)" when supported by exact live public
+matches; it never receives the existing BEST PRICE badge. Public amounts are
+never relabelled as Nigel's account prices. Savings use normalized whole-selling-
+pack inc-VAT amounts; negative savings explicitly say account pricing is more.
+
+Cross-merchant equivalence requires GTIN or brand + MPN, matching pack and
+nonconflicting specifications. City SKU is local to City/PTS; a missing MPN can
+match the same City code only with exact description and no conflicting identity.
+It cannot establish Toolstation/Selco equivalence. PTS is not a second merchant.
+Different packs, conflicting GTIN/MPN/brand/specifications or unknown pricing
+basis do not generate claimed savings. Out-of-stock, preorder, backorder,
+unavailable, manual and cached-public references cannot establish a live match.
+
+Choosing a cached price requires explicit acknowledgement of cached pricing and
+unknown stock. Only that action populates the City product, supplier and price;
+quantity remains unchanged. No product URL is guessed. The City code is in the
+private selected_account_price snapshot. A saved known City URL, if supplied,
+must match its code. Changing name, supplier, URL or amount invalidates the held
+selection; quantity edits preserve it. Selecting a public card clears the
+account choice.
+
+The calculator uses the selected normalized numeric amount with account_cached
+provenance and bypasses the legacy public lookup. Request and calculated line
+both preserve the snapshot. Reopening/editing or updating the capture library
+cannot replace the quote's chosen price. Existing stale saved selections remain
+held and show age warnings; they are not silently repriced. "Update price"
+opens the owner-capture panel for an account-selected row.
+
+Existing arithmetic, charging rules, quantity, manual choices, explicit handling
+edits and the 25% default remain unchanged. No existing quote/material/public
+price records or schemas are rewritten.
+
+## Storage, privacy and staging gate
+
+The generic account foundation is reused. On the first explicit save only,
+a private city-account-prices.sqlite3 sidecar is created beside the configured
+quote database, with 0600 permissions. It contains account_price_imports and
+immutable account_price_records snapshots. A local opaque source reference is
+not Nigel's merchant account identifier. Reads use mode=ro and query_only.
+An interprocess lock covers initial creation and SQLite BEGIN IMMEDIATE covers
+atomic snapshot merge. App startup and read-only comparison create no files.
+
+Existing quote backups remain unchanged: future staging/release restoration
+must include the new private sidecar and its retained private input file as well
+as quotes.db. Do not merge/provision/deploy without subsequent owner approval.
+The initial real captures have been validated into a private local store only;
+no staging/production data is seeded or modified by this commit.
+
+## Tests and remaining gate
+
+Full Python, both Node and complete Chromium gates are required at the final
+PR head. New coverage includes all 23 real identities with sanitized prices,
+VAT/rounding, missing identifiers, exact/conflicting identities, selling packs,
+City/Toolstation/Selco public comparisons, stale and blocked stock references,
+atomic preview/import/update, duplicates, read-only byte integrity, auth/origin
+protection, explicit account selection and quote create/reopen/edit persistence.
+Chromium exercises preview/save/select/create/edit in the rendered app at a
+390px mobile viewport and retains all previous public workflows.
+
+Local validation: 229 Python tests, both Node suites and full rendered Chromium
+workflows passed. Full Chrome could not create a process-singleton socket in the
+workspace; Chromium 141 headless shell ran the same complete workflow cleanly,
+with no page/console errors, failed requests, failed responses or outbound calls.
+Final-head hosted CI is recorded in PR #4 rather than claiming it in advance.
+
+Once these gates pass, the implementation is ready for an approved staging
+trial: import the private file through preview/save and validate current
+public comparisons. No staging or production validation is claimed here.
+The PR remains draft, unmerged and undeployed. Wolseley is optional future work;
+Williams remains paused.
+
+## Documented future integration options
+
+City officially supports personal prices through its website/app, saved lists,
+order tools and financial-document downloads. A personal CSV/XLS price export
+format remains unconfirmed. Emailed branch PDF quotes are documented.
+City and Commusoft document live prices within Commusoft; that does not authorize
+this custom app or provide a documented direct City API contract.
+
+Normal City login was offered to the owner in the Work browser; its login frame
+returned HTTP 403. No access protection was bypassed and no cookie/token was
+copied. Owner-provided app captures now supply the first practical route without
+requiring an export. Any future CSV/PDF parser must inspect a genuine file first;
+any live connector requires documented permission and separate approval.
+
+Official sources researched 5 October 2026:
+
+- [City account benefits](https://www.cityplumbing.co.uk/content/elevate-your-installation-business/exclusive-benefits)
+- [City / PTS](https://www.cityplumbing.co.uk/content/pts)
 - [Favourites / Joblist](https://www.cityplumbing.co.uk/content/job-list)
-- [Purchasing tools / order history](https://www.cityplumbing.co.uk/content/elevate-your-installation-business/purchasing-tools)
-- [Account management / financial downloads](https://www.cityplumbing.co.uk/content/elevate-your-installation-business/streamline-operations)
-- [Integrated Solutions contract MI reports](https://www.cityplumbing.co.uk/content/integrated-solutions/solutions)
-- [Online branch quotes / emailed PDFs](https://www.cityplumbing.co.uk/content/elevate-your-installation-business/our-tools)
-- [Public trade guide](https://www.cityplumbing.co.uk/content/trade-price-guide)
-- [City account FAQ](https://www.cityplumbing.co.uk/content/help-and-advice/faqs)
-- [City's Commusoft partnership](https://www.cityplumbing.co.uk/content/commusoft)
-- [Commusoft's City integration](https://www.commusoft.com/en-gb/integrations/)
+- [Order tools](https://www.cityplumbing.co.uk/content/elevate-your-installation-business/purchasing-tools)
+- [Financial documents](https://www.cityplumbing.co.uk/content/elevate-your-installation-business/streamline-operations)
+- [Branch quotes](https://www.cityplumbing.co.uk/content/elevate-your-installation-business/our-tools)
+- [City Commusoft partnership](https://www.cityplumbing.co.uk/content/commusoft)
+- [Commusoft integrations](https://www.commusoft.com/en-gb/integrations/)
 - [Commusoft developer authentication](https://developer.commusoft.com/authentication-1985209m0)
-- [City customer contact routes](https://www.cityplumbing.co.uk/content/contact-us)
-
-## Best permitted route for the existing account
-
-Recommendation: obtain a current price file directly from Nigel's existing City
-branch/account manager before considering a live custom connector. This is a
-practical request, not a claim that City guarantees a CSV service.
-
-Nigel can use his normal existing login to check account pricing and whether
-Pricing/Favourites/Order History offers a download. If branch access is not
-linked online, City Customer Service can assist; do not open a new trade account.
-Do not supply the login password to this application.
-
-Ask the branch for a current account-specific price list for regular materials
-as CSV/XLS, including product code, description, selling unit/pack, price,
-VAT/rate and price/export date. Ask for manufacturer + MPN or GTIN if available,
-and any expiry, branch, quantity-break or minimum-order restrictions. Do not
-assume a price file contains these fields until a real sample is inspected.
-
-If no price file exists, request a representative basket quote for 10–15 regular
-products under the existing account. City documents emailed PDF branch quotes.
-That provides real account-price evidence for inspection, but a PDF import path
-still needs a real owner-supplied document and verified identity/pack/VAT fields.
-It is not a complete price list or live feed.
-
-Customer Service: 0330 678 0267 (Mon–Fri 08:30–17:00),
-customerservice@cityplumbing.co.uk. Nigel can use his existing branch instead.
-Keep the real account number in direct private communication with City. No
-message was sent by this task.
-
-For live access, ask City to route an enquiry to its digital partnerships team:
-does the documented Commusoft relationship support a read-only custom-app
-integration for this account? Request approval, supported scope/schema, test
-environment, authentication, limits, pricing-unit/VAT/stock meanings and allowed
-reuse. If Commusoft is the only offered route, evaluate the required software
-relationship and terms separately; do not sign up, purchase, trial or request
-credentials without Nigel's approval. No City endpoints have been invented.
-
-## Export/import gate
-
-Current state: **a City-specific CSV/XLS importer is not practical to implement
-yet** because no export schema or real owner file is available. A branch PDF
-quote is a documented available route; its actual format is likewise unknown.
-
-Once Nigel provides a genuine City-generated file and reliable date evidence:
-
-1. Inspect exact headers/dialect or document rows; map only observed fields.
-   Expected fields (not assumed columns): City SKU, name, manufacturer, MPN/GTIN,
-   selling unit/pack, price, VAT and export/validity date. Missing values remain
-   unsupported/unknown; do not derive account discounts from public prices.
-2. Ignore/redact account numbers, contact details and unnecessary financial data.
-   Preserve original product/price/unit/VAT/date evidence for the mapping review.
-3. Preview every row, price basis and separate normalized inc-VAT pack amount;
-   validate identity, quantity breaks and dates before an explicit import action.
-4. Critical malformed rows reject the entire batch. Identical rows/files are
-   idempotent; snapshots append history without multiplying duplicates or
-   reviving removed older products. The generic tested ingestion boundary exists.
-5. Store `account_cached`, checked/exported time and import time separately. No
-   import time may refresh an old price. Unknown VAT/unit/date/identity cannot
-   enter confirmed comparison or quote selection. Never claim CSV prices live.
-6. Public City offers remain `public_live`, in their existing independent source.
-   Do not overwrite the public price history or legacy/manual material records.
-
-Future live records may be `account_live` only after a genuine approved feed
-connection and freshness/stock checks. A public page, invoice, PDF, exported
-catalogue or manually copied account amount is not live account evidence.
-
-## Proposed City account-price UI and quote contract
-
-Separate visible sources for each exact product/pack:
-
-| Card | Required presentation / action |
-|---|---|
-| City Plumbing account price | `Cached account price`, original inc/ex VAT amount, normalized inc-VAT selling-pack amount, pack, price-as-of date, imported date/age and stock uncertainty. Fresh confirmed cached choice requires explicit acknowledgement. No live BEST PRICE badge. |
-| Stale City account price | Clear `STALE — refresh or reconfirm with City` warning. Keep visible as a reference; do not silently refresh its date or select it as current. Unknown VAT, selling pack or identity remains blocked. |
-| City public price | Explicit `PUBLIC LIVE` label and check time; retain alongside the account card, even for the same City SKU. Never relabel it an account price. |
-| Other public merchants | Existing product/pack/VAT checks and unavailable-merchant handling. Cached City cannot be a live winner against Toolstation. City/PTS is one merchant, never two for BEST PRICE counts. |
-
-Buttons/fields must use safe text rendering, private authenticated responses and
-no-store caching; do not reveal account numbers or account-source references in
-public pages, PDFs, logs or browser credentials. No account UI has been wired.
-
-Selecting a confirmed City account price must be an explicit owner action.
-Comparison cannot overwrite the selected supplier or quantity. Save a private,
-additive selected-price snapshot with `account_cached` provenance, original
-VAT/amount, normalized pack amount, product identity, pack and age evidence.
-Creation and editing must use that saved numeric selection until Nigel explicitly
-changes it, without any legacy public-price lookup replacement. Editing quantity
-alone must not drop the selection; editing product/pack identity must invalidate
-it and require a new explicit choice. Keep the existing calculator and 25%
-handling default; preserve explicit handling edits as well.
-
-The current application selection path is `selected_public`; **do not pass
-account choices through it and claim account provenance is preserved**. The
-source-aware snapshot/create/edit path must be implemented and tested after the
-real City file/feed exists. This pivot adds no request-model, calculator, quote
-store, route, UI or startup migration changes.
-
-## Test and readiness status
-
-The generic foundation's canonical synthetic fixtures now use City Plumbing.
-They are not sample City CSV rows and establish no City export column names.
-Retained cases cover account-vs-public precedence, stale/unknown pricing, exact
-identity/GTIN/MPN conflicts, packs, explicit VAT normalization, duplicate/atomic
-imports, malformed rows, no database mutation during read-only comparison, and
-unchanged calculator/quantity/manual choice/25% default.
-
-Six additional City cases explicitly cover separate City account/public cards,
-cached City vs Toolstation, stale City fallback to public comparison, original
-ex-VAT pack amounts, no VAT inference from public prices and exact GTIN/MPN with
-different merchant SKUs. Required suite: 212 tests (169 main + 43 foundation).
-All 212 local Python tests and both Node suites passed. Final-head CI and the
-complete Chromium result are recorded in PR #4 when available.
-
-The existing **public** selected-price quote create/edit regression is retained.
-It does not prove an account-price path: City account selection, source-aware
-persistence and rendered account-card acceptance tests remain mandatory pending
-implementation. Real-file malformed/duplicate/stale row tests also require the
-actual City export and must precede staging approval.
-
-Ready for next step: **YES — City data acquisition and permitted-route approval**.
-Ready to implement an actual importer: **NO — supply a real City file first**.
-Ready for staging: **NO — importer/account UI and create/edit gate are incomplete**.
-No Wolseley account/export is required. Williams remains paused. Do not merge
-or deploy without Nigel's explicit subsequent approval.

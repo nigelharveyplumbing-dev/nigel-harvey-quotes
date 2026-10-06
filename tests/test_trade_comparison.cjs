@@ -21,6 +21,7 @@ const context = {URL, URLSearchParams, fetch:async url => {lastRequest=url; retu
   pounds:x => '£' + Number(x).toFixed(2), escapeHtml:x => String(x).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'),
   showNotice:x => notices.push(x),updateMaterialLiveBadge:() => {},handling};
 vm.createContext(context);
+vm.runInContext(fs.readFileSync(require('node:path').join(__dirname, '../static/city_account_prices.js'), 'utf8'), context);
 vm.runInContext(code, context);
 (async () => {
   fields['.m-url'].value = 'https://www.cityplumbing.co.uk/p/valve/p/123456';
@@ -69,5 +70,47 @@ vm.runInContext(code, context);
   await context.compareMaterialTradePrices(button);
   assert.equal(fields['.trade-price-results'].textContent, 'Authentication required');
   assert.equal(button.disabled, false);
+  // Cached account selection is a separate, explicit source. Sanitized price.
+  const cached = {name:'Wednesbury Plain Copper Tube 15mm × 3m X015L-3',supplier_sku:'313813',
+    price:'6.00',price_inc_vat:'7.20',pack_quantity:1,selling_unit:'each',
+    source_type:'account_cached',freshness:'current',checked_at:new Date().toISOString(),
+    checked_precision:'time',selectable:true,cheapest_observed:true,stock_note:'<script>note</script>'};
+  cached.selection = {...cached};
+  let acknowledged = false;
+  const cachedButton = {closest:selector => selector === '.material-row' ? row :
+    {querySelector:() => ({checked:acknowledged})}};
+  const cards = context.cityAccountCards([cached], 'chooseSavedCityAccountPrice');
+  assert.match(cards,/City Plumbing account price — cached/);
+  assert.match(cards,/CHEAPEST OBSERVED — CACHED ACCOUNT PRICE/);
+  assert.ok(!cards.includes('BEST PRICE') && !cards.includes('<script>'));
+  fields['.m-qty'].value = '3';
+  context.selectCityAccountPrice(row,cached,cachedButton);
+  assert.equal(context.selectedAccountPrice(row),null);
+  acknowledged = true;
+  context.selectCityAccountPrice(row,cached,cachedButton);
+  assert.equal(fields['.m-supplier'].value,'City Plumbing');
+  assert.equal(fields['.m-manual'].value,'7.20');
+  assert.equal(fields['.m-url'].value,'');
+  assert.equal(fields['.m-qty'].value,'3');
+  assert.equal(handling.value,'25');
+  assert.equal(context.selectedAccountPrice(row).supplier_sku,'313813');
+  assert.equal(context.selectedComparisonPrice(row),null);
+  fields['.m-qty'].value='9';
+  assert.equal(context.selectedAccountPrice(row).price_inc_vat,'7.20');
+  fields['.m-supplier'].value='Selco';
+  assert.equal(context.selectedAccountPrice(row),null);
+  fields['.m-supplier'].value='City Plumbing';
+  fields['.m-url'].value='https://www.cityplumbing.co.uk/p/other/p/119745';
+  assert.equal(context.selectedAccountPrice(row),null);
+  fields['.m-url'].value='';
+  const stale={...cached,checked_at:new Date(Date.now()-8*86400000).toISOString(),freshness:'stale',selectable:false};
+  assert.match(context.cityAccountCards([stale],'chooseSavedCityAccountPrice'),/STALE/);
+  assert.ok(!context.cityAccountCards([stale],'chooseSavedCityAccountPrice').includes('Use cached City account price'));
+  row.selectedCityAccount=null;
+  context.selectCityAccountPrice(row,stale,cachedButton);
+  assert.equal(context.selectedAccountPrice(row),null);
+  // A card opened before expiry cannot be selected after seven days elapse.
+  context.selectCityAccountPrice(row,{...stale,freshness:'current',selectable:true},cachedButton);
+  assert.equal(context.selectedAccountPrice(row),null);
   console.log('Trade comparison UI: PASS');
 })().catch(error => {console.error(error);process.exitCode=1;});
