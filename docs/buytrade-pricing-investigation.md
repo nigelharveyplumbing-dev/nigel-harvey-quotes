@@ -27,19 +27,31 @@ ordering and search-only use can lose access. Descriptions may match products
 of similar specification, so a grouped result alone does not establish exact
 equivalence. A private manual-capture feature also needs reuse permission.
 
-## Authenticated inspection gate
+## Authenticated inspection — blocked; manual/reference-only
 
-The Work browser opened the official app and reached its normal TradeHelp
-sign-in screen. Nigel must complete login himself. No authenticated products,
-account prices, merchant links or exports have been inspected yet. No password,
-cookie, token or authentication URL is recorded here.
+On 6 October 2026 Nigel reported that authenticated inspection in the managed
+Chromium/Work browser was blocked by ERR_BLOCKED_BY_CLIENT. This is recorded
+as an environment/client block, not proof that BuyTrade itself is unavailable.
+The particular extension, managed policy or other client cause has not been
+independently established. No bypass, retry through an alternate environment,
+security weakening or session transfer will be attempted.
 
-After login, inspect visible account/link indicators without saving settings;
-then use normal UI interaction for a small representative procurement sample.
-No automated basket harvest, authenticated scraping, protected API probing,
-session transfer or request replay is permitted. Record only visible fields.
-Check genuine download/share controls without creating an order or requesting
-a quote from a merchant.
+The initial unauthenticated login page was accessible, but no authenticated
+products, account prices, credit links or export controls were verified.
+Nigel's registration does not establish a documented integration or reusable
+price feed. No BuyTrade sample price, saving or stock claim is fabricated.
+No password, cookie, token or authentication URL is recorded here.
+
+BuyTrade is manual/reference-only outside the plumbing app. Do not ingest
+prices, add a connector or request another browser login for this investigation.
+An official API/export/partner route, documented reuse permission and separate
+owner approval are required before operational integration. A permitted
+owner-provided export must be inspected before any format-specific importer.
+City's already implemented owner-capture workflow remains the primary path;
+the 23 City captures keep their independent account_cached provenance.
+
+The following evidence checklist is retained for a future permitted route,
+not as authorization to gather BuyTrade data now.
 
 For each independently confirmed exact product, retain privately:
 product, City code/account capture amount and date, BuyTrade offer amount,
@@ -98,9 +110,11 @@ branch/stock/freshness semantics; rate limits; and read-only authorization that
 does not permit orders or expose passwords/sessions. Obtain their written
 answer before implementation. Do not guess endpoints or create new accounts.
 
-Recommendation pending account inspection: keep PR #4's implemented City route;
-use BuyTrade in its normal browser for procurement comparisons. Do not ingest
-BuyTrade prices or add unattended retrieval without the required permission.
+Current decision: keep PR #4's implemented City route as the primary Phase 2
+path. BuyTrade is manual/reference-only unless an official permitted API,
+export or partner route is confirmed. No further authenticated browser
+inspection is planned under this request. The failed inspection leaves price
+comparisons and account export/link indicators unverified.
 
 ## Sources reviewed
 

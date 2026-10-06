@@ -29,6 +29,26 @@ merchant endpoint/schema. No operational live account connector, session reuse,
 OAuth credential, merchant write, background scrape or account registration
 exists. Private sidecar initialization is explicit; no startup DDL/migrations.
 
+## BuyTrade — manual/reference-only
+
+Nigel reported ERR_BLOCKED_BY_CLIENT during authenticated inspection in the
+managed Chromium/Work browser on 6 October 2026. Do not bypass or retry that
+restriction. No authenticated BuyTrade price, linked credit account or export
+was verified; no BuyTrade connector, importer or runtime source is included.
+
+See [BuyTrade investigation](buytrade-pricing-investigation.md) for official
+findings, terms restrictions and the proposed permission-gated architecture.
+Keep BuyTrade separate from Nigel's City account prices. Operational BuyTrade
+work requires a confirmed official permitted API/export/partner route and
+separate owner approval. Its browser block is not a dependency or release
+blocker for the City owner-capture path.
+
+City remains the primary implemented workflow: 23 private owner captures,
+account_cached provenance, original ex-VAT amounts and separate inc-VAT
+normalization, each/explicit selling packs, age/stale warnings and explicit
+quote selection snapshots. No cached price can receive a live BEST PRICE
+badge; quote quantity, arithmetic and 25% handling remain unchanged.
+
 ## Optional Wolseley route — future only
 
 Nigel has no Wolseley account; neither an account nor a CSV is required.
