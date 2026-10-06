@@ -119,6 +119,8 @@ class BaselineTests(unittest.TestCase):
             "APP_USERNAME": cls.test_username, "APP_PASSWORD": cls.test_password,
         }):
             spec.loader.exec_module(cls.module)
+        if not cls.module.DB_PATH.resolve().is_relative_to(root):
+            raise RuntimeError("Baseline app escaped temporary storage before database initialization")
         cls.module.init_db()
         cls.auth_headers = {"Authorization": "Basic " + base64.b64encode(
             f"{cls.test_username}:{cls.test_password}".encode()).decode()}

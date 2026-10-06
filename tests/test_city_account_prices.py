@@ -16,10 +16,20 @@ from zoneinfo import ZoneInfo
 from fastapi.testclient import TestClient
 from local_browser_server import disposable_app
 
+_path = list(sys.path)
+_existing = {key for key in sys.modules if key == "business" or key.startswith("business.")}
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from business import city_account_prices as city
-from business import account_pricing as foundation
-from business.models import MaterialItem
+try:
+    from business import city_account_prices as city
+    from business import account_pricing as foundation
+    from business.models import MaterialItem
+finally:
+    # unittest imports every test before running setUpClass. Do not leave the
+    # original package cached ahead of another harness's disposable app copy.
+    sys.path[:] = _path
+    for _key in list(sys.modules):
+        if (_key == "business" or _key.startswith("business.")) and _key not in _existing:
+            del sys.modules[_key]
 
 NOW = datetime(2026, 10, 6, 12, tzinfo=timezone.utc)
 
