@@ -1,0 +1,19 @@
+{
+  "pageErrors": [],
+  "externalRequests": [],
+  "brokenImages": [],
+  "layouts": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "images": 9,
+      "overflow": false
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "images": 9,
+      "overflow": false
+    }
+  ]
+}

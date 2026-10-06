@@ -38,7 +38,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_WEBSITE_ROUTES = {
     ("GET", path) for path in (
         "/", "/new-home", "/request-quote", "/robots.txt", "/sitemap.xml",
-        "/site-images/{filename}",
+        "/site-images/{filename}", "/projects", "/projects/{project_slug}",
+        "/project-images/{project_slug}/{filename}",
         "/plumber-{area_slug}", "/{service_slug}-{area_slug}", "/{service_slug}",
     )
 } | {("POST", "/api/leads")}
@@ -131,8 +132,8 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
-        self.assertEqual(len(routes), 81)
-        self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 10)
+        self.assertEqual(len(routes), 84)
+        self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 13)
         self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
         self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 66)
         self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
@@ -326,7 +327,7 @@ class BaselineTests(unittest.TestCase):
             for method, template in sorted(PUBLIC_WEBSITE_ROUTES):
                 if method == "GET":
                     with self.subTest(path=template):
-                        expected = 200
+                        expected = 404 if template in {"/projects/{project_slug}", "/project-images/{project_slug}/{filename}"} else 200
                         self.assertEqual(client.get(paths.get(template, template)).status_code, expected)
             lead = client.post("/api/leads", json={
                 "name": "Public Test", "phone": "07000000000", "description": "Enquiry",
@@ -369,7 +370,9 @@ class BaselineTests(unittest.TestCase):
                     with self.subTest(path=path):
                         response = client.get(path)
                         self.assertEqual(response.status_code, 200)
-                        self.assertEqual(hashlib.sha256(response.content).hexdigest(), digest)
+                        # Only the deliberate project-discovery footer link is additive.
+                        unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", response.text)
+                        self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
     def test_active_homepage_open_app_navigation(self):
         m = self.module
@@ -1271,7 +1274,9 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             }
         for name, digest in cases:
             with self.subTest(page=name):
-                self.assertEqual(hashlib.sha256(rendered[name].encode()).hexdigest(), digest)
+                # Freeze every existing byte outside the additive discovery link.
+                unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", rendered[name])
+                self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
     def test_stage7_merchant_parsing_and_matching_offline(self):
         """No merchant request escapes the process; preserve exact parsed shapes."""
