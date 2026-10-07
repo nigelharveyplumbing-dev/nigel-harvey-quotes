@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Response, Request, UploadFile, File,
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from starlette.routing import Match
 from pydantic import BaseModel, Field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import requests
 import re
@@ -976,7 +976,12 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     return invoice_store.update_invoice_by_id(invoice_id, data, row_to_invoice, safe_float, upsert_customer)
 
 from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search, website_contact, public_layout, growth_tracking
-from business import trade_comparison
+from business import trade_comparison, city_account_prices
+
+
+def city_account_store_path():
+    # Derive from the existing isolated data directory, never the quotes DB.
+    return DB_PATH.parent / "city-account-prices.sqlite3"
 
 def get_dashboard():
     return dashboard_reporting.get_dashboard(get_db, now_uk)
@@ -1222,6 +1227,7 @@ payment_config = json.dumps({
 }).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 HTML = HTML.replace("__APP_PAYMENT_CONFIG__", payment_config)
 HTML = HTML.replace("__MATERIAL_SELECTION_JS__", (APP_UI_ROOT / "static" / "material_selection.js").read_text(encoding="utf-8"))
+HTML = HTML.replace("__CITY_ACCOUNT_PRICES_JS__", (APP_UI_ROOT / "static" / "city_account_prices.js").read_text(encoding="utf-8"))
 HTML = HTML.replace("__APP_JS__", (APP_UI_ROOT / "static" / "app.js").read_text(encoding="utf-8"))
 HTML = HTML.replace("__PIPELINE_JS__", (APP_UI_ROOT / "static" / "pipeline.js").read_text(encoding="utf-8"))
 
@@ -1563,9 +1569,37 @@ def api_best_trade_prices(request: Request, q: str = "", url: str = "", compare_
     try:
         result = trade_comparison.compare_prices(q, anchor_url=url, comparison_url=compare_url,
                                                  cache_rows=material_store.list_material_price_cache())
+        result["account_results"] = city_account_prices.compare(city_account_store_path(), q, result["results"], now=datetime.now(timezone.utc))
+        result["account_prices_connected"] = bool(result["account_results"])
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/city-account-prices")
+def api_city_account_prices(q: str = ""):
+    now = datetime.now(timezone.utc)
+    rows = city_account_prices.read(city_account_store_path(), now=now)
+    return JSONResponse({"results": [city_account_prices.offer(r, (), now=now) for r in rows
+                         if not q or q == r.supplier_sku or trade_comparison.relevant(r.name, q)]}, headers={"Cache-Control":"no-store"})
+
+
+@app.post("/api/city-account-prices/preview")
+def api_preview_city_account_prices(payload: dict):
+    try:
+        result = city_account_prices.preview(payload, now=datetime.now(timezone.utc))
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+    return JSONResponse({"results":result}, headers={"Cache-Control":"no-store"})
+
+
+@app.post("/api/city-account-prices")
+def api_save_city_account_prices(payload: dict):
+    try:
+        result = city_account_prices.save(city_account_store_path(), payload, now=datetime.now(timezone.utc))
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+    return JSONResponse(result, headers={"Cache-Control":"no-store"})
 
 
 @app.get("/api/live-product-search")
@@ -4689,7 +4723,7 @@ def build_ai_quote_context(data: AIQuoteDraftRequest):
 
     forgotten = detect_forgotten_items(
         job,
-        [m.model_dump() if hasattr(m, "model_dump") else m.dict() for m in data.current_materials]
+        [m.model_dump(mode="json") if hasattr(m, "model_dump") else m.dict() for m in data.current_materials]
     ) if "detect_forgotten_items" in globals() else []
 
     common_materials = []
@@ -5496,7 +5530,7 @@ def api_create_quote(data: QuoteRequest):
         validate_work_types(data.work_type, data.additional_work_types)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    request_data = data.model_dump()
+    request_data = data.model_dump(mode="json")
     result_data = calculate_quote(data)
     try:
         quote_id = save_quote(request_data, result_data)
@@ -5517,7 +5551,7 @@ def api_update_quote(quote_id: int, data: QuoteRequest):
         validate_work_types(data.work_type, data.additional_work_types)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    request_data = data.model_dump()
+    request_data = data.model_dump(mode="json")
     result_data = calculate_quote(data)
     try:
         quote = update_quote_by_id(quote_id, request_data, result_data)

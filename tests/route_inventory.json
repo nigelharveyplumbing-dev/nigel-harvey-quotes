@@ -289,5 +289,8 @@
   ["POST", "/api/quick-add/preview"],
   ["POST", "/api/quick-add/confirm"],
   ["GET", "/api/leads/{lead_id}/deletion-check"],
-  ["GET", "/api/best-trade-prices"]
+  ["GET", "/api/best-trade-prices"],
+  ["GET", "/api/city-account-prices"],
+  ["POST", "/api/city-account-prices/preview"],
+  ["POST", "/api/city-account-prices"]
 ]

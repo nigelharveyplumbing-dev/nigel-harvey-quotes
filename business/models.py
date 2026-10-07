@@ -1,6 +1,44 @@
 """Request payload models with unchanged defaults."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator, ConfigDict
+from typing import Literal
+from decimal import Decimal, ROUND_HALF_UP
+from datetime import datetime, timezone
+
+
+class AccountPriceSelection(BaseModel):
+    """Frozen owner selection, separate from the legacy selected-public field."""
+    model_config = ConfigDict(extra="forbid")
+    supplier_sku: str = Field(pattern=r"^\d{6}$")
+    name: str = Field(min_length=1, max_length=500)
+    brand: str = Field(default="", max_length=500)
+    mpn: str = Field(default="", max_length=500)
+    gtin: str = ""
+    pack_quantity: int = Field(gt=0, le=100000)
+    selling_unit: Literal["each", "pack"]
+    price: Decimal = Field(gt=0, lt=100000, allow_inf_nan=False)
+    vat_basis: Literal["ex_vat"]
+    vat_rate: Literal["0.20"]
+    price_inc_vat: Decimal = Field(gt=0, lt=120000, allow_inf_nan=False)
+    source_type: Literal["account_cached"]
+    capture_source: Literal["city_app_owner_capture"]
+    checked_at: str
+    checked_precision: Literal["date", "time"] = "time"
+    stock_note: str = Field(default="", max_length=500)
+
+    @model_validator(mode="after")
+    def consistent_capture(self):
+        from business.account_pricing import timestamp
+        from business.trade_comparison import valid_gtin
+        if self.selling_unit == "each" and self.pack_quantity != 1:
+            raise ValueError("Each means a selling quantity of one")
+        if self.price.quantize(Decimal("0.01")) != self.price or (self.price * Decimal("1.20")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) != self.price_inc_vat:
+            raise ValueError("Account VAT normalization does not match the original price")
+        if timestamp(self.checked_at) > datetime.now(timezone.utc):
+            raise ValueError("Account capture cannot be dated in the future")
+        if self.gtin and not valid_gtin(self.gtin):
+            raise ValueError("Invalid account GTIN")
+        return self
 
 class MaterialItem(BaseModel):
     name: str = ""
@@ -9,12 +47,26 @@ class MaterialItem(BaseModel):
     url: str = ""
     manual_price: float = 0
     selected_comparison_price: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    selected_account_price: AccountPriceSelection | None = None
     quote_charge_override: float | None = None
     material_type: str = "chargeable"
     charge_method: str = "full"
     quantity_source: str = "rule"
     learned_average_quantity: float | None = None
     learned_used_count: float | None = None
+
+    @model_validator(mode="after")
+    def bound_account_selection(self):
+        selected = self.selected_account_price
+        if selected and (self.selected_comparison_price is not None or self.supplier not in {"City Plumbing", "PTS"}
+                         or self.name != selected.name or abs(self.manual_price - float(selected.price_inc_vat)) > 0.000001):
+            raise ValueError("Account selection must match the selected City product and amount")
+        if selected and self.url:
+            from business.trade_comparison import supplier_for_url
+            import re
+            if supplier_for_url(self.url) != "City Plumbing" or not re.search(r"/" + selected.supplier_sku + r"/?$", self.url):
+                raise ValueError("Account selection URL must match the City code")
+        return self
 
 
 class QuoteRequest(BaseModel):
