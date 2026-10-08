@@ -62,6 +62,9 @@ PUBLIC_ROUTE_KEYS = frozenset({
     ("GET", "/new-home"),
     ("GET", "/request-quote"),
     ("GET", "/site-images/{filename}"),
+    ("GET", "/projects"),
+    ("GET", "/projects/{project_slug}"),
+    ("GET", "/project-images/{project_slug}/{filename}"),
     ("GET", "/robots.txt"),
     ("GET", "/sitemap.xml"),
     ("GET", "/plumber-{area_slug}"),
@@ -122,21 +125,28 @@ def is_cross_site_write(request: Request):
 
 @app.middleware("http")
 async def protect_app_routes(request: Request, call_next):
+    def indexing_headers(response):
+        if (is_staging_environment() or request.url.path == "/app"
+                or request.url.path.startswith("/app/")
+                or (request.url.path.startswith("/api/") and not is_public_route(request))):
+            response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response
+
     if not is_staging_environment() and is_public_route(request):
         return await call_next(request)
     if not check_basic_auth(request):
         headers = {"WWW-Authenticate": "Basic"}
         if request.url.path.startswith("/api/"):
-            return JSONResponse(
+            return indexing_headers(JSONResponse(
                 status_code=401, headers=headers,
                 content={"detail": "Authentication required"},
-            )
-        return Response(status_code=401, headers=headers, content="Authentication required")
+            ))
+        return indexing_headers(Response(status_code=401, headers=headers, content="Authentication required"))
     if is_cross_site_write(request):
         if request.url.path.startswith("/api/"):
-            return JSONResponse(status_code=403, content={"detail": "Cross-site request blocked"})
-        return Response(status_code=403, content="Cross-site request blocked")
-    return await call_next(request)
+            return indexing_headers(JSONResponse(status_code=403, content={"detail": "Cross-site request blocked"}))
+        return indexing_headers(Response(status_code=403, content="Cross-site request blocked"))
+    return indexing_headers(await call_next(request))
 
 
 from business.config import (
@@ -975,7 +985,7 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict):
 def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     return invoice_store.update_invoice_by_id(invoice_id, data, row_to_invoice, safe_float, upsert_customer)
 
-from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search, website_contact, public_layout, growth_tracking
+from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search, website_contact, public_layout, growth_tracking, real_projects
 from business import trade_comparison, city_account_prices
 
 
@@ -1439,9 +1449,60 @@ def sitemap_xml(request: Request):
         for service in LOCAL_SERVICE_PAGES
         for location in LOCATION_PAGES if location["slug"] != "farnborough"
     )
-    body = "".join(f"<url><loc>{absolute_url(url, request)}</loc></url>" for url in urls)
+    body = "".join(f"<url><loc>{escape(absolute_url(url, request))}</loc></url>" for url in urls)
+    body += "".join(f"<url><loc>{escape(absolute_url(path, request))}</loc><lastmod>{updated}</lastmod></url>"
+                    for path, updated in real_projects.sitemap_entries())
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
     return Response(content=xml, media_type="application/xml; charset=utf-8")
+
+
+@app.get("/projects", response_class=HTMLResponse)
+def project_index(request: Request):
+    include_drafts = check_basic_auth(request)
+    noindex = include_drafts or not real_projects.visible_projects() or is_staging_environment()
+    return HTMLResponse(website_contact.add_quote_attribution(real_projects.render_index(
+        absolute_url=absolute_url, request=request, include_drafts=include_drafts,
+        staging=is_staging_environment())), headers={
+            "Cache-Control": "private, no-store" if noindex else "no-cache",
+            **({"X-Robots-Tag": "noindex, nofollow"} if noindex else {}),
+        })
+
+
+@app.get("/projects/{project_slug}", response_class=HTMLResponse)
+def real_project_page(project_slug: str, request: Request):
+    project = next((p for p in real_projects.PROJECTS if p.slug == project_slug), None)
+    if not project or (project.status != "published" and not check_basic_auth(request)):
+        raise HTTPException(status_code=404, detail="Project not found",
+                            headers={"X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, no-store"})
+    noindex = project.status != "published" or is_staging_environment()
+    return HTMLResponse(website_contact.add_quote_attribution(real_projects.render_project(
+        project, absolute_url=absolute_url, request=request, staging=is_staging_environment())),
+        headers={"Cache-Control": "private, no-store" if noindex else "no-cache",
+                 **({"X-Robots-Tag": "noindex, nofollow"} if noindex else {})})
+
+
+@app.get("/project-images/{project_slug}/{filename}")
+def real_project_image(project_slug: str, filename: str, request: Request):
+    project = next((p for p in real_projects.PROJECTS if p.slug == project_slug), None)
+    if not project or (project.status != "published" and not check_basic_auth(request)):
+        raise HTTPException(status_code=404, detail="Image not found", headers={"Cache-Control": "private, no-store"})
+    allowed = {f"{image.id}-{size}.webp" for image in project.images for size in (640, 1280)}
+    if filename not in allowed:
+        raise HTTPException(status_code=404, detail="Image not found")
+    # Original photographs and private uploads never enter this public route.
+    folder = Path(__file__).resolve().parent / "static/project-images" / project_slug
+    path = folder / filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Image not found")
+    private = project.status != "published" or is_staging_environment()
+    return FileResponse(path, media_type="image/webp", headers={
+        "Cache-Control": "private, no-store" if private else "public, max-age=604800",
+        **({"X-Robots-Tag": "noindex, nofollow"} if private else {}),
+    })
+
+
+def add_project_evidence(html: str, request: Request):
+    return real_projects.add_related_project_links(html, request.url.path)
 
 
 @app.get("/plumber-{area_slug}", response_class=HTMLResponse)
@@ -1450,7 +1511,7 @@ def location_page(area_slug: str, request: Request):
     if not page:
         raise HTTPException(status_code=404, detail="Area page not found")
     logo_html = get_company_logo_html(get_company_logo_value())
-    return HTMLResponse(content=website_contact.add_quote_attribution(render_location_page(page["name"], logo_html)), media_type="text/html; charset=utf-8")
+    return HTMLResponse(content=website_contact.add_quote_attribution(add_project_evidence(render_location_page(page["name"], logo_html), request)), media_type="text/html; charset=utf-8")
 
 
 
@@ -1462,7 +1523,7 @@ def local_service_location_page(service_slug: str, area_slug: str, request: Requ
     established_service = next((item for item in SERVICE_PAGES if item["slug"] == full_slug), None)
     if established_service:
         logo_html = get_company_logo_html(get_company_logo_value())
-        return HTMLResponse(content=website_contact.add_quote_attribution(render_service_page(established_service, logo_html, request)),
+        return HTMLResponse(content=website_contact.add_quote_attribution(add_project_evidence(render_service_page(established_service, logo_html, request), request)),
                             media_type="text/html; charset=utf-8")
     service = next((item for item in LOCAL_SERVICE_PAGES if item["slug"] == service_slug.lower()), None)
     # No automatic service × Farnborough doorway pages in this growth batch.
@@ -1474,17 +1535,17 @@ def local_service_location_page(service_slug: str, area_slug: str, request: Requ
         raise HTTPException(status_code=404, detail="Local service page not found")
     logo_html = get_company_logo_html(get_company_logo_value())
     return HTMLResponse(
-        content=website_contact.add_quote_attribution(render_local_service_location_page(service, location, logo_html, request)),
+        content=website_contact.add_quote_attribution(add_project_evidence(render_local_service_location_page(service, location, logo_html, request), request)),
         media_type="text/html; charset=utf-8"
     )
 
 @app.get("/{service_slug}", response_class=HTMLResponse)
-def service_page(service_slug: str):
+def service_page(service_slug: str, request: Request):
     page = next((item for item in SERVICE_PAGES if item["slug"] == service_slug.lower()), None)
     if not page:
         raise HTTPException(status_code=404, detail="Service page not found")
     logo_html = get_company_logo_html(get_company_logo_value())
-    return HTMLResponse(content=website_contact.add_quote_attribution(render_service_page(page, logo_html)), media_type="text/html; charset=utf-8")
+    return HTMLResponse(content=website_contact.add_quote_attribution(add_project_evidence(render_service_page(page, logo_html), request)), media_type="text/html; charset=utf-8")
 
 
 

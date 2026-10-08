@@ -292,5 +292,8 @@
   ["GET", "/api/best-trade-prices"],
   ["GET", "/api/city-account-prices"],
   ["POST", "/api/city-account-prices/preview"],
-  ["POST", "/api/city-account-prices"]
+  ["POST", "/api/city-account-prices"],
+  ["GET", "/projects"],
+  ["GET", "/projects/{project_slug}"],
+  ["GET", "/project-images/{project_slug}/{filename}"]
 ]

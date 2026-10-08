@@ -1,0 +1,117 @@
+{
+  "baseline": "8ab4f6494de3823b4150fc611e698a91295faa56",
+  "python": {
+    "baseline_passed": 169,
+    "final_passed": 180
+  },
+  "node": {
+    "material_selection": "PASS",
+    "trade_comparison": "PASS",
+    "public_analytics": "PASS"
+  },
+  "existing_browser": {
+    "result": "PASS",
+    "diagnostics": {
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "failedResponses": [],
+      "blockedExternalRequests": [],
+      "apiRequests": [
+        "GET /api/ai-quote-status",
+        "GET /api/dashboard",
+        "GET /api/dashboard/monthly-profit",
+        "GET /api/quotes",
+        "GET /api/invoices",
+        "GET /api/customers",
+        "GET /api/leads",
+        "GET /api/business-performance",
+        "GET /api/quotes",
+        "GET /api/best-trade-prices",
+        "GET /api/best-trade-prices",
+        "POST /api/quote",
+        "GET /api/quotes",
+        "GET /api/customers",
+        "GET /api/dashboard",
+        "GET /api/dashboard/monthly-profit",
+        "GET /api/business-performance",
+        "GET /api/quote-learning",
+        "GET /api/labour-intelligence",
+        "GET /api/quotes/1",
+        "GET /api/supplier-preference",
+        "GET /api/quotes",
+        "GET /api/quotes",
+        "GET /api/labour-intelligence",
+        "PUT /api/quotes/1",
+        "GET /api/quotes",
+        "GET /api/customers",
+        "GET /api/dashboard",
+        "GET /api/dashboard/monthly-profit",
+        "GET /api/business-performance",
+        "GET /api/customers",
+        "GET /api/customers",
+        "GET /api/customers/1/history",
+        "GET /api/quotes",
+        "POST /api/quotes/1/to-invoice",
+        "GET /api/invoices",
+        "GET /api/invoices",
+        "GET /api/invoices/1/payment-qr",
+        "GET /api/dashboard",
+        "GET /api/dashboard/monthly-profit",
+        "GET /api/business-performance",
+        "GET /api/invoices/1",
+        "PUT /api/invoices/1",
+        "GET /api/invoices/1/payment-qr",
+        "GET /api/invoices",
+        "GET /api/customers",
+        "GET /api/dashboard",
+        "GET /api/dashboard/monthly-profit",
+        "GET /api/business-performance",
+        "POST /api/invoices/1/status",
+        "GET /api/invoices",
+        "GET /api/dashboard",
+        "GET /api/dashboard/monthly-profit",
+        "GET /api/business-performance",
+        "GET /api/invoices/1",
+        "GET /api/invoices/1/payment-qr",
+        "POST /api/invoices/1/photos",
+        "GET /api/invoices/1/photos/1",
+        "DELETE /api/invoices/1/photos/1",
+        "GET /api/leads",
+        "GET /api/material-prices",
+        "GET /api/quotes",
+        "DELETE /api/quotes/1",
+        "GET /api/quotes",
+        "GET /api/customers",
+        "GET /api/dashboard",
+        "GET /api/dashboard/monthly-profit",
+        "GET /api/business-performance"
+      ]
+    }
+  },
+  "project_browser": {
+    "result": "PASS",
+    "diagnostics": {
+      "pageErrors": [],
+      "externalRequests": [],
+      "brokenImages": [],
+      "layouts": [
+        {
+          "name": "desktop",
+          "width": 1440,
+          "images": 9,
+          "overflow": false
+        },
+        {
+          "name": "mobile",
+          "width": 390,
+          "images": 9,
+          "overflow": false
+        }
+      ]
+    }
+  },
+  "schema_validation": "Local JSON parsing + semantic/schema-type checks; external rich-results validator not run",
+  "publication": "draft; no merge/deploy/indexing notifications",
+  "browser_runtime": "Playwright 1.56.1 / Chromium headless shell 141 (1194); loopback only"
+}

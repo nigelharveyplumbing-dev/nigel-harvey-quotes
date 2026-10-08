@@ -1,0 +1,12 @@
+# Original job/customer photographs belong in private owner storage.
+/docs/project-sources/
+/source-photos/
+/static/project-images/**/*.jpg
+/static/project-images/**/*.jpeg
+/static/project-images/**/*.heic
+/static/project-images/**/*.tif
+/static/project-images/**/*.tiff
+
+# Local Python caches
+__pycache__/
+*.pyc
