@@ -68,7 +68,15 @@ try {
     assert.equal(await page.locator('main img').count(), 9);
     for (const image of await page.locator('main img').all()) {
       await image.scrollIntoViewIfNeeded();
-      await image.evaluate(async img => { await img.decode(); });
+      try {
+        await image.evaluate(async img => { await img.decode(); });
+      } catch (error) {
+        console.error('Project image decode state:', JSON.stringify(await image.evaluate(img => ({
+          src: img.src, currentSrc: img.currentSrc, srcset: img.srcset,
+          complete: img.complete, naturalWidth: img.naturalWidth, loading: img.loading,
+        }))));
+        throw error;
+      }
     }
     const dimensions = await page.evaluate(() => ({ width: innerWidth,
       document: document.documentElement.scrollWidth,
