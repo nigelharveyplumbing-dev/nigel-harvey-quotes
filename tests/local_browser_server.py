@@ -73,7 +73,7 @@ def block_external_connections():
 @contextmanager
 def disposable_app(username: str, password: str,
                    public_base_url: str = "", environment: str = "",
-                   bank_settings: dict | None = None):
+                   bank_settings: dict | None = None, projects_as_drafts: bool = True):
     if not username or not password:
         raise ValueError("Test-only Basic Auth credentials are required")
     with tempfile.TemporaryDirectory(prefix="stage6-local-") as temporary:
@@ -81,6 +81,15 @@ def disposable_app(username: str, password: str,
         for name in ("business", "templates", "static"):
             shutil.copytree(ROOT / name, root / name,
                             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+
+        # Keep draft privacy regressions independent of the production catalogue.
+        # Publication checks explicitly opt into the unmodified approved records.
+        if projects_as_drafts:
+            content = root / "business/project_content.json"
+            records = json.loads(content.read_text())
+            for record in records:
+                record.update(status="draft", approved_at=None, published_at=None)
+            content.write_text(json.dumps(records))
 
         config = root / "business" / "config.py"
         settings = config.read_text()
@@ -170,7 +179,8 @@ if __name__ == "__main__":
     if not 1024 <= port <= 65535:
         raise ValueError("Invalid local test port")
     with disposable_app(os.environ["STAGE6_TEST_USERNAME"],
-                        os.environ["STAGE6_TEST_PASSWORD"]) as (app_module, _):
+                        os.environ["STAGE6_TEST_PASSWORD"],
+                        projects_as_drafts=os.environ.get("PROJECT_TEST_PUBLISHED") != "1") as (app_module, _):
         app_module.upsert_material_price_cache(
             "https://example.test/synthetic-valve", "Synthetic valve",
             "Test supplier", price=5, status="cached",

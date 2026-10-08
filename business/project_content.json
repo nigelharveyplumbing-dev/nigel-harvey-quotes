@@ -1,10 +1,10 @@
 [
   {
     "slug": "ensuite-renovation-merrow-guildford",
-    "status": "draft",
-    "approved_at": null,
-    "published_at": null,
-    "updated_on": "2026-10-06",
+    "status": "published",
+    "approved_at": "2026-10-08T22:02:45+01:00",
+    "published_at": "2026-10-08T22:05:00+01:00",
+    "updated_on": "2026-10-08",
     "title": "Ensuite renovation in Merrow, Guildford",
     "location": "Merrow, Guildford",
     "services": [
@@ -15,8 +15,8 @@
       "Flooring"
     ],
     "summary": "A complete ensuite refurbishment carried out by Nigel Harvey Plumbing, from strip-out and wall reconstruction to the shower, WC, vanity, heated towel rail, tiling and flooring.",
-    "problem": "The existing ensuite needed a complete refurbishment. Opening up the room exposed problems with the internal wall and insulation build-up, with visible mould in affected areas.",
-    "findings": "During strip-out, Nigel found visible mould and problems within the existing wall build-up. The affected construction was stripped back rather than covered over. These observations do not establish a definitive technical cause of the mould.",
+    "problem": "The ensuite needed a complete refurbishment. During strip-out, Nigel opened up the internal walls and found problems with the existing wall and insulation build-up, including visible mould in affected areas.",
+    "findings": "He stripped back the affected construction rather than covering it over, then rebuilt the wall build-up ready for waterproof boarding, tiling and the final fit-out.",
     "work": [
       "Strip out the existing ensuite and open up the affected wall construction.",
       "Strip back the affected construction and rebuild the internal wall build-up.",
