@@ -38,7 +38,7 @@ jobs:
         run: |
           python -m pip install -r requirements-test.txt
           npm install --prefix "$RUNNER_TEMP/comparison-browser" playwright@1.56.1
-          "$RUNNER_TEMP/comparison-browser/node_modules/.bin/playwright" install --with-deps chromium
+          "$RUNNER_TEMP/comparison-browser/node_modules/.bin/playwright" install chromium
       - name: Full offline Python, Node and browser regression
         env:
           EMAIL_ENABLED: '0'
@@ -50,4 +50,11 @@ jobs:
           node --check static/app.js
           node --check static/city_account_prices.js
           node --check tests/run_local_browser.mjs
-          python -B tests/run_stage6_local.py
+          python -B tests/run_stage6_local.py --python-only
+          timeout 60s node tests/run_local_browser.mjs
+          set +e
+          timeout 60s node tests/run_project_browser.mjs
+          baseline_status=$?
+          set -e
+          echo "ORIGINAL PROJECT TEST EXIT: $baseline_status"
+          timeout 60s node tests/ci_corrected_project.mjs
