@@ -185,15 +185,15 @@ def render_project(project, *, absolute_url, request=None, staging=False):
     content = banner + f'''<div class="wrap project-breadcrumb"><a href="/">Home</a> / <a href="/projects">Real projects</a> / {escape(project.title)}</div>
 <article><header class="wrap project-intro"><div><p class="kicker">A real completed project · {escape(project.location)}</p><h1>{escape(project.title)}</h1><p class="project-lead">{escape(project.summary)}</p><p class="project-byline">Project account by Nigel Harvey Plumbing · Work carried out by <a href="/#about">Nigel Harvey</a><br>{dates}</p><a class="btn" href="/request-quote">Discuss your bathroom</a></div><figure>{image_html(project, hero, hero=True)}<figcaption>{escape(hero.caption)}</figcaption></figure></header>
 <section class="project-facts"><div class="wrap"><h2>The job at a glance</h2><dl><div><dt>Location</dt><dd>{escape(project.location)}</dd></div><div><dt>Work</dt><dd>{escape(", ".join(project.services))}</dd></div><div><dt>Carried out by</dt><dd>Nigel Harvey Plumbing</dd></div><div><dt>Materials / systems</dt><dd>{escape("; ".join(project.materials) or "Not recorded")}</dd></div></dl></div></section>
-<div class="wrap project-story"><section><h2>The starting condition</h2><p>{escape(project.problem)}</p></section><section><h2>What Nigel found during strip-out</h2><p>{escape(project.findings)}</p></section><section><h2>Work carried out</h2><ul>{"".join("<li>" + escape(item) + "</li>" for item in project.work)}</ul></section><section><h2>The finished result</h2><p>{escape(project.result)}</p></section></div>
+<div class="wrap project-story"><section><h2>What the strip-out revealed</h2><p>{escape(project.problem)}</p><p>{escape(project.findings)}</p></section><section><h2>Work carried out</h2><ul>{"".join("<li>" + escape(item) + "</li>" for item in project.work)}</ul></section><section><h2>The finished result</h2><p>{escape(project.result)}</p></section></div>
 <section class="project-gallery"><div class="wrap"><h2>From strip-out to the finished ensuite</h2><p>Real photographs from this project, showing the construction stages and completed room.</p>'''
-    for stage, title in (("before", "Strip-out and findings"), ("during", "Rebuilding, preparation and tiling"), ("after", "Finished fittings")):
+    for stage, title in (("before", "Strip-out and findings"), ("during", "Rebuilding, preparation and tiling"), ("after", "The finished shower and vanity")):
         images = [image for image in project.images if image.stage == stage and image.id != project.hero_image]
         if images:
-            content += f'<h3>{title}</h3><div class="project-photo-grid">'
+            content += f'<section class="project-gallery-stage project-gallery-stage--{stage}"><h3>{title}</h3><div class="project-photo-grid">'
             content += ''.join(f'<figure><a href="{image_path(project, image)}" aria-label="{escape("View larger photo: " + image.alt, quote=True)}">{image_html(project, image)}</a><figcaption>{escape(image.caption)}</figcaption></figure>' for image in images)
-            content += '</div>'
-    content += '</div></section>'
+            content += '</div></section>'
+    content += '<div class="project-gallery-enquiry"><div><h3>Thinking about updating your bathroom?</h3><p>Tell Nigel what you would like to change.</p></div><a class="btn" href="/request-quote">Discuss your bathroom</a></div></div></section>'
     if project.review and project.review.approved_for_use:
         review = project.review
         content += f'<section class="wrap project-review"><h2>Customer feedback</h2><p class="project-review-source">{review.stars}-star {review.source} review</p><blockquote><p>“{escape(review.text)}”</p><cite>{escape(review.attribution)}</cite></blockquote></section>'

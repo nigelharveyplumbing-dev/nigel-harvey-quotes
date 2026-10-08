@@ -22,6 +22,7 @@ const port = socket.address().port;
 await new Promise(resolve => socket.close(resolve));
 const origin = `http://127.0.0.1:${port}`;
 const credentials = { username: randomBytes(16).toString('hex'), password: randomBytes(24).toString('hex') };
+const published = process.env.PROJECT_TEST_PUBLISHED === '1';
 const server = spawn(process.env.STAGE6_TEST_PYTHON || 'python', ['-B', join(directory, 'local_browser_server.py')], {
   cwd: dirname(directory), env: { ...process.env,
     STAGE6_TEST_USERNAME: credentials.username, STAGE6_TEST_PASSWORD: credentials.password,
@@ -42,7 +43,7 @@ try {
   const context = await browser.newContext({ httpCredentials: credentials,
     extraHTTPHeaders: { Authorization: `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString("base64")}` } });
   // Existing consent must never enable Google requests on a protected draft.
-  await context.addInitScript(() => localStorage.setItem('nhp_analytics_choice_v1', 'accepted'));
+  await context.addInitScript(published => localStorage.setItem('nhp_analytics_choice_v1', published ? 'declined' : 'accepted'), published);
   await context.route('**/*', route => {
     if (new URL(route.request().url()).origin === origin) return route.continue();
     diagnostics.externalRequests.push(route.request().url());
@@ -54,13 +55,16 @@ try {
   if (evidence) mkdirSync(evidence, { recursive: true });
   const path = '/projects/ensuite-renovation-merrow-guildford';
   const anonymous = await browser.newContext();
-  assert.equal((await anonymous.request.get(origin + path)).status(), 404);
+  assert.equal((await anonymous.request.get(origin + path)).status(), published ? 200 : 404);
   assert.equal((await anonymous.request.get(origin + '/projects')).status(), 200);
   for (const [name, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
     await page.setViewportSize({ width, height });
     const response = await page.goto(origin + path);
     assert.equal(response.status(), 200);
-    assert.match(response.headers()['x-robots-tag'], /noindex/);
+    if (published) {
+      assert(!response.headers()['x-robots-tag']?.includes('noindex'));
+      assert.equal(await page.locator('meta[name=robots]').getAttribute('content'), 'index,follow,max-image-preview:large');
+    } else assert.match(response.headers()['x-robots-tag'], /noindex/);
     const decline = page.getByRole('button', { name: 'Decline', exact: true });
     if (await decline.isVisible()) await decline.click();
     await page.waitForLoadState('networkidle');
@@ -95,7 +99,7 @@ try {
     }
     assert.equal(await page.locator('cite').textContent(), 'Tristan, Merrow');
     assert.equal(await page.locator('blockquote p').textContent(), '“Nigel did a complete fit of an en-suite bathroom for us, including radiation, tiling, flooring, shower tray, glass window and toilet. We are very pleased with the result. Nigel communicated well and explained options along the way. Much recommended.”');
-    assert.equal(await page.locator('#public-analytics').getAttribute('data-send-to-google'), 'false');
+    assert.equal(await page.locator('#public-analytics').getAttribute('data-send-to-google'), published ? 'true' : 'false');
     assert.equal(await page.locator('header .navlinks').count(), 1);
     await page.evaluate(() => scrollTo({ top: 0, left: 0, behavior: "instant" }));
     if (evidence) {
@@ -129,7 +133,13 @@ try {
     diagnostics.layouts.push({ name, width, images: dimensions.images.length, overflow: false });
   }
   const sitemap = await (await context.request.get(origin + '/sitemap.xml')).text();
-  assert(!sitemap.includes(path), 'Draft entered sitemap');
+  assert.equal(sitemap.includes(path), published, 'Publication sitemap gate');
+  if (published) {
+    assert.equal((sitemap.match(/<loc>/g) || []).length, 74);
+    const links = ['/plumber-merrow', '/plumber-guildford', '/bathroom-plumbing-surrey', '/bathroom-plumbing-guildford', '/bathroom-plumbing-merrow', '/heating-repairs-surrey'];
+    for (const link of links) assert((await (await anonymous.request.get(origin + link)).text()).includes(`href="${path}"`));
+    assert((await (await anonymous.request.get(origin + '/projects')).text()).includes(path));
+  }
   assert.deepEqual(diagnostics.pageErrors, []);
   assert.deepEqual(diagnostics.externalRequests, []);
   if (evidence) writeFileSync(join(evidence, 'browser-validation.json'), JSON.stringify(diagnostics, null, 2) + '\n');

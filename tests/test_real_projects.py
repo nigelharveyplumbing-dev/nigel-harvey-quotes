@@ -44,6 +44,23 @@ class RealProjectTests(unittest.TestCase):
                     published_at="2026-10-06T20:05:00+01:00")
         return self.projects.Project.model_validate(data)
 
+    def test_owner_approved_production_catalogue_is_published_without_content_changes(self):
+        record = json.loads((ROOT / "business/project_content.json").read_text())[0]
+        self.assertEqual(record["status"], "published")
+        self.assertEqual(record["approved_at"], "2026-10-08T22:02:45+01:00")
+        self.assertEqual(record["published_at"][:10], "2026-10-08")
+        self.assertEqual(record["review"]["text"], REVIEW)
+        self.assertEqual(record["review"]["attribution"], "Tristan, Merrow")
+        self.assertEqual(len(record["images"]), 9)
+        with disposable_app(secrets.token_urlsafe(12), secrets.token_urlsafe(18),
+                            projects_as_drafts=False) as (module, _), TestClient(module.app) as client:
+            project = module.real_projects.PROJECTS[0]
+            self.assertEqual(project.status, "published")
+            self.assertEqual(client.get(project.path).status_code, 200)
+            self.assertIn(project.path, client.get("/projects").text)
+            self.assertIn(project.path, client.get("/sitemap.xml").text)
+            self.assertNotIn("noindex", client.get(project.path).headers.get("X-Robots-Tag", ""))
+
     def test_draft_requires_staff_auth_and_does_not_leak(self):
         c, p = self.client, self.project
         self.assertEqual(c.get(p.path).status_code, 404)
@@ -82,7 +99,7 @@ class RealProjectTests(unittest.TestCase):
                 path = urlsplit(entry.findtext("s:loc", namespaces=ns)).path
                 self.assertEqual(self.client.get(path).status_code, 200, path)
                 if path.startswith("/projects"):
-                    self.assertEqual(entry.findtext("s:lastmod", namespaces=ns), "2026-10-06")
+                    self.assertEqual(entry.findtext("s:lastmod", namespaces=ns), p.updated_on.isoformat())
                 self.assertFalse(path.startswith(("/app", "/api/")))
 
     def test_structured_data_has_real_identity_images_and_no_review_markup(self):
@@ -118,12 +135,37 @@ class RealProjectTests(unittest.TestCase):
         self.assertEqual(soup.select_one('meta[name="description"]')["content"], self.project.meta_description)
         self.assertEqual(len(soup.select('main h1')), 1)
         self.assertEqual(len(soup.select('main img')), 9)
-        self.assertIn("do not establish a definitive technical cause", soup.get_text())
+        self.assertNotIn("definitive technical cause", soup.get_text())
         self.assertIn("Marmox", soup.get_text())
         for prohibited in ("professional mould remediation", "guaranteed mould-free", "source-photos", "libfile_", "source_sha256"):
             self.assertNotIn(prohibited, response.text)
         self.assertIn('data-measurement-id="G-Q9Z2WWNF6F"', response.text)
         self.assertIn("landing_page", response.text)
+
+    def test_owner_refinements_keep_the_story_photos_and_enquiry_in_order(self):
+        soup = BeautifulSoup(self.client.get(self.project.path, headers=self.auth).text, "html.parser")
+        story = soup.select_one(".project-story")
+        self.assertEqual([h.get_text() for h in story.select("h2")],
+                         ["What the strip-out revealed", "Work carried out", "The finished result"])
+        opening = story.section
+        self.assertEqual(len(opening.select("p")), 2)
+        for fact in ("visible mould", "insulation build-up", "stripped back", "rebuilt"):
+            self.assertIn(fact, opening.get_text())
+        for claim in ("definitive technical cause", "professional mould remediation", "caused by"):
+            self.assertNotIn(claim, story.get_text().lower())
+        gallery = soup.select_one(".project-gallery")
+        stages = gallery.select(".project-gallery-stage")
+        self.assertEqual([len(stage.select("img")) for stage in stages], [2, 4, 2])
+        finished = gallery.select_one(".project-gallery-stage--after")
+        self.assertEqual([Path(img["src"]).name for img in finished.select("img")],
+                         ["finished-shower-1280.webp", "finished-vanity-1280.webp"])
+        enquiry = gallery.select_one(".project-gallery-enquiry")
+        self.assertIs(finished.find_next_sibling(), enquiry)
+        button = enquiry.select_one("a.btn")
+        self.assertEqual(button.get_text(), "Discuss your bathroom")
+        self.assertEqual(urlsplit(button["href"]).path, "/request-quote")
+        self.assertEqual(self.client.get(button["href"]).status_code, 200)
+        self.assertEqual(len(soup.select("main img")), 9)
 
     def test_reciprocal_links_only_on_relevant_published_pages(self):
         p = self.published()

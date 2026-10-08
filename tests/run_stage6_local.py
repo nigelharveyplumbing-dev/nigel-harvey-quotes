@@ -34,6 +34,11 @@ def main():
                                 cwd=ROOT, env=environment, check=False)
         if result.returncode:
             return result.returncode
+    print("Running published project desktop/mobile workflows", flush=True)
+    result = subprocess.run(["node", str(ROOT / "tests/run_project_browser.mjs")],
+                            cwd=ROOT, env={**environment, "PROJECT_TEST_PUBLISHED": "1"}, check=False)
+    if result.returncode:
+        return result.returncode
     return 0
 
 
