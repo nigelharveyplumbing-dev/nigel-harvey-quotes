@@ -66,9 +66,15 @@ try {
     await page.waitForLoadState('networkidle');
     assert.equal(await page.locator('main h1').textContent(), 'Ensuite renovation in Merrow, Guildford');
     assert.equal(await page.locator('main img').count(), 9);
-    for (const image of await page.locator('main img').all()) {
+    for (const [index, image] of (await page.locator('main img').all()).entries()) {
       await image.scrollIntoViewIfNeeded();
       try {
+        // Scrolling starts lazy loading; decode() can reject while the current
+        // responsive request is still changing. Require a loaded image first.
+        await page.waitForFunction(index => {
+          const img = document.querySelectorAll('main img')[index];
+          return img.currentSrc && img.complete && img.naturalWidth > 0;
+        }, index, { timeout: 5000 });
         await image.evaluate(async img => { await img.decode(); });
       } catch (error) {
         console.error('Project image decode state:', JSON.stringify(await image.evaluate(img => ({
