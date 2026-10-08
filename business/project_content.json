@@ -1,0 +1,154 @@
+[
+  {
+    "slug": "ensuite-renovation-merrow-guildford",
+    "status": "draft",
+    "approved_at": null,
+    "published_at": null,
+    "updated_on": "2026-10-06",
+    "title": "Ensuite renovation in Merrow, Guildford",
+    "location": "Merrow, Guildford",
+    "services": [
+      "Ensuite refurbishment",
+      "Bathroom plumbing",
+      "Shower installation",
+      "Wall tiling",
+      "Flooring"
+    ],
+    "summary": "A complete ensuite refurbishment carried out by Nigel Harvey Plumbing, from strip-out and wall reconstruction to the shower, WC, vanity, heated towel rail, tiling and flooring.",
+    "problem": "The existing ensuite needed a complete refurbishment. Opening up the room exposed problems with the internal wall and insulation build-up, with visible mould in affected areas.",
+    "findings": "During strip-out, Nigel found visible mould and problems within the existing wall build-up. The affected construction was stripped back rather than covered over. These observations do not establish a definitive technical cause of the mould.",
+    "work": [
+      "Strip out the existing ensuite and open up the affected wall construction.",
+      "Strip back the affected construction and rebuild the internal wall build-up.",
+      "Fit Marmox waterproof building boards and seal and waterproof joints and vulnerable areas.",
+      "Carry out the plumbing and install the shower tray and shower fittings.",
+      "Fit the WC, basin and vanity, and radiator / heated towel rail.",
+      "Complete the wall tiling, flooring and final fit-out."
+    ],
+    "materials": [
+      "Marmox waterproof building boards",
+      "Sealing and waterproofing at joints and vulnerable areas"
+    ],
+    "result": "The completed ensuite brings together a fitted shower and tray with a glass enclosure, WC, basin and vanity, and heated towel rail. Grey wall tiles, a green tiled feature above the vanity and herringbone-pattern flooring are visible in the finished photographs. Nigel carried out the complete job, including the preparation behind the finished surfaces.",
+    "images": [
+      {
+        "id": "stripped-back-walls",
+        "stage": "before",
+        "alt": "Exposed wall framing and insulation beneath the ensuite window during strip-out.",
+        "caption": "The room opened up before the wall build-up was rebuilt.",
+        "width": 1280,
+        "height": 960
+      },
+      {
+        "id": "wall-problem-detail",
+        "stage": "before",
+        "alt": "Dark marking around an exposed wall edge beside the window during strip-out.",
+        "caption": "A close view of the affected wall area found when the room was opened up.",
+        "width": 1152,
+        "height": 1536
+      },
+      {
+        "id": "wall-reconstruction",
+        "stage": "during",
+        "alt": "Timber framing and foil-faced insulation in the opened-up shower corner.",
+        "caption": "Wall reconstruction before fitting the waterproof building boards.",
+        "width": 1152,
+        "height": 1536
+      },
+      {
+        "id": "marmox-board-and-pipework",
+        "stage": "during",
+        "alt": "Marmox boards with sealed joints behind exposed basin pipework and waste.",
+        "caption": "Marmox waterproof building boards, with joints sealed before the final wall finish.",
+        "width": 1152,
+        "height": 1536
+      },
+      {
+        "id": "shower-tray-preparation",
+        "stage": "during",
+        "alt": "White shower tray fitted between Marmox-boarded walls with sealed joints.",
+        "caption": "Shower tray and boarded walls prepared ahead of tiling.",
+        "width": 1152,
+        "height": 1536
+      },
+      {
+        "id": "tiling-in-progress",
+        "stage": "during",
+        "alt": "Grey shower wall tiles held with red tile levelling clips above the white tray.",
+        "caption": "Wall tiling in progress after the board and tray preparation.",
+        "width": 1152,
+        "height": 1536
+      },
+      {
+        "id": "finished-shower",
+        "stage": "after",
+        "alt": "Completed shower with grey tiled walls, chrome fittings and a white shower tray.",
+        "caption": "The finished tiled shower and fittings.",
+        "width": 1152,
+        "height": 1536
+      },
+      {
+        "id": "finished-vanity",
+        "stage": "after",
+        "alt": "Wood-finish vanity with white basin, round mirror, green tiles and a chrome towel rail.",
+        "caption": "The finished basin and vanity, with the heated towel rail alongside.",
+        "width": 1152,
+        "height": 1536
+      },
+      {
+        "id": "finished-room",
+        "stage": "after",
+        "alt": "Finished ensuite showing the WC, glass shower enclosure, grey wall tiles and herringbone-pattern flooring.",
+        "caption": "The completed ensuite in Merrow, Guildford.",
+        "width": 1152,
+        "height": 1536
+      }
+    ],
+    "hero_image": "finished-room",
+    "review": {
+      "text": "Nigel did a complete fit of an en-suite bathroom for us, including radiation, tiling, flooring, shower tray, glass window and toilet. We are very pleased with the result. Nigel communicated well and explained options along the way. Much recommended.",
+      "attribution": "Tristan, Merrow",
+      "source": "Google",
+      "stars": 5,
+      "approved_for_use": true
+    },
+    "links": [
+      {
+        "path": "/plumber-merrow",
+        "label": "Plumbing in Merrow"
+      },
+      {
+        "path": "/plumber-guildford",
+        "label": "Plumbing in Guildford"
+      },
+      {
+        "path": "/bathroom-plumbing-surrey",
+        "label": "Bathroom plumbing"
+      },
+      {
+        "path": "/bathroom-plumbing-guildford",
+        "label": "Bathroom plumbing in Guildford"
+      },
+      {
+        "path": "/bathroom-plumbing-merrow",
+        "label": "Bathroom plumbing in Merrow"
+      },
+      {
+        "path": "/heating-repairs-surrey",
+        "label": "Radiators and heating plumbing"
+      }
+    ],
+    "faqs": [
+      {
+        "question": "Was the affected wall simply tiled over?",
+        "answer": "No. Nigel stripped back the affected construction, rebuilt the wall build-up, then fitted Marmox waterproof building boards and sealed and waterproofed joints and vulnerable areas before tiling."
+      },
+      {
+        "question": "Did Nigel carry out the whole ensuite refurbishment?",
+        "answer": "Yes. Nigel carried out the strip-out, wall reconstruction, plumbing, shower and sanitaryware installation, radiator / heated towel rail, wall tiling, flooring and final fit-out."
+      }
+    ],
+    "seo_title": "Ensuite Renovation in Merrow, Guildford | Nigel Harvey Plumbing",
+    "meta_description": "See a real ensuite renovation in Merrow, Guildford: strip-out, wall reconstruction, Marmox boards, plumbing, tiling and finished fittings by Nigel Harvey Plumbing."
+  }
+]

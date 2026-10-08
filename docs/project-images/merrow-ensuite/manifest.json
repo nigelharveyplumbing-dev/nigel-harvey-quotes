@@ -1,0 +1,206 @@
+{
+  "version": 2,
+  "original_storage": "Owner files outside Git; originals are not build or runtime dependencies.",
+  "optimisation": {
+    "format": "WebP",
+    "quality": 86,
+    "widths": [
+      640,
+      1280
+    ],
+    "upscale": false,
+    "crop": false,
+    "metadata": "EXIF, XMP and ICC stripped"
+  },
+  "images": [
+    {
+      "id": "stripped-back-walls",
+      "source_sha256": "4ebdf25065d0d8f92602cf87c4955fd4b8eecbe148f1c7715fd55e619b8dc36f",
+      "source_bytes": 567919,
+      "variants": [
+        {
+          "filename": "stripped-back-walls-640.webp",
+          "width": 640,
+          "height": 480,
+          "bytes": 52772,
+          "sha256": "4fbe2dc5c79366e9e5442a9af1a9b1ffc3b5a1317065c6a1246e19f96d5e519d"
+        },
+        {
+          "filename": "stripped-back-walls-1280.webp",
+          "width": 1280,
+          "height": 960,
+          "bytes": 156610,
+          "sha256": "e7ed30c489178c199004104fcaa5b3a2d6ade61ce1806ba7186acac588f1c827"
+        }
+      ]
+    },
+    {
+      "id": "wall-problem-detail",
+      "source_sha256": "e5997f83ebd3e74f98dc52fffc15031c63d2997dd0beb1c6eb79811db3e567c1",
+      "source_bytes": 643712,
+      "variants": [
+        {
+          "filename": "wall-problem-detail-640.webp",
+          "width": 640,
+          "height": 853,
+          "bytes": 74190,
+          "sha256": "c0edefcd8f521a5767190d26ee653876ee26ab5375cae05021436fb3e152a911"
+        },
+        {
+          "filename": "wall-problem-detail-1280.webp",
+          "width": 1152,
+          "height": 1536,
+          "bytes": 253910,
+          "sha256": "9b65573eb550b70e43612de33f52817bb8b41bf256d292c358460a06d9a3f3ff"
+        }
+      ]
+    },
+    {
+      "id": "wall-reconstruction",
+      "source_sha256": "2d7ff864899e232e330dd2915be652eb9a4c3a3a2eecad4ebd4481e3755b1b5e",
+      "source_bytes": 595123,
+      "variants": [
+        {
+          "filename": "wall-reconstruction-640.webp",
+          "width": 640,
+          "height": 853,
+          "bytes": 81666,
+          "sha256": "ed22bc18d7eebb0c410852bd9e54537f622416d9836e344b169eff817a3475ff"
+        },
+        {
+          "filename": "wall-reconstruction-1280.webp",
+          "width": 1152,
+          "height": 1536,
+          "bytes": 231004,
+          "sha256": "4f1acb041f97cc8063371f3bd5f7518c374d702c3ef9d1f571ac0eddb8573ac4"
+        }
+      ]
+    },
+    {
+      "id": "marmox-board-and-pipework",
+      "source_sha256": "9dddb4b3af9fddc83f09ae664cc8207db9e71183819307c98044c21fd8c3eff7",
+      "source_bytes": 888568,
+      "variants": [
+        {
+          "filename": "marmox-board-and-pipework-640.webp",
+          "width": 640,
+          "height": 853,
+          "bytes": 152106,
+          "sha256": "886ea7f7a4f5763ef5d9f05379508f121f0d42e5edf712a31f5e23da4406ee83"
+        },
+        {
+          "filename": "marmox-board-and-pipework-1280.webp",
+          "width": 1152,
+          "height": 1536,
+          "bytes": 478152,
+          "sha256": "420bbf2ea849005940dc7427d201e1dbec3995103a62d400f2e53eff97876434"
+        }
+      ]
+    },
+    {
+      "id": "shower-tray-preparation",
+      "source_sha256": "d8473b8e4b874c945978ed8203b414c62c99506f9a7acc44d90ab66c727e471f",
+      "source_bytes": 640555,
+      "variants": [
+        {
+          "filename": "shower-tray-preparation-640.webp",
+          "width": 640,
+          "height": 853,
+          "bytes": 91982,
+          "sha256": "0a48006eac9518f81817a919e4b7e44ec19f3eca942ea9a78c966d792752cb22"
+        },
+        {
+          "filename": "shower-tray-preparation-1280.webp",
+          "width": 1152,
+          "height": 1536,
+          "bytes": 304126,
+          "sha256": "a5a28215816e6f8fd2cb598e6c99748d14cd18c22575a700b26ff246f43bb084"
+        }
+      ]
+    },
+    {
+      "id": "tiling-in-progress",
+      "source_sha256": "b86e7f37c9d0dc34803c4086548494be3e8a6f350096127928803299bb016ee7",
+      "source_bytes": 682423,
+      "variants": [
+        {
+          "filename": "tiling-in-progress-640.webp",
+          "width": 640,
+          "height": 853,
+          "bytes": 82052,
+          "sha256": "57428925462c02d505710c547fdcb00bf64f22a08dff9a2e965d4557e8397547"
+        },
+        {
+          "filename": "tiling-in-progress-1280.webp",
+          "width": 1152,
+          "height": 1536,
+          "bytes": 309620,
+          "sha256": "591951df960fa9639ea8a8df8c5aa9059d8431d342c45bf6dca8912a5136d95d"
+        }
+      ]
+    },
+    {
+      "id": "finished-shower",
+      "source_sha256": "68b32b84013ab1dcedc332c8b86832dd6fbf811ad125754f5bcc0861cc9d795f",
+      "source_bytes": 418848,
+      "variants": [
+        {
+          "filename": "finished-shower-640.webp",
+          "width": 640,
+          "height": 853,
+          "bytes": 37802,
+          "sha256": "a6fc1ace77f3fd18070df140da4a3e370751ea34ac73db79072cecc45f6cae5b"
+        },
+        {
+          "filename": "finished-shower-1280.webp",
+          "width": 1152,
+          "height": 1536,
+          "bytes": 115040,
+          "sha256": "a9e02208b5e68f266f9a99d3be22baa097afc0779836da491758799e9dbe2878"
+        }
+      ]
+    },
+    {
+      "id": "finished-vanity",
+      "source_sha256": "638c312b7c0eac2162a8b1bd10d0cae39ec1ac29b10f0d5696d1cfaf73105dba",
+      "source_bytes": 380710,
+      "variants": [
+        {
+          "filename": "finished-vanity-640.webp",
+          "width": 640,
+          "height": 853,
+          "bytes": 34496,
+          "sha256": "6a4325a0884ccae1456c3b67e14aeb68ed5b65b269115b88701e37fa4e84dbfa"
+        },
+        {
+          "filename": "finished-vanity-1280.webp",
+          "width": 1152,
+          "height": 1536,
+          "bytes": 98718,
+          "sha256": "a672f667bbdbea3e16886ce903a57e2dedaddc7591b125ac25093ab9f21826c2"
+        }
+      ]
+    },
+    {
+      "id": "finished-room",
+      "source_sha256": "e1f500596817b5e3486363799395552b915ed5597cd35ff3309ea44232e28930",
+      "source_bytes": 418026,
+      "variants": [
+        {
+          "filename": "finished-room-640.webp",
+          "width": 640,
+          "height": 853,
+          "bytes": 46566,
+          "sha256": "9761df6b8e1912b78be56f9b04ae634e79439c3299edb12294ee92f26d51918c"
+        },
+        {
+          "filename": "finished-room-1280.webp",
+          "width": 1152,
+          "height": 1536,
+          "bytes": 124152,
+          "sha256": "97c9d423a14e22c87f9b22f29741cdeb8dac4261e63108231a2036c8663bd42d"
+        }
+      ]
+    }
+  ]
+}
