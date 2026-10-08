@@ -62,6 +62,8 @@ PUBLIC_ROUTE_KEYS = frozenset({
     ("GET", "/new-home"),
     ("GET", "/request-quote"),
     ("GET", "/site-images/{filename}"),
+    ("GET", "/advice"),
+    ("GET", "/advice/{article_slug}"),
     ("GET", "/projects"),
     ("GET", "/projects/{project_slug}"),
     ("GET", "/project-images/{project_slug}/{filename}"),
@@ -985,7 +987,7 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict):
 def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest):
     return invoice_store.update_invoice_by_id(invoice_id, data, row_to_invoice, safe_float, upsert_customer)
 
-from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search, website_contact, public_layout, growth_tracking, real_projects
+from business import dashboard_reporting, public_pages, merchant_search, google_reviews, material_search, website_contact, public_layout, growth_tracking, real_projects, plumbing_advice
 from business import trade_comparison, city_account_prices
 
 
@@ -1452,8 +1454,36 @@ def sitemap_xml(request: Request):
     body = "".join(f"<url><loc>{escape(absolute_url(url, request))}</loc></url>" for url in urls)
     body += "".join(f"<url><loc>{escape(absolute_url(path, request))}</loc><lastmod>{updated}</lastmod></url>"
                     for path, updated in real_projects.sitemap_entries())
+    body += "".join(f"<url><loc>{escape(absolute_url(path, request))}</loc><lastmod>{updated}</lastmod></url>"
+                    for path, updated in plumbing_advice.sitemap_entries())
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
     return Response(content=xml, media_type="application/xml; charset=utf-8")
+
+
+@app.get("/advice", response_class=HTMLResponse)
+def advice_index(request: Request):
+    owner = check_basic_auth(request)
+    if not owner and not plumbing_advice.visible_articles():
+        raise HTTPException(status_code=404, detail="Advice not found",
+                            headers={"X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, no-store"})
+    private = owner or is_staging_environment()
+    return HTMLResponse(plumbing_advice.render_index(absolute_url=absolute_url, request=request,
+                        include_drafts=owner, staging=is_staging_environment()),
+                        headers={"Cache-Control": "private, no-store" if private else "no-cache",
+                                 **({"X-Robots-Tag": "noindex, nofollow"} if private else {})})
+
+
+@app.get("/advice/{article_slug}", response_class=HTMLResponse)
+def advice_page(article_slug: str, request: Request):
+    article = next((a for a in plumbing_advice.ARTICLES if a.slug == article_slug), None)
+    if not article or (article.status != "published" and not check_basic_auth(request)):
+        raise HTTPException(status_code=404, detail="Advice not found",
+                            headers={"X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, no-store"})
+    private = article.status != "published" or is_staging_environment()
+    return HTMLResponse(website_contact.add_quote_attribution(plumbing_advice.render_article(
+        article, absolute_url=absolute_url, request=request, staging=is_staging_environment())),
+        headers={"Cache-Control": "private, no-store" if private else "no-cache",
+                 **({"X-Robots-Tag": "noindex, nofollow"} if private else {})})
 
 
 @app.get("/projects", response_class=HTMLResponse)
@@ -1475,8 +1505,8 @@ def real_project_page(project_slug: str, request: Request):
         raise HTTPException(status_code=404, detail="Project not found",
                             headers={"X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, no-store"})
     noindex = project.status != "published" or is_staging_environment()
-    return HTMLResponse(website_contact.add_quote_attribution(real_projects.render_project(
-        project, absolute_url=absolute_url, request=request, staging=is_staging_environment())),
+    return HTMLResponse(website_contact.add_quote_attribution(plumbing_advice.add_related_advice_links(real_projects.render_project(
+        project, absolute_url=absolute_url, request=request, staging=is_staging_environment()), request.url.path)),
         headers={"Cache-Control": "private, no-store" if noindex else "no-cache",
                  **({"X-Robots-Tag": "noindex, nofollow"} if noindex else {})})
 
@@ -1502,7 +1532,8 @@ def real_project_image(project_slug: str, filename: str, request: Request):
 
 
 def add_project_evidence(html: str, request: Request):
-    return real_projects.add_related_project_links(html, request.url.path)
+    return plumbing_advice.add_related_advice_links(
+        real_projects.add_related_project_links(html, request.url.path), request.url.path)
 
 
 @app.get("/plumber-{area_slug}", response_class=HTMLResponse)

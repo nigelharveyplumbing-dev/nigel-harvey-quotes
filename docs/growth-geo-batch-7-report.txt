@@ -1,0 +1,90 @@
+GROWTH BATCH 7 — STAGE 2 PRIVATE ADVICE CHECKPOINT
+Nigel Harvey Plumbing | 9 October 2026
+
+Stage 1 audit and its documented measurement limits were approved by Nigel.
+Stage 2 only is authorised: reusable private advice architecture, one shower
+replacement owner-review draft, local regression tests, and a dedicated branch
+commit. Stage 3, merge, deployment and publication remain unauthorised.
+
+Preservation and baseline
+All 13 files in the Stage 1 preservation manifest matched their saved hashes
+before this work resumed. Prepared work was retained, not reset or recreated.
+The feature branch is growth/geo-knowledge-batch-7. The verified base is main
+at e3e390846ad9e7e5589c589362b4471fdf2ecc1a. A fresh main check is required
+immediately before committing; the exact commit is recorded in the delivery
+report after it is created. No main mutation is part of Stage 2.
+
+Implementation
+GET /advice and GET /advice/{article_slug} use the existing owner Basic Auth
+for draft previews. Anonymous draft/index requests return 404 with noindex,
+nofollow and private,no-store. Authenticated draft previews carry the same
+privacy metadata and disable GA4 sending even with previous consent. Existing
+whole-site staging authentication remains in place; no staging deployment or
+credentials/configuration change occurs here.
+
+business/advice_content.json contains a single draft. It has no owner approval
+or publication timestamp. Article metadata omits publication/modification dates
+while drafted. Canonical comes from the existing validated public base, not
+Host, query parameters or an editor-entered URL. No advice URL enters sitemap,
+public index/navigation, service or project backlinks while it is a draft.
+
+Reusable records contain summary, sections, safety, FAQs, named author, related
+public services/locations, existing project references, sources and SEO fields.
+Unknown fields, duplicate topics/titles/slugs, high-overlap narratives, invalid
+publication dates and private/unknown related link types are rejected. Human
+review remains necessary for factual accuracy and semantic duplication.
+
+Publication is a later code-reviewed content change requiring explicit owner
+approval and real timezone-aware dates. Record timestamps are not an identity
+or permission audit system. Nothing changes status automatically. There is no
+write API, CMS publication button, scheduler, DB migration or job-pipeline edit.
+
+Article
+What happens during a complete shower replacement and waterproofing rebuild?
+It covers inspection-led repair versus rebuild, wall/floor preparation, fitting
+dimensions, tray and glass support, waterproof joints/corners/penetrations,
+plumbing and curing/final checks. It uses the approved Merrow account as one
+example and links its nine genuine photographs. It does not republish images
+under a new permission scope or invent a precise mould cause, product model,
+qualification, completion date, fixed duration or price.
+
+Safety copy is for homeowner planning, not installation instructions or
+permission for restricted gas/electrical/unvented work. Numerical years of
+experience and unverified registrations remain omitted. The approved biography
+and Merrow record/photos/review are unchanged.
+
+SEO and links
+Title: Shower Replacement & Waterproofing | Nigel Harvey Plumbing
+Description: Understand shower replacement, wall preparation, waterproofing and
+plumbing checks, with a real Merrow ensuite example from Nigel Harvey Plumbing.
+Canonical path: /advice/shower-replacement-waterproofing-rebuild
+Graph: Article + Person author + existing Plumber publisher + BreadcrumbList.
+Visible FAQs have no extra FAQ rich-result or HowTo claims.
+Private preview links: bathroom-plumbing-surrey, bathroom-plumbing-guildford,
+plumber-merrow, published Merrow case study and request-quote.
+Only after separate publication approval, relevant service/project backlinks
+become eligible. There is no site-wide advice navigation change in this draft.
+
+Validation and delivery
+Use the preinstalled Chromium headless shell, not the normal Chromium executable
+that previously failed its runtime socket check. Full offline Python/browser
+runner, both Node suites and all existing public response comparisons must pass.
+Final result: 250 Python tests PASS (83.125 seconds), both Node suites PASS,
+and all five Chromium workflows PASS using the installed headless shell.
+All 75 existing public responses remain byte-identical to main.
+See docs/plumbing-advice-stage2-validation.json and the owner delivery report. Tests use temporary synthetic stores with outbound
+connections blocked. Simulated environment privacy tests are local regression
+checks, not Stage 3 or remote Render validation.
+
+Preserved boundaries
+City cached-account trade pricing, material handling/calculation, persistence,
+invoices/PDFs, customers, auth, approved SEO/location pages, Merrow publication,
+analytics consent and backup code remain unchanged. Inventory documentation is
+refreshed to the actual baseline routes plus two advice GET routes; this does
+not add private API functionality.
+
+Remaining gate
+Stop after the feature commit. Nigel must review the article and Stage 2 result.
+Stage 3 requires a separate safe isolated staging plan and exact-head validation.
+No GitHub PR, merge, deployment, indexing submission, external listing/business
+record change, public article or newly authorised photo reuse is created here.

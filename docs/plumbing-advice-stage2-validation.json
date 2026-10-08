@@ -1,0 +1,54 @@
+{
+  "checkpoint": "Growth Batch 7 Stage 2",
+  "status": "PASS",
+  "date": "2026-10-09",
+  "base_main": "e3e390846ad9e7e5589c589362b4471fdf2ecc1a",
+  "preservation_manifest_files_verified": 13,
+  "python": {
+    "tests": 250,
+    "result": "PASS",
+    "seconds": 83.125
+  },
+  "node": {
+    "material_selection": "PASS",
+    "trade_comparison": "PASS"
+  },
+  "chromium": {
+    "executable": "/root/.cache/ms-playwright/chromium_headless_shell-1194/chrome-linux/headless_shell",
+    "complete_application": "PASS",
+    "project_draft_desktop_mobile": "PASS",
+    "project_published_desktop_mobile": "PASS",
+    "advice_private_desktop_mobile": "PASS",
+    "simulated_stage_environment_privacy": "PASS",
+    "desktop_viewport": [
+      1440,
+      1000
+    ],
+    "mobile_viewport": [
+      390,
+      844
+    ]
+  },
+  "existing_public_responses": {
+    "count": 75,
+    "byte_identical_to_main": true
+  },
+  "draft": {
+    "status": "draft",
+    "anonymous": "404",
+    "owner": "200, noindex,nofollow, private,no-store",
+    "public_sitemap_entry": false,
+    "public_backlinks": false,
+    "analytics_sending": false,
+    "approval_timestamp": null,
+    "publication_timestamp": null
+  },
+  "remote_staging": "NOT RUN; Stage 3 not authorised",
+  "production": "UNCHANGED",
+  "github_ci": "Not run; no PR or main push in Stage 2",
+  "limitations": [
+    "JSON-LD parsing and semantic checks are local; no external rich-result validator submitted.",
+    "Existing shared header still includes Open App; removal belongs to separately scoped authentication follow-up.",
+    "Owner wording and any photo embedding/reuse require review; no new reuse scope assumed."
+  ]
+}
