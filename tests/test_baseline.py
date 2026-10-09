@@ -38,6 +38,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_WEBSITE_ROUTES = {
     ("GET", path) for path in (
         "/", "/new-home", "/request-quote", "/robots.txt", "/sitemap.xml",
+        "/advice", "/advice/{article_slug}",
         "/site-images/{filename}", "/projects", "/projects/{project_slug}",
         "/project-images/{project_slug}/{filename}",
         "/plumber-{area_slug}", "/{service_slug}-{area_slug}", "/{service_slug}",
@@ -134,8 +135,8 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
-        self.assertEqual(len(routes), 89)
-        self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 13)
+        self.assertEqual(len(routes), 91)
+        self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 15)
         self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
         self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 71)
         self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
@@ -345,7 +346,7 @@ class BaselineTests(unittest.TestCase):
             for method, template in sorted(PUBLIC_WEBSITE_ROUTES):
                 if method == "GET":
                     with self.subTest(path=template):
-                        expected = 404 if template in {"/projects/{project_slug}", "/project-images/{project_slug}/{filename}"} else 200
+                        expected = 404 if template in {"/advice", "/advice/{article_slug}", "/projects/{project_slug}", "/project-images/{project_slug}/{filename}"} else 200
                         self.assertEqual(client.get(paths.get(template, template)).status_code, expected)
             lead = client.post("/api/leads", json={
                 "name": "Public Test", "phone": "07000000000", "description": "Enquiry",
