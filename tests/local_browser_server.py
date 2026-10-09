@@ -73,7 +73,7 @@ def block_external_connections():
 @contextmanager
 def disposable_app(username: str, password: str,
                    public_base_url: str = "", environment: str = "",
-                   bank_settings: dict | None = None, projects_as_drafts: bool = True):
+                   bank_settings: dict | None = None, projects_as_drafts: bool = True, advice_as_drafts: bool = True):
     if not username or not password:
         raise ValueError("Test-only Basic Auth credentials are required")
     with tempfile.TemporaryDirectory(prefix="stage6-local-") as temporary:
@@ -86,6 +86,13 @@ def disposable_app(username: str, password: str,
         # Publication checks explicitly opt into the unmodified approved records.
         if projects_as_drafts:
             content = root / "business/project_content.json"
+            records = json.loads(content.read_text())
+            for record in records:
+                record.update(status="draft", approved_at=None, published_at=None)
+            content.write_text(json.dumps(records))
+
+        if advice_as_drafts:
+            content = root / "business/advice_content.json"
             records = json.loads(content.read_text())
             for record in records:
                 record.update(status="draft", approved_at=None, published_at=None)

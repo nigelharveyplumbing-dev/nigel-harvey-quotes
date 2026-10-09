@@ -56,7 +56,12 @@ def _contact_markup(template: str) -> str:
 
 
 def site_header(*, home: bool = False) -> str:
-    return _contact_markup(HEADER.replace("__NAV_PREFIX__", "" if home else "/"))
+    from business.plumbing_advice import visible_articles
+
+    header = HEADER.replace("__NAV_PREFIX__", "" if home else "/")
+    if visible_articles():
+        header = header.replace('<a class="btn" href="/request-quote">', '<a href="/advice">Plumbing Advice</a><a class="btn" href="/request-quote">', 1)
+    return _contact_markup(header)
 
 
 def site_footer() -> str:

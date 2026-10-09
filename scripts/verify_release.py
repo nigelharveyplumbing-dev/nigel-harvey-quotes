@@ -220,8 +220,8 @@ def evaluate(result):
             and web["health"].get("backup_count") == db["backup_files"]
             and all(web["documents"].values())
             and all(code == 401 for code in web["anonymous_statuses"].values())
-            and web["sitemap_status"] == 200 and web["sitemap_count"] == 72
-            and web["sitemap_unique"] == 72 and not web["crawl_failures"]
+            and web["sitemap_status"] == 200 and web["sitemap_count"] == 76
+            and web["sitemap_unique"] == 76 and not web["crawl_failures"]
             and not web["duplicate_titles"] and not web["duplicate_descriptions"]
             and not web["duplicate_h1s"] and web["robots_status"] == 200
             and expected_robots in web["robots"]
