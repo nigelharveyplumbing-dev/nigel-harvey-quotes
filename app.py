@@ -653,7 +653,7 @@ from business.db import get_db, init_db, database_counts
 from business import quote_store, invoice_store, material_store
 from business import quote_history
 from business import public_invoice_render
-from business import notifications
+from business import notifications, lead_email_store
 from business import ai_presentation
 from business import job_context
 from business import customer_store, lead_store, invoice_photo_store
@@ -1151,8 +1151,17 @@ def delete_lead_by_id(lead_id: int, confirmed_site_visits: int | None = None):
 
 
 def send_lead_notification_email(lead: dict):
-    return notifications.send_lead_notification_email(
-        lead, EMAIL_ENABLED=EMAIL_ENABLED, EMAIL_USER=EMAIL_USER, EMAIL_PASS=EMAIL_PASS, EMAIL_FROM_NAME=EMAIL_FROM_NAME, EMAIL_HOST=EMAIL_HOST, EMAIL_PORT=EMAIL_PORT, get_public_base_url=get_public_base_url)
+    def sender(value):
+        return notifications.send_lead_notification_email(
+            value, EMAIL_ENABLED=EMAIL_ENABLED, EMAIL_USER=EMAIL_USER,
+            EMAIL_PASS=EMAIL_PASS, EMAIL_FROM_NAME=EMAIL_FROM_NAME,
+            EMAIL_HOST=EMAIL_HOST, EMAIL_PORT=EMAIL_PORT,
+            get_public_base_url=get_public_base_url)
+    try:
+        return lead_email_store.deliver(lead, sender) if lead.get('id') else sender(lead)
+    except Exception:
+        notifications.logger.error('lead_email_failed lead_id=%s reason=tracking_failed', lead.get('id'))
+        return {'status': 'failed', 'error_code': 'tracking_failed'}
 
 
 
@@ -1263,6 +1272,21 @@ def request_quote_page(request: Request):
 @app.get("/api/leads")
 def api_leads():
     return load_leads()
+
+
+@app.get('/api/lead-email-status')
+def api_lead_email_status():
+    return {**notifications.lead_email_configuration(
+        EMAIL_ENABLED=EMAIL_ENABLED, EMAIL_USER=EMAIL_USER, EMAIL_PASS=EMAIL_PASS),
+        'notifications': lead_email_store.notification_states()}
+
+
+@app.post('/api/leads/{lead_id}/retry-email')
+def api_retry_lead_email(lead_id: int):
+    lead = get_lead_by_id(lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    return send_lead_notification_email(lead)
 
 
 @app.post("/api/quick-add/preview")

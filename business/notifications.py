@@ -1,6 +1,7 @@
 """Lead mail and invoice reminder orchestration with injected app dependencies."""
 
 import os
+import logging
 import smtplib
 import ssl
 from datetime import datetime
@@ -8,22 +9,49 @@ from html import escape
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+logger = logging.getLogger(__name__)
+
+
+def lead_email_configuration(*, EMAIL_ENABLED, EMAIL_USER, EMAIL_PASS):
+    missing = [key for key, value in (("EMAIL_ENABLED", EMAIL_ENABLED),
+                                      ("EMAIL_USER", (EMAIL_USER or "").strip()),
+                                      ("EMAIL_PASS", (EMAIL_PASS or "").strip())) if not value]
+    return {"configured": not missing, "missing_settings": missing}
+
+
+def lead_email_error_code(exc):
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        return "authentication_failed"
+    if isinstance(exc, (TimeoutError, smtplib.SMTPServerDisconnected)):
+        return "connection_failed"
+    if isinstance(exc, smtplib.SMTPRecipientsRefused):
+        return "recipient_refused"
+    if isinstance(exc, smtplib.SMTPException):
+        return "smtp_failed"
+    return "delivery_failed"
+
 
 def send_lead_notification_email(lead: dict, *, EMAIL_ENABLED, EMAIL_USER, EMAIL_PASS, EMAIL_FROM_NAME, EMAIL_HOST, EMAIL_PORT, get_public_base_url):
-    if not EMAIL_ENABLED or not EMAIL_USER or not EMAIL_PASS:
-        return
+    if not lead_email_configuration(EMAIL_ENABLED=EMAIL_ENABLED, EMAIL_USER=EMAIL_USER,
+                                    EMAIL_PASS=EMAIL_PASS)['configured']:
+        logger.error("lead_email_failed lead_id=%s reason=not_configured", lead.get("id"))
+        return {"status": "failed", "error_code": "not_configured"}
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"New quote request - {lead.get('name') or 'Website lead'}"
+        name = str(lead.get('name') or 'Website lead').replace('\r', ' ').replace('\n', ' ')
+        msg["Subject"] = f"New quote request - {name}"
         msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_USER}>"
         msg["To"] = EMAIL_USER
-        public_url = get_public_base_url() if (os.getenv("PUBLIC_BASE_URL") or "").strip() else ""
+        public_url = get_public_base_url().rstrip('/') + '/app' if (os.getenv("PUBLIC_BASE_URL") or "").strip() else ""
         plain = (
             f"New website lead\n\n"
             f"Name: {lead.get('name','')}\n"
             f"Phone: {lead.get('phone','')}\n"
             f"Email: {lead.get('email','')}\n"
             f"Address: {lead.get('address','')}\n"
+            f"Postcode: {lead.get('postcode','')}\n"
+            f"Urgency: {lead.get('urgency','')}\n"
+            f"Preferred contact: {lead.get('preferred_contact','')}\n"
             f"Job type: {lead.get('job_type','')}\n"
             f"Description: {lead.get('description','')}\n\n"
             f"Open app: {public_url}\n"
@@ -35,6 +63,9 @@ def send_lead_notification_email(lead: dict, *, EMAIL_ENABLED, EMAIL_USER, EMAIL
             f"<strong>Phone:</strong> {escape(lead.get('phone',''))}<br>"
             f"<strong>Email:</strong> {escape(lead.get('email',''))}<br>"
             f"<strong>Address:</strong> {escape(lead.get('address',''))}<br>"
+            f"<strong>Postcode:</strong> {escape(lead.get('postcode',''))}<br>"
+            f"<strong>Urgency:</strong> {escape(lead.get('urgency',''))}<br>"
+            f"<strong>Preferred contact:</strong> {escape(lead.get('preferred_contact',''))}<br>"
             f"<strong>Job type:</strong> {escape(lead.get('job_type',''))}</p>"
             f"<p><strong>Description:</strong><br>{escape(lead.get('description','')).replace(chr(10), '<br>')}</p>"
             '</body></html>'
@@ -42,11 +73,19 @@ def send_lead_notification_email(lead: dict, *, EMAIL_ENABLED, EMAIL_USER, EMAIL
         msg.attach(MIMEText(plain, "plain", "utf-8"))
         msg.attach(MIMEText(html, "html", "utf-8"))
         context = ssl.create_default_context()
-        with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, context=context) as server:
+        with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, context=context, timeout=15) as server:
             server.login(EMAIL_USER, EMAIL_PASS)
-            server.sendmail(EMAIL_USER, [EMAIL_USER], msg.as_string())
-    except Exception:
-        return
+            refused = server.sendmail(EMAIL_USER, [EMAIL_USER], msg.as_string())
+            if isinstance(refused, dict) and refused:
+                raise smtplib.SMTPRecipientsRefused(refused)
+        logger.info("lead_email_accepted lead_id=%s", lead.get("id"))
+        return {"status": "accepted", "error_code": ""}
+    except Exception as exc:
+        code = lead_email_error_code(exc)
+        # SMTP exceptions can contain credentials, addresses or message content.
+        # Only record the stable category and internal lead ID.
+        logger.error("lead_email_failed lead_id=%s reason=%s", lead.get("id"), code)
+        return {"status": "failed", "error_code": code}
 
 
 

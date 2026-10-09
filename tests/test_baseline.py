@@ -134,10 +134,10 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
-        self.assertEqual(len(routes), 87)
+        self.assertEqual(len(routes), 89)
         self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 13)
         self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
-        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 69)
+        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 71)
         self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
         self.assertEqual(self.module.PUBLIC_ROUTE_KEYS,
                          PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES)
@@ -258,7 +258,7 @@ class BaselineTests(unittest.TestCase):
         ):
             masked = masked.replace(addition, '')
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
-                         "fbcdb03af239d67051ccb898cf023648f97dc6b98e06f785129e443c2ee6ca81")
+                         "26cc6e48d21692c85ac0f2815e871a9e13d27ac2621904227015eb284bcec02e")
         self.assertEqual(m.HTML.count("<style>"), 1)
         self.assertEqual(m.HTML.count("<script>"), 1)
         self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {
@@ -271,7 +271,7 @@ class BaselineTests(unittest.TestCase):
             "/api/appointments", "/api/appointments/", "/api/jobs", "/api/jobs/",
             "/api/pipeline", "/api/quick-add/preview", "/api/quick-add/confirm",
             "/api/dashboard/monthly-profit", "/api/intelligence", "/api/invoices",
-            "/api/invoices/", "/api/labour-intelligence", "/api/leads", "/api/leads/",
+            "/api/invoices/", "/api/labour-intelligence", "/api/leads", "/api/leads/", "/api/lead-email-status",
             "/api/live-product-refresh", "/api/live-product-search", "/api/best-trade-prices", "/api/material-prices",
             "/api/city-account-prices", "/api/city-account-prices/preview",
             "/api/material-prices/", "/api/material-prices/refresh", "/api/material-search",
@@ -302,7 +302,7 @@ class BaselineTests(unittest.TestCase):
         m = self.module
         private = {tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         private -= PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES
-        self.assertEqual(len(private), 69)
+        self.assertEqual(len(private), 71)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "appointment_id": "1", "job_id": "1",
                       "material_id": "1", "photo_id": "1", "filename": "sample.db"}

@@ -272,8 +272,24 @@ try {
     data: { name: 'Synthetic Lead', description: 'Test tap' },
   });
   assert.equal(lead.status(), 200);
+  const syntheticLead = await lead.json();
   await page.getByRole('button', { name: 'Leads', exact: true }).click();
   await page.locator('#leadList').getByText('Synthetic Lead').waitFor();
+  const leadCard = page.locator(`#lead_card_${syntheticLead.id}`);
+  await leadCard.getByText('Email alert failed — enquiry saved', {exact:true}).waitFor();
+  await page.locator('#leadList').getByRole('alert').waitFor();
+  const retryResponse = page.waitForResponse(response =>
+    response.url() === `${origin}/api/leads/${syntheticLead.id}/retry-email`
+    && response.request().method() === 'POST');
+  const retryDialog = page.waitForEvent('dialog');
+  await leadCard.getByRole('button', {name:'Retry email alert',exact:true}).click();
+  assert.equal((await retryResponse).status(), 200);
+  await leadCard.getByRole('button', {name:'Retry email alert',exact:true}).waitFor();
+  assert.match((await retryDialog).message(), /Email settings are missing or disabled.*enquiry remains saved/);
+  const emailAudit = await (await context.request.get(`${origin}/api/lead-email-status`)).json();
+  assert.equal(emailAudit.notifications[String(syntheticLead.id)].attempts, 2);
+  assert.equal(emailAudit.notifications[String(syntheticLead.id)].status, 'failed');
+  assert.equal((await anonymous.request.get(`${origin}/api/lead-email-status`)).status(), 401);
   await page.getByRole('button', { name: 'Material Database' }).click();
   await page.locator('#materialDbSearch').fill('Synthetic valve');
   await page.locator('#materialDbList').getByText('Synthetic valve').waitFor();
