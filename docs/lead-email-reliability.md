@@ -44,7 +44,7 @@ No previous lead is automatically emailed or assigned a historic sent status.
 
 ## Release gate and recovery
 
-This branch is prepared separately from main. Do not claim email is fixed until
+The repair was prepared separately and merged through PR #8. Do not claim email is fixed until
 live configuration has been inspected and a synthetic website enquiry is both
 saved and received in the owner's plumbing Gmail inbox. Check mail headers,
 subject and all supplied fields; verify private status and retry controls.
@@ -58,6 +58,14 @@ customers, quotes, invoices and material-price tables retain their schemas.
 
 Local validation: 251 Python regressions (including nine focused email checks),
 the two existing Node suites, and new notification-control Node checks.
-Chromium workflows could not run: no executable was available and the official
-Playwright download returned a corrupt/empty archive. Treat browser and live
-delivery validation as outstanding, not passed.
+Local Chromium was unavailable because the official download returned a corrupt
+or empty archive. GitHub Actions run 37920448173 subsequently passed the full
+offline Python and Chromium workflows on repair head
+5a7a8d125e88c3ff8111c497117295b17d303d52, including failed-email and retry UI checks.
+
+Production deployment dep-db4chb60tbcc73du2m9g is live at code commit
+51f3e9566eaf53f9fa29f8165167140888c0b3d8. The quote form loads, the private status
+endpoint returns 200 with owner authentication and 401 anonymously, and both
+databases pass integrity checks with business counts unchanged. Consistent
+recovery copies are retained at /var/data/lead-email-repair-20261009T105427Z.
+Only credential replacement and live inbox delivery validation remain outstanding.
