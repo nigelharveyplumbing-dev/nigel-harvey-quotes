@@ -60,23 +60,3 @@ jobs:
           name: approved-advice-previews
           path: ${{ runner.temp }}/advice-preview
           if-no-files-found: error
-      # Temporary Stage 3 validation aid: exports vendor-installed browser only.
-      # Never upload the private article, application storage or credentials.
-      - name: Package trusted Chromium for isolated private-content verification
-        if: github.head_ref == 'growth/website-batch-8'
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import os, tarfile
-          folders = list((Path.home() / '.cache/ms-playwright').glob('chromium_headless_shell-*'))
-          assert len(folders) == 1
-          with tarfile.open(Path(os.environ['RUNNER_TEMP']) / 'trusted-chromium.tar.gz', 'w:gz') as archive:
-              archive.add(folders[0], arcname=folders[0].name)
-          PY
-      - name: Save trusted browser package
-        if: github.head_ref == 'growth/website-batch-8'
-        uses: actions/upload-artifact@v4
-        with:
-          name: batch8-trusted-chromium
-          path: ${{ runner.temp }}/trusted-chromium.tar.gz
-          if-no-files-found: error

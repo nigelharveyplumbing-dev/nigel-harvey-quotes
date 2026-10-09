@@ -1,8 +1,8 @@
 // Actual mixed catalogue: published shower/project, private radiator draft.
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 import { dirname, join, resolve } from 'node:path';
@@ -14,6 +14,12 @@ const {chromium}=playwright;
 const executablePath=process.env.STAGE6_CHROMIUM_EXECUTABLE||chromium.executablePath();
 assert(existsSync(executablePath),'Preinstalled Chromium required');
 const directory=dirname(fileURLToPath(import.meta.url));
+const privateFile=process.env.PLUMBING_ADVICE_PRIVATE_DRAFTS;
+assert(!(process.env.CI && privateFile),'Private owner content must not be loaded in public CI');
+if(process.env.BATCH8_REQUIRE_PRIVATE_DRAFT==='1')assert(privateFile && !resolve(privateFile).includes('/tests/fixtures/'),'Complete private catalogue required');
+const ownerRecords=privateFile?JSON.parse(readFileSync(privateFile,'utf8')):null;
+const ownerArticle=ownerRecords?.find(a=>a.slug==='radiators-cold-heating-unevenly');
+if(privateFile)assert(ownerArticle?.status==='draft' && !ownerArticle.approved_at && !ownerArticle.published_at,'Owner article must remain a private draft');
 const socket=net.createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r));
 const port=socket.address().port;await new Promise(r=>socket.close(r));
 const origin=`http://127.0.0.1:${port}`;
@@ -24,7 +30,9 @@ const draft='/advice/radiators-cold-heating-unevenly';
 const pages=[['home','/'],['guildford','/plumber-guildford'],['woking','/plumber-woking'],['farnham-leak','/leak-repair-farnham'],['radiator-draft',draft]];
 const evidence=process.env.BATCH8_EVIDENCE_DIR?resolve(process.env.BATCH8_EVIDENCE_DIR):process.env.ADVICE_EVIDENCE_DIR?resolve(process.env.ADVICE_EVIDENCE_DIR,'batch8'):null;
 if(evidence)mkdirSync(evidence,{recursive:true});
-const diagnostics={pageErrors:[],externalRequests:[],layouts:[],draftAnonymous:404,changedPageCount:4};
+const diagnostics={pageErrors:[],consoleErrors:[],externalRequests:[],layouts:[],images:[],draftAnonymous:404,changedPageCount:4,
+ draftContentMode:ownerArticle?'complete_private_owner_wording':'labelled_synthetic_fixture',
+ privateCatalogueSha256:privateFile?createHash('sha256').update(readFileSync(privateFile)).digest('hex'):null};
 let browser;
 try{
  for(let i=0;i<100;i++){
@@ -34,16 +42,22 @@ try{
  }
  browser=await chromium.launch({executablePath,headless:true,args:['--no-sandbox']});
  const anonymous=await browser.newContext();
- assert.equal((await anonymous.request.get(origin+draft)).status(),404);
+ for(const suffix of ['', '?preview=1','?utm_source=google']){
+  const hidden=await anonymous.request.get(origin+draft+suffix);assert.equal(hidden.status(),404);
+  assert.match(hidden.headers()['x-robots-tag'],/noindex/);assert.equal(hidden.headers()['cache-control'],'private, no-store');
+ }
  assert.equal((await anonymous.request.get(origin+'/app')).status(),401);
+ assert.equal((await anonymous.request.get(origin+'/api/customers')).status(),401);
+ assert.equal((await anonymous.request.get(origin+draft,{headers:{Authorization:'Basic ZmFrZTpmYWtl'}})).status(),404);
  assert(!(await(await anonymous.request.get(origin+'/advice')).text()).includes(draft));
  const sitemap=await(await anonymous.request.get(origin+'/sitemap.xml')).text();
  assert.equal((sitemap.match(/<loc>/g)||[]).length,76);assert(!sitemap.includes(draft));
  const auth=Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64');
  const context=await browser.newContext({httpCredentials:credentials,extraHTTPHeaders:{Authorization:`Basic ${auth}`}});
- await context.addInitScript(()=>localStorage.setItem('nhp_analytics_choice_v1','rejected'));
+ await context.addInitScript(()=>localStorage.setItem('nhp_analytics_choice_v1',location.pathname==='/advice/radiators-cold-heating-unevenly'?'accepted':'rejected'));
  await context.route('**/*',route=>{if(new URL(route.request().url()).origin===origin)return route.continue();diagnostics.externalRequests.push(route.request().url());return route.abort()});
  const page=await context.newPage();page.on('pageerror',e=>diagnostics.pageErrors.push(e.message));
+ page.on('console',m=>{if(m.type()==='error')diagnostics.consoleErrors.push(m.text().replace(/data:image[^\s]+/g,'[inline image]').slice(0,300))});
  for(const [device,width,height] of [['desktop',1440,1000],['mobile',390,844]]){
   await page.setViewportSize({width,height});
   for(const [name,path] of pages){
@@ -52,14 +66,44 @@ try{
    assert.equal(await page.locator('link[rel=canonical]').getAttribute('href'),'https://www.nigelharveyplumbing.co.uk'+path);
    const layout=await page.evaluate(()=>({width:innerWidth,document:document.documentElement.scrollWidth}));
    assert(layout.document<=width,`${name} ${device} overflow`);diagnostics.layouts.push({name,device,...layout});
+   const brand=await page.locator('header .brand').evaluate(b=>({text:b.textContent,width:b.getBoundingClientRect().width}));
+   assert(brand.text.includes('Nigel Harvey') && brand.width<=width,'Existing public wordmark must remain readable');
+   diagnostics.layouts.at(-1).branding=brand.text.replace(/\s+/g,' ').trim();
+   const images=await page.locator('img').evaluateAll(async images=>Promise.all(images.map(async i=>{
+    let decodeError=null;try{await i.decode()}catch(e){decodeError=e.name}
+    return {alt:i.alt,sourceKind:i.src.startsWith('data:')?'inline':'local',complete:i.complete,naturalWidth:i.naturalWidth,naturalHeight:i.naturalHeight,decodeError};
+   })));
+   diagnostics.images.push({name,device,images});
    if(path===draft){assert.match(response.headers()['x-robots-tag'],/noindex/);assert.equal(response.headers()['cache-control'],'private, no-store');assert.equal(await page.locator('#public-analytics').getAttribute('data-send-to-google'),'false')}
    else assert(!response.headers()['x-robots-tag']);
-   for(const s of await page.locator('script[type="application/ld+json"]').all())JSON.parse(await s.textContent());
+   const graphs=[];for(const s of await page.locator('script[type="application/ld+json"]').all())graphs.push(JSON.parse(await s.textContent()));
+   if(path===draft){
+    const a=graphs.flatMap(g=>g['@graph']||[g]).find(g=>g['@type']==='Article');
+    assert(a && a.author.name==='Nigel Harvey');assert(!a.datePublished && !a.dateModified);
+    assert.equal(await page.locator('nav a[href^="/advice/radiators-cold"]').count(),0);
+    assert.equal(await page.locator('main img').count(),0);
+    if(ownerArticle){
+     assert.equal(await page.locator('main h1').textContent(),ownerArticle.title);
+     const text=await page.locator('main').innerText();
+     const normalize=s=>s.replace(/\s+/g,' ').trim();
+     for(const p of [ownerArticle.summary,ownerArticle.author_note,...ownerArticle.sections.flatMap(s=>[s.heading,...s.paragraphs]),...ownerArticle.safety,...ownerArticle.faqs.flatMap(f=>[f.question,f.answer])])assert(normalize(text).includes(normalize(p)),'Complete private wording must be rendered');
+     const external=await page.locator('main a[href^="https://"]').evaluateAll(links=>links.map(l=>({href:l.href,rel:l.rel})));
+     assert.deepEqual(external.map(x=>x.href),ownerArticle.sources);assert(external.every(x=>x.rel.includes('noopener')&&x.rel.includes('noreferrer')));
+     diagnostics.externalSourceLinks=external.map(x=>x.href);
+    }
+    const readability=await page.locator('main .advice-story p:not(.kicker):not(.project-byline)').evaluateAll(ps=>ps.map(p=>({font:parseFloat(getComputedStyle(p).fontSize),line:parseFloat(getComputedStyle(p).lineHeight)})));
+    assert(readability.every(p=>p.font>=14 && p.line>p.font));
+    diagnostics.layouts.at(-1).paragraphs=readability.length;
+   }
    const hrefs=await page.locator('main a[href^="/"]').evaluateAll(links=>links.map(l=>l.getAttribute('href').split('#')[0]));
    for(const href of new Set(hrefs))assert.equal((await context.request.get(origin+href)).status(),200,href);
    const quote=page.locator('main a').filter({hasText:'enquiry form'});
    if(path==='/plumber-guildford'){
     const href=await quote.getAttribute('href');assert(href.includes('landing_page=%2Fplumber-guildford'));
+   }
+   if(path===draft){
+    const href=await page.locator('main a.btn').getAttribute('href');assert(href.startsWith('/request-quote'));
+    assert.equal((await context.request.get(origin+href)).status(),200);
    }
    await page.evaluate(()=>scrollTo(0,0));
    if(evidence){
@@ -72,9 +116,14 @@ try{
      writeFileSync(join(evidence,`${name}-owner-preview.html`),html);
     }
    }
+   const enquiry=path===draft?page.locator('main a.btn'):page.locator('main a[href^="/request-quote"]').first();
+   const enquiryHref=await enquiry.getAttribute('href');await enquiry.click();await page.waitForURL('**/request-quote**');
+   assert(await page.locator('#lead_postcode').isVisible(),'Enquiry form postcode input must be usable');
+   diagnostics.layouts.at(-1).enquiryDestination=enquiryHref;
   }
  }
- assert.deepEqual(diagnostics.pageErrors,[]);assert.deepEqual(diagnostics.externalRequests,[]);
  if(evidence)writeFileSync(join(evidence,'batch8-browser-validation.json'),JSON.stringify(diagnostics,null,2)+'\n');
+ assert.deepEqual(diagnostics.pageErrors,[]);assert.deepEqual(diagnostics.externalRequests,[]);
+ assert(!diagnostics.images.some(p=>p.images.some(i=>i.decodeError||!i.naturalWidth)), 'All page images must decode before screenshots');
  console.log(JSON.stringify({result:'PASS',diagnostics},null,2));
 }finally{if(browser)await browser.close();server.kill('SIGTERM')}

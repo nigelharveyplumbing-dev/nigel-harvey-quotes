@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 from bs4 import BeautifulSoup
@@ -103,5 +104,13 @@ class GrowthBatch8Tests(unittest.TestCase):
         private_file.write_text(json.dumps([{'status':'draft','approved_at':'2026-10-09T12:00:00Z'}]))
         with patch.dict(os.environ,{'PLUMBING_ADVICE_PRIVATE_DRAFTS':str(private_file)}):
             with self.assertRaises(ValueError):self.module.plumbing_advice.load_catalogue()
+
+    def test_public_ci_rejects_private_owner_files_before_launch(self):
+        outcome=subprocess.run(['node',str(ROOT/'tests/run_batch8_browser.mjs')],cwd=ROOT,
+            env={**os.environ,'CI':'true','STAGE6_CHROMIUM_EXECUTABLE':sys.executable},
+            capture_output=True,text=True,timeout=10)
+        self.assertNotEqual(outcome.returncode,0)
+        self.assertIn('Private owner content must not be loaded in public CI',outcome.stderr)
+        self.assertNotIn('Synthetic test content',outcome.stderr)
 
 if __name__=='__main__':unittest.main()
