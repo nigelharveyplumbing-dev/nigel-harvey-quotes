@@ -1,0 +1,22 @@
+[
+  {
+    "slug": "radiators-cold-heating-unevenly",
+    "topic_key": "uneven-radiator-heating",
+    "status": "draft",
+    "approved_at": null,
+    "published_at": null,
+    "updated_on": "2026-10-09",
+    "title": "Why are some radiators cold or heating unevenly?",
+    "summary": "Synthetic test content for private advice routing. This fixture is not the owner-review article and contains no homeowner plumbing guidance.",
+    "author": "Nigel Harvey",
+    "author_note": "Synthetic regression fixture only; not intended for publication.",
+    "help_heading": "Help with radiators and heating pipework",
+    "sections": [{"heading": "Synthetic review section", "paragraphs": ["This placeholder tests the private layout without placing the unpublished article body in a public repository."]}],
+    "safety": ["Synthetic test content, not installation advice."],
+    "services": [{"path": "/heating-repairs-surrey", "label": "Radiators and heating plumbing in Surrey"}],
+    "locations": [{"path": "/plumber-guildford", "label": "Plumbing in Guildford"}],
+    "project_slugs": [],
+    "seo_title": "Private Advice Test | Nigel Harvey Plumbing",
+    "meta_description": "Synthetic metadata used only to test owner-review privacy and routing."
+  }
+]

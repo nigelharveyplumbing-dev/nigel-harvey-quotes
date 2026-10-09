@@ -1,0 +1,87 @@
+{
+  "batch": "Growth Batch 8 Stage 2",
+  "date": "2026-10-09",
+  "phase": "Controlled development and staging preparation; no remote deployment",
+  "baseline_main": "63d2505c8d566f63d10b84414d10ed7aec713cab",
+  "baseline_production_deploy": "dep-db4kuhnavr4c73fl7png",
+  "branch": "growth/website-batch-8",
+  "public_page_proposals": {
+    "/": "One gated bathroom/project/advice enquiry section before reviews",
+    "/plumber-guildford": "Repair versus planned-work details, scope considerations and enquiry route",
+    "/plumber-woking": "Genuine Guildford base and postcode confirmation, useful service details, title/description and clearly labelled Merrow example",
+    "/leak-repair-farnham": "Active versus intermittent leak guidance, safe enquiry details and limits of symptom-based diagnosis"
+  },
+  "draft": {
+    "title": "Why are some radiators cold or heating unevenly?",
+    "path": "/advice/radiators-cold-heating-unevenly",
+    "status": "draft",
+    "owner_approval": null,
+    "publication_date": null,
+    "anonymous": "404, private/no-store, noindex",
+    "authenticated_preview": "200, private/no-store, noindex; analytics transmission disabled",
+    "public_discovery": "Excluded from sitemap, anonymous advice index and related links",
+    "new_project_claims": false,
+    "images": 0,
+    "storage": "Full wording is in the private owner-review catalogue outside this public GitHub repository. No draft body is committed.",
+    "local_preview_configuration": "PLUMBING_ADVICE_PRIVATE_DRAFTS points to an owner-controlled JSON file; only draft records are accepted. No Render environment changes were made."
+  },
+  "ga4": {
+    "read_access": "Unavailable: connected account has no Google Analytics scope",
+    "property_discovery_requests": 1,
+    "large_gsc_requests": 0,
+    "tracking_changed": false,
+    "existing_events": [
+      "generate_lead",
+      "click_phone",
+      "click_whatsapp",
+      "click_get_quote"
+    ],
+    "key_event_configuration_verified": false,
+    "measurement_limits": [
+      "Consent-related gaps",
+      "Clicks are not completed calls/messages",
+      "Form submissions are not qualified jobs",
+      "Source and outcome evidence is sparse"
+    ]
+  },
+  "preservation": {
+    "merrow_content_and_photographs": "Unchanged",
+    "published_shower_article": "Unchanged",
+    "customer_records": "No access or changes during Stage 2",
+    "private_application_logic": "Unchanged",
+    "city_prices_quotes_invoices_email_auth": "Unchanged",
+    "app_py_scope": [
+      "render_public_homepage",
+      "add_project_evidence"
+    ],
+    "sitemap_url_count": 76,
+    "unaffected_public_pages_compared": 72
+  },
+  "validation": {
+    "python": "python -B tests/run_stage6_local.py --python-only",
+    "node": [
+      "tests/test_material_selection.cjs",
+      "tests/test_trade_comparison.cjs",
+      "tests/test_lead_email.cjs",
+      "tests/growth_batch2_events.mjs"
+    ],
+    "chromium": "Established headless CI configuration; loopback-only synthetic servers and blocked outbound requests",
+    "batch8_browser": "tests/run_batch8_browser.mjs uses a labelled synthetic privacy fixture in public CI; the full owner draft is validated locally and delivered separately.",
+    "desktop": [
+      1440,
+      1000
+    ],
+    "mobile": [
+      390,
+      844
+    ],
+    "shared_staging": "Untouched; preview generation and auto-deploy were verified off"
+  },
+  "approval_boundary": "Stop after development, tests and owner-review delivery. No Stage 3, merge, production deployment, article publication, GBP/citation changes or indexing notifications.",
+  "owner_decisions": [
+    "Approve or revise exact public-page proposal wording",
+    "Review radiator draft before any publication approval",
+    "Connect the appropriate GA4 account/read permission outside this automated task if analytics reporting is wanted",
+    "Separately authorise Stage 3 and confirm a safe isolated staging plan"
+  ]
+}

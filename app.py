@@ -1442,6 +1442,7 @@ def render_public_homepage(request: Request):
     html = html.replace("__PUBLIC_HEADER__", public_layout.site_header(home=True))
     html = html.replace("__PUBLIC_FOOTER__", public_layout.site_footer())
     html = html.replace("__PUBLIC_ANALYTICS__", public_layout.analytics_markup())
+    html = public_pages.add_batch8_context(html, "/")
     return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -1556,6 +1557,7 @@ def real_project_image(project_slug: str, filename: str, request: Request):
 
 
 def add_project_evidence(html: str, request: Request):
+    html = public_pages.add_batch8_context(html, request.url.path)
     return plumbing_advice.add_related_advice_links(
         real_projects.add_related_project_links(html, request.url.path), request.url.path)
 

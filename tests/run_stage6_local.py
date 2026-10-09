@@ -47,7 +47,11 @@ def main():
     print("Running published advice desktop/mobile workflows", flush=True)
     result = subprocess.run(["node", str(ROOT / "tests/run_advice_browser.mjs")],
                             cwd=ROOT, env={**environment, "ADVICE_TEST_PUBLISHED": "1"}, check=False)
-    return result.returncode
+    if result.returncode:
+        return result.returncode
+    print("Running Batch 8 mixed-catalogue desktop/mobile proposals", flush=True)
+    return subprocess.run(["node", str(ROOT / "tests/run_batch8_browser.mjs")],
+                          cwd=ROOT, env=environment, check=False).returncode
 
 
 if __name__ == "__main__":

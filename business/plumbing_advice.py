@@ -3,6 +3,7 @@ from datetime import date, datetime
 from difflib import SequenceMatcher
 from html import escape
 import json
+import os
 from pathlib import Path
 import re
 from typing import Literal
@@ -27,6 +28,8 @@ class Advice(PublicRecord):
     summary: str = Field(min_length=1)
     author: Literal['Nigel Harvey'] = 'Nigel Harvey'
     author_note: str = Field(min_length=1)
+    help_heading: str = "Help with your shower or bathroom"
+    source_label: str = "manufacturer guidance"
     sections: list[AdviceSection] = Field(min_length=1)
     safety: list[str] = Field(min_length=1)
     faqs: list[ProjectFAQ] = Field(default_factory=list)
@@ -90,7 +93,20 @@ def validate_catalogue(records):
                 raise ValueError('Near-duplicate advice requires editorial consolidation')
     return articles
 
-ARTICLES = validate_catalogue(json.loads((ROOT / 'business/advice_content.json').read_text(encoding='utf-8')))
+def load_catalogue():
+    records = json.loads((ROOT / 'business/advice_content.json').read_text(encoding='utf-8'))
+    # Optional owner-controlled file, outside the public source repository.
+    # This can add private drafts only; publication remains an explicit release.
+    private_file = os.environ.get('PLUMBING_ADVICE_PRIVATE_DRAFTS', '').strip()
+    if private_file:
+        drafts = json.loads(Path(private_file).read_text(encoding='utf-8'))
+        if not isinstance(drafts, list) or any(not isinstance(a, dict) or a.get('status') != 'draft' for a in drafts):
+            raise ValueError('Private advice catalogue may contain drafts only')
+        records.extend(drafts)
+    return validate_catalogue(records)
+
+
+ARTICLES = load_catalogue()
 
 def visible_articles(*, include_drafts=False):
     return tuple(a for a in ARTICLES if a.status == 'published' or include_drafts)
@@ -130,9 +146,9 @@ def render_article(a, *, absolute_url, request=None, staging=False):
     projects = [p for p in real_projects.visible_projects() if p.slug in a.project_slugs]
     if projects:
         content += '<section><h2>See the work behind the advice</h2><p>These are completed projects, with genuine photographs and the recorded work.</p><ul>' + ''.join(f'<li><a href="{p.path}">{escape(p.title)}</a></li>' for p in projects) + '</ul></section>'
-    content += '<section><h2>Help with your shower or bathroom</h2><ul>' + ''.join(f'<li><a href="{link.path}">{escape(link.label)}</a></li>' for link in a.services + a.locations) + '</ul><p>Send a short description, your postcode and photographs of safely visible areas. Nigel can discuss whether a visit is needed.</p><a class="btn" href="/request-quote">Discuss your plumbing job</a></section>'
+    content += '<section><h2>' + escape(a.help_heading) + '</h2><ul>' + ''.join(f'<li><a href="{link.path}">{escape(link.label)}</a></li>' for link in a.services + a.locations) + '</ul><p>Send a short description, your postcode and photographs of safely visible areas. Nigel can discuss whether a visit is needed.</p><a class="btn" href="/request-quote">Discuss your plumbing job</a></section>'
     if a.sources:
-        content += '<section><h2>Further reading</h2><ul>' + ''.join(f'<li><a href="{escape(url, quote=True)}" rel="noopener noreferrer">{escape(url.split("/")[2])} — manufacturer guidance</a></li>' for url in a.sources) + '</ul><p>Check the current instructions for the actual products selected for your installation.</p></section>'
+        content += '<section><h2>Further reading</h2><ul>' + ''.join(f'<li><a href="{escape(url, quote=True)}" rel="noopener noreferrer">{escape(url.split("/")[2])} — {escape(a.source_label)}</a></li>' for url in a.sources) + '</ul><p>Check the current instructions for the actual products selected for your installation.</p></section>'
     content += '</article>'
     html = real_projects.page_shell(a.seo_title, a.meta_description, absolute_url(a.path, request), content,
                                    noindex=draft or staging, schema=schema_graph(a, absolute_url, request))
