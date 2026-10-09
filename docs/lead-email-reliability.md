@@ -7,10 +7,13 @@ SMTP. Existing code discards disabled configuration and every SMTP exception,
 so the success response proves lead storage, not mail delivery. No matching
 notification was found in the connected Gmail mailbox, including spam.
 
-The live cause remains unverified: production environment settings and SQLite
-read-back require an authenticated Render dashboard session. Google verification
-has blocked that inspection. Do not infer that credentials are invalid, that
-EMAIL_ENABLED is disabled, or that the mail provider blocked SMTP without evidence.
+Authenticated production inspection confirmed the test lead (ID 9) is saved,
+SQLite integrity is OK and EMAIL_ENABLED is true. EMAIL_USER is the owner's
+plumbing Gmail account. Connections succeed over SSL 465 and STARTTLS 587, but
+authentication fails. An explicit LOGIN exchange returned SMTP 535; removing
+password whitespace also returned 535. Gmail rejects the saved credential.
+No secret values were displayed or logged. A valid Gmail app password must be
+entered by the owner before live inbox delivery can be verified.
 
 ## Change
 
