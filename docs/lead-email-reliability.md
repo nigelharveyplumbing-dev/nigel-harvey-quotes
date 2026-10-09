@@ -1,0 +1,85 @@
+# Website enquiry email repair
+
+The production server accepted the owner's test POST /api/leads at 10:08:30 UTC
+on 9 October 2026. Production was e3e390846ad9e7e5589c589362b4471fdf2ecc1a,
+deployment dep-db40e8ub7d7c739t25qg. The handler saves the lead before calling
+SMTP. Existing code discards disabled configuration and every SMTP exception,
+so the success response proves lead storage, not mail delivery. The connected Gmail mailbox was later verified as the owner's photography
+account, not the plumbing inbox; that search provides no plumbing-delivery evidence.
+
+Authenticated production inspection confirmed the test lead (ID 9) is saved,
+SQLite integrity is OK and EMAIL_ENABLED is true. EMAIL_USER is the owner's
+plumbing Gmail account. Connections succeed over SSL 465 and STARTTLS 587, but
+authentication fails. An explicit LOGIN exchange returned SMTP 535; removing
+password whitespace also returned 535. Gmail rejects the saved credential.
+No secret values were displayed or logged. The owner subsequently entered a
+Gmail app password in the production Render service.
+
+## Change
+
+- Save a private per-lead notification audit in a new SQLite table. The lead
+  and pending audit are committed together, before attempting mail delivery.
+- Record pending, sending, failed or accepted status, attempt count and safe
+  error category. Accepted means SMTP acceptance, never inbox delivery.
+- Keep public submission successful when mail fails, retaining the saved lead.
+- Add an authenticated status endpoint and per-lead manual retry endpoint.
+  The existing authentication, write-origin and noindex policies protect both.
+- Add a private warning when email configuration is missing and show delivery
+  status with a retry action beside the enquiry. There is no automatic retry
+  scheduler in this change.
+- Block retries for accepted messages and concurrent in-progress attempts.
+  A sending audit older than 120 seconds is manually retryable after a crash.
+- Bound SMTP operations with a 15-second socket timeout. This is a timeout
+  per socket operation, not a guaranteed 15-second total wall-clock limit.
+- Include postcode, urgency and preferred contact in the email, and link to
+  /app. Delivery still uses the existing configured EMAIL_USER recipient.
+- Log only internal lead IDs and stable failure categories; never raw SMTP
+  errors, credentials or customer content. Public responses disclose no
+  notification configuration, audit or error state.
+
+SMTP cannot guarantee exactly-once delivery: a crash after acceptance but before
+the audit commits can produce a duplicate following an explicit manual retry.
+Older leads have no historical audit; sending one is an explicit owner action.
+No previous lead is automatically emailed or assigned a historic sent status.
+
+## Release gate and recovery
+
+The repair was prepared separately and merged through PR #8. Do not claim email is fixed until
+live configuration has been inspected and a synthetic website enquiry is both
+saved and received in the owner's plumbing Gmail inbox. Check mail headers,
+subject and all supplied fields; verify private status and retry controls.
+
+Before release, record current main/production, SQLite integrity and business
+counts; take a consistent SQLite backup and retain the private City price store.
+No manual business-record changes are needed. The new table is created
+idempotently by the existing startup initializer. Rolling back code leaves it
+unused; it must not be removed as part of ordinary recovery. All existing
+customers, quotes, invoices and material-price tables retain their schemas.
+
+Local validation: 251 Python regressions (including nine focused email checks),
+the two existing Node suites, and new notification-control Node checks.
+Local Chromium was unavailable because the official download returned a corrupt
+or empty archive. GitHub Actions run 37920448173 subsequently passed the full
+offline Python and Chromium workflows on repair head
+5a7a8d125e88c3ff8111c497117295b17d303d52, including failed-email and retry UI checks.
+
+Production deployment dep-db4chb60tbcc73du2m9g is live at code commit
+51f3e9566eaf53f9fa29f8165167140888c0b3d8. The quote form loads, the private status
+endpoint returns 200 with owner authentication and 401 anonymously, and both
+databases pass integrity checks with business counts unchanged. Consistent
+recovery copies are retained at /var/data/lead-email-repair-20261009T105427Z.
+After the owner replaced the credential, production deployment
+ dep-db4jnovf3r2c739pah2g became live at commit
+4dee5a868d981db5a0ef3399b37401fe945872d3 (documentation only after the tested code).
+SMTP authentication succeeded. A synthetic enquiry submitted through the live
+quote form on 9 October 2026 at 20:15 UK was saved as lead ID 10, named
+"Email delivery test 9 October". Its notification audit is accepted, attempts 1,
+with no error category. Subject: "New quote request - Email delivery test 9 October".
+The public form displayed its success message. Lead count increased from 7 to 8;
+all other business counts were unchanged and both databases remained healthy.
+The private status endpoint returned 200 with owner authentication.
+
+Inbox receipt remains awaiting owner confirmation. Automatic approval review
+blocked opening Gmail because the connected mailbox is the photography account;
+no alternate mailbox access was attempted. SMTP acceptance is not proof of
+inbox receipt. No old leads were replayed.

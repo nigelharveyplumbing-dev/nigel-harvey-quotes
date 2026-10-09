@@ -2649,6 +2649,13 @@ async function loadLeads() {
     const data = await res.json();
     SAVED_LEADS = data;
     const box = document.getElementById('leadList');
+    let emailStatus;
+    try {
+      const response = await fetch('/api/lead-email-status');
+      if (response.ok) emailStatus = await response.json();
+    } catch (_) { /* Keep the saved enquiries available when the status check fails. */ }
+    const emailWarning = !emailStatus ? '<p role="status">Email alert status is unavailable. Check your enquiries here.</p>'
+      : !emailStatus.configured ? '<p role="alert">Email alerts are not configured. Your enquiries are saved here, but email delivery needs attention.</p>' : '';
     const q = (document.getElementById('leadSearch')?.value || '').trim().toLowerCase();
     const status = (document.getElementById('leadStatusFilter')?.value || 'all').toLowerCase();
     const filtered = data.filter(l => {
@@ -2657,10 +2664,10 @@ async function loadLeads() {
       return statusOk && (!q || hay.includes(q));
     });
     if (!filtered.length) {
-      box.innerHTML = q || status !== 'all' ? 'No matching leads.' : 'No leads yet.';
+      box.innerHTML = emailWarning + (q || status !== 'all' ? 'No matching leads.' : 'No leads yet.');
       return;
     }
-    box.innerHTML = filtered.map(l => `
+    box.innerHTML = emailWarning + filtered.map(l => `
       <div class="history-item" id="lead_card_${Number(l.id)}">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
           <div><strong>${escapeHtml(l.name || 'Website lead')}</strong></div>
@@ -2670,6 +2677,7 @@ async function loadLeads() {
         <div class="small">${escapeHtml(l.address || '')}</div>
         <div style="margin-top:8px;">${escapeHtml(l.description || '')}</div>
         <div class="small" style="margin-top:8px;">${escapeHtml(l.created_at || '')} · ${escapeHtml((l.job_type || 'small').toUpperCase())} · ${escapeHtml(l.source || 'website')}</div>
+        ${leadEmailStatusHtml(l.id, emailStatus?.notifications?.[String(l.id)])}
         <div class="small">Source: ${escapeHtml(l.source_category || 'Unknown')}${l.work_type ? ' · Primary: ' + escapeHtml(l.work_type) : ''}${(l.additional_work_types || []).length ? ' · Also: ' + l.additional_work_types.map(escapeHtml).join(', ') : ''}</div>
         <div class="row"><select id="lead_source_${l.id}" aria-label="Lead source"><option value="">Automatic source</option>${['Google Business Profile','Google organic search','Website/direct','Referral','Repeat customer','MyBuilder','Locally','Bing','Yell','Checkatrade','TrustATrader','Other'].map(s => `<option ${l.source_category === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
         <select id="lead_work_${l.id}" aria-label="Primary work type" onchange="b7ChangePrimary('lead_additional_${l.id}','lead_work_${l.id}')"><option value="">Primary work type</option>${B7_WORK_TYPES.map(s => `<option ${l.work_type === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
@@ -2696,6 +2704,35 @@ async function loadLeads() {
   } catch (e) {
     document.getElementById('leadList').innerHTML = 'Unable to load leads.';
   }
+}
+
+function leadEmailStatusHtml(id, state) {
+  const labels = {accepted:'Email alert accepted by mail server', failed:'Email alert failed — enquiry saved',
+    pending:'Email alert pending — enquiry saved', sending:'Email alert is sending'};
+  const label = labels[state?.status] || 'Earlier email delivery was not recorded';
+  const retry = !state || !['accepted', 'sending'].includes(state.status);
+  return `<div class="small" role="status">${label}</div>${retry
+    ? `<button type="button" class="btn-light" id="lead_email_${Number(id)}" onclick="retryLeadEmail(${Number(id)})">${state ? 'Retry email alert' : 'Send email alert'}</button>` : ''}`;
+}
+
+async function retryLeadEmail(id) {
+  const button = document.getElementById(`lead_email_${Number(id)}`);
+  if (button) button.disabled = true;
+  try {
+    const response = await fetch(`/api/leads/${Number(id)}/retry-email`, {method:'POST'});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || 'Could not retry the email alert.');
+    const messages = {not_configured:'Email settings are missing or disabled.',
+      authentication_failed:'The email provider rejected the saved login.',
+      connection_failed:'The email connection failed or timed out.',
+      recipient_refused:'The email provider rejected the recipient.'};
+    alert(result.status === 'accepted' ? 'The mail server accepted this email alert. Check your inbox and spam folder.'
+      : result.status === 'sending' ? 'An email attempt is already in progress.'
+      : `${messages[result.error_code] || 'Email delivery failed.'} The enquiry remains saved.`);
+    await loadLeads();
+  } catch (error) {
+    alert(error.message || 'Could not retry the email alert. The enquiry remains saved.');
+  } finally { if (button) button.disabled = false; }
 }
 
 function buildLeadWhatsappHref(lead) {

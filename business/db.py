@@ -90,6 +90,15 @@ def init_db():
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS lead_email_notifications (
+            lead_id INTEGER PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            error_code TEXT NOT NULL DEFAULT '',
+            updated_at REAL NOT NULL DEFAULT 0
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS material_price_cache (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             url TEXT NOT NULL UNIQUE,

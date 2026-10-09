@@ -110,7 +110,7 @@ class AdviceTests(unittest.TestCase):
             self.assertIn('Disallow: /',self.client.get('/robots.txt',headers=self.auth).text)
 
     def test_existing_public_content_files_and_core_assets_unchanged(self):
-        paths=['business/project_content.json','business/real_projects.py','business/public_pages.py','business/public_layout.py','business/quote_calculation.py','business/account_pricing.py','business/city_account_prices.py','business/db.py','business/invoice_store.py','business/pdf_render.py','business/quote_store.py','static/app.js','static/city_account_prices.js','static/public_analytics.js','templates/public_footer.html','templates/public_header.html']
+        paths=['business/project_content.json','business/real_projects.py','business/public_pages.py','business/public_layout.py','business/quote_calculation.py','business/account_pricing.py','business/city_account_prices.py','business/db.py','business/lead_email_store.py','business/lead_store.py','business/notifications.py','business/invoice_store.py','business/pdf_render.py','business/quote_store.py','static/app.js','static/city_account_prices.js','static/public_analytics.js','templates/public_footer.html','templates/public_header.html']
         for path in paths:
-            baseline=subprocess.check_output(['git','show','e3e390846ad9e7e5589c589362b4471fdf2ecc1a:'+path],cwd=ROOT)
+            baseline=subprocess.check_output(['git','show','bdcacc9ff02d041e4ab4c63269b5c7ebba4942a2:'+path],cwd=ROOT)
             self.assertEqual((ROOT/path).read_bytes(),baseline,path)
