@@ -7,5 +7,5 @@ stage=os.environ.get('ADVICE_TEST_STAGING')=='1'
 with disposable_app(os.environ['STAGE6_TEST_USERNAME'],os.environ['STAGE6_TEST_PASSWORD'],
                     environment='staging' if stage else '',
                     public_base_url=f'http://127.0.0.1:{port}' if stage else '',
-                    projects_as_drafts=False) as (module,_):
+                    projects_as_drafts=False, advice_as_drafts=os.environ.get('ADVICE_TEST_PUBLISHED')!='1') as (module,_):
     uvicorn.run(module.app,host='127.0.0.1',port=port,log_level='warning',access_log=False)

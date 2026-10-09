@@ -42,6 +42,11 @@ def main():
     print("Running advice with isolated staging controls", flush=True)
     result = subprocess.run(["node", str(ROOT / "tests/run_advice_browser.mjs")],
                             cwd=ROOT, env={**environment, "ADVICE_TEST_STAGING": "1"}, check=False)
+    if result.returncode:
+        return result.returncode
+    print("Running published advice desktop/mobile workflows", flush=True)
+    result = subprocess.run(["node", str(ROOT / "tests/run_advice_browser.mjs")],
+                            cwd=ROOT, env={**environment, "ADVICE_TEST_PUBLISHED": "1"}, check=False)
     return result.returncode
 
 

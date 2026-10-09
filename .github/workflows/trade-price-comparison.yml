@@ -45,6 +45,7 @@ jobs:
           EMAIL_ENABLED: '0'
           GOOGLE_PLACES_API_KEY: ''
           OPENAI_API_KEY: ''
+          ADVICE_EVIDENCE_DIR: '${{ runner.temp }}/advice-preview'
         run: |
           export CODEX_PRIMARY_RUNTIME_NODE_MODULES="$RUNNER_TEMP/comparison-browser/node_modules"
           export STAGE6_TEST_PYTHON="$(command -v python)"
@@ -53,3 +54,9 @@ jobs:
           node --check tests/run_local_browser.mjs
           node tests/test_lead_email.cjs
           python -B tests/run_stage6_local.py
+      - name: Save approved article desktop and mobile previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: approved-advice-previews
+          path: ${{ runner.temp }}/advice-preview
+          if-no-files-found: error

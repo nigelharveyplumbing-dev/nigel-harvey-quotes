@@ -23,6 +23,7 @@ await new Promise(resolve => socket.close(resolve));
 const origin = `http://127.0.0.1:${port}`;
 const credentials = { username: randomBytes(16).toString('hex'), password: randomBytes(24).toString('hex') };
 const stage = process.env.ADVICE_TEST_STAGING === '1';
+const published = process.env.ADVICE_TEST_PUBLISHED === '1';
 const server = spawn(process.env.STAGE6_TEST_PYTHON || 'python', ['-B', join(directory, 'advice_browser_server.py')], {
  cwd: dirname(directory), env: { ...process.env, STAGE6_TEST_USERNAME: credentials.username,
  STAGE6_TEST_PASSWORD: credentials.password, STAGE6_TEST_PORT: String(port) }, stdio: ['ignore','pipe','pipe'] });
@@ -39,29 +40,31 @@ try {
  browser=await chromium.launch({executablePath,headless:true,args:['--no-sandbox']});
  const anonymous=await browser.newContext();
  const path='/advice/shower-replacement-waterproofing-rebuild';
- for(const privatePath of ['/advice',path]) assert.equal((await anonymous.request.get(origin+privatePath)).status(),stage?401:404);
+ for(const privatePath of ['/advice',path]) assert.equal((await anonymous.request.get(origin+privatePath)).status(),stage?401:published?200:404);
  assert.equal((await anonymous.request.get(origin+'/app')).status(),401);
  const context=await browser.newContext({httpCredentials:credentials,extraHTTPHeaders:{Authorization:`Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`}});
- await context.addInitScript(()=>localStorage.setItem('nhp_analytics_choice_v1','accepted'));
+ await context.addInitScript(()=>localStorage.setItem('nhp_analytics_choice_v1','rejected'));
  await context.route('**/*',route=>{if(new URL(route.request().url()).origin===origin)return route.continue();diagnostics.externalRequests.push(route.request().url());return route.abort();});
  const page=await context.newPage();page.on('pageerror',e=>diagnostics.pageErrors.push(e.message));
  page.on('response',r=>{if(r.status()>=400)diagnostics.badResponses.push({url:r.url(),status:r.status()});});
- const evidence=process.env.ADVICE_EVIDENCE_DIR?resolve(process.env.ADVICE_EVIDENCE_DIR):null;
+ const evidence=published && process.env.ADVICE_EVIDENCE_DIR?resolve(process.env.ADVICE_EVIDENCE_DIR):null;
  if(evidence)mkdirSync(evidence,{recursive:true});
  for(const [name,width,height] of [['desktop',1440,1000],['mobile',390,844]]) {
   await page.setViewportSize({width,height});const response=await page.goto(origin+path);assert.equal(response.status(),200);
-  await page.waitForLoadState('networkidle');assert.match(response.headers()['x-robots-tag'],/noindex/);
-  assert.equal(response.headers()['cache-control'],'private, no-store');
+  await page.waitForLoadState('networkidle');
+  if(stage || !published) {assert.match(response.headers()['x-robots-tag'],/noindex/);assert.equal(response.headers()['cache-control'],'private, no-store');}
+  else {assert(!response.headers()['x-robots-tag']);assert.equal(response.headers()['cache-control'],'no-cache');}
   assert.equal(await page.locator('main h1').count(),1);
   assert.match(await page.locator('main h1').textContent(),/complete shower replacement/);
-  assert.equal(await page.locator('#public-analytics').getAttribute('data-send-to-google'),'false');
+  assert.equal(await page.locator('#public-analytics').getAttribute('data-send-to-google'),stage || !published?'false':'true');
   const layout=await page.evaluate(()=>({width:innerWidth,document:document.documentElement.scrollWidth,h2:document.querySelectorAll('main h2').length}));
   assert(layout.document<=width);diagnostics.layouts.push({name,...layout,overflow:false});
   const canonical=await page.locator('link[rel=canonical]').getAttribute('href');assert.equal(canonical,(stage?origin:'https://www.nigelharveyplumbing.co.uk')+path);
   for(const link of await page.locator('main a[href^="/"]').all()) {
    const href=(await link.getAttribute('href')).split('#')[0];assert.equal((await context.request.get(origin+href)).status(),200,href);
   }
-  const schema=JSON.parse(await page.locator('script[type="application/ld+json"]').textContent());const article=schema['@graph'].find(x=>x['@type']==='Article');assert(!article.datePublished);
+  const schema=JSON.parse(await page.locator('script[type="application/ld+json"]').textContent());const article=schema['@graph'].find(x=>x['@type']==='Article');assert.equal(Boolean(article.datePublished),published);
+  assert.equal(await page.locator('main img').count(),0);
   await page.evaluate(()=>scrollTo(0,0));
   if(evidence) {
    await page.screenshot({path:join(evidence,`advice-${name}-top.png`)});
@@ -72,7 +75,7 @@ try {
    }
   }
  }
- assert(!(await(await context.request.get(origin+'/sitemap.xml')).text()).includes('/advice'));
+ assert.equal((await(await context.request.get(origin+'/sitemap.xml')).text()).includes('/advice'),published);
  assert.equal((await context.request.get(origin+'/advice')).status(),200);
  assert.equal((await context.request.get(origin+'/projects/ensuite-renovation-merrow-guildford')).status(),200);
  assert.deepEqual(diagnostics.pageErrors,[]);assert.deepEqual(diagnostics.externalRequests,[]);assert.deepEqual(diagnostics.badResponses,[]);

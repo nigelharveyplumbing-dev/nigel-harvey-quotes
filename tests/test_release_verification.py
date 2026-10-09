@@ -46,7 +46,7 @@ class ReleaseVerificationTests(unittest.TestCase):
                 "health": {"db_exists": True, "sqlite_integrity": "ok",
                            "var_data_is_mount": True, "counts": counts, "backup_count": 0},
                 "documents": {"quote_pdf": True}, "anonymous_statuses": {"/app": 401},
-                "sitemap_status": 200, "sitemap_count": 72, "sitemap_unique": 72,
+                "sitemap_status": 200, "sitemap_count": 76, "sitemap_unique": 76,
                 "crawl_failures": [], "duplicate_titles": [], "duplicate_descriptions": [],
                 "duplicate_h1s": [], "robots_status": 200,
                 "robots": ("User-agent: *\nDisallow: /\n" if environment == "staging" else

@@ -346,7 +346,7 @@ class BaselineTests(unittest.TestCase):
             for method, template in sorted(PUBLIC_WEBSITE_ROUTES):
                 if method == "GET":
                     with self.subTest(path=template):
-                        expected = 404 if template in {"/advice", "/advice/{article_slug}", "/projects/{project_slug}", "/project-images/{project_slug}/{filename}"} else 200
+                        expected = 404 if template in {"/advice/{article_slug}", "/projects/{project_slug}", "/project-images/{project_slug}/{filename}"} else 200
                         self.assertEqual(client.get(paths.get(template, template)).status_code, expected)
             lead = client.post("/api/leads", json={
                 "name": "Public Test", "phone": "07000000000", "description": "Enquiry",
@@ -389,8 +389,9 @@ class BaselineTests(unittest.TestCase):
                     with self.subTest(path=path):
                         response = client.get(path)
                         self.assertEqual(response.status_code, 200)
-                        # Only the deliberate project-discovery footer link is additive.
+                        # Only the approved project and advice discovery links are additive.
                         unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", response.text)
+                        unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
                         self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
     def test_active_homepage_open_app_navigation(self):
@@ -1295,6 +1296,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             with self.subTest(page=name):
                 # Freeze every existing byte outside the additive discovery link.
                 unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", rendered[name])
+                unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
                 self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
     def test_stage7_merchant_parsing_and_matching_offline(self):

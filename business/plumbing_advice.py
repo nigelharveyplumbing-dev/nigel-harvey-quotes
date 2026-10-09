@@ -124,9 +124,9 @@ def render_article(a, *, absolute_url, request=None, staging=False):
     content += f'<article class="wrap advice-story"><p class="kicker">Plumbing advice</p><h1>{escape(a.title)}</h1><div class="advice-answer"><p>{escape(a.summary)}</p></div><p class="project-byline">By <a href="/#about">Nigel Harvey</a> · Nigel Harvey Plumbing<br>{escape(date_label)}</p><p>{escape(a.author_note)}</p>'
     for s in a.sections:
         content += '<section><h2>' + escape(s.heading) + '</h2>' + ''.join('<p>' + escape(p) + '</p>' for p in s.paragraphs) + '</section>'
-    content += '<section class="advice-safety"><h2>Safety and specialist work</h2>' + ''.join('<p>' + escape(p) + '</p>' for p in a.safety) + '</section>'
+    content += '<section class="advice-safety"><h2>Safety considerations</h2>' + ''.join('<p>' + escape(p) + '</p>' for p in a.safety) + '</section>'
     if a.faqs:
-        content += '<section><h2>Common questions</h2>' + ''.join('<h3>' + escape(f.question) + '</h3><p>' + escape(f.answer) + '</p>' for f in a.faqs) + '</section>'
+        content += '<section><h2>Homeowner questions</h2>' + ''.join('<h3>' + escape(f.question) + '</h3><p>' + escape(f.answer) + '</p>' for f in a.faqs) + '</section>'
     projects = [p for p in real_projects.visible_projects() if p.slug in a.project_slugs]
     if projects:
         content += '<section><h2>See the work behind the advice</h2><p>These are completed projects, with genuine photographs and the recorded work.</p><ul>' + ''.join(f'<li><a href="{p.path}">{escape(p.title)}</a></li>' for p in projects) + '</ul></section>'
