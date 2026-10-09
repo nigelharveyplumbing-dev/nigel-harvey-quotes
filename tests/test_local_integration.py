@@ -771,7 +771,7 @@ vm.runInContext(code, context);
                 raw = smtp.return_value.__enter__.return_value.sendmail.call_args.args[2]
             lead_msg = message_from_string(raw)
             lead_plain = next(p for p in lead_msg.walk() if p.get_content_type() == "text/plain")
-            self.assertIn("Open app: " + stage + "\n", lead_plain.get_payload(decode=True).decode())
+            self.assertIn("Open app: " + stage + "/app\n", lead_plain.get_payload(decode=True).decode())
 
     def test_staging_origin_configuration_fails_closed(self):
         m = self.app_module
@@ -850,7 +850,7 @@ class StagingAccessTests(unittest.TestCase):
         routes = [(method, route) for route in m.app.routes
                   if route.path not in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
                   for method in getattr(route, "methods", [])]
-        self.assertEqual(len(routes), 87)
+        self.assertEqual(len(routes), 89)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "appointment_id": "1", "job_id": "1",
                       "material_id": "1", "photo_id": "1", "filename": "sample.db",

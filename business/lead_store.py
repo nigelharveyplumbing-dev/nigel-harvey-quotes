@@ -82,6 +82,7 @@ def save_lead(data: LeadRequest, now_uk, format_dt):
         ),
     )
     lead_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("INSERT INTO lead_email_notifications (lead_id) VALUES (?)", (lead_id,))
     conn.commit()
     conn.close()
     return get_lead_by_id(lead_id)
@@ -202,6 +203,7 @@ def delete_lead_by_id(lead_id: int, confirmed_site_visits: int | None = None):
                      (lead_id,))
         customer_id = conn.execute("SELECT customer_id FROM leads WHERE id=?", (lead_id,)).fetchone()[0]
         conn.execute("DELETE FROM leads WHERE id=?", (lead_id,))
+        conn.execute("DELETE FROM lead_email_notifications WHERE lead_id=?", (lead_id,))
         if info["customer_contact_will_be_deleted"]:
             conn.execute("DELETE FROM customers WHERE id=?", (customer_id,))
         conn.commit()

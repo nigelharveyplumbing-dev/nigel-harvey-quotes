@@ -295,5 +295,7 @@
   ["POST", "/api/city-account-prices"],
   ["GET", "/projects"],
   ["GET", "/projects/{project_slug}"],
-  ["GET", "/project-images/{project_slug}/{filename}"]
+  ["GET", "/project-images/{project_slug}/{filename}"],
+  ["GET", "/api/lead-email-status"],
+  ["POST", "/api/leads/{lead_id}/retry-email"]
 ]
