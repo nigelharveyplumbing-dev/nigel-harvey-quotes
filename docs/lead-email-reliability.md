@@ -4,16 +4,16 @@ The production server accepted the owner's test POST /api/leads at 10:08:30 UTC
 on 9 October 2026. Production was e3e390846ad9e7e5589c589362b4471fdf2ecc1a,
 deployment dep-db40e8ub7d7c739t25qg. The handler saves the lead before calling
 SMTP. Existing code discards disabled configuration and every SMTP exception,
-so the success response proves lead storage, not mail delivery. No matching
-notification was found in the connected Gmail mailbox, including spam.
+so the success response proves lead storage, not mail delivery. The connected Gmail mailbox was later verified as the owner's photography
+account, not the plumbing inbox; that search provides no plumbing-delivery evidence.
 
 Authenticated production inspection confirmed the test lead (ID 9) is saved,
 SQLite integrity is OK and EMAIL_ENABLED is true. EMAIL_USER is the owner's
 plumbing Gmail account. Connections succeed over SSL 465 and STARTTLS 587, but
 authentication fails. An explicit LOGIN exchange returned SMTP 535; removing
 password whitespace also returned 535. Gmail rejects the saved credential.
-No secret values were displayed or logged. A valid Gmail app password must be
-entered by the owner before live inbox delivery can be verified.
+No secret values were displayed or logged. The owner subsequently entered a
+Gmail app password in the production Render service.
 
 ## Change
 
@@ -68,4 +68,18 @@ Production deployment dep-db4chb60tbcc73du2m9g is live at code commit
 endpoint returns 200 with owner authentication and 401 anonymously, and both
 databases pass integrity checks with business counts unchanged. Consistent
 recovery copies are retained at /var/data/lead-email-repair-20261009T105427Z.
-Only credential replacement and live inbox delivery validation remain outstanding.
+After the owner replaced the credential, production deployment
+ dep-db4jnovf3r2c739pah2g became live at commit
+4dee5a868d981db5a0ef3399b37401fe945872d3 (documentation only after the tested code).
+SMTP authentication succeeded. A synthetic enquiry submitted through the live
+quote form on 9 October 2026 at 20:15 UK was saved as lead ID 10, named
+"Email delivery test 9 October". Its notification audit is accepted, attempts 1,
+with no error category. Subject: "New quote request - Email delivery test 9 October".
+The public form displayed its success message. Lead count increased from 7 to 8;
+all other business counts were unchanged and both databases remained healthy.
+The private status endpoint returned 200 with owner authentication.
+
+Inbox receipt remains awaiting owner confirmation. Automatic approval review
+blocked opening Gmail because the connected mailbox is the photography account;
+no alternate mailbox access was attempted. SMTP acceptance is not proof of
+inbox receipt. No old leads were replayed.
