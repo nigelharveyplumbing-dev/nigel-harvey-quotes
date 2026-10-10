@@ -587,6 +587,9 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         "description": intro,
     }, ensure_ascii=False)
 
+    # This page uses the shared Plumbing header without a second hero logo.
+    hero_logo_html = "" if (service_slug, area_slug) == ("leak-repair", "farnham") else f"<div>{logo_html}</div>"
+
     return render_shared_public_page(f"""<!doctype html>
 <html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(page_title)}</title>
@@ -600,7 +603,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
 <body>
 <div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(title)} in {escape(area)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
 <main>
-<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Local plumbing help in {escape(area)}</div><h1>{escape(heading)}</h1><p class="lead">{escape(intro)}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
+<div class="wrap hero"><div class="hero-card">{hero_logo_html}<div class="eyebrow">Local plumbing help in {escape(area)}</div><h1>{escape(heading)}</h1><p class="lead">{escape(intro)}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
 
 <div class="wrap section"><h2>{escape(title)} Services in {escape(area)}</h2><p>If you are looking for {escape(service["service"])} in {escape(area)}, Nigel provides practical help for local homes, landlords and small businesses.</p><ul class="list">{problem_items}</ul></div>
 {priority_html}

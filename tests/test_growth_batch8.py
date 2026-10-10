@@ -71,6 +71,20 @@ class GrowthBatch8Tests(unittest.TestCase):
         self.assertEqual(self.client.get('/app').status_code,401)
         self.assertEqual(self.client.get('/api/customers').status_code,401)
 
+    def test_farnham_uses_shared_branding_without_legacy_hero_logo(self):
+        for path in ['/', '/plumber-guildford', '/plumber-woking', '/leak-repair-farnham']:
+            with self.subTest(path=path):
+                response=self.client.get(path)
+                self.assertEqual(response.status_code,200)
+                page=BeautifulSoup(response.text,'html.parser')
+                self.assertIn('Nigel Harvey',page.select_one('header .brand').get_text())
+                self.assertIn('PLUMBING',page.select_one('header .brand').get_text())
+                self.assertEqual(len(page.select('main img.logo')),0)
+        # The approved correction must not remove logos from other service pages.
+        for path in ['/leak-repair-camberley', '/bathroom-plumbing-farnham']:
+            page=BeautifulSoup(self.client.get(path).text,'html.parser')
+            self.assertEqual(len(page.select('.hero-card img.logo')),1)
+
     def test_original_published_article_record_and_project_assets_preserved(self):
         original=json.loads(subprocess.check_output(['git','show',BASE+':business/advice_content.json'],cwd=ROOT))
         current=json.loads((ROOT/'business/advice_content.json').read_text())

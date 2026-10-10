@@ -117,6 +117,7 @@ try{
    assert(layout.document<=width,`${name} ${device} overflow`);diagnostics.layouts.push({name,device,...layout});
    const brand=await page.locator('header .brand').evaluate(b=>({text:b.textContent,width:b.getBoundingClientRect().width}));
    assert(brand.text.includes('Nigel Harvey') && brand.width<=width,'Existing public wordmark must remain readable');
+   if(name==='farnham-leak')assert.equal(await page.locator('main img.logo').count(),0,'Farnham must use shared header branding without the legacy hero logo');
    diagnostics.layouts.at(-1).branding=brand.text.replace(/\s+/g,' ').trim();
    });
    const imageNodes=page.locator('img');
