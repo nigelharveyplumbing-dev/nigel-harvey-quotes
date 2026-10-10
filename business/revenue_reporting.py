@@ -3,6 +3,27 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from business.enquiry_attribution import origin
 from business.payment_store import pence
+import csv
+import io
+
+# Deliberately fixed columns: no record IDs, free text or customer fields.
+EXPORT_COLUMNS = ('enquiries','quoted_enquiries','accepted_enquiries','completed_enquiries',
+    'quotes','won_quotes','lost_quotes','quote_win_percent','won_enquiries','lost_enquiries',
+    'decided_enquiries','enquiry_win_percent','cash_pence','cohort_paid_pence',
+    'legacy_undated_pence','outstanding_pence','invoiced_pence')
+
+def export_csv(data):
+    output = io.StringIO(newline='')
+    writer = csv.writer(output)
+    writer.writerow(('source','period_start','period_end','as_of','currency',*EXPORT_COLUMNS))
+    from business.growth_tracking import SOURCES
+    for source, row in sorted(data['by_source'].items()):
+        # Source is a controlled taxonomy, never a customer-entered CSV cell.
+        if source not in SOURCES:
+            raise ValueError('Unrecognised reporting source')
+        writer.writerow((source,data['start'],data['end'],data['as_of'],'GBP',
+                         *(row.get(key) for key in EXPORT_COLUMNS)))
+    return output.getvalue()
 
 def report(conn, start, end):
     try:
@@ -22,6 +43,7 @@ def report(conn, start, end):
     def bucket(oid):
         source = origins.get(oid,{}).get('source','Unknown')
         return rows.setdefault(source,{'enquiries':0,'quoted_enquiries':0,'accepted_enquiries':0,'completed_enquiries':0,
+            'won_enquiries':0,'lost_enquiries':0,'decided_enquiries':0,
             'quotes':0,'won_quotes':0,'lost_quotes':0,'cash_pence':0,'cohort_paid_pence':0,
             'legacy_undated_pence':0,'outstanding_pence':0,'invoiced_pence':0})
     cohort = {l['id'] for l in leads if start <= (l['created_at_sort'] or '')[:10] <= end and l['origin_id'] not in excluded_tests}
@@ -36,6 +58,11 @@ def report(conn, start, end):
         target['quoted_enquiries']+=any(q['lead_id']==lead['id'] for q in quotes)
         target['accepted_enquiries']+=lead['origin_id'] in accepted_origins
         target['completed_enquiries']+=lead['origin_id'] in completed_origins
+        decisions = {q['status'] for q in quotes if q['lead_id']==lead['id']
+                     and q['id'] not in superseded and q['status'] in ('won','lost')}
+        target['won_enquiries'] += 'won' in decisions
+        target['lost_enquiries'] += bool(decisions) and 'won' not in decisions
+        target['decided_enquiries'] += bool(decisions)
     for q in quotes:
         if q['origin_id'] in excluded_tests or q['id'] in superseded:
             continue
@@ -65,10 +92,13 @@ def report(conn, start, end):
         target['quoted_percent']=round(100*target['quoted_enquiries']/n,1) if n else None
         target['accepted_percent']=round(100*target['accepted_enquiries']/n,1) if n else None
         target['quote_win_percent']=round(100*target['won_quotes']/decisions,1) if decisions else None
+        target['enquiry_win_percent']=round(100*target['won_enquiries']/target['decided_enquiries'],1) if target['decided_enquiries'] else None
     return {'start':start,'end':end,'currency':'GBP','as_of':datetime.now(ZoneInfo('Europe/London')).date().isoformat(),
             'by_source':rows,'totals':{k:sum(v[k] for v in rows.values()) for k in next(iter(rows.values()),{}) if not k.endswith('percent')},
             'synthetic_origins_excluded':len(excluded_tests),
             'definitions':{'cash':'Dated confirmed receipts minus refunds/reversal effects within selected UK receipt dates',
+                'quote_win':'Current won quotes / current won + lost quotes; superseded revisions excluded',
+                'enquiry_win':'Distinct cohort enquiries with a current won quote / distinct cohort enquiries with any current won or lost quote; any win takes precedence; standalone quotes, superseded revisions and synthetic tests excluded',
                 'cohort':'Distinct enquiries created in selected dates; later linked recorded payments shown separately',
                 'legacy':'Undated historical opening balances; excluded from period cash',
                 'outstanding':'Current all-time invoice balance, not filtered by receipt dates',

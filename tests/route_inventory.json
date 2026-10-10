@@ -410,5 +410,9 @@
   [
     "PUT",
     "/api/quotes/{quote_id}/outcome"
+  ],
+  [
+    "GET",
+    "/api/revenue/export"
   ]
 ]

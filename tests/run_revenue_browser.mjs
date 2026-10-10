@@ -75,12 +75,47 @@ try {
   const source=await context.request.get(origin+'/api/revenue/origins/'+lead.origin_id);assert.equal(source.headers()['cache-control'],'private, no-store');assert(source.headers()['x-robots-tag'].includes('noindex'));
   assert.equal((await context.request.get(origin+'/api/invoices/'+invoice.id+'/pdf')).status(),200);assert.equal((await context.request.get(origin+'/api/quotes/'+quote.id+'/pdf')).status(),200);
   const balances=await (await context.request.get(origin+'/api/revenue/report?start=2020-01-01&end=2026-10-10')).json();assert.equal(balances.synthetic_origins_excluded,label==='desktop'?1:2);assert.equal(balances.totals.cash_pence || 0,0);
+  // Extra synthetic fixtures exercise the three completion items through owner UI.
+  const seed=await (await context.request.post(origin+'/api/quick-add/confirm',{data:{idempotency_key:randomBytes(16).toString('hex'),name:'PRIVATE-EXPORT-NAME',phone:'07700900001',description:'PRIVATE-EXPORT-JOB',contact_channel:'Phone',record_kind:'genuine'}})).json();
+  async function decisionQuote(status) {
+    const item=await (await context.request.post(origin+'/api/quote',{data:{quote_type:'small',lead_id:seed.lead.id,customer_name:'PRIVATE-EXPORT-NAME',customer_phone:'07700900001',customer_address:'PRIVATE-EXPORT-ADDRESS',job_description:'PRIVATE-EXPORT-JOB',labour_cost:100,submission_key:randomBytes(16).toString('hex')}})).json();
+    assert(item.id);
+    const changed=await context.request.post(`${origin}/api/revenue/workflow/quote/${item.id}`,{data:{status,reason:'Synthetic owner decision',operation_key:randomBytes(16).toString('hex')}});assert.equal(changed.status(),200);
+    return item;
+  }
+  const previous=await decisionQuote('won'),replacement=await decisionQuote('lost');
+  await page.getByRole('button',{name:'Source & revenue',exact:true}).click();
+  await page.locator('#revenueDashboard').getByText('Unknown',{exact:true}).waitFor();
+  const sourceRow=page.locator('#revenueDashboard tbody tr').filter({hasText:'Unknown'});
+  assert.equal(await sourceRow.locator('td').nth(5).innerText(),label==='desktop'?'1 / 1 (50%)':'1 / 2 (33.3%)');
+  assert.equal(await sourceRow.locator('td').nth(6).innerText(),label==='desktop'?'1 / 0 (100%)':'1 / 1 (50%)');
+  await page.locator('summary').filter({hasText:'Link genuine quote revisions'}).click();
+  await page.locator('#revenueRevisionCurrent').selectOption(String(replacement.id));
+  await page.locator('#revenueRevisionPrevious').selectOption(String(previous.id));
+  await page.locator('#revenueRevisionReason').fill('Owner explicitly confirmed same work, revised price');
+  await page.getByRole('button',{name:'Confirm revision link',exact:true}).click();
+  await page.locator('#revenueStatus').getByText('Confirm these are genuine revisions of the same work',{exact:true}).waitFor();
+  await page.locator('#revenueRevisionConfirmed').check();
+  page.removeAllListeners('dialog');page.once('dialog',d=>d.dismiss());
+  await page.getByRole('button',{name:'Confirm revision link',exact:true}).click();
+  assert.equal((await (await context.request.get(`${origin}/api/revenue/workflow/quote/${replacement.id}`)).json()).history.filter(x=>x.event_kind==='quote_revision').length,0);
+  page.on('dialog',d=>d.type()==='confirm'?d.accept():d.dismiss());
+  const linked=page.waitForResponse(r=>r.url()===`${origin}/api/revenue/quotes/${replacement.id}/revision`);
+  await page.getByRole('button',{name:'Confirm revision link',exact:true}).click();assert.equal((await linked).status(),200);
+  await page.locator('#revenueWorkflowHistory').getByText('Explicit revision of quote #'+previous.id,{exact:false}).waitFor();
+  assert.equal(await page.locator('#revenueRevisionConfirmed').isChecked(),false);
+  assert.equal(await sourceRow.locator('td').nth(6).innerText(),label==='desktop'?'0 / 1 (0%)':'0 / 2 (0%)');
+  const downloadReady=page.waitForEvent('download');await page.getByRole('button',{name:'Download aggregate CSV',exact:true}).click();
+  const download=await downloadReady;assert.equal(download.suggestedFilename(),'source-revenue-aggregate.csv');
+  const stream=await download.createReadStream();let csv='';for await (const chunk of stream)csv+=chunk.toString();
+  assert(csv.startsWith('source,period_start,period_end,as_of,currency,'));assert(csv.includes('enquiry_win_percent'));assert(csv.includes('Unknown,'));
+  for(const forbidden of ['PRIVATE-EXPORT','07700900001','Synthetic Revenue','payment_reference','origin_id'])assert(!csv.includes(forbidden),forbidden);
   const publicDoc=await context.request.get(origin+'/sitemap.xml');assert(!(await publicDoc.text()).includes('/api/revenue'));assert.equal((await context.request.get(origin+'/advice/radiators-cold-heating-unevenly')).status(),404);
   assert.deepEqual(jsErrors,[]);const layout=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));assert(layout.scroll<=width+1,JSON.stringify(layout));evidence.layouts.push({label,...layout});
   await page.goto(origin+'/request-quote');await page.locator('#analytics-settings').click();await page.locator('#analytics-consent [data-choice="rejected"]').click();await page.waitForLoadState('domcontentloaded');
   assert.equal(await page.evaluate(()=>sessionStorage.getItem('nhp_attribution_session_v1')),null);const contextData=await page.evaluate(()=>window.nhpAttribution.context());assert.deepEqual(contextData,{landing_page:'/request-quote'});
   await context.close();console.log('Revenue browser: '+label+' PASS');
  }
- assert.deepEqual(evidence.externalRequests,[]);evidence.checks=['real enquiry form','consented first entry preserved across pages','source inherited through quote and invoice','synthetic correction/history/exclusion','quote outcome and accepted/completed job history','dated partial/full receipts, refund, reversal and correction reconciled','private no-store/noindex','invoice/quote PDFs','consent withdrawal clears attribution','desktop/mobile overflow','no external requests'];
+ assert.deepEqual(evidence.externalRequests,[]);evidence.checks=['real enquiry form','consented first entry preserved across pages','source inherited through quote and invoice','synthetic correction/history/exclusion','quote outcome and accepted/completed job history','dated partial/full receipts, refund, reversal and correction reconciled','private no-store/noindex','invoice/quote PDFs','consent withdrawal clears attribution','desktop/mobile overflow','aggregate CSV download without private fields','distinct enquiry versus quote rates','explicit revision confirmation, cancellation and append-only history','no external requests'];
  writeFileSync(join(output,'revenue-browser-evidence.json'),JSON.stringify(evidence,null,2));
 }finally{clearTimeout(deadline);await Promise.allSettled([browser?.close(),server?.close(),stopServer(child)]);if(server?.process()?.exitCode===null)await stopServer(server.process());}

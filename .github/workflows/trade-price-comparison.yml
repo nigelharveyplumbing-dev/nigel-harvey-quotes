@@ -56,6 +56,9 @@ jobs:
           node --check static/app.js
           node --check static/city_account_prices.js
           node --check tests/run_local_browser.mjs
+          node tests/test_material_selection.cjs
+          node tests/test_trade_comparison.cjs
+          node --test tests/test_batch8_browser_support.mjs
           node tests/test_lead_email.cjs
           python -B tests/run_stage6_local.py
       - name: Save approved article desktop and mobile previews

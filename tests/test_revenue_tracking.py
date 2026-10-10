@@ -148,7 +148,7 @@ class RevenueTests(unittest.TestCase):
         self.assertEqual(fixed['invoice']['amount_paid'],40);self.assertEqual(fixed['undated_balance_pence'],0);self.assertEqual(self.report()['totals']['cash_pence'],4000)
     def test_multiple_quotes_invoices_jobs_and_milestones(self):
         self.activate();l=self.lead('Referral');q=self.quote(l);q2=self.quote(l)
-        self.post(f"/api/revenue/quotes/{q2['id']}/revision",{'supersedes_quote_id':q['id']})
+        self.post(f"/api/revenue/quotes/{q2['id']}/revision",{'supersedes_quote_id':q['id'],'confirmed_same_scope':True,'reason':'Owner confirmed same work revised','operation_key':self.key()})
         key=self.key();self.post(f"/api/revenue/workflow/quote/{q2['id']}",{'status':'won','operation_key':key});self.post(f"/api/revenue/workflow/quote/{q2['id']}",{'status':'won','operation_key':key})
         job=self.post('/api/jobs',{'quote_id':q2['id'],'lead_id':l['id'],'title':'Synthetic local job'})
         self.post(f"/api/revenue/workflow/job/{job['id']}",{'status':'accepted','operation_key':self.key()})

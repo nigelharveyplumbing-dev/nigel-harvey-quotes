@@ -1999,7 +1999,7 @@ def api_dashboard():
 
 # Tracking is opt-in by an explicit schema migration; this never migrates at startup.
 from business import enquiry_attribution, payment_store, workflow_history, revenue_reporting
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, StrictBool
 
 class RevenuePaymentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -2039,7 +2039,10 @@ class RevenueInteractionRequest(BaseModel):
 
 class RevenueRevisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    supersedes_quote_id: int
+    supersedes_quote_id: int = Field(gt=0)
+    confirmed_same_scope: StrictBool
+    reason: str = Field(min_length=1,max_length=500)
+    operation_key: str = Field(min_length=16,max_length=128)
 
 
 def revenue_call(function, *, write=False):
@@ -2071,6 +2074,13 @@ def api_revenue_options():
 @app.get("/api/revenue/report")
 def api_revenue_report(start: str, end: str):
     return revenue_call(lambda c: revenue_reporting.report(c,start,end))
+
+@app.get("/api/revenue/export")
+def api_revenue_export(start: str, end: str):
+    from fastapi.responses import Response
+    data = revenue_call(lambda c: revenue_reporting.report(c,start,end))
+    return Response(revenue_reporting.export_csv(data),media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition":'attachment; filename="source-revenue-aggregate.csv"'})
 
 @app.get("/api/revenue/review")
 def api_revenue_review():
@@ -2126,16 +2136,8 @@ def api_revenue_stage_invoice(quote_id: int, data: RevenueInvoiceRequest):
 
 @app.post("/api/revenue/quotes/{quote_id}/revision")
 def api_revenue_revision(quote_id: int, data: RevenueRevisionRequest):
-    def link(c):
-        current=c.execute("SELECT origin_id,supersedes_quote_id FROM quotes WHERE id=?",(quote_id,)).fetchone()
-        previous=c.execute("SELECT origin_id FROM quotes WHERE id=?",(data.supersedes_quote_id,)).fetchone()
-        if not current or not previous or quote_id <= data.supersedes_quote_id or current[0]!=previous[0]:
-            raise ValueError("Choose an earlier quote for the same original enquiry")
-        if current[1] not in (None,data.supersedes_quote_id):
-            raise ValueError("Revision relationship has already been recorded")
-        c.execute("UPDATE quotes SET supersedes_quote_id=? WHERE id=?",(data.supersedes_quote_id,quote_id))
-        return {"saved":True}
-    return revenue_call(link,write=True)
+    from business.quote_revisions import link
+    return revenue_call(lambda c: link(c,quote_id,data.model_dump(),APP_USERNAME),write=True)
 
 
 @app.get("/api/business-performance")
