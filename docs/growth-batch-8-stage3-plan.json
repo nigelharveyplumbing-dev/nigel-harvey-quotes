@@ -1,0 +1,19 @@
+{
+  "phase": "Growth Batch 8 Stage 3: isolated validation only",
+  "approved_start": "8b95b04e090af2cf43f4d092f90fe40a4f0afcec",
+  "production_baseline": "63d2505c8d566f63d10b84414d10ed7aec713cab",
+  "feature_branch": "growth/website-batch-8",
+  "article": {
+    "status": "private owner-review draft; no publication approval",
+    "storage": "Complete wording remains in an owner-controlled file outside public GitHub and CI artifacts",
+    "refinements": ["Normal flow/return temperature variation versus unusually cold areas", "Construction, operating temperatures, lower-temperature heating and room heat-loss assessment"],
+    "safety": "Existing safety and gas-work restrictions preserved",
+    "validation": "BATCH8_REQUIRE_PRIVATE_DRAFT=1 requires the private catalogue. Public CI rejects any supplied private catalogue. Compare every visible paragraph against that file and record only its hash in diagnostic summaries."
+  },
+  "preview": "Loopback-only disposable application storage; random test credentials; outbound requests and SMTP blocked",
+  "browser": "Vendor-installed Chromium obtained through existing CI without sending owner wording; temporary export step removed from final tree",
+  "public_pages": ["/", "/plumber-guildford", "/plumber-woking", "/leak-repair-farnham"],
+  "logo": "Existing asset and branding preserved. Assert image decoding and visible wordmark before capture; record any failure rather than masking it.",
+  "ga4": "Read scope remains unavailable; tracking and consent unchanged",
+  "boundary": "No merge, Render deployment, environment or database changes, GBP actions, indexing requests or article publication. Separate production approval and fresh release safeguards required."
+}

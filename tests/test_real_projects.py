@@ -176,7 +176,11 @@ class RealProjectTests(unittest.TestCase):
                 page = self.client.get(link.path)
                 self.assertEqual(page.status_code, 200)
                 self.assertIn(p.path, page.text)
-            self.assertNotIn(p.path, self.client.get("/plumber-woking").text)
+            # Batch 8 permits a nearby example, explicitly labelled as Merrow,
+            # without claiming this project took place in Woking.
+            woking = self.client.get("/plumber-woking").text
+            self.assertIn(p.path, woking)
+            self.assertIn("project took place in Merrow, Guildford", woking)
             self.assertNotIn(p.path, self.client.get("/leak-repair-guildford").text)
             for a in soup.select('main a[href^="/"]'):
                 self.assertEqual(self.client.get(a["href"]).status_code, 200, a["href"])

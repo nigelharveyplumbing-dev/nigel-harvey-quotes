@@ -145,6 +145,12 @@ SERVICE_PAGES = [
 ]
 
 PRIMARY_LOCATION_NOTES = {
+    "woking": {
+        "intro": "For a leaking fitting, toilet problem or planned bathroom plumbing in Woking, describe the job and send the postcode. You deal directly with Nigel, who is based in Guildford and can confirm coverage and the next step before a visit is arranged.",
+        "detail": "Say which fitting is affected, when the problem occurs and whether water is still escaping. For planned work, explain which fittings are changing and whether the layout stays the same. Share photographs of safely visible areas if useful; do not remove fittings to take them.",
+        "nearby": "Guildford, Godalming and nearby Surrey areas",
+        "related": ("/leak-repair-woking", "Leak repair in Woking"),
+    },
     "aldershot": {
         "intro": "For a leaking pipe, running toilet or planned bathroom plumbing in Aldershot, send Nigel a short description and the job postcode. He is based in Guildford and can confirm coverage and the next step before you arrange work.",
         "detail": "Tell Nigel which fixture is affected, whether water is still escaping and whether you can safely isolate it. Photos can help with a tap, toilet or visible pipework problem; use WhatsApp after making contact if you have them.",
@@ -173,6 +179,86 @@ PRIMARY_LOCATION_NOTES = {
         "nearby": "Aldershot, Camberley and nearby areas",
     },
 }
+
+
+def add_batch8_context(html: str, path: str) -> str:
+    """A small, reviewed set of contextual sections; never link private drafts."""
+    if path not in {"/", "/plumber-guildford", "/plumber-woking", "/leak-repair-farnham"}:
+        return html
+    from business import plumbing_advice, real_projects
+
+    project_path = "/projects/ensuite-renovation-merrow-guildford"
+    advice_path = "/advice/shower-replacement-waterproofing-rebuild"
+    published = {p.path for p in real_projects.visible_projects()}
+    published.update(a.path for a in plumbing_advice.visible_articles())
+    proof = []
+    if project_path in published:
+        proof.append('<a href="' + project_path + '">the completed Merrow ensuite project</a>')
+    if advice_path in published:
+        proof.append('<a href="' + advice_path + '">the shower replacement and waterproofing guide</a>')
+    proof_html = ('<p>For a real example of preparation and finished work, see ' +
+                  ' and '.join(proof) + '. The project took place in Merrow, Guildford.</p>') if proof else ''
+    if path == "/":
+        if not proof:
+            return html
+        section = ('<section class="section-alt" id="batch8-home-context"><div class="wrap"><div class="intro">'
+                   '<h2>Planning a shower or bathroom job?</h2>'
+                   '<p>Understanding the preparation can help you explain the work you need. '
+                   '<a href="/bathroom-plumbing-surrey">Bathroom and shower plumbing</a> '
+                   'covers the service enquiries Nigel can discuss.</p>' + proof_html +
+                   '<p><a href="/request-quote">Send your job details and postcode</a> '
+                   'to discuss whether a visit is needed.</p></div></div></section>')
+        return html.replace('<section id="reviews">', section + '<section id="reviews">', 1)
+    if path == "/plumber-guildford":
+        heading = "Choosing the next step for your Guildford plumbing job"
+        paragraphs = (
+            '<p>For a repair, say which fitting is affected, when the problem occurs and whether '
+            'water is still escaping. A leaking waste, a running toilet and a faulty valve can '
+            'need different work; the symptoms alone do not establish which part should be replaced.</p>'
+            '<p>For planned <a href="/bathroom-plumbing-guildford">bathroom plumbing in Guildford</a>, '
+            'explain which fittings are changing, whether the layout stays the same and what access '
+            'is available. Hidden pipework or damaged supporting construction may need inspection '
+            'before the scope and quotation can be confirmed.</p>' + proof_html +
+            '<p>Send the postcode, a short description and photographs of safely visible areas '
+            'through <a href="/request-quote">the enquiry form</a> or WhatsApp. '
+            'Call for an active leak rather than waiting for an online reply; attendance depends '
+            'on the problem, location and availability.</p>')
+        marker = '<section class="section-dark" id="about">'
+    elif path == "/plumber-woking":
+        heading = "Planning a repair or bathroom visit in Woking"
+        paragraphs = (
+            '<p>For <a href="/bathroom-plumbing-woking">bathroom plumbing in Woking</a>, '
+            'tell Nigel whether you need a small fitting replacement or wider pipework and preparation. '
+            'Tray and enclosure dimensions, the existing supply and waste arrangement, and access '
+            'to connections can affect the work. Do not order replacement fittings on appearance alone.</p>'
+            + proof_html +
+            '<p>For a repair, describe what happens when the fitting is used and whether the fault '
+            'affects one fixture or several. <a href="/general-plumbing-surrey">General plumbing information</a> '
+            'explains the kinds of everyday jobs Nigel can discuss. '
+            '<a href="/request-quote">Send the Woking postcode and job details</a> to confirm coverage '
+            'and the next step. No visit or immediate attendance is confirmed by submitting the form.</p>')
+        marker = '<section id="about">'
+    else:
+        heading = "An active leak or an occasional drip?"
+        paragraphs = (
+            '<p>If water is escaping continuously, call Nigel and explain whether you can safely '
+            'isolate it. Keep clear of wet electrical equipment and obtain appropriate emergency '
+            'help if water may be reaching electrics. Do not dismantle fittings or open a ceiling '
+            'to investigate or take photographs.</p>'
+            '<p>For an intermittent leak, note whether it appears when a tap, shower or appliance '
+            'is used, or while everything is off. Water can travel before becoming visible, so '
+            'the damp patch alone does not identify the faulty pipe or fitting. Accessible connections '
+            'and waste joints may need checking before a repair is agreed.</p>'
+            '<p>A repair enquiry is not automatically a recommendation to replace a bathroom. '
+            'If a shower is involved, the <a href="/bathroom-plumbing-farnham">Farnham bathroom plumbing page</a> '
+            'explains the wider service scope. '
+            '<a href="/request-quote">Send the Farnham postcode and a short description</a> for a planned '
+            'repair, or call for an active leak. Nigel is based in Guildford and will confirm coverage '
+            'and availability.</p>')
+        marker = '<div class="wrap section"><h2>Other Plumbing Services in Farnham</h2>'
+    section = ('<section class="section-pale"><div class="wrap section"><h2>' +
+               heading + '</h2>' + paragraphs + '</div></section>')
+    return html.replace(marker, section + marker, 1)
 
 
 def get_company_logo_html(logo_value: str) -> str:
@@ -227,6 +313,10 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
         title = "Plumber in Camberley | Leaks & Repairs | Nigel Harvey Plumbing"
         meta_description = ("Need plumbing help in Camberley? Describe a leak, tap, toilet or bathroom job "
                             "and send your postcode to Guildford-based Nigel for the next step.")
+    elif slug == "woking":
+        title = "Plumber in Woking | Repairs & Bathrooms | Nigel Harvey Plumbing"
+        meta_description = ("Plumbing repairs and bathroom work in Woking. Send your postcode and job details "
+                            "to Guildford-based Nigel to discuss coverage, availability and a quote.")
 
     breadcrumb_schema = json.dumps({
         "@context": "https://schema.org",
@@ -497,6 +587,9 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         "description": intro,
     }, ensure_ascii=False)
 
+    # This page uses the shared Plumbing header without a second hero logo.
+    hero_logo_html = "" if (service_slug, area_slug) == ("leak-repair", "farnham") else f"<div>{logo_html}</div>"
+
     return render_shared_public_page(f"""<!doctype html>
 <html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(page_title)}</title>
@@ -510,7 +603,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
 <body>
 <div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(title)} in {escape(area)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
 <main>
-<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Local plumbing help in {escape(area)}</div><h1>{escape(heading)}</h1><p class="lead">{escape(intro)}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
+<div class="wrap hero"><div class="hero-card">{hero_logo_html}<div class="eyebrow">Local plumbing help in {escape(area)}</div><h1>{escape(heading)}</h1><p class="lead">{escape(intro)}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
 
 <div class="wrap section"><h2>{escape(title)} Services in {escape(area)}</h2><p>If you are looking for {escape(service["service"])} in {escape(area)}, Nigel provides practical help for local homes, landlords and small businesses.</p><ul class="list">{problem_items}</ul></div>
 {priority_html}

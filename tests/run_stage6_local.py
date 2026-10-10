@@ -47,7 +47,24 @@ def main():
     print("Running published advice desktop/mobile workflows", flush=True)
     result = subprocess.run(["node", str(ROOT / "tests/run_advice_browser.mjs")],
                             cwd=ROOT, env={**environment, "ADVICE_TEST_PUBLISHED": "1"}, check=False)
-    return result.returncode
+    if result.returncode:
+        return result.returncode
+    print("Running Batch 8 mixed-catalogue desktop/mobile proposals", flush=True)
+    # The harness owns browser/server cleanup and has a 180-second deadline.
+    # This independent parent deadline protects against a stuck Node process.
+    process = subprocess.Popen(["node", str(ROOT / "tests/run_batch8_browser.mjs")],
+                               cwd=ROOT, env=environment)
+    try:
+        return process.wait(timeout=210)
+    except subprocess.TimeoutExpired:
+        print("Batch 8 harness exceeded 210 seconds; requesting owned-process cleanup", flush=True)
+        process.terminate()
+        try:
+            process.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+        return 1
 
 
 if __name__ == "__main__":

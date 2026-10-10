@@ -392,6 +392,10 @@ class BaselineTests(unittest.TestCase):
                         # Only the approved project and advice discovery links are additive.
                         unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", response.text)
                         unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
+                        # The reviewed Batch 8 context is additive; retain the
+                        # exact pre-existing homepage hash after removing it.
+                        unchanged = re.sub(r'<section class="section-alt" id="batch8-home-context">.*?</section>',
+                                           "", unchanged, flags=re.S)
                         self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
     def test_active_homepage_open_app_navigation(self):

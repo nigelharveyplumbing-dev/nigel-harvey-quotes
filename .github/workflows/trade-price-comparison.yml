@@ -55,6 +55,7 @@ jobs:
           node tests/test_lead_email.cjs
           python -B tests/run_stage6_local.py
       - name: Save approved article desktop and mobile previews
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: approved-advice-previews
