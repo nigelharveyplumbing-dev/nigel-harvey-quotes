@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  batch8_diagnostic:
+  regression:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -40,7 +40,7 @@ jobs:
           python -m pip install -r requirements-test.txt
           npm install --prefix "$RUNNER_TEMP/comparison-browser" playwright@1.56.1
           "$RUNNER_TEMP/comparison-browser/node_modules/.bin/playwright" install --with-deps chromium
-      - name: Bounded standalone Batch 8 diagnostic only
+      - name: Full offline Python, Node and browser regression
         env:
           EMAIL_ENABLED: '0'
           GOOGLE_PLACES_API_KEY: ''
@@ -49,9 +49,12 @@ jobs:
         run: |
           export CODEX_PRIMARY_RUNTIME_NODE_MODULES="$RUNNER_TEMP/comparison-browser/node_modules"
           export STAGE6_TEST_PYTHON="$(command -v python)"
-          node tests/run_batch8_browser.mjs --probe home desktop --lazy-repro
-          node tests/run_batch8_browser.mjs
-      - name: Save bounded diagnostic evidence
+          node --check static/app.js
+          node --check static/city_account_prices.js
+          node --check tests/run_local_browser.mjs
+          node tests/test_lead_email.cjs
+          python -B tests/run_stage6_local.py
+      - name: Save approved article desktop and mobile previews
         if: always()
         uses: actions/upload-artifact@v4
         with:
