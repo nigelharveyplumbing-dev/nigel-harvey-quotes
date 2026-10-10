@@ -49,7 +49,8 @@ jobs:
         run: |
           export CODEX_PRIMARY_RUNTIME_NODE_MODULES="$RUNNER_TEMP/comparison-browser/node_modules"
           export STAGE6_TEST_PYTHON="$(command -v python)"
-          node tests/run_batch8_browser.mjs --legacy-probe
+          node tests/run_batch8_browser.mjs --probe home desktop --lazy-repro
+          node tests/run_batch8_browser.mjs
       - name: Save bounded diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4

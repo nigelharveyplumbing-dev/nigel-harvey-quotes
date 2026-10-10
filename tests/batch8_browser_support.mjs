@@ -62,3 +62,12 @@ export async function stopServer(child, milliseconds = 3000) {
   return { terminated: true, forced: true };
 }
 
+// Scrolling schedules lazy-image loading; await its load event before decode.
+// The caller supplies the host-side deadline even if no event ever arrives.
+export async function waitForImageLoad(image) {
+  return image.evaluate(i => new Promise((resolve, reject) => {
+    if (i.complete) return i.naturalWidth > 0 ? resolve() : reject(new Error('Image failed to load'));
+    i.addEventListener('load', () => resolve(), { once: true });
+    i.addEventListener('error', () => reject(new Error('Image failed to load')), { once: true });
+  }));
+}
