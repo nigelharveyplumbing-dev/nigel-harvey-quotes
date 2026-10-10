@@ -132,6 +132,7 @@ async def protect_app_routes(request: Request, call_next):
                 or request.url.path.startswith("/app/")
                 or (request.url.path.startswith("/api/") and not is_public_route(request))):
             response.headers["X-Robots-Tag"] = "noindex, nofollow"
+            response.headers["Cache-Control"] = "private, no-store"
         return response
 
     if not is_staging_environment() and is_public_route(request):
@@ -919,6 +920,8 @@ def row_to_invoice(row):
     return {
         "id": row["id"],
         "quote_id": row["quote_id"],
+        "origin_id": row["origin_id"] if "origin_id" in row.keys() else None,
+        "job_id": row["job_id"] if "job_id" in row.keys() else None,
         "customer_id": row["customer_id"],
         "invoice_number": row["invoice_number"],
         "customer_name": row["customer_name"] or "",
@@ -1250,6 +1253,7 @@ HTML = HTML.replace("__APP_PAYMENT_CONFIG__", payment_config)
 HTML = HTML.replace("__MATERIAL_SELECTION_JS__", (APP_UI_ROOT / "static" / "material_selection.js").read_text(encoding="utf-8"))
 HTML = HTML.replace("__CITY_ACCOUNT_PRICES_JS__", (APP_UI_ROOT / "static" / "city_account_prices.js").read_text(encoding="utf-8"))
 HTML = HTML.replace("__APP_JS__", (APP_UI_ROOT / "static" / "app.js").read_text(encoding="utf-8"))
+HTML = HTML.replace("__REVENUE_JS__", (APP_UI_ROOT / "static" / "enquiry_revenue.js").read_text(encoding="utf-8"))
 HTML = HTML.replace("__PIPELINE_JS__", (APP_UI_ROOT / "static" / "pipeline.js").read_text(encoding="utf-8"))
 
 
@@ -1356,6 +1360,8 @@ def api_update_job(job_id: int, data: JobRequest):
 
 @app.post("/api/leads")
 def api_create_lead(data: LeadRequest):
+    # Public callers cannot assign trusted marketing or synthetic classifications.
+    data = data.model_copy(update={"source_category":""})
     try:
         lead = save_lead(data)
     except ValueError as exc:
@@ -1991,6 +1997,149 @@ def api_dashboard():
     return get_dashboard()
 
 
+# Tracking is opt-in by an explicit schema migration; this never migrates at startup.
+from business import enquiry_attribution, payment_store, workflow_history, revenue_reporting
+from pydantic import ConfigDict, Field, StrictBool
+
+class RevenuePaymentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: str = "receipt"
+    amount: str = "0"
+    received_on: str = ""
+    method: str = "Unknown"
+    reference: str = Field(default="", max_length=180)
+    reason: str = Field(default="", max_length=500)
+    related_entry_id: int | None = None
+    operation_key: str = Field(min_length=16,max_length=128)
+
+class RevenueCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source: str
+    kind: str
+    reason: str = Field(min_length=1,max_length=500)
+    expected_revision: int = Field(ge=0)
+    channel: str = ""
+    test_reference: str = Field(default="",max_length=100)
+
+class RevenueMilestoneRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: str
+    reason: str = Field(default="",max_length=500)
+    operation_key: str = Field(min_length=16,max_length=128)
+
+class RevenueInvoiceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_key: str = Field(min_length=16,max_length=128)
+    job_id: int | None = None
+
+class RevenueInteractionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    channel: str
+    note: str = Field(default="",max_length=500)
+
+class RevenueRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    supersedes_quote_id: int = Field(gt=0)
+    confirmed_same_scope: StrictBool
+    reason: str = Field(min_length=1,max_length=500)
+    operation_key: str = Field(min_length=16,max_length=128)
+
+
+def revenue_call(function, *, write=False):
+    conn = get_db()
+    try:
+        if not enquiry_attribution.enabled(conn):
+            raise HTTPException(status_code=409,detail="Tracking needs the separately approved explicit migration")
+        if write:
+            conn.execute("BEGIN IMMEDIATE")
+        value = function(conn)
+        if write:
+            conn.commit()
+        return value
+    except (ValueError,sqlite3.IntegrityError) as exc:
+        conn.rollback()
+        # Do not surface raw SQL or private payment details in validation errors.
+        message = str(exc) if isinstance(exc,ValueError) else "Relationship or duplicate-operation conflict; reload and review"
+        raise HTTPException(status_code=409,detail=message) from None
+    finally:
+        conn.close()
+
+@app.get("/api/revenue/options")
+def api_revenue_options():
+    with get_db() as conn:
+        active = enquiry_attribution.enabled(conn)
+    return {"active":active,"sources":list(growth_tracking.SOURCES),"channels":list(enquiry_attribution.CHANNELS),
+            "kinds":list(enquiry_attribution.KINDS),"methods":list(payment_store.METHODS)}
+
+@app.get("/api/revenue/report")
+def api_revenue_report(start: str, end: str):
+    return revenue_call(lambda c: revenue_reporting.report(c,start,end))
+
+@app.get("/api/revenue/export")
+def api_revenue_export(start: str, end: str):
+    from fastapi.responses import Response
+    data = revenue_call(lambda c: revenue_reporting.report(c,start,end))
+    return Response(revenue_reporting.export_csv(data),media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition":'attachment; filename="source-revenue-aggregate.csv"'})
+
+@app.get("/api/revenue/review")
+def api_revenue_review():
+    return revenue_call(revenue_reporting.review)
+
+@app.get("/api/revenue/origins/{origin_id}")
+def api_revenue_origin(origin_id: int):
+    return revenue_call(lambda c: enquiry_attribution.origin(c,origin_id))
+
+@app.post("/api/revenue/origins/{origin_id}/corrections")
+def api_revenue_correct(origin_id: int, data: RevenueCorrectionRequest):
+    return revenue_call(lambda c: enquiry_attribution.correct(c,origin_id,actor=APP_USERNAME,**data.model_dump()),write=True)
+
+@app.post("/api/revenue/origins/{origin_id}/interactions")
+def api_revenue_interaction(origin_id: int, data: RevenueInteractionRequest):
+    def add(c):
+        if data.channel not in enquiry_attribution.CHANNELS or not enquiry_attribution.origin(c,origin_id):
+            raise ValueError("Existing origin and valid contact channel required")
+        c.execute("INSERT INTO enquiry_interactions(origin_id,channel,occurred_at,recorded_at,actor,note) VALUES (?,?,?,?,?,?)",
+                  (origin_id,data.channel,now_uk().isoformat(),enquiry_attribution.utc_now(),APP_USERNAME,data.note))
+        return {"saved":True,"original_source_unchanged":True}
+    return revenue_call(add,write=True)
+
+@app.get("/api/revenue/invoices/{invoice_id}/payments")
+def api_revenue_payments(invoice_id: int):
+    return revenue_call(lambda c: payment_store.history(c,invoice_id))
+
+@app.post("/api/revenue/invoices/{invoice_id}/payments")
+def api_revenue_payment(invoice_id: int, data: RevenuePaymentRequest):
+    return revenue_call(lambda c: payment_store.record(c,invoice_id,data.model_dump(),APP_USERNAME),write=True)
+
+@app.get("/api/revenue/workflow/{entity_type}/{entity_id}")
+def api_revenue_workflow(entity_type: str, entity_id: int):
+    if entity_type not in ("quote","job"):
+        raise HTTPException(status_code=422,detail="Choose a quote or job")
+    return revenue_call(lambda c: {"history":workflow_history.events(c,entity_type,entity_id)})
+
+@app.post("/api/revenue/workflow/{entity_type}/{entity_id}")
+def api_revenue_milestone(entity_type: str, entity_id: int, data: RevenueMilestoneRequest):
+    return revenue_call(lambda c: workflow_history.milestone(c,entity_type,entity_id,data.model_dump(),APP_USERNAME),write=True)
+
+@app.post("/api/revenue/quotes/{quote_id}/stage-invoice")
+def api_revenue_stage_invoice(quote_id: int, data: RevenueInvoiceRequest):
+    revenue_call(lambda c: True)
+    from business.revenue_mutations import create_invoice
+    try:
+        iid=create_invoice(quote_id,now_uk,format_dt,operation_key=data.operation_key,job_id=data.job_id,separate=True)
+        if not iid:
+            raise ValueError("Quote not found")
+        return get_invoice_by_id(iid)
+    except ValueError as exc:
+        raise HTTPException(status_code=409,detail=str(exc)) from None
+
+@app.post("/api/revenue/quotes/{quote_id}/revision")
+def api_revenue_revision(quote_id: int, data: RevenueRevisionRequest):
+    from business.quote_revisions import link
+    return revenue_call(lambda c: link(c,quote_id,data.model_dump(),APP_USERNAME),write=True)
+
+
 @app.get("/api/business-performance")
 def api_business_performance():
     return growth_tracking.business_report()
@@ -2028,7 +2177,11 @@ def api_quote_outcome(quote_id: int, data: QuoteOutcomeRequest):
 
 @app.delete("/api/quotes/{quote_id}")
 def api_delete_quote(quote_id: int):
-    if not delete_quote_by_id(quote_id):
+    try:
+        deleted = delete_quote_by_id(quote_id)
+    except (ValueError,sqlite3.IntegrityError):
+        raise HTTPException(status_code=409,detail="Tracked history cannot be deleted; close its status instead") from None
+    if not deleted:
         raise HTTPException(status_code=404, detail="Quote not found")
     return {"ok": True}
 
@@ -5870,7 +6023,10 @@ def api_invoice(invoice_id: int):
 
 @app.put("/api/invoices/{invoice_id}")
 def api_update_invoice(invoice_id: int, data: InvoiceEditRequest):
-    invoice = update_invoice_by_id(invoice_id, data)
+    try:
+        invoice = update_invoice_by_id(invoice_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=409,detail=str(exc)) from None
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return invoice
@@ -5878,7 +6034,10 @@ def api_update_invoice(invoice_id: int, data: InvoiceEditRequest):
 
 @app.post("/api/invoices/{invoice_id}/status")
 def api_invoice_status(invoice_id: int, data: InvoiceStatusRequest):
-    invoice = update_invoice_status(invoice_id, data.status, data.amount_paid)
+    try:
+        invoice = update_invoice_status(invoice_id, data.status, data.amount_paid)
+    except ValueError as exc:
+        raise HTTPException(status_code=409,detail=str(exc)) from None
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return invoice
@@ -5910,7 +6069,11 @@ def api_invoice_payment_link(invoice_id: int, data: PaymentLinkUpdateRequest):
 
 @app.delete("/api/invoices/{invoice_id}")
 def api_delete_invoice(invoice_id: int):
-    if not delete_invoice_by_id(invoice_id):
+    try:
+        deleted = delete_invoice_by_id(invoice_id)
+    except (ValueError,sqlite3.IntegrityError):
+        raise HTTPException(status_code=409,detail="Tracked history cannot be deleted; close its status instead") from None
+    if not deleted:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return {"ok": True}
 
@@ -5922,7 +6085,10 @@ def api_customers():
 
 @app.delete("/api/customers/{customer_id}")
 def api_delete_customer(customer_id: int):
-    result = customer_store.delete_customer_by_id(customer_id)
+    try:
+        result = customer_store.delete_customer_by_id(customer_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Customer not found")
     return result

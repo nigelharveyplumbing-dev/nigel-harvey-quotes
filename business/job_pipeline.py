@@ -7,7 +7,7 @@ from business.db import get_db
 
 APPOINTMENT_KINDS = {"site_visit", "job"}
 APPOINTMENT_STATUSES = {"confirmed", "provisional", "completed", "cancelled"}
-JOB_STATUSES = {"awaiting_schedule", "scheduled", "in_progress", "completed", "cancelled"}
+JOB_STATUSES = {"awaiting_schedule", "accepted", "scheduled", "in_progress", "completed", "cancelled"}
 STAGES = ("new_enquiry", "visit_booked", "quote_pending", "won_unscheduled",
           "scheduled", "in_progress", "completed_uninvoiced", "invoiced_unpaid",
           "paid", "closed_lost_expired")
@@ -103,6 +103,19 @@ def save_job(data, now, job_id=None):
         raise ValueError("Link a lead or quote to the job")
     conn = get_db()
     try:
+        from business.enquiry_attribution import enabled
+        if enabled(conn):
+            conn.execute("BEGIN IMMEDIATE")
+            from business.payment_store import request_hash
+            digest = request_hash({'job_id':job_id,**data.model_dump()})
+            if data.operation_key:
+                if not 16 <= len(data.operation_key) <= 128:
+                    raise ValueError("Valid job operation key required")
+                prior = conn.execute("SELECT * FROM revenue_operations WHERE operation_key=?",(data.operation_key,)).fetchone()
+                if prior:
+                    if prior['operation_type']!='job' or prior['request_hash']!=digest:
+                        raise ValueError("Operation key reused for different job details")
+                    return _row(conn.execute("SELECT * FROM jobs WHERE id=?",(prior['entity_id'],)).fetchone())
         lead_id, quote_id, invoice_id = data.lead_id, data.quote_id, data.invoice_id
         lead = conn.execute("SELECT customer_id FROM leads WHERE id=?", (lead_id,)).fetchone() if lead_id else None
         if lead_id and not lead:
@@ -122,6 +135,16 @@ def save_job(data, now, job_id=None):
                 invoice_quote = conn.execute("SELECT lead_id FROM quotes WHERE id=?", (invoice["quote_id"],)).fetchone()
                 if invoice_quote and invoice_quote["lead_id"] and invoice_quote["lead_id"] != lead_id:
                     raise ValueError("Invoice belongs to a different lead")
+        from business import enquiry_attribution as attribution
+        tracked = attribution.enabled(conn)
+        oid = attribution.inherited(conn,lead_id=lead_id,quote_id=quote_id,invoice_id=invoice_id) if tracked else None
+        if tracked and data.status in {"accepted","scheduled","in_progress","completed"}:
+            approved = conn.execute("SELECT status FROM quotes WHERE id=?",(quote_id,)).fetchone()
+            if not approved or approved[0]!="won":
+                raise ValueError("Accept the quote before recording job progress")
+        old_job = conn.execute("SELECT origin_id,status FROM jobs WHERE id=?",(job_id,)).fetchone() if tracked and job_id else None
+        if old_job and old_job[0] != oid:
+            raise ValueError("Original enquiry cannot be changed on an existing job")
         timestamp = now().isoformat()
         values = (lead_id, quote_id, invoice_id, customer_id, data.title.strip()[:180],
                   data.status, data.notes.strip()[:2000])
@@ -135,6 +158,16 @@ def save_job(data, now, job_id=None):
                 title=?, status=?, notes=?, updated_at=? WHERE id=?""", (*values, timestamp, job_id))
             if not cur.rowcount:
                 raise ValueError("Job does not exist")
+        if tracked:
+            conn.execute("UPDATE jobs SET origin_id=? WHERE id=?",(oid,job_id))
+            if invoice_id:
+                conn.execute("UPDATE invoices SET job_id=? WHERE id=?",(job_id,invoice_id))
+            from business.workflow_history import append
+            if old_job and old_job['status']=='completed' and data.status!='completed' and not data.notes.strip():
+                raise ValueError("Provide a reason in job notes when reopening completion")
+            append(conn,"job",job_id,old_job[1] if old_job else "",data.status,reason=data.notes)
+            if data.operation_key:
+                conn.execute("INSERT INTO revenue_operations VALUES (?,?,?,?)",(data.operation_key,'job',job_id,digest))
         conn.commit()
         return _row(conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone())
     except sqlite3.IntegrityError as exc:
@@ -157,7 +190,9 @@ def pipeline_report():
         leads = [dict(x) for x in conn.execute("SELECT id,name,description,status,source_category,work_type FROM leads")]
         quotes = [dict(x) for x in conn.execute("SELECT id,lead_id,customer_name,status,total_price FROM quotes")]
         jobs = [dict(x) for x in conn.execute("SELECT * FROM jobs")]
-        invoices = [dict(x) for x in conn.execute("SELECT id,quote_id,customer_name,status,balance_due FROM invoices")]
+        from business.enquiry_attribution import enabled
+        job_field = "job_id" if enabled(conn) else "NULL AS job_id"
+        invoices = [dict(x) for x in conn.execute("SELECT id,quote_id,customer_name,status,balance_due,"+job_field+" FROM invoices")]
         visits = [dict(x) for x in conn.execute("SELECT lead_id,status FROM appointments WHERE kind='site_visit' AND status IN ('confirmed','provisional','completed')")]
         job_bookings = {x["job_id"] for x in conn.execute("""SELECT job_id FROM appointments
             WHERE kind='job' AND status IN ('confirmed','provisional') AND job_id IS NOT NULL""")}
@@ -174,11 +209,11 @@ def pipeline_report():
         related_invoices = [invoice for quote in related_quotes
                             for invoice in invoices_by_quote.get(quote["id"], [])]
         related_invoices += [invoice for job in related_jobs for invoice in invoices
-                             if job["invoice_id"] == invoice["id"] and invoice not in related_invoices]
+                             if (job["invoice_id"] == invoice["id"] or invoice["job_id"] == job["id"]) and invoice not in related_invoices]
         invoice_stages = [_invoice_stage(invoice) for invoice in related_invoices]
         statuses = {quote["status"] for quote in related_quotes}
         job_statuses = {job["status"] for job in related_jobs}
-        if "paid" in invoice_stages:
+        if invoice_stages and all(stage == "paid" for stage in invoice_stages):
             stage = "paid"
         elif "invoiced_unpaid" in invoice_stages:
             stage = "invoiced_unpaid"
@@ -190,7 +225,7 @@ def pipeline_report():
             stage = "in_progress"
         elif any(job["status"] == "scheduled" and job["id"] in job_bookings for job in related_jobs):
             stage = "scheduled"
-        elif "awaiting_schedule" in job_statuses or "won" in statuses or (lead and lead["status"] == "won"):
+        elif "accepted" in job_statuses or "awaiting_schedule" in job_statuses or "won" in statuses or (lead and lead["status"] == "won"):
             stage = "won_unscheduled"
         elif "scheduled" in job_statuses:
             # A stage label alone does not put work into the diary.

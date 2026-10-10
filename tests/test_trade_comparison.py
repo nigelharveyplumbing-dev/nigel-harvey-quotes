@@ -506,7 +506,7 @@ class TradeComparisonHTTPTests(unittest.TestCase):
                 fetch.assert_not_called()
                 actual = client.get('/api/best-trade-prices', params={"q": TITLE}, headers=auth)
                 self.assertEqual(actual.status_code, 200, actual.text)
-                self.assertEqual(actual.headers['cache-control'], 'no-store')
+                self.assertEqual(actual.headers['cache-control'], 'private, no-store')
                 data = actual.json()
                 self.assertEqual([x["supplier"] for x in data["results"] if x["is_best_price"]], ["Toolstation"])
                 self.assertEqual(next(x for x in data['merchants'] if x['supplier'] == 'Selco')['status'], 'unavailable')

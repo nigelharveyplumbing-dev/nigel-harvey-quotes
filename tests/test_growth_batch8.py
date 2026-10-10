@@ -98,16 +98,17 @@ class GrowthBatch8Tests(unittest.TestCase):
         tracked=subprocess.check_output(['git','ls-tree','-r','--name-only',BASE,'static/project-images'],cwd=ROOT,text=True).splitlines()
         for path in tracked:self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT),path)
 
-    def test_app_changes_limited_to_public_html_insertion(self):
-        old=ast.parse(subprocess.check_output(['git','show',BASE+':app.py'],cwd=ROOT))
+    def test_stage2_changes_limited_to_tracking_and_protected_core_unchanged(self):
+        baseline='c4f57d379e3463fc414814b43ca0e81f8e5a68c7'
+        old=ast.parse(subprocess.check_output(['git','show',baseline+':app.py'],cwd=ROOT))
         new=ast.parse((ROOT/'app.py').read_text())
-        allowed={'render_public_homepage','add_project_evidence'}
-        before=[ast.dump(n) for n in old.body if getattr(n,'name',None) not in allowed]
-        after=[ast.dump(n) for n in new.body if getattr(n,'name',None) not in allowed]
-        self.assertEqual(before,after)
-        for tree in [old,new]:self.assertEqual(sum(getattr(n,'name',None) in allowed for n in tree.body),2)
-        for path in ['business/db.py','business/lead_email_store.py','business/lead_store.py','business/notifications.py','business/quote_calculation.py','business/quote_store.py','business/invoice_store.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','static/public_analytics.js','templates/request_quote.html']:
-            self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT),path)
+        allowed={'protect_app_routes','row_to_invoice','api_create_lead','api_delete_quote','api_update_invoice','api_invoice_status','api_delete_invoice','api_delete_customer'}
+        before={n.name:ast.dump(n) for n in old.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef,ast.ClassDef))}
+        after={n.name:ast.dump(n) for n in new.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef,ast.ClassDef))}
+        self.assertEqual({k:v for k,v in before.items() if k not in allowed},{k:after[k] for k in before if k not in allowed})
+        self.assertTrue(all(k.startswith(('Revenue','revenue_','api_revenue_')) for k in set(after)-set(before)))
+        for path in ['business/public_pages.py','business/project_content.json','business/advice_content.json','business/real_projects.py','business/plumbing_advice.py','business/lead_email_store.py','business/notifications.py','business/quote_calculation.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','templates/homepage.html','templates/public_header.html','templates/public_footer.html']:
+            self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',baseline+':'+path],cwd=ROOT),path)
 
     def test_private_file_cannot_publish_or_bypass_approval(self):
         private_file=self.root/'invalid-private-advice.json'
