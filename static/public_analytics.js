@@ -13,6 +13,32 @@
   let started = false;
   try { choice = localStorage.getItem(storageKey); } catch (_) {}
 
+  const entryKey = 'nhp_attribution_session_v1';
+  const campaignKeys = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'];
+  function currentContext() {
+    const params = new URLSearchParams(location.search);
+    const context = { landing_page: location.pathname };
+    try { const ref = new URL(document.referrer); if (ref.origin !== location.origin) context.referrer = ref.origin; } catch (_) {}
+    for (const key of campaignKeys) {
+      const value = params.get(key) || '';
+      if (/^[A-Za-z][A-Za-z0-9 _.-]{0,79}$/.test(value) && !/\d{7,}|@/.test(value)) context[key] = value;
+    }
+    return context;
+  }
+  function clearEntry() { try { sessionStorage.removeItem(entryKey); } catch (_) {} }
+  function firstEntry() {
+    if (choice !== 'accepted') { clearEntry(); return {landing_page:location.pathname}; }
+    let entry;
+    try { entry = JSON.parse(sessionStorage.getItem(entryKey)); } catch (_) {}
+    if (!entry || !entry.context || Date.now() - entry.capturedAt > 24*60*60*1000 || entry.capturedAt > Date.now()) {
+      entry = {capturedAt:Date.now(),context:currentContext()};
+      try { sessionStorage.setItem(entryKey,JSON.stringify(entry)); } catch (_) {}
+    }
+    return entry.context;
+  }
+  window.nhpAttribution = { context:firstEntry, accepted:()=>choice === 'accepted' };
+  firstEntry();
+
   function start() {
     if (started || choice !== 'accepted') return;
     started = true;
@@ -24,7 +50,10 @@
       ad_user_data: 'denied', ad_personalization: 'denied'
     });
     window.gtag('js', new Date());
-    window.gtag('config', id, { allow_google_signals: false, allow_ad_personalization_signals: false });
+    const context = firstEntry();
+    const campaign = {};
+    for (const [utm,field] of Object.entries({utm_source:'campaign_source',utm_medium:'campaign_medium',utm_campaign:'campaign_name',utm_content:'campaign_content',utm_term:'campaign_term'})) if (context[utm]) campaign[field] = context[utm];
+    window.gtag('config', id, { allow_google_signals: false, allow_ad_personalization_signals: false, page_location: location.origin + location.pathname, page_referrer:context.referrer || '', ...campaign });
     const loader = document.createElement('script');
     loader.async = true;
     loader.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(id);
@@ -51,8 +80,9 @@
     choice = value;
     try { localStorage.setItem(storageKey, value); } catch (_) {}
     banner.hidden = true;
-    if (value === 'accepted') start();
-    else if (started) {
+    if (value === 'accepted') { firstEntry(); start(); }
+    else { clearEntry(); }
+    if (value !== 'accepted' && started) {
       if (sendToGoogle) window.gtag('consent', 'update', { analytics_storage: 'denied' });
       forgetCookies();
       location.reload();

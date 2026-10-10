@@ -161,7 +161,7 @@ def disposable_app(username: str, password: str,
                       if route.path not in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
                       for method in getattr(route, "methods", [])]
             expected = [tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())]
-            if len(routes) != len(set(routes)) or set(routes) != set(expected) or len(routes) != 91:
+            if len(routes) != len(set(routes)) or set(routes) != set(expected) or len(routes) != 103:
                 raise RuntimeError("Route inventory changed")
             yield module, root
         finally:

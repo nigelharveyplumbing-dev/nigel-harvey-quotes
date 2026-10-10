@@ -162,7 +162,7 @@ try{
    for(const href of new Set(hrefs))assert.equal((await context.request.get(origin+href,{timeout:10000})).status(),200,href);
    const quote=page.locator('main a').filter({hasText:'enquiry form'});
    if(path==='/plumber-guildford'){
-    const href=await quote.getAttribute('href');assert(href.includes('landing_page=%2Fplumber-guildford'));
+    await quote.click();assert(new URL(page.url()).pathname==='/request-quote');assert(new URL(page.url()).searchParams.get('landing_page')==='/plumber-guildford');await page.goBack({waitUntil:'domcontentloaded',timeout:15000});
    }
    if(path===draft){
     const href=await page.locator('main a.btn').getAttribute('href');assert(href.startsWith('/request-quote'));

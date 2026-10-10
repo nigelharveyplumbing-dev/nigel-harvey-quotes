@@ -49,6 +49,10 @@ jobs:
         run: |
           export CODEX_PRIMARY_RUNTIME_NODE_MODULES="$RUNNER_TEMP/comparison-browser/node_modules"
           export STAGE6_TEST_PYTHON="$(command -v python)"
+          node --check static/enquiry_revenue.js
+          node --check static/public_analytics.js
+          node tests/test_revenue_attribution.mjs
+          node tests/growth_batch2_events.mjs
           node --check static/app.js
           node --check static/city_account_prices.js
           node --check tests/run_local_browser.mjs

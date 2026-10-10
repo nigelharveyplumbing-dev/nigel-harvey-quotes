@@ -1,0 +1,86 @@
+/* Genuine local desktop/mobile UI journeys. Synthetic content; no external I/O. */
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import net from 'node:net';
+import { bounded, stopServer } from './batch8_browser_support.mjs';
+const require=createRequire(import.meta.url),{chromium}=require(join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES,'playwright'));
+const directory=dirname(fileURLToPath(import.meta.url));
+const socket=net.createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r));const port=socket.address().port;await new Promise(r=>socket.close(r));
+const credentials={username:'local-'+randomBytes(8).toString('hex'),password:randomBytes(20).toString('hex')};
+const origin='http://127.0.0.1:'+port;
+const output=process.env.REVENUE_EVIDENCE_DIR || '/tmp/enquiry-revenue-previews';mkdirSync(output,{recursive:true});
+const child=spawn(process.env.STAGE6_TEST_PYTHON||'python',['-B',join(directory,'revenue_browser_server.py')],{cwd:dirname(directory),env:{...process.env,STAGE6_TEST_PORT:String(port),STAGE6_TEST_USERNAME:credentials.username,STAGE6_TEST_PASSWORD:credentials.password},stdio:['ignore','ignore','pipe']});
+let errors=0;child.stderr.on('data',x=>errors+=x.length);
+let server,browser;const evidence={environment:'disposable local; synthetic only',layouts:[],checks:[],externalRequests:[]};
+const deadline=setTimeout(()=>{child.kill('SIGTERM');server?.process()?.kill('SIGTERM');},180000);
+try {
+ await bounded('server-ready',async()=>{for(let n=0;n<90;n++){if(child.exitCode!==null)throw Error('Server stopped; stderr bytes '+errors);try {if((await fetch(origin+'/app')).status===401)return;}catch{}await new Promise(r=>setTimeout(r,150));}throw Error('Server not ready');},15000);
+ server=await chromium.launchServer({headless:true,executablePath:process.env.STAGE6_CHROMIUM_EXECUTABLE||chromium.executablePath(),args:['--no-sandbox'],timeout:10000});
+ browser=await chromium.connect(server.wsEndpoint(),{timeout:10000});
+ for(const [label,width,height] of [['desktop',1440,1000],['mobile',390,844]]){
+  console.log('Revenue browser: '+label+' start');
+  const context=await browser.newContext({httpCredentials:credentials,viewport:{width,height},isMobile:label==='mobile',hasTouch:label==='mobile'});
+  await context.route('**/*',route=>{const u=new URL(route.request().url());if(u.origin===origin || u.protocol==='data:')return route.continue();evidence.externalRequests.push(u.origin);return route.abort();});
+  const page=await context.newPage();page.setDefaultTimeout(10000);page.setDefaultNavigationTimeout(15000);const jsErrors=[];page.on('pageerror',e=>jsErrors.push(e.message));page.on('dialog',d=>d.type()==='confirm'?d.accept():d.dismiss());
+  await page.goto(origin+'/?utm_source=google&utm_medium=organic&utm_campaign=local_synthetic');
+  await page.locator('#analytics-consent [data-choice="accepted"]').click();
+  await page.goto(origin+'/plumber-guildford');
+  await page.locator('main a[href="/request-quote"]').first().click();
+  assert.equal(new URL(page.url()).pathname,'/request-quote');
+  await page.locator('#lead_name').fill('Synthetic Revenue '+label);
+  await page.locator('#lead_phone').fill('07700900000');
+  await page.locator('#lead_description').fill('Authorised LOCAL synthetic enquiry-to-payment browser test. No email, response or booking.');
+  const saved=page.waitForResponse(r=>r.url()===origin+'/api/leads'&&r.request().method()==='POST');
+  await page.locator('#submitButton').click();const response=await saved;assert.equal(response.status(),200);const lead=await response.json();await page.locator('#lead_ok').waitFor({state:'visible'});
+  assert.equal(lead.utm_source,'google');assert.equal(lead.landing_page,'/');
+  assert.equal(await page.locator('script[src*="googletagmanager"]').count(),0);
+  await page.screenshot({path:join(output,label+'-enquiry-success.png'),fullPage:true,timeout:10000});
+  await page.goto(origin+'/app');await page.getByRole('button',{name:'Leads',exact:true}).click();
+  const card=page.locator('#lead_card_'+lead.id);await card.getByRole('button',{name:'Start Quote',exact:true}).click();
+  await page.locator('#labour').fill('100');
+  const quoted=page.waitForResponse(r=>r.url()===origin+'/api/quote'&&r.request().method()==='POST');await page.getByRole('button',{name:'Generate Quote',exact:true}).click();const q=(await quoted).json();const quote=await q;assert.equal(quote.origin_id,lead.origin_id);
+  const row=page.locator('#historyList .history-item').filter({hasText:'Synthetic Revenue '+label});
+  const invoiced=page.waitForResponse(r=>r.url()===`${origin}/api/quotes/${quote.id}/to-invoice`);await row.getByRole('button',{name:'To Invoice',exact:true}).click();const invoice=await (await invoiced).json();assert.equal(invoice.origin_id,lead.origin_id);
+  await page.getByRole('button',{name:'Source & revenue',exact:true}).click();await page.locator('#revenueWorkspace').waitFor({state:'visible'});
+  await page.locator('#revenueOriginSelect').selectOption(String(lead.origin_id));await page.getByRole('button',{name:'Load original source',exact:true}).click();await page.locator('#revenueOriginal').getByRole('heading',{name:'Origin #'+lead.origin_id}).waitFor();
+  await page.locator('#revenueKind').selectOption('synthetic');await page.locator('#revenueTestReference').fill('LOCAL-BROWSER-'+label);await page.locator('#revenueCorrectionReason').fill('Local development synthetic record; exclude from genuine metrics');await page.getByRole('button',{name:'Append source correction'}).click();await page.locator('#revenueOriginal').getByText(/revision 1/).waitFor();
+  await page.locator('#revenueTab').screenshot({path:join(output,label+'-source-history.png'),timeout:10000});
+  await page.locator('summary').filter({hasText:'Quote outcomes and job milestones'}).click();await page.locator('#revenueEntitySelect').selectOption('quote/'+quote.id);await page.getByRole('button',{name:'Load milestone history'}).click();await page.locator('#revenueOutcome').selectOption('won');await page.getByRole('button',{name:'Record milestone',exact:true}).click();await page.locator('#revenueStatus').getByText(/Saved/).waitFor();
+  await page.getByRole('button',{name:'Quotes',exact:true}).click();
+  await row.getByRole('button',{name:'Add to Pipeline',exact:true}).click();
+  await page.locator('#jobInvoiceId').fill(String(invoice.id));await page.locator('#jobStatus').selectOption('accepted');
+  const jobSaved=page.waitForResponse(r=>r.url()===origin+'/api/jobs'&&r.request().method()==='POST');await page.getByRole('button',{name:'Save job',exact:true}).click();const job=await (await jobSaved).json();assert.equal(job.origin_id,lead.origin_id);
+  await page.getByRole('button',{name:'Source & revenue',exact:true}).click();await page.locator('#revenueWorkspace').waitFor({state:'visible'});
+  await page.locator('#revenueEntitySelect').selectOption('job/'+job.id);await page.getByRole('button',{name:'Load milestone history'}).click();await page.locator('#revenueOutcome').selectOption('completed');await page.getByRole('button',{name:'Record milestone',exact:true}).click();await page.locator('#revenueWorkflowHistory').getByText(/Current job status: completed/).waitFor();
+  await page.locator('#revenueTab').screenshot({path:join(output,label+'-workflow-history.png'),timeout:10000});
+  await page.locator('summary').filter({hasText:'Record payment and history'}).click();await page.locator('#revenueInvoiceSelect').selectOption(String(invoice.id));await page.getByRole('button',{name:'Load payment history',exact:true}).click();await page.locator('#revenuePaymentHistory h3').waitFor();
+  await page.locator('#revenuePaymentAmount').fill('30.00');await page.locator('#revenuePaymentMethod').selectOption('Bank transfer');
+  const paid=page.waitForResponse(r=>r.url()===`${origin}/api/revenue/invoices/${invoice.id}/payments`&&r.request().method()==='POST');await page.locator('#revenueSavePayment').click();const ledger=await (await paid).json();assert.equal(ledger.invoice.amount_paid,30);assert.equal(ledger.invoice.balance_due,70);await page.locator('#revenuePaymentHistory').getByText(/Recorded paid £30/).waitFor();
+  async function addPayment(action,amount,expected,target=null,reason='') {
+    await page.locator('#revenuePaymentAction').selectOption(action);await page.locator('#revenuePaymentAmount').fill(amount);await page.locator('#revenuePaymentReason').fill(reason);
+    if (target) await page.locator('#revenuePaymentTarget').selectOption(String(target));
+    const saved=page.waitForResponse(r=>r.url()===`${origin}/api/revenue/invoices/${invoice.id}/payments`&&r.request().method()==='POST');
+    await page.locator('#revenueSavePayment').click();const body=await (await saved).json();assert.equal(body.invoice.amount_paid,expected);await page.locator('#revenueStatus').getByText(/Saved/).waitFor();return body;
+  }
+  await addPayment('receipt','70.00',100);
+  const refunded=await addPayment('refund','15.00',85,null,'Synthetic refund rehearsal');
+  await addPayment('reversal','0',100,refunded.entries.at(-1).id,'Refund record entered in error');
+  await addPayment('correction','20.00',90,ledger.entries[0].id,'Correct synthetic first receipt amount');
+  await page.locator('#revenueTab').screenshot({path:join(output,label+'-payment-history.png'),timeout:10000});
+  const source=await context.request.get(origin+'/api/revenue/origins/'+lead.origin_id);assert.equal(source.headers()['cache-control'],'private, no-store');assert(source.headers()['x-robots-tag'].includes('noindex'));
+  assert.equal((await context.request.get(origin+'/api/invoices/'+invoice.id+'/pdf')).status(),200);assert.equal((await context.request.get(origin+'/api/quotes/'+quote.id+'/pdf')).status(),200);
+  const balances=await (await context.request.get(origin+'/api/revenue/report?start=2020-01-01&end=2026-10-10')).json();assert.equal(balances.synthetic_origins_excluded,label==='desktop'?1:2);assert.equal(balances.totals.cash_pence || 0,0);
+  const publicDoc=await context.request.get(origin+'/sitemap.xml');assert(!(await publicDoc.text()).includes('/api/revenue'));assert.equal((await context.request.get(origin+'/advice/radiators-cold-heating-unevenly')).status(),404);
+  assert.deepEqual(jsErrors,[]);const layout=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));assert(layout.scroll<=width+1,JSON.stringify(layout));evidence.layouts.push({label,...layout});
+  await page.goto(origin+'/request-quote');await page.locator('#analytics-settings').click();await page.locator('#analytics-consent [data-choice="rejected"]').click();await page.waitForLoadState('domcontentloaded');
+  assert.equal(await page.evaluate(()=>sessionStorage.getItem('nhp_attribution_session_v1')),null);const contextData=await page.evaluate(()=>window.nhpAttribution.context());assert.deepEqual(contextData,{landing_page:'/request-quote'});
+  await context.close();console.log('Revenue browser: '+label+' PASS');
+ }
+ assert.deepEqual(evidence.externalRequests,[]);evidence.checks=['real enquiry form','consented first entry preserved across pages','source inherited through quote and invoice','synthetic correction/history/exclusion','quote outcome and accepted/completed job history','dated partial/full receipts, refund, reversal and correction reconciled','private no-store/noindex','invoice/quote PDFs','consent withdrawal clears attribution','desktop/mobile overflow','no external requests'];
+ writeFileSync(join(output,'revenue-browser-evidence.json'),JSON.stringify(evidence,null,2));
+}finally{clearTimeout(deadline);await Promise.allSettled([browser?.close(),server?.close(),stopServer(child)]);if(server?.process()?.exitCode===null)await stopServer(server.process());}
