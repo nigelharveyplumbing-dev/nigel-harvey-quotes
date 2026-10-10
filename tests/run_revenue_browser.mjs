@@ -84,7 +84,10 @@ try {
     return item;
   }
   const previous=await decisionQuote('won'),replacement=await decisionQuote('lost');
+  const refreshedReport=page.waitForResponse(r=>r.url().includes('/api/revenue/report?')&&r.status()===200);
   await page.getByRole('button',{name:'Source & revenue',exact:true}).click();
+  await refreshedReport;
+  await page.waitForFunction(expected=>Array.from(document.querySelectorAll('#revenueDashboard tbody tr')).some(row=>row.cells[0].textContent==='Unknown'&&row.cells[5].textContent===expected),label==='desktop'?'1 / 1 (50%)':'1 / 2 (33.3%)');
   await page.locator('#revenueDashboard').getByText('Unknown',{exact:true}).waitFor();
   const sourceRow=page.locator('#revenueDashboard tbody tr').filter({hasText:'Unknown'});
   assert.equal(await sourceRow.locator('td').nth(5).innerText(),label==='desktop'?'1 / 1 (50%)':'1 / 2 (33.3%)');
@@ -104,6 +107,7 @@ try {
   await page.getByRole('button',{name:'Confirm revision link',exact:true}).click();assert.equal((await linked).status(),200);
   await page.locator('#revenueWorkflowHistory').getByText('Explicit revision of quote #'+previous.id,{exact:false}).waitFor();
   assert.equal(await page.locator('#revenueRevisionConfirmed').isChecked(),false);
+  await page.waitForFunction(expected=>Array.from(document.querySelectorAll('#revenueDashboard tbody tr')).some(row=>row.cells[0].textContent==='Unknown'&&row.cells[6].textContent===expected),label==='desktop'?'0 / 1 (0%)':'0 / 2 (0%)');
   assert.equal(await sourceRow.locator('td').nth(6).innerText(),label==='desktop'?'0 / 1 (0%)':'0 / 2 (0%)');
   const downloadReady=page.waitForEvent('download');await page.getByRole('button',{name:'Download aggregate CSV',exact:true}).click();
   const download=await downloadReady;assert.equal(download.suggestedFilename(),'source-revenue-aggregate.csv');
