@@ -52,12 +52,18 @@ class GrowthBatch4Tests(unittest.TestCase):
         self.assertEqual(page.h1.get_text(" ", strip=True),
                          "Plumber in Guildford & Across Surrey")
         description = page.select_one('meta[name="description"]')["content"]
-        self.assertIn("24 hours a day, including overnight", description)
+        self.assertIn("out-of-hours emergency callouts subject to availability", description)
         self.assertLessEqual(len(description), 160)
         text = page.get_text(" ", strip=True)
         for phrase in ("West Horsley", "Aldershot", "Camberley",
-                       "deal directly with me, Nigel", "Timing depends on the problem and location"):
+                       "deal directly with me, Nigel", "subject to availability"):
             self.assertIn(phrase, text)
+        # Coverage must be visible in the introductory copy, with its qualifier,
+        # rather than only appearing in a distant section or machine metadata.
+        hero = page.select_one("section.hero").get_text(" ", strip=True)
+        self.assertIn("Over 20 years of plumbing experience", hero)
+        self.assertIn("South West London", hero)
+        self.assertIn("depending on the location and work involved", hero)
         for path in ("/plumber-guildford", "/plumber-aldershot", "/plumber-camberley",
                      "/emergency-plumber-surrey", "/leak-repair-guildford"):
             self.assertTrue(page.select_one(f'a[href="{path}"]'), path)
@@ -70,18 +76,23 @@ class GrowthBatch4Tests(unittest.TestCase):
         self.assertEqual(business["legalName"], "Nigel Harvey Ltd")
         self.assertIn("operated by Nigel Harvey", business["description"])
         self.assertIn("West Horsley", business["areaServed"])
+        self.assertIn("South West London", business["areaServed"])
+        self.assertNotIn("openingHoursSpecification", business)
         visible_questions = [item.get_text(" ", strip=True)
                              for item in page.select("section.faq details summary")]
         schema_questions = [item["name"] for item in faq["mainEntity"]]
         self.assertEqual(schema_questions, visible_questions)
+        self.assertEqual([item["acceptedAnswer"]["text"] for item in faq["mainEntity"]],
+                         [item.get_text(" ", strip=True)
+                          for item in page.select("section.faq details p")])
 
     def test_priority_snippets_and_urgent_wording(self):
         expectations = {
             "/plumber-guildford": (
                 "Plumber in Guildford | Local Repairs | Nigel Harvey Plumbing",
-                "24 hours", "/emergency-plumber-surrey"),
+                "emergency", "/emergency-plumber-surrey"),
             "/emergency-plumber-surrey": (
-                "24-Hour Plumber in Surrey | Nigel Harvey Plumbing",
+                "Emergency Plumbing Callouts in Surrey | Nigel Harvey Plumbing",
                 "including overnight", "/emergency-plumber-guildford"),
             "/general-plumbing-surrey": (
                 "General Plumbing & Small Repairs in Surrey | Nigel Harvey Plumbing",
@@ -110,12 +121,15 @@ class GrowthBatch4Tests(unittest.TestCase):
         urgent_text = self.soup("/emergency-plumber-surrey").get_text(" ", strip=True).lower()
         self.assertNotIn("guaranteed arrival", urgent_text)
         self.assertNotIn("immediate attendance", urgent_text)
+        self.assertNotIn("the phone is answered", urgent_text)
+        self.assertIn("subject to availability", urgent_text)
+        self.assertIn("may not answer immediately", urgent_text)
 
     def test_complete_sitemap_metadata_targets_and_internal_links(self):
         sitemap = ElementTree.fromstring(self.client.get("/sitemap.xml").text)
         urls = [item.text for item in sitemap.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")]
-        self.assertEqual(len(urls), 72)
-        self.assertEqual(len(set(urls)), 72)
+        self.assertEqual(len(urls), 78)
+        self.assertEqual(len(set(urls)), 78)
         self.assertTrue(all(url.startswith(PRODUCTION + "/") for url in urls))
 
         titles = {}

@@ -74,14 +74,14 @@ class AdviceTests(unittest.TestCase):
             self.assertEqual(self.client.get('/advice').status_code,200)
             response=self.client.get(a.path)
             self.assertNotIn('noindex',response.headers.get('x-robots-tag',''))
-            self.assertEqual(self.client.get('/sitemap.xml').text.count('<loc>'),76)
+            self.assertEqual(self.client.get('/sitemap.xml').text.count('<loc>'),82)
             self.assertIn(a.path,self.client.get('/sitemap.xml').text)
             for path in [l.path for l in a.services]+['/projects/'+s for s in a.project_slugs]:
                 self.assertIn('href="'+a.path+'"',self.client.get(path).text)
             graph=json.loads(BeautifulSoup(response.text,'html.parser').select_one('script[type="application/ld+json"]').string)['@graph']
             self.assertIn('datePublished',next(x for x in graph if x['@type']=='Article'))
         self.assertEqual(self.advice.ARTICLES[0].status,'draft')
-        self.assertEqual(self.client.get('/sitemap.xml').text.count('<loc>'),74)
+        self.assertEqual(self.client.get('/sitemap.xml').text.count('<loc>'),80)
 
     def test_duplicate_and_near_duplicate_records_rejected(self):
         data=self.a.model_dump(mode='json')

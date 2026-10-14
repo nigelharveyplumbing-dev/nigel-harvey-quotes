@@ -59,7 +59,7 @@ class ApprovedPublicationTests(unittest.TestCase):
                 for link in article.select('a[href^="/"]'):
                     self.assertEqual(client.get(link['href'].split('#')[0]).status_code,200)
                 sitemap=client.get('/sitemap.xml').text
-                self.assertEqual(sitemap.count('<loc>'),76)
+                self.assertEqual(sitemap.count('<loc>'),82)
                 self.assertIn(canonical,sitemap)
                 self.assertEqual(client.get('/app').status_code,401)
                 self.assertEqual(client.get('/api/customers').status_code,401)

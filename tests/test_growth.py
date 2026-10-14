@@ -103,7 +103,7 @@ class GrowthBatchTests(unittest.TestCase):
         with patch.object(m, "_google_reviews_html", return_value='<h2>Customer reviews</h2>'):
             sitemap = ElementTree.fromstring(c.get("/sitemap.xml").text)
             paths = [urlsplit(loc.text).path for loc in sitemap.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")]
-            self.assertEqual(len(paths), 72)
+            self.assertEqual(len(paths), 78)
             for path in paths:
                 with self.subTest(path=path):
                     response = c.get(path)
