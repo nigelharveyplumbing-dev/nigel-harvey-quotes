@@ -473,7 +473,7 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
             ("Can you replace radiators and thermostatic radiator valves?", "Yes. I replace radiators, towel radiators and thermostatic radiator valves (TRVs), and can discuss any pipework adjustments needed. Send dimensions and photographs to help me assess the job."),
         ],
         "emergency-plumber-surrey": [
-            ("Can I call about an urgent leak outside normal working hours?", "You can call about an urgent plumbing problem, including an active leak. Out-of-hours response and attendance depend on location and availability; a call does not guarantee immediate attendance."),
+            ("Can I call about an urgent leak outside normal working hours?", "You can call about an urgent plumbing problem, including an active leak. Out-of-hours response and attendance depend on location and availability; attendance is not confirmed until agreed."),
         ],
         "bathroom-plumbing-surrey": [
             ("Do you replace leaking showers and waterproof shower enclosures?", "Yes. I can assess a leaking shower and discuss shower tray, enclosure and plumbing replacement. Where rebuilding is needed, suitable waterproof backing and tanking can be installed at vulnerable joints. The repair depends on the cause of the leak."),
