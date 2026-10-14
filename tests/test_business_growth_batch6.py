@@ -163,7 +163,7 @@ class BusinessGrowthTests(unittest.TestCase):
             with TestClient(module.app) as client:
                 xml = ElementTree.fromstring(client.get('/sitemap.xml').text)
                 paths = [urlsplit(el.text).path for el in xml.iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
-                self.assertEqual(len(paths), 72)
+                self.assertEqual(len(paths), 78)
                 self.assertFalse(any('blocked-drains' in path for path in paths))
                 for town in ('guildford', 'camberley', 'epsom'):
                     response = client.get('/blocked-drains-' + town, follow_redirects=False)

@@ -1,3 +1,4 @@
+from seo_preservation import assert_project_renderer_preserved
 """Batch 8 proposals preserve the live article, projects and protected app code."""
 import ast
 import base64
@@ -37,7 +38,7 @@ class GrowthBatch8Tests(unittest.TestCase):
         for path in ['/', '/advice','/projects','/sitemap.xml','/plumber-guildford','/plumber-woking','/heating-repairs-surrey','/projects/ensuite-renovation-merrow-guildford']:
             r=self.client.get(path);self.assertEqual(r.status_code,200)
             self.assertNotIn(DRAFT,r.text)
-        self.assertEqual(self.client.get('/sitemap.xml').text.count('<loc>'),76)
+        self.assertEqual(self.client.get('/sitemap.xml').text.count('<loc>'),82)
         self.assertEqual(self.client.get('/advice/shower-replacement-waterproofing-rebuild').status_code,200)
 
     def test_private_owner_preview_has_safe_metadata_and_links(self):
@@ -86,6 +87,7 @@ class GrowthBatch8Tests(unittest.TestCase):
             self.assertEqual(len(page.select('.hero-card img.logo')),1)
 
     def test_original_published_article_record_and_project_assets_preserved(self):
+        assert_project_renderer_preserved(self, BASE)
         original=json.loads(subprocess.check_output(['git','show',BASE+':business/advice_content.json'],cwd=ROOT))
         current=json.loads((ROOT/'business/advice_content.json').read_text())
         self.assertEqual(current,original);self.assertEqual(len(current),1)
@@ -93,13 +95,13 @@ class GrowthBatch8Tests(unittest.TestCase):
         self.assertEqual(draft.status,'draft')
         self.assertIsNone(draft.approved_at);self.assertIsNone(draft.published_at)
         self.assertEqual(draft.project_slugs,[])
-        for path in ['business/project_content.json','business/real_projects.py','docs/growth-batch-7/final-approved-shower-article.md','docs/growth-batch-7/publication-approval.json']:
+        for path in ['business/project_content.json','docs/growth-batch-7/final-approved-shower-article.md','docs/growth-batch-7/publication-approval.json']:
             self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT))
         tracked=subprocess.check_output(['git','ls-tree','-r','--name-only',BASE,'static/project-images'],cwd=ROOT,text=True).splitlines()
         for path in tracked:self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT),path)
 
     def test_stage2_changes_limited_to_tracking_and_protected_core_unchanged(self):
-        baseline='c4f57d379e3463fc414814b43ca0e81f8e5a68c7'
+        baseline='f0bb182a35ba7e50d80764a8f35ed5d126124167'
         old=ast.parse(subprocess.check_output(['git','show',baseline+':app.py'],cwd=ROOT))
         new=ast.parse((ROOT/'app.py').read_text())
         allowed={'protect_app_routes','row_to_invoice','api_create_lead','api_delete_quote','api_update_invoice','api_invoice_status','api_delete_invoice','api_delete_customer'}

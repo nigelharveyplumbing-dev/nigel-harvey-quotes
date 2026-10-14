@@ -1,3 +1,4 @@
+from seo_preservation import assert_project_renderer_preserved
 import base64
 from datetime import datetime
 import hashlib
@@ -74,14 +75,14 @@ class AdviceTests(unittest.TestCase):
             self.assertEqual(self.client.get('/advice').status_code,200)
             response=self.client.get(a.path)
             self.assertNotIn('noindex',response.headers.get('x-robots-tag',''))
-            self.assertEqual(self.client.get('/sitemap.xml').text.count('<loc>'),76)
+            self.assertEqual(self.client.get('/sitemap.xml').text.count('<loc>'),82)
             self.assertIn(a.path,self.client.get('/sitemap.xml').text)
             for path in [l.path for l in a.services]+['/projects/'+s for s in a.project_slugs]:
                 self.assertIn('href="'+a.path+'"',self.client.get(path).text)
             graph=json.loads(BeautifulSoup(response.text,'html.parser').select_one('script[type="application/ld+json"]').string)['@graph']
             self.assertIn('datePublished',next(x for x in graph if x['@type']=='Article'))
         self.assertEqual(self.advice.ARTICLES[0].status,'draft')
-        self.assertEqual(self.client.get('/sitemap.xml').text.count('<loc>'),74)
+        self.assertEqual(self.client.get('/sitemap.xml').text.count('<loc>'),80)
 
     def test_duplicate_and_near_duplicate_records_rejected(self):
         data=self.a.model_dump(mode='json')
@@ -110,10 +111,11 @@ class AdviceTests(unittest.TestCase):
             self.assertIn('Disallow: /',self.client.get('/robots.txt',headers=self.auth).text)
 
     def test_existing_public_content_files_and_core_assets_unchanged(self):
+        assert_project_renderer_preserved(self, 'bdcacc9ff02d041e4ab4c63269b5c7ebba4942a2')
         # Revenue Stage 2 authorises tracking storage and consent scripts.
         # Payment/attribution behavior is covered in test_revenue_tracking. The
         # mixed published/draft and unchanged-page checks live in test_growth_batch8.
-        paths=['business/project_content.json','business/real_projects.py','business/quote_calculation.py','business/account_pricing.py','business/city_account_prices.py','business/lead_email_store.py','business/notifications.py','business/pdf_render.py','static/app.js','static/city_account_prices.js','templates/public_footer.html','templates/public_header.html']
+        paths=['business/project_content.json','business/quote_calculation.py','business/account_pricing.py','business/city_account_prices.py','business/lead_email_store.py','business/notifications.py','business/pdf_render.py','static/app.js','static/city_account_prices.js','templates/public_footer.html','templates/public_header.html']
         for path in paths:
             baseline=subprocess.check_output(['git','show','bdcacc9ff02d041e4ab4c63269b5c7ebba4942a2:'+path],cwd=ROOT)
             self.assertEqual((ROOT/path).read_bytes(),baseline,path)

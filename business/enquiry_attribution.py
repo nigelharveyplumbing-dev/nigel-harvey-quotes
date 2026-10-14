@@ -10,6 +10,10 @@ CHANNELS = ('Website form', 'Phone', 'WhatsApp', 'Email', 'Directory message', '
 KINDS = ('unconfirmed', 'genuine', 'synthetic', 'legacy')
 CONTEXT_KEYS = ('landing_page', 'referrer', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term')
 
+# Bump when classification rules change; never assign a modern rule to historic data.
+ATTRIBUTION_RULE_VERSION = 'attribution-v1'
+LEGACY_RULE_VERSION = 'legacy-unversioned'
+
 def utc_now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -58,9 +62,10 @@ def create_origin(conn, *, lead_id=None, source='Unknown', channel='Unknown', co
         confidence = 'limited'
     if kind == 'synthetic' and not test_reference.strip():
         raise ValueError('Synthetic Test requires a test reference')
+    rule_version = LEGACY_RULE_VERSION if kind == 'legacy' else ATTRIBUTION_RULE_VERSION
     cursor = conn.execute('''INSERT INTO enquiry_origins
-        (lead_id,captured_source,contact_channel,record_kind,evidence_json,method,confidence,captured_at,test_reference)
-        VALUES (?,?,?,?,?,?,?,?,?)''', (lead_id,source,channel,kind,json.dumps(clean),method,confidence,utc_now(),test_reference.strip()[:100]))
+        (lead_id,captured_source,contact_channel,record_kind,evidence_json,method,confidence,captured_at,test_reference,rule_version)
+        VALUES (?,?,?,?,?,?,?,?,?,?)''', (lead_id,source,channel,kind,json.dumps(clean),method,confidence,utc_now(),test_reference.strip()[:100],rule_version))
     return cursor.lastrowid
 
 def origin(conn, origin_id):
@@ -77,6 +82,8 @@ def origin(conn, origin_id):
     item['kind'] = corrections[-1]['new_kind'] if corrections else item['record_kind']
     item['test_reference'] = corrections[-1]['new_test_reference'] if corrections else item['test_reference']
     item['revision'] = len(corrections)
+    # Captured version is immutable; later corrections carry their own version.
+    item['effective_rule_version'] = corrections[-1]['rule_version'] if corrections else item['rule_version']
     item['evidence'] = json.loads(item.pop('evidence_json'))
     return item
 
@@ -93,8 +100,8 @@ def correct(conn, origin_id, *, source, kind, reason, expected_revision, actor, 
     if kind == 'synthetic' and not test_reference:
         raise ValueError('Synthetic Test requires a test reference')
     conn.execute('''INSERT INTO origin_corrections
-        (origin_id,revision,old_source,new_source,old_kind,new_kind,reason,actor,recorded_at,new_test_reference,old_channel,new_channel)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', (origin_id,expected_revision+1,item['source'],source,item['kind'],kind,reason.strip()[:500],actor,utc_now(),test_reference[:100],item['contact_channel'],channel))
+        (origin_id,revision,old_source,new_source,old_kind,new_kind,reason,actor,recorded_at,new_test_reference,old_channel,new_channel,rule_version)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''', (origin_id,expected_revision+1,item['source'],source,item['kind'],kind,reason.strip()[:500],actor,utc_now(),test_reference[:100],item['contact_channel'],channel,ATTRIBUTION_RULE_VERSION))
     return origin(conn, origin_id)
 
 def inherited(conn, *, lead_id=None, quote_id=None, invoice_id=None):

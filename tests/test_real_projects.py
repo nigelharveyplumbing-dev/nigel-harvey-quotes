@@ -92,7 +92,7 @@ class RealProjectTests(unittest.TestCase):
             ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
             entries = sitemap.findall("s:url", ns)
             locations = [node.findtext("s:loc", namespaces=ns) for node in entries]
-            self.assertEqual(len(locations), 74)
+            self.assertEqual(len(locations), 80)
             self.assertEqual(len(locations), len(set(locations)))
             self.assertIn("https://www.nigelharveyplumbing.co.uk/projects", locations)
             for entry in entries:
@@ -282,9 +282,10 @@ class RealProjectTests(unittest.TestCase):
             xml = ElementTree.fromstring(self.client.get("/sitemap.xml").text)
             return {urlsplit(node.text).path for node in xml.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")}
 
-        self.assertEqual(paths(), baseline)
+        london = {"/plumber-" + item["slug"] for item in self.module.public_pages.SOUTH_WEST_LONDON_PAGES}
+        self.assertEqual(paths(), baseline | london)
         with patch.object(self.projects, "PROJECTS", (self.published(),)):
-            self.assertEqual(paths(), baseline | {"/projects", self.project.path})
+            self.assertEqual(paths(), baseline | london | {"/projects", self.project.path})
         self.assertEqual(len(evidence["removed_since_growth_5"]), 13)
         for path in evidence["removed_since_growth_5"]:
             response = self.client.get(path, follow_redirects=False)

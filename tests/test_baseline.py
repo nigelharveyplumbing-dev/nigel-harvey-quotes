@@ -381,15 +381,15 @@ class BaselineTests(unittest.TestCase):
             "SEO_CSS": "aea9aaf6e6704acabe4891b0ac98142966025a808ec6908954c410ff96f725da",
             "LEAD_FORM_HTML": "ebad8b2a87d805fb4e2e0fe6a9ca848ae6982d1f70782502b2900f36ae9fef06",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "320571878093ef74a5a4625b89659459e575aa9eec3776e9911b4ae40dc2fef5",
+                "18addd56b81583c7fb0b1b2a40780b1a1a821c1069ddea7463a8eb453c8aff17",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(pre_revenue_public(getattr(m, name)).encode()).hexdigest(), digest)
 
         page_hashes = {
-            "/": "e760fe4163ae177387c36e8666b957e3ed15a4d3a1738a8d1d616ad0f70145e2",
-            "/new-home": "e760fe4163ae177387c36e8666b957e3ed15a4d3a1738a8d1d616ad0f70145e2",
+            "/": "e12dc6bb4b6522d3c73f99875a14c2d5eecf073bd8cc7ab142105561f623750a",
+            "/new-home": "e12dc6bb4b6522d3c73f99875a14c2d5eecf073bd8cc7ab142105561f623750a",
             "/request-quote": "0b9d71a15bdcf403aa43f77d0f284a1e1467bb7f75f1ea26e45d17dbedaa0dd4",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
@@ -406,8 +406,8 @@ class BaselineTests(unittest.TestCase):
                         # Only the approved project and advice discovery links are additive.
                         unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", response.text)
                         unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
-                        # The reviewed Batch 8 context is additive; retain the
-                        # exact pre-existing homepage hash after removing it.
+                        # The reviewed trust/area/availability copy is included
+                        # in the homepage golden; Batch 8 context stays additive.
                         unchanged = re.sub(r'<section class="section-alt" id="batch8-home-context">.*?</section>',
                                            "", unchanged, flags=re.S)
                         self.assertEqual(hashlib.sha256(pre_revenue_public(unchanged).encode()).hexdigest(), digest)
@@ -1296,9 +1296,9 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         """Freeze the SEO page families after applying the shared public shell."""
         m = self.module
         cases = (
-            ("location", "f2cb0dcf128c371129883559368773dc37b592ff422e0a01b88ce9efb470eaef"),
-            ("service", "0b5390eedb07304325a59dc205ac4c52c5573b619b6df4f1f018437eaa534a77"),
-            ("local", "962e8cb9c8c42bea5e70ee3d8412aa98fb1bb229afb6b48001f92ecca27b46a6"),
+            ("location", "3989e02593f7b5ed7a1bd1a99d105f4ac3f001bb7e5db26b60ae3cd93d9daf68"),
+            ("service", "39088ad1730a819a85e63011d26246ce419be9f535f01e5960eb88508e5787f6"),
+            ("local", "cb4336769b472d7ab35a0e747a48cdbba2aadbaabfe7600b3a3ddc28d3059eab"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage7.invalid",

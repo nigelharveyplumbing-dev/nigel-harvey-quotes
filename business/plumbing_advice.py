@@ -116,6 +116,18 @@ def sitemap_entries():
     return ([('/advice', max(a.updated_on for a in published).isoformat())] +
             [(a.path, a.updated_on.isoformat()) for a in published]) if published else []
 
+def article_project_image(a):
+    """Use a relevant photo only from an explicitly published linked project."""
+    if a.status != 'published':
+        return None
+    for project in real_projects.visible_projects():
+        if project.slug in a.project_slugs:
+            for image in project.images:
+                if image.id == 'marmox-board-and-pipework':
+                    return project, image
+    return None
+
+
 def schema_graph(a, absolute_url, request=None):
     from business.public_pages import public_business_entity
     home, canonical = absolute_url('/', request), absolute_url(a.path, request)
@@ -125,6 +137,9 @@ def schema_graph(a, absolute_url, request=None):
                'mainEntityOfPage': canonical, 'headline': a.title, 'description': a.summary,
                'inLanguage': 'en-GB', 'author': {'@type': 'Person', 'name': a.author, 'url': home + '#about'},
                'publisher': {'@id': home + '#business'}}
+    photo = article_project_image(a)
+    if photo:
+        article['image'] = [absolute_url(real_projects.image_path(*photo), request)]
     if a.status == 'published':
         article.update(datePublished=a.published_at.isoformat(), dateModified=a.updated_on.isoformat())
     breadcrumbs = {'@type': 'BreadcrumbList', 'itemListElement': [
@@ -138,6 +153,10 @@ def render_article(a, *, absolute_url, request=None, staging=False):
                   f'Published {a.published_at:%d %B %Y} · Updated {a.updated_on:%d %B %Y}')
     content = ('<div class="project-draft wrap">Draft for Nigel’s review · not published</div>' if draft else '')
     content += f'<article class="wrap advice-story"><p class="kicker">Plumbing advice</p><h1>{escape(a.title)}</h1><div class="advice-answer"><p>{escape(a.summary)}</p></div><p class="project-byline">By <a href="/#about">Nigel Harvey</a> · Nigel Harvey Plumbing<br>{escape(date_label)}</p><p>{escape(a.author_note)}</p>'
+    photo = article_project_image(a)
+    if photo:
+        project, image = photo
+        content += '<figure class="advice-project-image">' + real_projects.image_html(project, image) + '<figcaption>' + escape(image.caption) + ' From the <a href="' + project.path + '">Merrow ensuite project</a>.</figcaption></figure>'
     for s in a.sections:
         content += '<section><h2>' + escape(s.heading) + '</h2>' + ''.join('<p>' + escape(p) + '</p>' for p in s.paragraphs) + '</section>'
     content += '<section class="advice-safety"><h2>Safety considerations</h2>' + ''.join('<p>' + escape(p) + '</p>' for p in a.safety) + '</section>'
@@ -151,8 +170,9 @@ def render_article(a, *, absolute_url, request=None, staging=False):
         content += '<section><h2>Further reading</h2><ul>' + ''.join(f'<li><a href="{escape(url, quote=True)}" rel="noopener noreferrer">{escape(url.split("/")[2])} — {escape(a.source_label)}</a></li>' for url in a.sources) + '</ul><p>Check the current instructions for the actual products selected for your installation.</p></section>'
     content += '</article>'
     html = real_projects.page_shell(a.seo_title, a.meta_description, absolute_url(a.path, request), content,
-                                   noindex=draft or staging, schema=schema_graph(a, absolute_url, request))
-    return html.replace('</style>', '.advice-story{max-width:850px;padding:40px 0 64px}.advice-story h1{font-size:clamp(2rem,5vw,3rem);line-height:1.15}.advice-story h2{margin-top:35px}.advice-story p{line-height:1.75}.advice-answer{background:#eef5f7;border-left:5px solid #d7a844;padding:12px 22px}.advice-safety{border:1px solid #b4c8ce;border-radius:8px;padding:5px 22px;margin:30px 0}.advice-story a{overflow-wrap:anywhere}</style>')
+                                   noindex=draft or staging, schema=schema_graph(a, absolute_url, request),
+                                   og_image=absolute_url(real_projects.image_path(*photo), request) if photo else None)
+    return html.replace('</style>', '.advice-story{max-width:850px;padding:40px 0 64px}.advice-story h1{font-size:clamp(2rem,5vw,3rem);line-height:1.15}.advice-story h2{margin-top:35px}.advice-story p{line-height:1.75}.advice-answer{background:#eef5f7;border-left:5px solid #d7a844;padding:12px 22px}.advice-safety{border:1px solid #b4c8ce;border-radius:8px;padding:5px 22px;margin:30px 0}.advice-story a{overflow-wrap:anywhere}.advice-project-image{margin:30px 0}.advice-project-image img{display:block;width:100%;height:auto}.advice-project-image figcaption{font-size:.9rem;line-height:1.6;padding-top:10px}</style>')
 
 def render_index(*, absolute_url, request=None, include_drafts=False, staging=False):
     content = '<section class="wrap project-index"><p class="kicker">Nigel Harvey Plumbing</p><h1>Plumbing advice</h1><p>Practical explanations to help you understand domestic plumbing problems and plan work.</p>'

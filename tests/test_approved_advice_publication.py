@@ -42,7 +42,7 @@ class ApprovedPublicationTests(unittest.TestCase):
                 self.assertEqual([p for p in paragraphs if p in expected],expected)
                 self.assertEqual(len(expected),25)
                 self.assertNotIn('Publication metadata and link instructions',response.text)
-                self.assertEqual(len(article.select('img')),0)
+                self.assertEqual(len(article.select('.advice-project-image img')),1)
                 self.assertNotIn('noindex',response.headers.get('x-robots-tag',''))
                 self.assertEqual(soup.title.get_text(),a.seo_title)
                 self.assertEqual(soup.select_one('meta[name=description]')['content'],a.meta_description)
@@ -59,7 +59,7 @@ class ApprovedPublicationTests(unittest.TestCase):
                 for link in article.select('a[href^="/"]'):
                     self.assertEqual(client.get(link['href'].split('#')[0]).status_code,200)
                 sitemap=client.get('/sitemap.xml').text
-                self.assertEqual(sitemap.count('<loc>'),76)
+                self.assertEqual(sitemap.count('<loc>'),82)
                 self.assertIn(canonical,sitemap)
                 self.assertEqual(client.get('/app').status_code,401)
                 self.assertEqual(client.get('/api/customers').status_code,401)

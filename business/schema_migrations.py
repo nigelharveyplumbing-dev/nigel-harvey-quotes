@@ -1,22 +1,27 @@
 """Explicit additive migration. Never invoked by application startup."""
 import argparse
+import ast
+import inspect
+import textwrap
 import hashlib
 import json
 import sqlite3
 from pathlib import Path
 
-from business.enquiry_attribution import create_origin, enabled, utc_now
+from business.enquiry_attribution import (
+    LEGACY_RULE_VERSION, create_origin, enabled, utc_now,
+)
 
 VERSION = 1
 DDL = (
-'''CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)''',
+'''CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL, checksum TEXT NOT NULL)''',
 '''CREATE TABLE enquiry_origins(id INTEGER PRIMARY KEY, lead_id INTEGER UNIQUE REFERENCES leads(id),
  captured_source TEXT NOT NULL, contact_channel TEXT NOT NULL, record_kind TEXT NOT NULL,
  evidence_json TEXT NOT NULL, method TEXT NOT NULL, confidence TEXT NOT NULL, captured_at TEXT NOT NULL,
- test_reference TEXT NOT NULL DEFAULT '')''',
+ test_reference TEXT NOT NULL DEFAULT '', rule_version TEXT NOT NULL)''',
 '''CREATE TABLE origin_corrections(id INTEGER PRIMARY KEY, origin_id INTEGER NOT NULL REFERENCES enquiry_origins(id),
  revision INTEGER NOT NULL, old_source TEXT NOT NULL,new_source TEXT NOT NULL,old_kind TEXT NOT NULL,new_kind TEXT NOT NULL,
- reason TEXT NOT NULL,actor TEXT NOT NULL,recorded_at TEXT NOT NULL,new_test_reference TEXT NOT NULL DEFAULT '',old_channel TEXT NOT NULL,new_channel TEXT NOT NULL,UNIQUE(origin_id,revision))''',
+ reason TEXT NOT NULL,actor TEXT NOT NULL,recorded_at TEXT NOT NULL,new_test_reference TEXT NOT NULL DEFAULT '',old_channel TEXT NOT NULL,new_channel TEXT NOT NULL,rule_version TEXT NOT NULL,UNIQUE(origin_id,revision))''',
 '''CREATE TABLE invoice_payments(id INTEGER PRIMARY KEY,invoice_id INTEGER NOT NULL REFERENCES invoices(id),
  amount_pence INTEGER NOT NULL CHECK(amount_pence != 0),received_on TEXT,recorded_at TEXT NOT NULL,
  entry_type TEXT NOT NULL,method TEXT NOT NULL,reference TEXT NOT NULL DEFAULT '',reason TEXT NOT NULL DEFAULT '',
@@ -33,6 +38,39 @@ DDL = (
 '''CREATE INDEX idx_workflow_entity ON workflow_events(entity_type,entity_id,id)''',
 )
 NEW_TABLES = ('schema_migrations','enquiry_origins','origin_corrections','invoice_payments','workflow_events','enquiry_interactions','revenue_operations')
+
+
+def migration_checksum():
+    """Deterministically fingerprint the exact v1 DDL, backfill and guard code.
+
+    AST normalisation excludes comments, indentation, timestamps and environment
+    values. Changes to migration semantics fail closed on an already-applied v1.
+    A previously deployed, unchecksummed v1 must use a separate v2 upgrade.
+    """
+    from business import enquiry_attribution, lead_store
+    functions = {
+        'migrate': migrate,
+        'preflight': preflight,
+        'inventory': inventory,
+        'hashes': hashes,
+        'create_origin': enquiry_attribution.create_origin,
+        'sanitize_context': enquiry_attribution.sanitize_context,
+        'parse_lead_source': lead_store.parse_lead_source,
+    }
+    source_trees = {
+        name: ast.dump(ast.parse(textwrap.dedent(inspect.getsource(fn))),
+                       annotate_fields=True, include_attributes=False)
+        for name, fn in functions.items()
+    }
+    contract = {
+        'version': VERSION,
+        'ddl': DDL,
+        'new_tables': NEW_TABLES,
+        'legacy_rule_version': LEGACY_RULE_VERSION,
+        'source_trees': source_trees,
+    }
+    canonical = json.dumps(contract, sort_keys=True, separators=(',', ':'), ensure_ascii=True)
+    return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
 def connect(path, readonly=False):
     conn = sqlite3.connect('file:'+str(Path(path).resolve())+('?mode=ro' if readonly else '?mode=rw'), uri=True, timeout=5)
@@ -72,13 +110,26 @@ def preflight(conn):
 
 
 def migrate(path, *, apply=False, fail_after=None):
+    checksum = migration_checksum()
     with connect(path, readonly=not apply) as conn:
         before = inventory(conn)
+        # Unknown or partially recorded migration histories must not be treated
+        # as a fresh database. Do not attempt to repair them automatically.
+        if 'schema_migrations' in before:
+            versions = [r[0] for r in conn.execute('SELECT version FROM schema_migrations ORDER BY version')]
+            if versions != [VERSION]:
+                raise ValueError('Unexpected migration version state; stop for owner review')
         if enabled(conn):
-            return {'version':VERSION,'already_applied':True,'inventory':before}
+            columns = {r['name'] for r in conn.execute('PRAGMA table_info(schema_migrations)')}
+            if 'checksum' not in columns:
+                raise ValueError('Existing v1 migration has no checksum; stop for a separately versioned v2 review')
+            saved = conn.execute('SELECT checksum FROM schema_migrations WHERE version=?', (VERSION,)).fetchone()
+            if not saved or saved['checksum'] != checksum:
+                raise ValueError('Migration v1 checksum mismatch; stop before any writes')
+            return {'version':VERSION,'checksum':checksum,'already_applied':True,'inventory':before}
         safety = preflight(conn)
         original = hashes(conn,before)
-        plan = {'version':VERSION,'already_applied':False,'dry_run':not apply,'inventory':before,'preflight':safety,
+        plan = {'version':VERSION,'checksum':checksum,'already_applied':False,'dry_run':not apply,'inventory':before,'preflight':safety,
                 'legacy_positive_paid':conn.execute('SELECT COUNT(*) FROM invoices WHERE amount_paid>0').fetchone()[0]}
         if not apply:
             return plan
@@ -123,7 +174,7 @@ def migrate(path, *, apply=False, fail_after=None):
                 raise RuntimeError('Injected migration rollback rehearsal')
             if hashes(conn,before) != original:
                 raise RuntimeError('Legacy records changed during additive migration')
-            conn.execute('INSERT INTO schema_migrations VALUES (?,?)',(VERSION,utc_now()))
+            conn.execute('INSERT INTO schema_migrations(version,applied_at,checksum) VALUES (?,?,?)',(VERSION,utc_now(),checksum))
             for table in ('enquiry_origins','origin_corrections','invoice_payments','workflow_events'):
                 for operation in ('UPDATE','DELETE'):
                     conn.execute('CREATE TRIGGER immutable_'+table+'_'+operation.lower()+' BEFORE '+operation+' ON '+table+" BEGIN SELECT RAISE(ABORT,'History is append-only'); END")
