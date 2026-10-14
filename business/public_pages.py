@@ -683,6 +683,8 @@ def render_south_west_london_page(location: dict, request: Request | None = None
         (f"Can I book an emergency callout in {name}?", "Emergency and out-of-hours callouts, including overnight, are subject to availability. Nigel may not answer immediately. Call or leave a message with the postcode and problem; attendance is not confirmed until agreed."),
         ("What should I send for a quote?", "Send the postcode, a short description, photographs of safely visible fittings and any access details. Nigel will discuss whether a visit is needed and set out the proposed work and relevant charges before you proceed."),
     ]
+    if location["slug"] == "wimbledon":
+        faqs.append(("Do you take plumbing jobs in Wimbledon and nearby South West London?", "I am based in Guildford and consider plumbing enquiries in Wimbledon and surrounding South West London areas, subject to the job, travel and availability. Send the postcode and details so I can confirm."))
     schemas = [
         {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
             {"@type": "ListItem", "position": 1, "name": "Home", "item": absolute_url("/", request)},
