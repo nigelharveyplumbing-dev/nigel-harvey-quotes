@@ -475,7 +475,7 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
         "emergency-plumber-surrey": [
             ("Can I call about an urgent leak outside normal working hours?", "You can call about an urgent plumbing problem, including an active leak. Out-of-hours response and attendance depend on location and availability; a call does not guarantee immediate attendance."),
         ],
-        "bathroom-plumbing": [
+        "bathroom-plumbing-surrey": [
             ("Do you replace leaking showers and waterproof shower enclosures?", "Yes. I can assess a leaking shower and discuss shower tray, enclosure and plumbing replacement. Where rebuilding is needed, suitable waterproof backing and tanking can be installed at vulnerable joints. The repair depends on the cause of the leak."),
             ("Can you renovate a bathroom in Guildford?", "I undertake bathroom plumbing and renovation work in Guildford and surrounding Surrey areas, including replacing baths, showers, toilets, basins and associated pipework. Send photos and a description to discuss a quote."),
         ],
