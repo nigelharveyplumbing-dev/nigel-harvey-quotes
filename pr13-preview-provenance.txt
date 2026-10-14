@@ -1,0 +1,2 @@
+Isolated static review build from PR #13 source commit 50f9aa37f3cf92ea85bfc872f3563a1854ceb5f8.
+Ephemeral synthetic SQLite only. Public catalogue from repository; no private fixtures. No credentials or live customer/City data. Contact links, forms, analytics and scripts stripped. Never run the application as a deployed service.
