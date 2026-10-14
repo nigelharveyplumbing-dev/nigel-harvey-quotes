@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import unittest
 from unittest.mock import patch
+from xml.etree import ElementTree as ET
 from bs4 import BeautifulSoup
 from fastapi.testclient import TestClient
 from local_browser_server import disposable_app
@@ -21,10 +22,11 @@ class SeoCleanupTests(unittest.TestCase):
         cls.addClassCleanup(cls.client.__exit__, None, None, None)
 
     def test_all_public_metadata_remains_unique_concise_and_canonical(self):
-        sitemap = BeautifulSoup(self.client.get('/sitemap.xml').text, 'xml')
+        sitemap = ET.fromstring(self.client.get('/sitemap.xml').text)
+        urls = sitemap.findall('{http://www.sitemaps.org/schemas/sitemap/0.9}url/{http://www.sitemaps.org/schemas/sitemap/0.9}loc')
         titles, descriptions = [], []
-        self.assertEqual(len(sitemap.select('loc')), 82)
-        for loc in sitemap.select('loc'):
+        self.assertEqual(len(urls), 82)
+        for loc in urls:
             path = loc.text.split('.co.uk', 1)[1]
             with self.subTest(path=path):
                 response = self.client.get(path)
