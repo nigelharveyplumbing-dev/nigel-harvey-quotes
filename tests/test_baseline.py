@@ -396,13 +396,7 @@ class BaselineTests(unittest.TestCase):
                         # in the homepage golden; Batch 8 context stays additive.
                         unchanged = re.sub(r'<section class="section-alt" id="batch8-home-context">.*?</section>',
                                            "", unchanged, flags=re.S)
-                        if name == "service":
-                    # Only strip the newly added Batch 9 FAQ block before
-                    # comparing against the preserved legacy service snapshot.
-                    unchanged = re.sub(
-                        r'<div class="wrap section"><h2>Common questions</h2>.*?</div>',
-                        "", unchanged, count=1, flags=re.DOTALL)
-                self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
+                        self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
     def test_active_homepage_open_app_navigation(self):
         m = self.module
@@ -1307,6 +1301,10 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
                 # Freeze every existing byte outside the additive discovery link.
                 unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", rendered[name])
                 unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
+                if name == "service":
+                    unchanged = re.sub(
+                        r'<div class="wrap section"><h2>Common questions</h2>.*?</div>',
+                        "", unchanged, count=1, flags=re.DOTALL)
                 self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
     def test_stage7_merchant_parsing_and_matching_offline(self):
