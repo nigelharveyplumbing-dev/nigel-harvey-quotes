@@ -396,7 +396,13 @@ class BaselineTests(unittest.TestCase):
                         # in the homepage golden; Batch 8 context stays additive.
                         unchanged = re.sub(r'<section class="section-alt" id="batch8-home-context">.*?</section>',
                                            "", unchanged, flags=re.S)
-                        self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
+                        if name == "service":
+                    # Only strip the newly added Batch 9 FAQ block before
+                    # comparing against the preserved legacy service snapshot.
+                    unchanged = re.sub(
+                        r'<div class="wrap section"><h2>Common questions</h2>.*?</div>',
+                        "", unchanged, count=1, flags=re.DOTALL)
+                self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
     def test_active_homepage_open_app_navigation(self):
         m = self.module
