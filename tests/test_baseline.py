@@ -1302,9 +1302,12 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
                 unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", rendered[name])
                 unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
                 if name == "service":
-                    unchanged = re.sub(
-                        r'<div class="wrap section"><h2>Common questions</h2>.*?</div>\\n',
+                    # Remove the entire additive FAQ wrapper, including nested
+                    # FAQ cards, stopping at the original next section.
+                    unchanged, removed = re.subn(
+                        r'<div class="wrap section"><h2>Common questions</h2>.*?</div>\\n(?=<div class="wrap section"><h2>Areas covered)',
                         "", unchanged, count=1, flags=re.DOTALL)
+                    self.assertEqual(removed, 1, "Batch 9 FAQ section missing")
                 self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
     def test_stage7_merchant_parsing_and_matching_offline(self):
