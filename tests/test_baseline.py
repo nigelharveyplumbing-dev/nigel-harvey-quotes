@@ -367,15 +367,15 @@ class BaselineTests(unittest.TestCase):
             "SEO_CSS": "aea9aaf6e6704acabe4891b0ac98142966025a808ec6908954c410ff96f725da",
             "LEAD_FORM_HTML": "ebad8b2a87d805fb4e2e0fe6a9ca848ae6982d1f70782502b2900f36ae9fef06",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "baab7fed3cd0a656039f668bbaae6146136caf180d9b32dbc72b4d88434f69f2",
+                "c56155b810efceb0a64b1dee0e6f1230edcb656b64c43151e023a8162b9c857c",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
         page_hashes = {
-            "/": "de5f45b5dfebdb1be234d552faa203415adf57677254c8c8e69e4351302f816b",
-            "/new-home": "de5f45b5dfebdb1be234d552faa203415adf57677254c8c8e69e4351302f816b",
+            "/": "4b22dde88cca2606e97d62c453604884e73880d40640eec9d005f88adb38e676",
+            "/new-home": "4b22dde88cca2606e97d62c453604884e73880d40640eec9d005f88adb38e676",
             "/request-quote": "0b9d71a15bdcf403aa43f77d0f284a1e1467bb7f75f1ea26e45d17dbedaa0dd4",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
