@@ -210,6 +210,7 @@ def evaluate(result):
     db, web, identity = result["database"], result["http"], result["identity"]
     origin = identity["origin"]
     expected_robots = "Disallow: /" if identity["environment"] == "staging" else "Allow: /"
+    expected_sitemap_count = 82 if identity["environment"] == "production" else 76
     return (db["integrity"] == "ok" and db["mounted"] and not db["missing_columns"]
             and all(code == 200 for code in web["api_statuses"].values())
             and all(code == 200 for code in web["public_statuses"].values())
@@ -220,8 +221,8 @@ def evaluate(result):
             and web["health"].get("backup_count") == db["backup_files"]
             and all(web["documents"].values())
             and all(code == 401 for code in web["anonymous_statuses"].values())
-            and web["sitemap_status"] == 200 and web["sitemap_count"] == 76
-            and web["sitemap_unique"] == 76 and not web["crawl_failures"]
+            and web["sitemap_status"] == 200 and web["sitemap_count"] == expected_sitemap_count
+            and web["sitemap_unique"] == expected_sitemap_count and not web["crawl_failures"]
             and not web["duplicate_titles"] and not web["duplicate_descriptions"]
             and not web["duplicate_h1s"] and web["robots_status"] == 200
             and expected_robots in web["robots"]
