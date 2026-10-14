@@ -135,7 +135,7 @@ try {
   const sitemap = await (await context.request.get(origin + '/sitemap.xml')).text();
   assert.equal(sitemap.includes(path), published, 'Publication sitemap gate');
   if (published) {
-    assert.equal((sitemap.match(/<loc>/g) || []).length, 74);
+    assert.equal((sitemap.match(/<loc>/g) || []).length, 80);
     const links = ['/plumber-merrow', '/plumber-guildford', '/bathroom-plumbing-surrey', '/bathroom-plumbing-guildford', '/bathroom-plumbing-merrow', '/heating-repairs-surrey'];
     for (const link of links) assert((await (await anonymous.request.get(origin + link)).text()).includes(`href="${path}"`));
     assert((await (await anonymous.request.get(origin + '/projects')).text()).includes(path));

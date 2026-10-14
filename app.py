@@ -1469,7 +1469,7 @@ def robots_txt(request: Request):
 @app.get("/sitemap.xml")
 def sitemap_xml(request: Request):
     urls = ["/", "/request-quote"]
-    urls.extend(f"/plumber-{item['slug']}" for item in LOCATION_PAGES)
+    urls.extend(f"/plumber-{item['slug']}" for item in LOCATION_PAGES + public_pages.SOUTH_WEST_LONDON_PAGES)
     urls.extend(f"/{item['slug']}" for item in SERVICE_PAGES)
     urls.extend(
         f"/{service['slug']}-{location['slug']}"
@@ -1564,7 +1564,7 @@ def add_project_evidence(html: str, request: Request):
 
 @app.get("/plumber-{area_slug}", response_class=HTMLResponse)
 def location_page(area_slug: str, request: Request):
-    page = next((item for item in LOCATION_PAGES if item["slug"] == area_slug.lower()), None)
+    page = next((item for item in LOCATION_PAGES + public_pages.SOUTH_WEST_LONDON_PAGES if item["slug"] == area_slug.lower()), None)
     if not page:
         raise HTTPException(status_code=404, detail="Area page not found")
     logo_html = get_company_logo_html(get_company_logo_value())

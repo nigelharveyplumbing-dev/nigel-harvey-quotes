@@ -90,7 +90,7 @@ try{
  assert.equal((await anonymous.request.get(origin+draft,{headers:{Authorization:'Basic ZmFrZTpmYWtl'}})).status(),404);
  assert(!(await(await anonymous.request.get(origin+'/advice')).text()).includes(draft));
  const sitemap=await(await anonymous.request.get(origin+'/sitemap.xml')).text();
- assert.equal((sitemap.match(/<loc>/g)||[]).length,76);assert(!sitemap.includes(draft));
+ assert.equal((sitemap.match(/<loc>/g)||[]).length,82);assert(!sitemap.includes(draft));
  await anonymous.close();
  });
  const auth=Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64');

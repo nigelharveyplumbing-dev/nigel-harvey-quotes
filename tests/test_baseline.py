@@ -367,15 +367,15 @@ class BaselineTests(unittest.TestCase):
             "SEO_CSS": "aea9aaf6e6704acabe4891b0ac98142966025a808ec6908954c410ff96f725da",
             "LEAD_FORM_HTML": "ebad8b2a87d805fb4e2e0fe6a9ca848ae6982d1f70782502b2900f36ae9fef06",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "c56155b810efceb0a64b1dee0e6f1230edcb656b64c43151e023a8162b9c857c",
+                "18addd56b81583c7fb0b1b2a40780b1a1a821c1069ddea7463a8eb453c8aff17",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
         page_hashes = {
-            "/": "4b22dde88cca2606e97d62c453604884e73880d40640eec9d005f88adb38e676",
-            "/new-home": "4b22dde88cca2606e97d62c453604884e73880d40640eec9d005f88adb38e676",
+            "/": "a7b3448dff9b2285236b540170ac2c922c15720c388b893f7ae7fdaafec8766f",
+            "/new-home": "a7b3448dff9b2285236b540170ac2c922c15720c388b893f7ae7fdaafec8766f",
             "/request-quote": "0b9d71a15bdcf403aa43f77d0f284a1e1467bb7f75f1ea26e45d17dbedaa0dd4",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
@@ -1282,7 +1282,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         """Freeze the SEO page families after applying the shared public shell."""
         m = self.module
         cases = (
-            ("location", "0c70823154da49a927a49302141aeee8df5968e9342495be0b99d771f1564b54"),
+            ("location", "b37f99d178b65d153a074806e9545b306dd3c322359162c6cc1cac1e088dc62c"),
             ("service", "ca363b69725f65448e0425f1deda27bcce0ab40da85c9ba17a365f7378ee0d88"),
             ("local", "962e8cb9c8c42bea5e70ee3d8412aa98fb1bb229afb6b48001f92ecca27b46a6"),
         )

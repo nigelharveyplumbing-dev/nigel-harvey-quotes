@@ -73,7 +73,7 @@ def public_business_entity(canonical_home: str) -> dict:
         "telephone": "+44" + COMPANY_PHONE_TEL[1:],
         "email": COMPANY_EMAIL,
         "location": {"@type": "Place", "name": "Guildford, Surrey"},
-        "areaServed": ["Guildford", "Woking", "Farnham", "Godalming", "Camberley", "Aldershot", "Leatherhead", "Epsom", "Farnborough", "West Horsley", "Weybridge", "Cobham", "Surrey", "South West London"],
+        "areaServed": ["Guildford", "Woking", "Farnham", "Godalming", "Camberley", "Aldershot", "Leatherhead", "Epsom", "Farnborough", "West Horsley", "Weybridge", "Cobham", "Surrey", "South West London"] + [item["name"] for item in SOUTH_WEST_LONDON_PAGES],
         "url": canonical_home,
         "hasMap": GOOGLE_BUSINESS_PROFILE_URL,
         "sameAs": [GOOGLE_BUSINESS_PROFILE_URL],
@@ -133,6 +133,18 @@ LOCATION_PAGES = [
     {"slug":"merrow","name":"Merrow"},
     {"slug":"burpham","name":"Burpham"},
     {"slug":"shalford","name":"Shalford"},
+]
+
+
+# Owner-confirmed area overviews only. Keep these separate from the Surrey
+# service/location matrix so six area pages do not generate dozens of promises.
+SOUTH_WEST_LONDON_PAGES = [
+    {"slug": "richmond", "name": "Richmond", "planning": "For a Richmond bathroom or shower update, say which fittings are being replaced and whether the layout will change. Photographs of the existing fittings and visible pipework help distinguish a replacement from work that needs a visit before quoting."},
+    {"slug": "kingston", "name": "Kingston upon Thames", "planning": "For a Kingston tap, toilet or waste repair, describe the fitting and what is happening: dripping, running, leaking or not flushing. Say whether water is still escaping and send a photograph of the safely visible fitting."},
+    {"slug": "wimbledon", "name": "Wimbledon", "planning": "For a Wimbledon tap or shower problem, explain whether it affects hot water, cold water or both, and whether it happens at one fitting or several. A photograph of the tap or shower and a description of any dripping or noise can help plan the next step."},
+    {"slug": "putney", "name": "Putney", "planning": "For plumbing work in a Putney flat, include the floor, access arrangements and whether an individual water isolation point is known. If a repair might need a shared supply turned off, explain any building-management arrangements before a visit is agreed."},
+    {"slug": "merton", "name": "Merton", "planning": "For an enquiry in Merton, send the postcode and the specific neighbourhood as well as the job description. The borough includes Wimbledon and Morden, which also have their own pages below; the address helps Nigel confirm travel and availability."},
+    {"slug": "morden", "name": "Morden", "planning": "For a Morden radiator or towel-rail replacement, send the current dimensions, photographs of the valves and visible pipework, and say whether the new fitting will stay in the same position. Nigel can discuss the plumbing work and any preparation needed."},
 ]
 
 
@@ -265,6 +277,9 @@ def get_company_logo_html(logo_value: str) -> str:
 
 
 def render_location_page(location_name: str, logo_html: str, request: Request | None = None, *, absolute_url, _google_reviews_html) -> str:
+    london = next((item for item in SOUTH_WEST_LONDON_PAGES if item["name"] == location_name), None)
+    if london:
+        return render_south_west_london_page(london, request, absolute_url=absolute_url)
     related = ''.join(
         f'<a href="/plumber-{escape(item["slug"])}">Plumber in {escape(item["name"])}</a>'
         for item in LOCATION_PAGES if item['name'] != location_name
@@ -620,4 +635,42 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
 </main>
 <div class="footer"><div class="wrap footer-inner"><div><strong>Nigel Harvey Ltd</strong><br>Plumbing services in Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}<br>{escape(area)}, Surrey and surrounding areas</div></div></div>
 <a href="tel:{escape(COMPANY_PHONE_TEL)}" class="sticky-call">📞 Call Now: {escape(COMPANY_PHONE)}</a>
+</body></html>""")
+
+
+def render_south_west_london_page(location: dict, request: Request | None = None, *, absolute_url) -> str:
+    """Guildford-based coverage, never a claimed London office or guaranteed visit."""
+    name = location["name"]
+    canonical = absolute_url(f"/plumber-{location['slug']}", request)
+    title = f"Plumber in {name} | Nigel Harvey Plumbing"
+    description = f"Plumbing in {name}: taps, toilets, leaks, bathrooms and radiators. Guildford-based Nigel confirms coverage and availability before a visit."
+    faqs = [
+        (f"Is Nigel based in {name}?", "Nigel is based in Guildford, Surrey. He considers jobs in South West London depending on the location, work involved and availability. There is no London office."),
+        (f"Can I book an emergency callout in {name}?", "Emergency and out-of-hours callouts, including overnight, are subject to availability. Nigel may not answer immediately. Call or leave a message with the postcode and problem; attendance is not confirmed until agreed."),
+        ("What should I send for a quote?", "Send the postcode, a short description, photographs of safely visible fittings and any access details. Nigel will discuss whether a visit is needed and set out the proposed work and relevant charges before you proceed."),
+    ]
+    schemas = [
+        {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Home", "item": absolute_url("/", request)},
+            {"@type": "ListItem", "position": 2, "name": f"Plumber in {name}", "item": canonical}]},
+        {"@context": "https://schema.org", "@type": "Service", "name": f"Domestic plumbing in {name}",
+         "serviceType": "Domestic plumbing", "areaServed": [name, "South West London"],
+         "provider": {"@id": absolute_url("/", request) + "#business"}, "url": canonical, "description": description},
+        {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
+            {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in faqs]},
+    ]
+    schema_html = ''.join('<script type="application/ld+json">' + json.dumps(schema, ensure_ascii=False) + '</script>' for schema in schemas)
+    related = ''.join(f'<a href="/plumber-{escape(item["slug"])}">{escape(item["name"])}</a>' for item in SOUTH_WEST_LONDON_PAGES if item != location)
+    faq_html = ''.join(f'<div class="faq-item"><h3>{escape(q)}</h3><p>{escape(a)}</p></div>' for q, a in faqs)
+    return render_shared_public_page(f"""<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{escape(title)}</title><meta name="description" content="{escape(description, quote=True)}"><link rel="canonical" href="{escape(canonical, quote=True)}"><meta property="og:type" content="website"><meta property="og:title" content="{escape(title, quote=True)}"><meta property="og:description" content="{escape(description, quote=True)}"><meta property="og:url" content="{escape(canonical, quote=True)}">{schema_html}<style>{SEO_CSS}</style></head><body>
+<div class="wrap hero"><div class="hero-card"><div class="eyebrow">Guildford based · South West London enquiries</div><h1>Plumber in {escape(name)}</h1>
+<p class="lead">Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey. I consider plumbing jobs in {escape(name)}, depending on the location and work involved. Send your postcode and job details so I can confirm coverage, availability and the next step.</p>
+<div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
+<div class="wrap section"><h2>Planning plumbing work in {escape(name)}</h2><p>{escape(location['planning'])}</p><p>A quote enquiry does not confirm a booking. Travel, timing, the proposed work and relevant charges are discussed before you agree to proceed.</p></div>
+<div class="wrap section"><h2>Domestic plumbing enquiries</h2><div class="grid3"><div class="card item"><h3>Taps, toilets and leaks</h3><p>Dripping taps, toilet mechanisms, wastes, traps and visible pipework leaks. Describe the fault and whether water is still escaping.</p></div><div class="card item"><h3>Bathrooms and showers</h3><p>Sanitaryware connections, shower plumbing, replacement fittings and pipework alterations. Tell me what is changing and what will stay.</p></div><div class="card item"><h3>Radiators and pipework</h3><p>Radiators, valves, towel rails and associated plumbing. Send dimensions and photographs where useful.</p></div></div></div>
+<div class="wrap section"><h2>Urgent and out-of-hours enquiries</h2><p>Emergency and out-of-hours callouts, including overnight, are subject to availability. I may not answer immediately; call or leave a message with your postcode and the problem. Response times and attendance are not guaranteed. If water is escaping, isolate it only if safe to do so.</p></div>
+<div class="wrap section"><h2>Other South West London areas</h2><p>Coverage is confirmed for each job. Merton includes Wimbledon and Morden; the pages help you send the right enquiry details.</p><div class="pill-links">{related}</div><p><a href="/plumber-guildford">Guildford base and Surrey plumbing</a></p></div>
+<div class="wrap section"><h2>Questions before arranging a visit</h2>{faq_html}</div>
+<div class="wrap section"><h2>Discuss your {escape(name)} plumbing job</h2><p>Speak directly with Nigel. Send the postcode and details to discuss whether I can help.</p><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div>
 </body></html>""")
