@@ -64,7 +64,14 @@ try {
    const href=(await link.getAttribute('href')).split('#')[0];assert.equal((await context.request.get(origin+href)).status(),200,href);
   }
   const schema=JSON.parse(await page.locator('script[type="application/ld+json"]').textContent());const article=schema['@graph'].find(x=>x['@type']==='Article');assert.equal(Boolean(article.datePublished),published);
-  assert.equal(await page.locator('main img').count(),0);
+  assert.equal(await page.locator('main img').count(),published?1:0);
+  if(published) {
+   const image=page.locator('.advice-project-image img');
+   const src=await image.getAttribute('src');
+   assert.equal(article.image[0], 'https://www.nigelharveyplumbing.co.uk'+src);
+   assert(await image.evaluate(img=>img.complete && img.naturalWidth>0));
+   assert(await image.getAttribute('alt'));
+  }
   await page.evaluate(()=>scrollTo(0,0));
   if(evidence) {
    await page.screenshot({path:join(evidence,`advice-${name}-top.png`)});

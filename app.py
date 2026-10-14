@@ -1420,11 +1420,12 @@ NEW_HOMEPAGE_PREVIEW_HTML = (Path(__file__).resolve().parent / "templates/homepa
 
 @app.get("/site-images/{filename}")
 def public_site_image(filename: str):
-    # Only the reviewed, bundled stock illustrations may be served publicly.
-    if filename not in {"bathroom-illustrative.webp", "shower-illustrative.webp", "radiator-illustrative.webp"}:
+    # Only reviewed, bundled illustrations and the existing public logo are served.
+    if filename not in {"bathroom-illustrative.webp", "shower-illustrative.webp", "radiator-illustrative.webp", "nigel-harvey-logo.png"}:
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(Path(__file__).resolve().parent / "static" / "site-images" / filename,
-                        media_type="image/webp", headers={"Cache-Control": "public, max-age=604800"})
+                        media_type="image/png" if filename == "nigel-harvey-logo.png" else "image/webp",
+                        headers={"Cache-Control": "public, max-age=604800"})
 
 
 def render_public_homepage(request: Request):

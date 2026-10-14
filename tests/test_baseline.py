@@ -374,8 +374,8 @@ class BaselineTests(unittest.TestCase):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
         page_hashes = {
-            "/": "a7b3448dff9b2285236b540170ac2c922c15720c388b893f7ae7fdaafec8766f",
-            "/new-home": "a7b3448dff9b2285236b540170ac2c922c15720c388b893f7ae7fdaafec8766f",
+            "/": "e12dc6bb4b6522d3c73f99875a14c2d5eecf073bd8cc7ab142105561f623750a",
+            "/new-home": "e12dc6bb4b6522d3c73f99875a14c2d5eecf073bd8cc7ab142105561f623750a",
             "/request-quote": "0b9d71a15bdcf403aa43f77d0f284a1e1467bb7f75f1ea26e45d17dbedaa0dd4",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
@@ -1282,9 +1282,9 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         """Freeze the SEO page families after applying the shared public shell."""
         m = self.module
         cases = (
-            ("location", "b37f99d178b65d153a074806e9545b306dd3c322359162c6cc1cac1e088dc62c"),
-            ("service", "ca363b69725f65448e0425f1deda27bcce0ab40da85c9ba17a365f7378ee0d88"),
-            ("local", "962e8cb9c8c42bea5e70ee3d8412aa98fb1bb229afb6b48001f92ecca27b46a6"),
+            ("location", "3989e02593f7b5ed7a1bd1a99d105f4ac3f001bb7e5db26b60ae3cd93d9daf68"),
+            ("service", "39088ad1730a819a85e63011d26246ce419be9f535f01e5960eb88508e5787f6"),
+            ("local", "cb4336769b472d7ab35a0e747a48cdbba2aadbaabfe7600b3a3ddc28d3059eab"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage7.invalid",

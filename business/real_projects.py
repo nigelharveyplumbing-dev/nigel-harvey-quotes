@@ -133,7 +133,7 @@ def schema_graph(project, absolute_url, request=None):
         "@type": "Article", "@id": canonical + "#article", "url": canonical,
         "mainEntityOfPage": canonical, "headline": project.title,
         "description": project.summary, "inLanguage": "en-GB",
-        "author": {"@type": "Organization", "name": "Nigel Harvey Plumbing", "url": home},
+        "author": {"@type": "Organization", "name": "Nigel Harvey Plumbing", "url": home, "logo": business["logo"]},
         "publisher": {"@id": home + "#business"},
         "contentLocation": {"@type": "Place", "name": project.location},
         "about": [{"@type": "Thing", "name": service} for service in project.services],
@@ -204,7 +204,11 @@ def render_project(project, *, absolute_url, request=None, staging=False):
     content += '<section class="wrap project-related"><h2>Related plumbing services and areas</h2><ul>'
     content += ''.join(f'<li><a href="{link.path}">{escape(link.label)}</a></li>' for link in project.links)
     content += '</ul></section></article><section class="final"><div class="wrap"><div><h2>Planning your own bathroom?</h2><p>Tell Nigel what you would like to change and where the work is.</p></div><a class="btn light" href="/request-quote">Request a quote</a></div></section>'
-    return page_shell(project.seo_title, project.meta_description, canonical, content,
+    title, description = project.seo_title, project.meta_description
+    if project.status == "published" and project.slug == "ensuite-renovation-merrow-guildford":
+        title = "Merrow Ensuite Renovation, Guildford | Nigel Harvey Plumbing"
+        description = "A real ensuite renovation in Merrow, Guildford: wall reconstruction, Marmox boards, plumbing, tiling and finished fittings by Nigel Harvey Plumbing."
+    return page_shell(title, description, canonical, content,
                       noindex=draft or staging, schema=schema_graph(project, absolute_url, request),
                       og_image=absolute_url(image_path(project, hero), request))
 

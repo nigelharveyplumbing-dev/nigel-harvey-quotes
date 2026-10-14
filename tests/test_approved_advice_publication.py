@@ -42,7 +42,7 @@ class ApprovedPublicationTests(unittest.TestCase):
                 self.assertEqual([p for p in paragraphs if p in expected],expected)
                 self.assertEqual(len(expected),25)
                 self.assertNotIn('Publication metadata and link instructions',response.text)
-                self.assertEqual(len(article.select('img')),0)
+                self.assertEqual(len(article.select('.advice-project-image img')),1)
                 self.assertNotIn('noindex',response.headers.get('x-robots-tag',''))
                 self.assertEqual(soup.title.get_text(),a.seo_title)
                 self.assertEqual(soup.select_one('meta[name=description]')['content'],a.meta_description)

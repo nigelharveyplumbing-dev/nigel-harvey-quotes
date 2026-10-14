@@ -92,19 +92,19 @@ class GrowthBatch4Tests(unittest.TestCase):
                 "Plumber in Guildford | Local Repairs | Nigel Harvey Plumbing",
                 "emergency", "/emergency-plumber-surrey"),
             "/emergency-plumber-surrey": (
-                "Emergency Plumbing Callouts in Surrey | Nigel Harvey Plumbing",
+                "Emergency Plumbing in Surrey | Nigel Harvey Plumbing",
                 "including overnight", "/emergency-plumber-guildford"),
             "/general-plumbing-surrey": (
-                "General Plumbing & Small Repairs in Surrey | Nigel Harvey Plumbing",
+                "General Plumbing & Repairs in Surrey | Nigel Harvey Plumbing",
                 "minor pipework repairs", "/plumber-guildford"),
             "/leak-repair-camberley": (
-                "Leak Repair Camberley | Leaking Pipes | Nigel Harvey Plumbing",
+                "Leak Repair Camberley | Pipes | Nigel Harvey Plumbing",
                 "whether it can be isolated", "/general-plumbing-surrey"),
             "/leak-repair-aldershot": (
-                "Leak Repair Aldershot | Leaking Pipes | Nigel Harvey Plumbing",
+                "Leak Repair Aldershot | Pipes | Nigel Harvey Plumbing",
                 "Leaking pipe", "/request-quote"),
             "/toilet-repair-leatherhead": (
-                "Toilet Repair Leatherhead | Cisterns & Leaks | Nigel Harvey Plumbing",
+                "Toilet Repair Leatherhead | Nigel Harvey Plumbing",
                 "running or leaking", "/general-plumbing-surrey"),
         }
         for path, (title, meta_phrase, linked_path) in expectations.items():
