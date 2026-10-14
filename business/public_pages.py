@@ -464,6 +464,27 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
         "url": canonical,
         "description": service["meta"],
     }, ensure_ascii=False)
+    # Batch 9: distinct service FAQs, avoiding duplicate generic/location answers.
+    service_faqs = {
+        "general-plumbing-surrey": [
+            ("Can you investigate low water pressure or noisy pipes?", "Yes. I can investigate plumbing-related pressure problems and water hammer, including issues at taps, valves and fittings. The cause needs checking before I can recommend a repair."),
+        ],
+        "heating-repairs-surrey": [
+            ("Can you replace radiators and thermostatic radiator valves?", "Yes. I replace radiators, towel radiators and thermostatic radiator valves (TRVs), and can discuss any pipework adjustments needed. Send dimensions and photographs to help me assess the job."),
+        ],
+        "emergency-plumber-surrey": [
+            ("Can I call about an urgent leak outside normal working hours?", "You can call about an urgent plumbing problem, including an active leak. Out-of-hours response and attendance depend on location and availability; attendance is not confirmed until agreed."),
+        ],
+        "bathroom-plumbing-surrey": [
+            ("Do you replace leaking showers and waterproof shower enclosures?", "Yes. I can assess a leaking shower and discuss shower tray, enclosure and plumbing replacement. Where rebuilding is needed, suitable waterproof backing and tanking can be installed at vulnerable joints. The repair depends on the cause of the leak."),
+            ("Can you renovate a bathroom in Guildford?", "I undertake bathroom plumbing and renovation work in Guildford and surrounding Surrey areas, including replacing baths, showers, toilets, basins and associated pipework. Send photos and a description to discuss a quote."),
+        ],
+    }.get(service["slug"], [])
+    service_faq_html = (
+        '<div class="wrap section"><h2>Common questions</h2>' +
+        ''.join(f'<div class="card faq"><h3>{escape(q)}</h3><p>{escape(a)}</p></div>' for q, a in service_faqs) +
+        '</div>'
+    ) if service_faqs else ""
     general_detail = (
         '<div class="wrap section"><h2>Everyday repairs and small plumbing jobs</h2>'
         '<p>A dripping tap, toilet that keeps filling, leaking waste or outside tap may be a modest job, '
@@ -489,6 +510,7 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
 <div class="wrap section"><h2>What to tell Nigel</h2><p>{escape(service['body'])}</p><div class="grid3"><div class="card item"><h3>Where is the job?</h3><p>Send the postcode so Nigel can confirm whether the location is in his service area.</p></div><div class="card item"><h3>What is happening?</h3><p>Describe the fixture or pipework and whether this is a repair or planned installation.</p></div><div class="card item"><h3>How to get in touch</h3><p>Call for a pressing problem or use the quote form for planned work. You deal directly with Nigel.</p></div></div></div>
 {general_detail}
 {urgent_detail}
+{service_faq_html}
 <div class="wrap section"><h2>Areas covered for {escape(service['heading']).lower()}</h2><p>We also cover nearby towns for customers searching for this service in Surrey.</p><div class="pill-links">{location_links}</div></div>
 <div class="wrap section"><h2>Related plumbing services</h2><div class="pill-links">{service_links}</div></div>
 <div class="wrap section"><h2>Frequently asked questions</h2><div class="faq-grid"><div class="card faq"><h3>How do I check whether you cover my address?</h3><p>Send your postcode and a short description. Nigel can confirm the location before arranging any work.</p></div><div class="card faq"><h3>Can I request a quote online?</h3><p>Yes. Send your details through the online quote form. Submission does not confirm a booking.</p></div><div class="card faq"><h3>What if the problem is urgent?</h3><p>Call Nigel to discuss the issue and availability. Isolate an active leak if it is safe to do so.</p></div></div></div>
@@ -661,6 +683,8 @@ def render_south_west_london_page(location: dict, request: Request | None = None
         (f"Can I book an emergency callout in {name}?", "Emergency and out-of-hours callouts, including overnight, are subject to availability. Nigel may not answer immediately. Call or leave a message with the postcode and problem; attendance is not confirmed until agreed."),
         ("What should I send for a quote?", "Send the postcode, a short description, photographs of safely visible fittings and any access details. Nigel will discuss whether a visit is needed and set out the proposed work and relevant charges before you proceed."),
     ]
+    if location["slug"] == "wimbledon":
+        faqs.append(("Do you take plumbing jobs in Wimbledon and nearby South West London?", "I am based in Guildford and consider plumbing enquiries in Wimbledon and surrounding South West London areas, subject to the job, travel and availability. Send the postcode and details so I can confirm."))
     schemas = [
         {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
             {"@type": "ListItem", "position": 1, "name": "Home", "item": absolute_url("/", request)},
