@@ -52,11 +52,11 @@ class GrowthBatch4Tests(unittest.TestCase):
         self.assertEqual(page.h1.get_text(" ", strip=True),
                          "Plumber in Guildford & Across Surrey")
         description = page.select_one('meta[name="description"]')["content"]
-        self.assertIn("24 hours a day, including overnight", description)
+        self.assertIn("out-of-hours emergency callouts subject to availability", description)
         self.assertLessEqual(len(description), 160)
         text = page.get_text(" ", strip=True)
         for phrase in ("West Horsley", "Aldershot", "Camberley",
-                       "deal directly with me, Nigel", "Timing depends on the problem and location"):
+                       "deal directly with me, Nigel", "Attendance is subject to availability"):
             self.assertIn(phrase, text)
         for path in ("/plumber-guildford", "/plumber-aldershot", "/plumber-camberley",
                      "/emergency-plumber-surrey", "/leak-repair-guildford"):
@@ -79,9 +79,9 @@ class GrowthBatch4Tests(unittest.TestCase):
         expectations = {
             "/plumber-guildford": (
                 "Plumber in Guildford | Local Repairs | Nigel Harvey Plumbing",
-                "24 hours", "/emergency-plumber-surrey"),
+                "emergency", "/emergency-plumber-surrey"),
             "/emergency-plumber-surrey": (
-                "24-Hour Plumber in Surrey | Nigel Harvey Plumbing",
+                "Emergency Plumbing Callouts in Surrey | Nigel Harvey Plumbing",
                 "including overnight", "/emergency-plumber-guildford"),
             "/general-plumbing-surrey": (
                 "General Plumbing & Small Repairs in Surrey | Nigel Harvey Plumbing",
