@@ -1303,7 +1303,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
                 unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
                 if name == "service":
                     unchanged = re.sub(
-                        r'<div class="wrap section"><h2>Common questions</h2>.*?</div>',
+                        r'<div class="wrap section"><h2>Common questions</h2>.*?</div>\\n',
                         "", unchanged, count=1, flags=re.DOTALL)
                 self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
