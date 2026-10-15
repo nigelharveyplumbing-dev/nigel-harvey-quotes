@@ -591,7 +591,27 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
             "Let me know if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Take a photo or short video of what happens and send it to me on WhatsApp with your postcode and a brief description. This can help me work out what parts might be needed before a visit."
         ),
     }
-    detail = priority_details.get((service_slug, area_slug))
+    # Service-specific guidance for remaining town pages. Keep existing reviewed
+    # location-specific sections above; do not invent jobs or local premises.
+    service_guidance = {
+        "emergency-plumber": (
+            f"What to do if you need urgent plumbing help in {area}",
+            "If a pipe has burst or water is overflowing, turn off the water at the stopcock if it is safe. Keep away from electrical fittings near water. Tell me what is leaking and whether the water is still running. You can send a photo or short video on WhatsApp if it is safe to take one. Include your postcode. Emergency visits are subject to availability and are not confirmed until agreed."
+        ),
+        "toilet-repair": (
+            f"What to do if your toilet is not working in {area}",
+            "Tell me if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Send a photo or short video on WhatsApp, along with your postcode and a short description. This can help me discuss the likely repair before a visit."
+        ),
+        "leak-repair": (
+            f"What to do if you have a water leak in {area}",
+            "Try to see where the water is coming from without taking anything apart. Does it leak all the time or only when you use a tap, toilet or shower? If water is escaping badly, turn it off at the stopcock if it is safe. Send a photo or short video on WhatsApp with your postcode and a short description so I can discuss the next step."
+        ),
+        "bathroom-plumbing": (
+            f"Planning bathroom plumbing work in {area}?",
+            "Tell me whether you are replacing a bath, shower, basin or toilet, or changing where the pipes run. A few photos or a short video of the existing bathroom can help me understand the space. Send them on WhatsApp with your postcode and a brief description of what you would like done. Please do not remove any fittings just to take pictures."
+        ),
+    }
+    detail = priority_details.get((service_slug, area_slug), service_guidance.get(service_slug))
     from business.website_contact import whatsapp_url
     whatsapp_message = f"Hello Nigel, I need help with {service['service']} in {area}. My postcode is: . I can send a photo or short video of the problem."
     whatsapp_link = whatsapp_url(COMPANY_PHONE, whatsapp_message)
