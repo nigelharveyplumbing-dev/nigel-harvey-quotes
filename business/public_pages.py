@@ -556,7 +556,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         ),
         ("leak-repair", "farnham"): (
             "What to do if you have a water leak in Farnham",
-            "If you have noticed water leaking at home, try to see where it is coming from without taking anything apart. Tell me whether the water appears all the time or only when you use a tap, shower or toilet. If water is leaking badly, turn off the water at the stopcock, but only if it is safe. Take a photo or short video if you can do so safely and send it to me on WhatsApp, along with your postcode and a brief description. This can help me understand the problem and discuss what may be needed before visiting."
+            "If you have spotted water around a tap, toilet, sink or shower, tell me where it appears and whether it happens all the time or only when that fitting is used. A drip under a sink when the tap runs can be a different problem from a pipe that leaks continuously. Do not remove panels or take fittings apart just to find the cause. If water is escaping badly, turn it off at the stopcock if safe. Send a photo or short video on WhatsApp, with your Farnham postcode and a description, so I can discuss the likely next step and whether I can attend from Guildford."
         ),
         ("leak-repair", "guildford"): (
             "What to do if you have a water leak in Guildford",
@@ -616,8 +616,15 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
     whatsapp_message = f"Hello Nigel, I need help with {service['service']} in {area}. My postcode is: . I can send a photo or short video of the problem."
     whatsapp_link = whatsapp_url(COMPANY_PHONE, whatsapp_message)
     whatsapp_html = (f'<p><a class="btn btn-green" href="{escape(whatsapp_link, quote=True)}" target="_blank" rel="noopener noreferrer">Send photos or video on WhatsApp</a></p>' if detail else "")
+    # Relevant published guidance, not a claim that a Farnham project was completed.
+    farnham_advice_html = (
+        '<p>If the leak seems to be around a shower, you can also read '
+        '<a href="/advice/shower-replacement-waterproofing-rebuild">what happens during a shower replacement and waterproofing rebuild</a>. '
+        'This explains possible repair work; a site visit may still be needed to identify the cause.</p>'
+        if (service_slug, area_slug) == ("leak-repair", "farnham") else ""
+    )
     priority_html = (f'<div class="wrap section"><h2>{escape(detail[0])}</h2><p>{escape(detail[1])}</p>'
-                     f'{whatsapp_html}<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
+                     f'{whatsapp_html}{farnham_advice_html}<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
                      'or <a href="/request-quote">send the job details</a>.</p></div>') if detail else ""
     priority_meta = {
         ("leak-repair", "aldershot"): "Leaking pipe or fitting in Aldershot? Tell Guildford-based Nigel where the water appears, whether it can be isolated and your postcode to discuss repair help.",
