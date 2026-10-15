@@ -6,7 +6,7 @@ r=Path(__file__).resolve().parent;sys.path.insert(0,str(r/'tests'))
 from local_browser_server import disposable_app
 from fastapi.testclient import TestClient
 out=r/'pr19-farnham-preview';out.mkdir(exist_ok=True)
-paths=['/','/leak-repair-farnham','/advice/shower-replacement-waterproofing-rebuild']
+paths=['/','/leak-repair-farnham']
 entries=[]
 with disposable_app(secrets.token_urlsafe(12),secrets.token_urlsafe(16),projects_as_drafts=False,advice_as_drafts=False) as (app,_):
  with TestClient(app.app) as client:
@@ -38,7 +38,7 @@ with disposable_app(secrets.token_urlsafe(12),secrets.token_urlsafe(16),projects
    d.head.append(d.new_tag('meta',attrs={'name':'robots','content':'noindex,nofollow,noarchive'}))
    notice=d.new_tag('div',id='preview-notice',style='background:#fff4d9;color:#123247;padding:8px 4%;font:14px system-ui')
    notice.append('PR #19 Farnham preview · Contact and enquiry links disabled · ')
-   for label,url in [('Home','/'),('Farnham leak repair','/leak-repair-farnham.html'),('Shower advice','/advice/shower-replacement-waterproofing-rebuild.html')]:
+   for label,url in [('Home','/'),('Farnham leak repair','/leak-repair-farnham.html')]:
     a=d.new_tag('a',href=url);a.string=label;notice.append(a);notice.append(' · ')
    d.body.insert(0,notice)
    filename='index.html' if path=='/' else path[1:]+'.html';content=str(d);(out/filename).parent.mkdir(parents=True,exist_ok=True);(out/filename).write_text(content)
