@@ -616,6 +616,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
     whatsapp_message = f"Hello Nigel, I need help with {service['service']} in {area}. My postcode is: . I can send a photo or short video of the problem."
     whatsapp_link = whatsapp_url(COMPANY_PHONE, whatsapp_message)
     whatsapp_html = (f'<p><a class="btn btn-green" href="{escape(whatsapp_link, quote=True)}" target="_blank" rel="noopener noreferrer">Send photos or video on WhatsApp</a></p>' if detail else "")
+    from business import plumbing_advice
     # Relevant published guidance, not a claim that a Farnham project was completed.
     farnham_advice_html = (
         '<p>If the leak seems to be around a shower, you can also read '
@@ -623,7 +624,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         'This explains possible repair work; a site visit may still be needed to identify the cause.</p>'
         if ((service_slug, area_slug) == ("leak-repair", "farnham")
             and any(article.path == "/advice/shower-replacement-waterproofing-rebuild"
-                    for article in __import__("business.plumbing_advice", fromlist=["visible_articles"]).visible_articles())) else ""
+                    for article in plumbing_advice.visible_articles())) else ""
     )
     priority_html = (f'<div class="wrap section"><h2>{escape(detail[0])}</h2><p>{escape(detail[1])}</p>'
                      f'{whatsapp_html}{farnham_advice_html}<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
