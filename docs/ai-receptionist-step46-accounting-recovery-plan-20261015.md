@@ -96,3 +96,31 @@ Required **after** Gate A passes, or an explicitly reviewed Gate B procedure is 
 - [ ] Separate owner approval requested before any paid validation, new baseline, or safety-gate modification
 
 This document is an evidence recovery **plan**, not a certification that all historical usage is known.
+
+## 7. Independent OpenAI Platform exports — 15 October 2026 update
+
+**Evidence basis:** Owner-provided exports `cost_2026-10-01_2026-10-15.csv` and `completions_usage_2026-10-01_2026-10-15.csv`, read independently for this review. **Do not commit the CSV files:** they contain account/project/API-key/user identifiers. Only redacted aggregates are recorded here.
+
+**Coverage:** Daily rows dated 1–15 October 2026. Cost CSV has 15 date rows with one non-empty amount on 4 October; activity CSV has 16 rows with two non-empty model groups on 4 October. Blank values on other dates are **not** interpreted as independent evidence of zero usage outside the export's scope.
+
+| Export / measure | Verified value | What it establishes |
+| --- | ---: | --- |
+| Provider cost, 4 Oct 2026 (USD; organisation-grouped) | **$1.527364600000000000000000000** | Provider-reported aggregate cost for the exported organisation/date, **not** a request-level ledger or proof of actual payment |
+| Activity: `gpt-realtime-2.1` | **31** model requests | Aggregate model usage for the exported project/date |
+| Activity: `gpt-realtime-2.1-mini` | **14** model requests | Aggregate model usage for the exported project/date |
+| Total activity | **45** model requests | Sum of the two non-empty model rows; not a count of archived `paid-evidence.json` response entries |
+| Historical Step 4 report-derived planning USD | **$0.83859500** | Derived from documented £1.0482437500 divided by historical 1.25 planning factor; original Step 4 journal remains missing |
+| Step 4.5 archived response usage USD | **$0.68876960** | Sum of 35 archived responses, including incomplete and cancelled entries |
+| Combined historical planning USD | **$1.52736460** | $0.83859500 + $0.68876960 |
+| Provider minus historical planning USD | **$0.00000000** | Exact aggregate numeric match at displayed precision, **not** individual-request reconciliation |
+| Combined planning GBP (historical 1.25 factor) | **£1.9092057500** | Planning figure, not provider sterling invoice or FX settlement |
+
+**Important scope difference:** The provider cost export is grouped by **organisation** and has no project, model or API-key breakdown in its non-empty cost row. The activity export is grouped by **project/model** and does not contain individual request IDs, individual request costs, statuses or Step 4 / Step 4.5 attribution. Therefore, the two exports support an aggregate historical cost cross-check, **not** proof that every saved paid response or every provider request has been mapped one-to-one.
+
+The 35 Step 4.5 archived `responses` entries (31 completed, two incomplete, two cancelled) **must not** be compared as equivalent units to the 45 aggregated provider `num_model_requests`. Step 4 and Step 4.5 together contribute to the historical activity, and request/response definitions may differ. Do not infer that ten entries are missing, duplicated or assigned to Step 4.
+
+**Remaining reconciliation gap:** The original `spending-ledger.json` and `step45-spending-ledger.json` were not recovered; the provider exports contain no request identifiers to validate each reservation, failure, partial response, journal label or independent generated-output-audio hash. Aggregate agreement does not establish completeness of all historical paid operations or justify removing fail-closed checks.
+
+**Gate status after provider exports:** Gate A **BLOCKED** (original journals absent); Gate B **REVIEW PROPOSAL ONLY** (no exception authorised); Gate C **BLOCKED** (no new paid testing, no new baseline, no budget changes). See the companion review-only exception proposal in this draft PR.
+
+**Source-handling control:** Keep the owner-provided CSVs outside GitHub. Do not put account IDs, project IDs, API key IDs, email addresses or raw usage files in PR discussions, CI logs or source control.
