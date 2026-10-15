@@ -547,25 +547,57 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
     canonical = absolute_url(f"/{service_slug}-{area_slug}", request)
     priority_details = {
         ("leak-repair", "aldershot"): (
-            "What to tell Nigel about a leaking pipe in Aldershot",
-            "Say whether the water is coming from visible pipework, a tap, toilet, shower or waste and whether it can be isolated safely. Include the Aldershot postcode and, if useful, share a photo after making contact so Nigel can discuss the likely repair and next step."
+            "What to do if you have a water leak in Aldershot",
+            "If you have noticed water leaking at home, try to see where it is coming from without taking anything apart. Tell me whether the water appears all the time or only when you use a tap, shower or toilet. If water is leaking badly, turn off the water at the stopcock, but only if it is safe. Take a photo or short video if you can do so safely and send it to me on WhatsApp, along with your postcode and a brief description. This can help me understand the problem and discuss what may be needed before visiting."
         ),
         ("leak-repair", "camberley"): (
-            "Leak repair in Camberley: what to check before calling",
-            "If water is escaping, turn it off at the nearest safe valve or stopcock if you can. Tell Nigel whether the leak is at a pipe, tap, toilet, shower or waste, whether it happens continuously, and what you can see without taking fittings apart. A postcode and a photo can help him discuss the next step from his Guildford base."
+            "What to do if you have a water leak in Camberley",
+            "If you have noticed water leaking at home, try to see where it is coming from without taking anything apart. Tell me whether the water appears all the time or only when you use a tap, shower or toilet. If water is leaking badly, turn off the water at the stopcock, but only if it is safe. Take a photo or short video if you can do so safely and send it to me on WhatsApp, along with your postcode and a brief description. This can help me understand the problem and discuss what may be needed before visiting."
         ),
         ("leak-repair", "farnham"): (
-            "Describing a leak in Farnham",
-            "Note where the water appears and whether the leak is constant or only when a tap, shower or appliance is used. Isolate the supply if it is safe. Send the postcode and a photo if useful so Nigel can discuss the repair and whether he can cover your address."
+            "What to do if you have a water leak in Farnham",
+            "If you have noticed water leaking at home, try to see where it is coming from without taking anything apart. Tell me whether the water appears all the time or only when you use a tap, shower or toilet. If water is leaking badly, turn off the water at the stopcock, but only if it is safe. Take a photo or short video if you can do so safely and send it to me on WhatsApp, along with your postcode and a brief description. This can help me understand the problem and discuss what may be needed before visiting."
+        ),
+        ("leak-repair", "guildford"): (
+            "What to do if you have a water leak in Guildford",
+            "If you have noticed water leaking at home, try to see where it is coming from without taking anything apart. Tell me whether the water appears all the time or only when you use a tap, shower or toilet. If water is leaking badly, turn off the water at the stopcock, but only if it is safe. Take a photo or short video if you can do so safely and send it to me on WhatsApp, along with your postcode and a brief description. This can help me understand the problem and discuss what may be needed before visiting."
+        ),
+        ("leak-repair", "woking"): (
+            "What to do if you have a water leak in Woking",
+            "If you have noticed water leaking at home, try to see where it is coming from without taking anything apart. Tell me whether the water appears all the time or only when you use a tap, shower or appliance. If water is leaking badly, turn off the water at the stopcock, but only if it is safe. Take a photo or short video if you can do so safely and send it to me on WhatsApp, along with your postcode and a brief description. This can help me understand the problem and discuss what may be needed before visiting."
+        ),
+        ("leak-repair", "merrow"): (
+            "What to do if you have a water leak in Merrow",
+            "If you have noticed water leaking at home, try to see where it is coming from without taking anything apart. If the leak is near a shower, tell me whether water appears while the shower is running or afterwards. If water is leaking badly, turn off the water at the stopcock, but only if it is safe. Take a photo or short video if you can do so safely and send it to me on WhatsApp, along with your postcode and a brief description. This can help me understand the problem and discuss what may be needed before visiting."
+        ),
+        ("leak-repair", "fairlands"): (
+            "What to do if you have a water leak in Fairlands",
+            "If you have noticed water leaking at home, try to see where it is coming from without taking anything apart. Tell me whether the water appears all the time or only when you use a tap, shower or toilet. If water is leaking badly, turn off the water at the stopcock, but only if it is safe. Take a photo or short video if you can do so safely and send it to me on WhatsApp, along with your postcode and a brief description. This can help me understand the problem and discuss what may be needed before visiting."
+        ),
+        ("toilet-repair", "guildford"): (
+            "What to do if your toilet is not working in Guildford",
+            "Let me know if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Take a photo or short video of what happens and send it to me on WhatsApp with your postcode and a brief description. This can help me work out what parts might be needed before a visit."
+        ),
+        ("toilet-repair", "woking"): (
+            "What to do if your toilet is not working in Woking",
+            "Let me know if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Take a photo or short video of what happens and send it to me on WhatsApp with your postcode and a brief description. This can help me work out what parts might be needed before a visit."
+        ),
+        ("toilet-repair", "burpham"): (
+            "What to do if your toilet is not working in Burpham",
+            "Let me know if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Take a photo or short video of what happens and send it to me on WhatsApp with your postcode and a brief description. This can help me work out what parts might be needed before a visit."
         ),
         ("toilet-repair", "leatherhead"): (
-            "What is wrong with the toilet?",
-            "A running cistern, weak flush, leak at the pan or fill valve fault can need different parts. Tell Nigel what happens when you flush, whether water is escaping and whether you can safely isolate the toilet. Include the Leatherhead postcode before arranging a visit."
+            "What to do if your toilet is not working in Leatherhead",
+            "Let me know if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Take a photo or short video of what happens and send it to me on WhatsApp with your postcode and a brief description. This can help me work out what parts might be needed before a visit."
         ),
     }
     detail = priority_details.get((service_slug, area_slug))
+    from business.website_contact import whatsapp_url
+    whatsapp_message = f"Hello Nigel, I need help with {service['service']} in {area}. My postcode is: . I can send a photo or short video of the problem."
+    whatsapp_link = whatsapp_url(COMPANY_PHONE, whatsapp_message)
+    whatsapp_html = (f'<p><a class="btn btn-green" href="{escape(whatsapp_link, quote=True)}" target="_blank" rel="noopener noreferrer">Send photos or video on WhatsApp</a></p>' if detail else "")
     priority_html = (f'<div class="wrap section"><h2>{escape(detail[0])}</h2><p>{escape(detail[1])}</p>'
-                     '<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
+                     f'{whatsapp_html}<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
                      'or <a href="/request-quote">send the job details</a>.</p></div>') if detail else ""
     priority_meta = {
         ("leak-repair", "aldershot"): "Leaking pipe or fitting in Aldershot? Tell Guildford-based Nigel where the water appears, whether it can be isolated and your postcode to discuss repair help.",

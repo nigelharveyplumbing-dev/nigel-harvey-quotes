@@ -73,9 +73,9 @@ class GrowthBatch2Tests(unittest.TestCase):
             "/plumber-aldershot": ("Guildford-based Nigel", "/leak-repair-aldershot"),
             "/plumber-camberley": ("Guildford-based Nigel", "/leak-repair-camberley"),
             "/general-plumbing-surrey": ("Everyday repairs and small plumbing jobs", "outside tap"),
-            "/leak-repair-camberley": ("what to check before calling", "stopcock"),
-            "/leak-repair-farnham": ("Describing a leak in Farnham", "postcode"),
-            "/toilet-repair-leatherhead": ("What is wrong with the toilet?", "running cistern"),
+            "/leak-repair-camberley": ("What to do if you have a water leak in Camberley", "WhatsApp"),
+            "/leak-repair-farnham": ("What to do if you have a water leak in Farnham", "postcode"),
+            "/toilet-repair-leatherhead": ("What to do if your toilet is not working in Leatherhead", "WhatsApp"),
         }.items():
             with self.subTest(path=path):
                 html = self.client.get(path).text
