@@ -1,0 +1,41 @@
+name: AI receptionist offline recovery checks
+
+on:
+  push:
+    branches:
+      - feature/ai-receptionist-step46-offline-reconstruction
+      - feature/ai-receptionist-step46-offline-safeguards
+      - feature/ai-receptionist-private-provider-adapter
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      PYTHONPATH: .:tests
+      AI_RECEPTIONIST_LIVE_ENABLED: "false"
+    steps:
+      - name: Check out offline reconstruction
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install test-only dependencies
+        run: python -m pip install -r requirements-voice-provider-test.txt
+      - name: Verify frozen synthetic plan and budgets
+        env:
+          PYTHONPATH: tests/voice_lab/offline_guard:.:tests
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python tests/run_voice_recovery_preflight.py
+      - name: Run offline voice tests
+        env:
+          PYTHONPATH: tests/voice_lab/offline_guard:.:tests
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -m unittest discover -s tests -p 'test_voice*.py'
