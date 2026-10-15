@@ -1284,7 +1284,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         cases = (
             ("location", "3989e02593f7b5ed7a1bd1a99d105f4ac3f001bb7e5db26b60ae3cd93d9daf68"),
             ("service", "39088ad1730a819a85e63011d26246ce419be9f535f01e5960eb88508e5787f6"),
-            ("local", "cb4336769b472d7ab35a0e747a48cdbba2aadbaabfe7600b3a3ddc28d3059eab"),
+            ("local", "9748b98c4c87612cadd413ecf043cc47c209c785675a51833b7a97c446acdb30"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage7.invalid",
