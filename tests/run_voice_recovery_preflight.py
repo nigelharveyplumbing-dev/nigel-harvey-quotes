@@ -8,6 +8,9 @@ import json
 from decimal import Decimal, ROUND_CEILING
 from pathlib import Path
 
+from voice_lab.budget import GBP_PER_USD_WITH_LOADING, RATES
+from voice_lab.cases import CAPTURE_TOOL
+
 ROOT = Path(__file__).resolve().parents[1]
 PLAN_PATH = ROOT / "docs" / "step46-validation-plan.json"
 CORE = (
@@ -15,19 +18,54 @@ CORE = (
     "gas-smell", "co-alarm", "uncontrolled-leak", "water-electrics",
 )
 OPTIONAL = ("corrected-phone", "talk-over")
+# Canonical fingerprints of the reviewed public plan, tool schema and historical
+# rate card at PR #21 head 22642d4. Deliberate changes require a fresh review;
+# this verifier cannot approve a changed plan by reading it as its own baseline.
+REVIEWED_PLAN_SHA256 = "50ed7568591b24c9d23c4ec928b674553ff93c40aa8d5afadf1615a8b7603f9a"
+REVIEWED_TOOL_SHA256 = "0013c7097dd89ef72eae8e4f40499858fd7cfc2a838b784795af0e44df9ff238"
+REVIEWED_RATES_SHA256 = "c337aecdc35e9fe13e1024b2c891d313c5f5fa39f8f6152814756e47e6222bee"
 
 
 class OfflineRecoveryBlocked(ValueError):
     """Do not proceed when the offline plan differs from approved boundaries."""
 
 
+def fingerprint(value):
+    try:
+        text = json.dumps(value, sort_keys=True, separators=(",", ":"),
+                          ensure_ascii=True, allow_nan=False)
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        raise OfflineRecoveryBlocked("Invalid offline JSON structure") from exc
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def verify_plan(plan, *, receptionist_prompt, capture_prompt, pilot_model,
-                prompt_version, soft_limit, hard_limit):
+                prompt_version, soft_limit, hard_limit, tool_schema=CAPTURE_TOOL,
+                rates=RATES, planning_loading=GBP_PER_USD_WITH_LOADING):
     """Fail closed on altered prompt, model, cases, reservations or budgets."""
     def require(condition, reason):
         if not condition:
             raise OfflineRecoveryBlocked(reason)
 
+    require(type(plan) is dict, "Offline plan must be an object")
+    require(fingerprint(plan) == REVIEWED_PLAN_SHA256,
+            "Reviewed plan changed; all settings, cases, bounds and gates are frozen")
+    require(fingerprint(tool_schema) == REVIEWED_TOOL_SHA256,
+            "Reviewed capture tool schema changed")
+    require(fingerprint(rates) == REVIEWED_RATES_SHA256,
+            "Historical rate card changed; reservations require review")
+    require(planning_loading == Decimal("1.25"), "Planning loading changed")
+    require((soft_limit, hard_limit) == (Decimal("4.85"), Decimal("5.00")),
+            "Cumulative budget policy changed")
+    require(isinstance(receptionist_prompt, str) and isinstance(capture_prompt, str),
+            "Frozen prompts must be strings")
+    require(plan["voice"] == "marin" and plan["reasoning_effort"] == "low",
+            "Reviewed voice or reasoning setting changed")
+    require(plan["instruction_and_tool_bytes"] ==
+            len(receptionist_prompt.encode("utf-8")) + len(json.dumps(tool_schema).encode("utf-8")),
+            "Prompt/tool byte bound changed")
+    require(plan["capture_prompt_bytes"] == len(capture_prompt.encode("utf-8")),
+            "Capture prompt byte bound changed")
     require(plan.get("status") == "approval_required_no_paid_requests",
             "The plan must not authorise paid work")
     require(plan.get("synthetic_only") is True, "Synthetic-only gate missing")
