@@ -1,4 +1,4 @@
-name: Materials comparison regression
+name: Nigel Harvey Plumbing - Full Regression Tests
 
 on:
   pull_request:
@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: materials-comparison-${{ github.ref }}
+  group: full-regression-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
