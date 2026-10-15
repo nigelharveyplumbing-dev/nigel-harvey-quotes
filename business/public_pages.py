@@ -558,6 +558,34 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
             "Describing a leak in Farnham",
             "Note where the water appears and whether the leak is constant or only when a tap, shower or appliance is used. Isolate the supply if it is safe. Send the postcode and a photo if useful so Nigel can discuss the repair and whether he can cover your address."
         ),
+        ("leak-repair", "guildford"): (
+            "Preparing a Guildford leak repair enquiry",
+            "Tell Nigel whether the leak is on a supply pipe, a waste connection or a fitting such as a tap or toilet. Explain if water appears continuously or only when a fixture is used. If safe, isolate the water and send the Guildford postcode and a photograph of the visible problem."
+        ),
+        ("leak-repair", "woking"): (
+            "What to check before reporting a leak in Woking",
+            "Note whether the damp patch grows when a shower, basin or appliance is used, or when no water is running. Avoid removing panels or opening up walls just to investigate. Send the Woking postcode, the affected room and any safely taken photographs so Nigel can discuss the next step."
+        ),
+        ("leak-repair", "merrow"): (
+            "Leak enquiries in Merrow: useful details",
+            "If water appears near a shower or bathroom floor, say whether it happens during use, after draining or all the time. A photograph of the visible seal, trap or pipe connection can help, but do not disturb waterproofing to investigate. Include the Merrow postcode when requesting advice."
+        ),
+        ("leak-repair", "fairlands"): (
+            "Describing a pipe or fitting leak in Fairlands",
+            "Tell Nigel if the issue is a dripping tap, leaking radiator connection, cistern or concealed pipework. Note any change when the heating or water supply is on. If there is escaping water, isolate it safely where possible and provide the Fairlands postcode."
+        ),
+        ("toilet-repair", "guildford"): (
+            "Identifying a toilet fault in Guildford",
+            "Explain whether the cistern continually refills, the flush is weak, the handle sticks or water escapes at the base. A photograph of the cistern mechanism, if safely accessible, can help identify likely replacement parts. Include the Guildford postcode."
+        ),
+        ("toilet-repair", "woking"): (
+            "What happens when the toilet is flushed?",
+            "For a Woking toilet repair enquiry, say whether the pan clears properly, the cistern fills slowly or water keeps running into the bowl. If there is a leak, identify where it appears without dismantling the toilet. Send the postcode and any useful photographs."
+        ),
+        ("toilet-repair", "burpham"): (
+            "Preparing for a toilet repair in Burpham",
+            "Tell Nigel whether the fault affects the flush button, filling valve, overflow or a visible pan connection. Mention whether the toilet is close-coupled or concealed if you know, and whether a local isolation valve is accessible. Include the Burpham postcode."
+        ),
         ("toilet-repair", "leatherhead"): (
             "What is wrong with the toilet?",
             "A running cistern, weak flush, leak at the pan or fill valve fault can need different parts. Tell Nigel what happens when you flush, whether water is escaping and whether you can safely isolate the toilet. Include the Leatherhead postcode before arranging a visit."
