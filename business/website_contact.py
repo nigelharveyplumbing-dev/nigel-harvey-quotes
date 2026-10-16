@@ -9,16 +9,13 @@ from bs4 import BeautifulSoup
 
 QUOTE_ATTRIBUTION_SCRIPT = """<script>
 // Carry page and campaign context to the quote form without a cookie.
-const campaign = new URLSearchParams(location.search);
-const allowed = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'];
-let referring = '';
-try { const url = new URL(document.referrer); referring = url.origin + (url.origin === location.origin ? url.pathname : ''); } catch (_) {}
 for (const link of document.querySelectorAll('a[href="/request-quote"]')) {
-  const next = new URL(link.href);
-  next.searchParams.set('landing_page', location.pathname);
-  if (referring) next.searchParams.set('referrer', referring);
-  for (const name of allowed) if (campaign.has(name)) next.searchParams.set(name, campaign.get(name));
-  link.href = next.pathname + next.search;
+  link.addEventListener('click', function () {
+    const next = new URL(link.href);
+    const context = window.nhpAttribution ? window.nhpAttribution.context() : {landing_page:location.pathname};
+    for (const [name,value] of Object.entries(context)) if (value) next.searchParams.set(name,value);
+    link.href = next.pathname + next.search;
+  });
 }
 </script>"""
 
