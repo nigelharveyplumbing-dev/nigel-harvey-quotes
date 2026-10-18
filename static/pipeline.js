@@ -192,7 +192,8 @@ async function bookPipelineQuote(id) {
       }
     }
     if (['completed','cancelled'].includes(job.status)) throw new Error('Open Update job to review this job before adding dates.');
-    await loadDiary();
+    // Do not open an empty booking form if existing dates could not be checked.
+    b7Appointments = await b7Request('/api/appointments');
     const booking = b7Appointments.find(item => item.job_id === job.id &&
       ['confirmed','provisional'].includes(item.status) && item.kind === 'job');
     if (booking) {

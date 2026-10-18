@@ -92,10 +92,10 @@ const ctx = {document:{getElementById:node}, escapeHtml:String,
   showTab:id=>tabs.push(id),alert:s=>alerts.push(s)};
 vm.createContext(ctx); vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),ctx);
 ctx.loadDiary=async()=>{};
-let jobs=[], creates=0;
+let jobs=[], appointments=[], creates=0;
 ctx.b7Request=async url=> url==='/api/pipeline' ? {stages:{won_unscheduled:[
   {name:'Synthetic',description:'',lead_id:null,quote_ids:[32],won_quote_ids:[32],job_ids:[]}]}} :
-  url==='/api/jobs' ? jobs : {id:32,status:'won',lead_id:null,customer_name:'Synthetic',job:'Pipework'};
+  url==='/api/jobs' ? jobs : url==='/api/appointments' ? appointments : {id:32,status:'won',lead_id:null,customer_name:'Synthetic',job:'Pipework'};
 ctx.b7Post=async()=> {creates++; const job={id:9,quote_id:32,lead_id:null,status:'awaiting_schedule',title:'Pipework'};jobs.push(job);return job};
 async function run(){
   await ctx.loadPipeline();
@@ -107,7 +107,7 @@ async function run(){
   assert.equal(node('appointmentLeadId').value,'');assert.equal(node('appointmentJobId').value,'9');
   assert.equal(node('appointmentKind').value,'job');assert.match(node('appointmentContext').innerText,/Synthetic.*Quote #32/);
   assert.equal(node('appointmentStart').value,'');assert.equal(node('appointmentEditor').open,true);
-  vm.runInContext("b7Appointments=[{id:12,job_id:9,lead_id:null,quote_id:32,kind:'job',status:'confirmed',customer_name:'Synthetic',starts_at:'2026-11-02T09:00',ends_at:'2026-11-03T17:00'}]",ctx);
+  appointments=[{id:12,job_id:9,lead_id:null,quote_id:32,kind:'job',status:'confirmed',customer_name:'Synthetic',starts_at:'2026-11-02T09:00',ends_at:'2026-11-03T17:00'}];
   ctx.renderDiary=()=>{};
   await ctx.bookPipelineQuote(32);
   assert.equal(node('appointmentEditId').value,'12');
