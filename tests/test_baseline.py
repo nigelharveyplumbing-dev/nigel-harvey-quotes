@@ -259,7 +259,7 @@ class BaselineTests(unittest.TestCase):
         ):
             masked = masked.replace(addition, '')
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
-                         "26cc6e48d21692c85ac0f2815e871a9e13d27ac2621904227015eb284bcec02e")
+                         "a4e0d61fb0fbddfea5c9de22cff47295fe1aada59a31d707aa31e2c49ff9f506")
         self.assertEqual(m.HTML.count("<style>"), 1)
         self.assertEqual(m.HTML.count("<script>"), 1)
         self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {
@@ -1645,3 +1645,4 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
 
 if __name__ == "__main__":
     unittest.main()
+

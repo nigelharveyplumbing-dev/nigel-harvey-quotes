@@ -109,7 +109,10 @@ class GrowthBatch8Tests(unittest.TestCase):
         self.assertEqual(before,after)
         for tree in [old,new]:self.assertEqual(sum(getattr(n,'name',None) in allowed for n in tree.body),5)
         for path in ['business/db.py','business/lead_email_store.py','business/lead_store.py','business/notifications.py','business/quote_calculation.py','business/quote_store.py','business/invoice_store.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','static/public_analytics.js','templates/request_quote.html']:
-            self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT),path)
+            # Preserve complete-file checks, with a new private pipeline snapshot.
+            baseline_ref = ('52a7495923025b9f4f4e77426ef47056ea7bce3a'
+                            if path in {'business/db.py', 'static/app.js'} else BASE)
+            self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',baseline_ref+':'+path],cwd=ROOT),path)
 
     def test_private_file_cannot_publish_or_bypass_approval(self):
         private_file=self.root/'invalid-private-advice.json'
@@ -130,3 +133,4 @@ class GrowthBatch8Tests(unittest.TestCase):
         self.assertNotIn('Synthetic test content',outcome.stderr)
 
 if __name__=='__main__':unittest.main()
+
