@@ -16,6 +16,7 @@ let b7Appointments = [];
 let b7Jobs = [];
 let b7WeekOffset = 0;
 const b7BookingQuotes = new Set();
+const b7RemovingAppointments = new Set();
 const B7_WORK_TYPES = ['Leak / repair','Tap','Toilet / cistern','Shower','Bathroom plumbing',
   'Radiator / TRV','Outside tap','Pipework','Power/heating-system flush','Cylinder / tank','Other'];
 
@@ -320,7 +321,9 @@ function renderDiary() {
         '</strong> · ' + (a.kind === 'site_visit' ? 'Site visit / quote survey' : 'Plumbing job') + ' · ' + escapeHtml(a.status) +
         '<div>' + escapeHtml(a.starts_at.replace('T',' ')) + '–' + escapeHtml(a.ends_at.replace('T',' ')) +
         (a.lead_id ? ' · Lead #' + Number(a.lead_id) : ' · Quote #' + Number(a.quote_id)) + '</div><div class="small">' + escapeHtml(a.notes || '') + '</div>' +
+        (a.starts_at.slice(0,10) !== a.ends_at.slice(0,10) ? '<p class="small">Continuous booking: remove once to clear it from every day.</p>' : '') +
         '<button type="button" class="btn-light" onclick="editDiaryAppointment(' + Number(a.id) + ')">Update</button> ' +
+        '<button type="button" class="btn-light" onclick="removeDiaryAppointment(' + Number(a.id) + ')">Remove booking</button> ' +
         (a.lead_id ? '<button type="button" class="btn-light" onclick="openPipelineLead(' + Number(a.lead_id) + ')">Open lead</button> ' : '') +
         (a.quote_id ? '<button type="button" class="btn-light" onclick="loadSavedQuote(' + Number(a.quote_id) + ')">Open quote</button> ' : '') +
         (a.kind === 'site_visit' ? '<button type="button" class="btn-light" onclick="quoteFromDiaryLead(' + Number(a.lead_id) + ')">Start quote</button> ' : '') +
@@ -334,6 +337,35 @@ function renderDiary() {
       closedBookings.map(a => '#' + a.id + ' ' + escapeHtml(a.customer_name) +
         ' <button type="button" class="btn-light" onclick="editDiaryAppointment(' + Number(a.id) + ')">Review</button>').join(', ') + '</p>' : '') +
     days.join('');
+}
+async function removeDiaryAppointment(id) {
+  const a = b7Appointments.find(item => item.id === id);
+  if (!a || a.status === 'cancelled' || b7RemovingAppointments.has(id)) return;
+  if (!confirm('Remove this entire booking from the app diary?\n\n' + a.customer_name + '\n' +
+    a.starts_at.replace('T',' ') + ' – ' + a.ends_at.replace('T',' ') +
+    '\n\nYour quote, job and other bookings will be kept.')) return;
+  b7RemovingAppointments.add(id);
+  try {
+    // Use the saved booking, never unsaved values from a different editor.
+    await b7Post('/api/appointments/' + id, {
+      lead_id:a.lead_id, job_id:a.job_id, kind:a.kind, status:'cancelled',
+      starts_at:a.starts_at, ends_at:a.ends_at, provisional_follow_up:'', notes:a.notes || ''
+    }, 'PUT');
+    a.status = 'cancelled';
+    renderDiary();
+    if (b7Number('appointmentEditId') === id) {
+      document.getElementById('appointmentEditor').open = false;
+      document.getElementById('appointmentEditId').value = '';
+      document.getElementById('appointmentAddDates').classList.add('hidden');
+      ['LeadId','JobId','Start','End','FollowDate','Notes'].forEach(key => {
+        document.getElementById('appointment' + key).value = '';
+      });
+      document.getElementById('appointmentContext').innerText = '';
+    }
+    await Promise.all([loadDiary(), loadPipeline()]);
+    showNotice('Booking removed from the app diary. If added to Google Calendar, remove that copy there too.');
+  } catch (error) { alert('Could not remove booking: ' + error.message); }
+  finally { b7RemovingAppointments.delete(id); }
 }
 function editDiaryAppointment(id) {
   const a = b7Appointments.find(x => x.id === id);
