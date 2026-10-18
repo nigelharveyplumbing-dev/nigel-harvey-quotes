@@ -2,6 +2,7 @@ from seo_preservation import assert_project_renderer_preserved
 """Batch 8 proposals preserve the live article, projects and protected app code."""
 import ast
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -108,11 +109,16 @@ class GrowthBatch8Tests(unittest.TestCase):
         after=[ast.dump(n) for n in new.body if getattr(n,'name',None) not in allowed]
         self.assertEqual(before,after)
         for tree in [old,new]:self.assertEqual(sum(getattr(n,'name',None) in allowed for n in tree.body),5)
+        pipeline_snapshots = {
+            'business/db.py': '1aa53f1eb938b840b4e7bca36411fac611182f586f5e71cb6af06ca69b971be9',
+            'static/app.js': 'e1950f32ef1f4f2a530dc18511f90d5e8ec2f2944da0d83571ba7a70995f84fd',
+        }
         for path in ['business/db.py','business/lead_email_store.py','business/lead_store.py','business/notifications.py','business/quote_calculation.py','business/quote_store.py','business/invoice_store.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','static/public_analytics.js','templates/request_quote.html']:
             # Preserve complete-file checks, with a new private pipeline snapshot.
-            baseline_ref = ('52a7495923025b9f4f4e77426ef47056ea7bce3a'
-                            if path in {'business/db.py', 'static/app.js'} else BASE)
-            self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',baseline_ref+':'+path],cwd=ROOT),path)
+            if path in pipeline_snapshots:
+                self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(), pipeline_snapshots[path], path)
+                continue
+            self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT),path)
 
     def test_private_file_cannot_publish_or_bypass_approval(self):
         private_file=self.root/'invalid-private-advice.json'
