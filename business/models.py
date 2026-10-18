@@ -163,7 +163,7 @@ class QuoteOutcomeRequest(BaseModel):
 
 
 class AppointmentRequest(BaseModel):
-    lead_id: int
+    lead_id: int | None = None
     job_id: int | None = None
     kind: str = "site_visit"
     status: str = "confirmed"
@@ -217,3 +217,4 @@ class InvoiceEditRequest(BaseModel):
     amount_paid: float = 0
     reminder_email: str = ""
     reminders_enabled: bool = False
+

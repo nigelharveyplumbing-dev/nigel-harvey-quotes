@@ -442,6 +442,44 @@ try {
   await page.locator('#historyList').getByText('Synthetic Browser Customer').waitFor({ state: 'detached' });
   assert.equal((await context.request.get(`${origin}/api/quotes/${quote.id}`)).status(), 404);
 
+  // Mobile won-quote workflow: no enquiry exists, and the owner enters only dates.
+  await page.setViewportSize({width:390,height:844});
+  const pipelineQuoteResponse = await context.request.post(origin+'/api/quote', {data:{
+    customer_name:'Synthetic Pipeline Customer',job_description:'Two-day pipework',labour_cost:250}});
+  assert.equal(pipelineQuoteResponse.status(),200);
+  const pipelineQuote = await pipelineQuoteResponse.json();
+  assert.equal((await context.request.put(origin+'/api/quotes/'+pipelineQuote.id+'/outcome',
+    {data:{status:'won'}})).status(),200);
+  await page.getByRole('button',{name:'Pipeline',exact:true}).click();
+  const pipelineCard = page.locator('#pipelineBoard .history-item').filter({hasText:'Synthetic Pipeline Customer'});
+  await pipelineCard.getByRole('button',{name:'Open quote #'+pipelineQuote.id,exact:true}).click();
+  await page.locator('#quoteWorkflow').getByText('Quote #'+pipelineQuote.id+': WON', {exact:false}).waitFor();
+  await page.getByRole('button',{name:'Pipeline',exact:true}).click();
+  await pipelineCard.getByRole('button',{name:'Book job dates',exact:true}).click();
+  await page.locator('#appointmentContext').getByText('Synthetic Pipeline Customer', {exact:false}).waitFor();
+  assert.equal(await page.locator('#appointmentLeadId').inputValue(),'');
+  await page.locator('#appointmentStart').fill('2026-11-02T09:00');
+  await page.locator('#appointmentEnd').fill('2026-11-03T17:00');
+  const saveBooking = page.waitForResponse(r=>r.url()===origin+'/api/appointments' && r.request().method()==='POST');
+  await page.getByRole('button',{name:'Save appointment',exact:true}).click();
+  assert.equal((await saveBooking).status(),200);
+  await page.locator('#diaryWeek').getByText('02/11/2026', {exact:false}).waitFor();
+  const diaryCards = page.locator('#diaryList .history-item').filter({hasText:'Synthetic Pipeline Customer'});
+  await diaryCards.first().waitFor();
+  assert.equal(await diaryCards.count(),2);
+  await page.getByRole('button',{name:'Pipeline',exact:true}).click();
+  const scheduledCard = page.locator('.pipeline-stage').filter({has:page.getByRole('heading',{name:/^Scheduled jobs/})})
+    .locator('.history-item').filter({hasText:'Synthetic Pipeline Customer'});
+  await scheduledCard.getByRole('button',{name:'View / edit job dates',exact:true}).click();
+  await page.waitForFunction(()=>document.getElementById('appointmentStart').value==='2026-11-02T09:00');
+  assert.equal(await page.locator('#appointmentEnd').inputValue(),'2026-11-03T17:00');
+  await page.getByRole('button',{name:'Add another date for this job',exact:true}).click();
+  assert.equal(await page.locator('#appointmentEditId').inputValue(),'');
+  assert.equal(await page.locator('#appointmentStart').inputValue(),'');
+  const pipelineJobs = (await (await context.request.get(origin+'/api/jobs')).json())
+    .filter(job=>job.quote_id===pipelineQuote.id);
+  assert.equal(pipelineJobs.length,1);
+
   assert.deepEqual(browserDiagnostics.pageErrors, [], 'Fatal browser JavaScript error');
   console.log(JSON.stringify({ result: 'PASS', diagnostics: browserDiagnostics }, null, 2));
 } catch (error) {
@@ -452,3 +490,4 @@ try {
   if (browser) await browser.close();
   server.kill('SIGTERM');
 }
+

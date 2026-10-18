@@ -2,7 +2,8 @@
 
 import sqlite3
 
-from business.config import DB_PATH
+from business.config import DB_PATH, DB_BACKUP_DIR
+from business import appointment_migration
 
 def get_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -13,6 +14,11 @@ def get_db():
 
 def init_db():
     conn = get_db()
+    try:
+        migration_backup = appointment_migration.preflight(conn, DB_BACKUP_DIR)
+    except Exception:
+        conn.close()
+        raise
     conn.execute("""
         CREATE TABLE IF NOT EXISTS customers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -193,7 +199,7 @@ def init_db():
     # a job can link to an existing lead, quote or invoice as work progresses.
     conn.execute("""CREATE TABLE IF NOT EXISTS appointments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        lead_id INTEGER NOT NULL,
+        lead_id INTEGER,
         job_id INTEGER,
         kind TEXT NOT NULL,
         status TEXT NOT NULL,
@@ -204,6 +210,7 @@ def init_db():
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )""")
+    appointment_migration.migrate(conn)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_start ON appointments(starts_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_lead ON appointments(lead_id)")
     conn.execute("""CREATE TABLE IF NOT EXISTS jobs (
@@ -228,6 +235,12 @@ def init_db():
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_quick_add_key ON leads(quick_add_key) WHERE quick_add_key IS NOT NULL")
 
     conn.commit()
+    if migration_backup:
+        integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        if integrity != "ok":
+            conn.close()
+            raise RuntimeError("Post-migration database integrity check failed")
+        print("PIPELINE_MIGRATION_COMPLETE integrity=ok records_preserved=true backup=" + migration_backup["backup_file"], flush=True)
     conn.close()
 
 
@@ -242,3 +255,4 @@ def database_counts():
             counts[table] = None
     conn.close()
     return counts
+

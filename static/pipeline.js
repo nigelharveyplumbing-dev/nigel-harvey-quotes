@@ -15,6 +15,7 @@ let b7QuickKey = '';
 let b7Appointments = [];
 let b7Jobs = [];
 let b7WeekOffset = 0;
+const b7BookingQuotes = new Set();
 const B7_WORK_TYPES = ['Leak / repair','Tap','Toilet / cistern','Shower','Bathroom plumbing',
   'Radiator / TRV','Outside tap','Pipework','Power/heating-system flush','Cylinder / tank','Other'];
 
@@ -127,12 +128,16 @@ async function openQuickVisit(appointmentId) {
   await loadDiary();
   const visit = b7Appointments.find(a => a.id === appointmentId);
   if (!visit) return;
+  focusDiaryAppointment(visit);
+}
+
+function focusDiaryAppointment(visit) {
   const monday = day => new Date(day.getFullYear(), day.getMonth(),
     day.getDate() - ((day.getDay() + 6) % 7));
   const date = new Date(visit.starts_at.slice(0,10) + 'T12:00:00');
   b7WeekOffset = Math.round((monday(date) - monday(new Date())) / 86400000);
   renderDiary();
-  document.getElementById('diary_appointment_' + appointmentId)?.scrollIntoView({behavior:'smooth', block:'center'});
+  document.getElementById('diary_appointment_' + visit.id)?.scrollIntoView({behavior:'smooth', block:'center'});
 }
 
 async function loadPipeline() {
@@ -154,29 +159,52 @@ async function loadPipeline() {
           (card.lead_id ? '<button type="button" class="btn-light" onclick="bookVisitForLead(' + Number(card.lead_id) + ')">Book visit</button>' : '') +
           (card.lead_id ? '<button type="button" class="btn-light" onclick="openPipelineLead(' + Number(card.lead_id) + ')">Open lead</button>' : '') +
           (card.lead_id ? '<button type="button" class="btn-light" onclick="quoteFromDiaryLead(' + Number(card.lead_id) + ')">Start quote</button>' : '') +
-          (card.job_ids.length ? '<button type="button" class="btn-light" onclick="editPipelineJob(' + Number(card.job_ids[0]) + ')">Update job</button>' : '') +
-          (card.lead_id && card.job_ids.length ? '<button type="button" class="btn-light" onclick="bookJobForLead(' + Number(card.lead_id) + ',' + Number(card.job_ids[0]) + ')">Book job dates</button>' : '') +
+          card.quote_ids.map(id => '<button type="button" class="btn-light" onclick="loadSavedQuote(' + Number(id) + ')">Open quote #' + Number(id) + '</button>').join('') +
+          card.job_ids.map(id => '<button type="button" class="btn-light" onclick="editPipelineJob(' + Number(id) + ')">Update job #' + Number(id) + '</button>').join('') +
+          (['won_unscheduled','scheduled','in_progress'].includes(pair[0]) ? (card.won_quote_ids || []).map(id =>
+            '<button type="button" class="btn-blue" onclick="bookPipelineQuote(' + Number(id) + ')">' +
+            (pair[0] === 'won_unscheduled' ? 'Book job dates' : 'View / edit job dates') +
+            ((card.won_quote_ids || []).length > 1 ? ' · Quote #' + Number(id) : '') + '</button>').join('') : '') +
           '</div></div>').join('') || '<p class="small">None</p>') + '</section>';
     }).join('');
   } catch (error) { board.innerText = 'Could not load pipeline: ' + error.message; }
 }
 
-function jobFromQuote(id) {
-  const quote = (typeof SAVED_QUOTES !== 'undefined' ? SAVED_QUOTES : []).find(x => x.id === id);
-  showTab('pipelineTab');
-  document.getElementById('jobEditor').open = true;
-  document.getElementById('jobEditId').value = '';
-  document.getElementById('jobLeadId').value = '';
-  document.getElementById('jobQuoteId').value = '';
-  document.getElementById('jobInvoiceId').value = '';
-  document.getElementById('jobTitle').value = '';
-  document.getElementById('jobNotes').value = '';
-  document.getElementById('jobStatus').value = 'awaiting_schedule';
-  if (quote) {
-    document.getElementById('jobLeadId').value = quote.lead_id || '';
-    document.getElementById('jobQuoteId').value = quote.id;
-    document.getElementById('jobTitle').value = quote.job || 'Plumbing work';
-  }
+function jobFromQuote(id) { return bookPipelineQuote(id); }
+
+async function bookPipelineQuote(id) {
+  if (b7BookingQuotes.has(id)) return;
+  b7BookingQuotes.add(id);
+  try {
+    const quote = await b7Request('/api/quotes/' + id);
+    if (quote.status !== 'won') throw new Error('Mark this quote as won before booking the work.');
+    b7Jobs = await b7Request('/api/jobs');
+    let job = b7Jobs.find(item => item.quote_id === id);
+    if (!job) {
+      try {
+        job = await b7Post('/api/jobs', {quote_id:id, lead_id:quote.lead_id || null,
+          title:quote.job || 'Plumbing work', status:'awaiting_schedule'});
+      } catch (error) {
+        // Another tab may have added the job. Reuse it only if it really exists.
+        b7Jobs = await b7Request('/api/jobs');
+        job = b7Jobs.find(item => item.quote_id === id);
+        if (!job) throw error;
+      }
+    }
+    if (['completed','cancelled'].includes(job.status)) throw new Error('Open Update job to review this job before adding dates.');
+    // Do not open an empty booking form if existing dates could not be checked.
+    b7Appointments = await b7Request('/api/appointments');
+    const booking = b7Appointments.find(item => item.job_id === job.id &&
+      ['confirmed','provisional'].includes(item.status) && item.kind === 'job');
+    if (booking) {
+      showTab('diaryTab');
+      focusDiaryAppointment(booking);
+      editDiaryAppointment(booking.id);
+    } else bookJobForLead(job.lead_id, job.id);
+    document.getElementById('appointmentContext').innerText =
+      (quote.customer_name || 'Customer') + ' · Quote #' + id + ' · ' + job.title;
+  } catch (error) { alert(error.message); }
+  finally { b7BookingQuotes.delete(id); }
 }
 function editPipelineJob(id) {
   const job = b7Jobs.find(x => x.id === id);
@@ -202,6 +230,8 @@ async function savePipelineJob() {
 }
 
 function bookVisitForLead(leadId) {
+  document.getElementById('appointmentContext').innerText = '';
+  document.getElementById('appointmentAddDates').classList.add('hidden');
   showTab('diaryTab');
   document.getElementById('appointmentEditor').open = true;
   document.getElementById('appointmentEditId').value = '';
@@ -211,19 +241,28 @@ function bookVisitForLead(leadId) {
   document.getElementById('appointmentStatus').value = 'confirmed';
   document.getElementById('appointmentFollow').classList.add('hidden');
   ['Start','End','FollowDate','Notes'].forEach(key => { document.getElementById('appointment' + key).value = ''; });
-  document.getElementById('appointmentLeadId').scrollIntoView({behavior:'smooth', block:'center'});
+  document.getElementById('appointmentEditor').scrollIntoView({behavior:'smooth', block:'center'});
 }
 function bookJobForLead(leadId, jobId) {
   showTab('diaryTab');
   document.getElementById('appointmentEditor').open = true;
   document.getElementById('appointmentEditId').value = '';
-  document.getElementById('appointmentLeadId').value = leadId;
+  document.getElementById('appointmentLeadId').value = leadId || '';
   document.getElementById('appointmentJobId').value = jobId;
   document.getElementById('appointmentKind').value = 'job';
+  document.getElementById('appointmentContext').innerText = '';
+  document.getElementById('appointmentAddDates').classList.add('hidden');
   document.getElementById('appointmentStatus').value = 'confirmed';
   document.getElementById('appointmentFollow').classList.add('hidden');
   ['Start','End','FollowDate','Notes'].forEach(key => { document.getElementById('appointment' + key).value = ''; });
-  document.getElementById('appointmentLeadId').scrollIntoView({behavior:'smooth', block:'center'});
+  document.getElementById('appointmentEditor').scrollIntoView({behavior:'smooth', block:'center'});
+}
+function addJobBookingDates() {
+  const leadId = b7Number('appointmentLeadId'), jobId = b7Number('appointmentJobId');
+  const context = document.getElementById('appointmentContext').innerText;
+  if (!jobId) return;
+  bookJobForLead(leadId, jobId);
+  document.getElementById('appointmentContext').innerText = context;
 }
 async function openPipelineLead(leadId) {
   document.getElementById('leadSearch').value = '';
@@ -251,7 +290,8 @@ function b7CalendarUrl(item) {
   const title = (item.kind === 'site_visit' ? 'Site visit / quote survey' : 'Plumbing job') + ' · ' + item.customer_name;
   return 'https://calendar.google.com/calendar/render?action=TEMPLATE&ctz=Europe%2FLondon&dates=' +
     encodeURIComponent(dates) + '&text=' + encodeURIComponent(title) +
-    '&details=' + encodeURIComponent('Lead #' + item.lead_id + ' · Check private Nigel Harvey Plumbing app for details.');
+    '&details=' + encodeURIComponent((item.lead_id ? 'Lead #' + item.lead_id : 'Quote #' + item.quote_id) +
+      ' · Check private Nigel Harvey Plumbing app for details.');
 }
 async function loadDiary() {
   try { b7Appointments = await b7Request('/api/appointments'); renderDiary(); }
@@ -279,9 +319,10 @@ function renderDiary() {
         '><strong>' + escapeHtml(a.customer_name) +
         '</strong> · ' + (a.kind === 'site_visit' ? 'Site visit / quote survey' : 'Plumbing job') + ' · ' + escapeHtml(a.status) +
         '<div>' + escapeHtml(a.starts_at.replace('T',' ')) + '–' + escapeHtml(a.ends_at.replace('T',' ')) +
-        ' · Lead #' + Number(a.lead_id) + '</div><div class="small">' + escapeHtml(a.notes || '') + '</div>' +
+        (a.lead_id ? ' · Lead #' + Number(a.lead_id) : ' · Quote #' + Number(a.quote_id)) + '</div><div class="small">' + escapeHtml(a.notes || '') + '</div>' +
         '<button type="button" class="btn-light" onclick="editDiaryAppointment(' + Number(a.id) + ')">Update</button> ' +
-        '<button type="button" class="btn-light" onclick="openPipelineLead(' + Number(a.lead_id) + ')">Open lead</button> ' +
+        (a.lead_id ? '<button type="button" class="btn-light" onclick="openPipelineLead(' + Number(a.lead_id) + ')">Open lead</button> ' : '') +
+        (a.quote_id ? '<button type="button" class="btn-light" onclick="loadSavedQuote(' + Number(a.quote_id) + ')">Open quote</button> ' : '') +
         (a.kind === 'site_visit' ? '<button type="button" class="btn-light" onclick="quoteFromDiaryLead(' + Number(a.lead_id) + ')">Start quote</button> ' : '') +
         '<a class="btn-link btn-secondary" target="_blank" rel="noopener" href="' + b7CalendarUrl(a) +
         '">Add to Google Calendar</a></div>').join('') : '<p class="small">No plumbing work booked.</p>') + '</section>';
@@ -297,13 +338,15 @@ function renderDiary() {
 function editDiaryAppointment(id) {
   const a = b7Appointments.find(x => x.id === id);
   if (!a) return;
+  document.getElementById('appointmentContext').innerText = a.customer_name || '';
+  document.getElementById('appointmentAddDates').classList.toggle('hidden', a.kind !== 'job');
   document.getElementById('appointmentEditor').open = true;
   ['EditId','LeadId','JobId','Kind','Status','Start','End','FollowDate','Notes'].forEach((key,index) => {
     document.getElementById('appointment' + key).value =
       [a.id,a.lead_id,a.job_id,a.kind,a.status,a.starts_at,a.ends_at,a.provisional_follow_up,a.notes][index] || '';
   });
   document.getElementById('appointmentFollow').classList.toggle('hidden',a.status !== 'provisional');
-  document.getElementById('appointmentEditId').scrollIntoView({behavior:'smooth', block:'center'});
+  document.getElementById('appointmentEditor').scrollIntoView({behavior:'smooth', block:'center'});
 }
 async function saveDiaryAppointment() {
   const id = b7Number('appointmentEditId');
@@ -316,6 +359,9 @@ async function saveDiaryAppointment() {
     const a = await b7Post(id ? '/api/appointments/' + id : '/api/appointments', data, id ? 'PUT' : 'POST');
     document.getElementById('appointmentEditId').value = a.id;
     await Promise.all([loadDiary(), loadPipeline()]);
-    showNotice('Appointment #' + a.id + ' saved.');
+    editDiaryAppointment(a.id);
+    focusDiaryAppointment(a);
+    showNotice((a.kind === 'job' ? 'Job dates' : 'Appointment') + ' saved.');
   } catch (error) { alert(error.message); }
 }
+
