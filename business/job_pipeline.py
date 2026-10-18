@@ -38,10 +38,17 @@ def _row(row):
 def list_appointments():
     conn = get_db()
     try:
-        return [dict(row) for row in conn.execute("""SELECT a.*, l.name AS customer_name,
-            l.phone AS customer_phone, l.address AS customer_address,
-            l.description AS lead_description, l.status AS lead_status, l.customer_id
-            FROM appointments a JOIN leads l ON l.id = a.lead_id
+        return [dict(row) for row in conn.execute("""SELECT a.*,
+            COALESCE(l.name, q.customer_name, c.name, j.title) AS customer_name,
+            COALESCE(l.phone, c.phone) AS customer_phone,
+            COALESCE(l.address, c.address) AS customer_address,
+            COALESCE(l.description, q.job, j.title) AS lead_description,
+            l.status AS lead_status, COALESCE(l.customer_id, j.customer_id) AS customer_id,
+            j.quote_id
+            FROM appointments a LEFT JOIN leads l ON l.id = a.lead_id
+            LEFT JOIN jobs j ON j.id = a.job_id
+            LEFT JOIN quotes q ON q.id = j.quote_id
+            LEFT JOIN customers c ON c.id = j.customer_id
             ORDER BY a.starts_at, a.id""")]
     finally:
         conn.close()
@@ -51,20 +58,23 @@ def save_appointment(data, now, appointment_id=None):
     validate_appointment(data)
     conn = get_db()
     try:
-        if not conn.execute("SELECT 1 FROM leads WHERE id = ?", (data.lead_id,)).fetchone():
+        if data.lead_id and not conn.execute("SELECT 1 FROM leads WHERE id = ?", (data.lead_id,)).fetchone():
             raise ValueError("Lead does not exist")
+        if data.kind == "site_visit" and not data.lead_id:
+            raise ValueError("A site visit needs a lead")
         if data.job_id:
             job = conn.execute("SELECT lead_id, quote_id FROM jobs WHERE id = ?", (data.job_id,)).fetchone()
             if not job or job["lead_id"] != data.lead_id:
                 raise ValueError("Job must belong to this lead")
-        previous = (conn.execute("SELECT kind FROM appointments WHERE id=?", (appointment_id,)).fetchone()
+        previous = (conn.execute("SELECT kind,job_id FROM appointments WHERE id=?", (appointment_id,)).fetchone()
                     if appointment_id else None)
-        if data.kind == "job" and (appointment_id is None or (previous and previous["kind"] != "job")):
+        if data.kind == "job":
             if not data.job_id:
                 raise ValueError("A plumbing job booking needs a linked won quote/job")
             linked_quote = (conn.execute("SELECT status FROM quotes WHERE id=?", (job["quote_id"],)).fetchone()
                             if job["quote_id"] else None)
-            if not linked_quote or linked_quote["status"] != "won":
+            if (not linked_quote or linked_quote["status"] != "won") and (
+                    not previous or previous["kind"] != "job" or previous["job_id"] != data.job_id):
                 raise ValueError("Book the plumbing job after its quote is won")
         timestamp = now().isoformat()
         values = (data.lead_id, data.job_id, data.kind, data.status,
@@ -82,6 +92,13 @@ def save_appointment(data, now, appointment_id=None):
                                (*values, timestamp, appointment_id))
             if not cur.rowcount:
                 raise ValueError("Appointment does not exist")
+        # Saving dates completes the scheduling step; a label alone is insufficient.
+        for linked_job_id in {data.job_id, previous["job_id"] if previous else None} - {None}:
+            has_booking = conn.execute("""SELECT 1 FROM appointments WHERE job_id=?
+                AND kind='job' AND status IN ('confirmed','provisional')""", (linked_job_id,)).fetchone()
+            conn.execute("""UPDATE jobs SET status=?, updated_at=? WHERE id=?
+                AND status IN ('awaiting_schedule','scheduled')""",
+                         ("scheduled" if has_booking else "awaiting_schedule", timestamp, linked_job_id))
         conn.commit()
         return _row(conn.execute("SELECT * FROM appointments WHERE id=?", (appointment_id,)).fetchone())
     finally:
@@ -205,6 +222,7 @@ def pipeline_report():
             stage = "new_enquiry"
         return {"stage": stage, "lead_id": lead["id"] if lead else None,
                 "quote_ids": [quote["id"] for quote in related_quotes],
+                "won_quote_ids": [quote["id"] for quote in related_quotes if quote["status"] == "won"],
                 "job_ids": [job["id"] for job in related_jobs],
                 "invoice_ids": [invoice["id"] for invoice in related_invoices],
                 "name": name or "Unnamed customer", "description": description or "",
@@ -243,3 +261,4 @@ def pipeline_report():
     return {"stages": {stage: [card for card in cards if card["stage"] == stage] for stage in STAGES},
             "total_active": len([c for c in cards if c["stage"] not in {"paid", "closed_lost_expired"}]),
             "total": len(cards)}
+

@@ -369,7 +369,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
     </div>
     <div id="pipelineTab" class="tab-panel">
       <h2>Job Pipeline</h2>
-      <p class="small">One view of active opportunities. Closed lost/expired quotes remain in Leads and Quotes; historical quotes are not assigned an outcome automatically.</p>
+      <p class="small">Won quotes appear automatically. Choose Book job dates to put the work in your diary. Closed lost/expired quotes remain in Leads and Quotes.</p>
       <button type="button" class="btn-light" onclick="loadPipeline()">Refresh pipeline</button>
       <div id="pipelineBoard" class="pipeline-grid" style="margin-top:12px;">Loading...</div>
       <details id="jobEditor" class="quote-box" style="margin-top:14px;"><summary><strong>Add or update a job</strong></summary>
@@ -390,14 +390,19 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
       <div class="row"><button type="button" class="btn-light" onclick="shiftDiary(-7)">Previous week</button><strong id="diaryWeek"></strong><button type="button" class="btn-light" onclick="shiftDiary(7)">Next week</button></div>
       <div id="diaryList" class="history-list">Loading...</div>
       <details id="appointmentEditor" class="quote-box" style="margin-top:14px;"><summary><strong>Book or update an appointment</strong></summary>
+        <p id="appointmentContext"></p>
+        <details><summary>Record links (advanced)</summary>
         <label>Appointment ID to update (leave blank for new)</label><input id="appointmentEditId" type="number" min="1">
-        <label>Lead ID</label><input id="appointmentLeadId" type="number" min="1">
+        <label>Lead ID (optional for a job linked to a quote)</label><input id="appointmentLeadId" type="number" min="1">
         <label>Linked job ID (required for plumbing job, leave blank for site visit)</label><input id="appointmentJobId" type="number" min="1">
+        </details>
         <div class="grid2"><div><label>Type</label><select id="appointmentKind"><option value="site_visit">Site visit / quote survey</option><option value="job">Plumbing job</option></select></div><div><label>Status</label><select id="appointmentStatus" onchange="document.getElementById('appointmentFollow').classList.toggle('hidden',this.value!=='provisional')"><option value="confirmed">Confirmed</option><option value="provisional">Pencilled in</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div></div>
+        <p class="small">Choose the first start and final finish for consecutive days. Save a separate booking for additional dates with gaps.</p>
         <div class="grid2"><div><label>Start</label><input id="appointmentStart" type="datetime-local"></div><div><label>End</label><input id="appointmentEnd" type="datetime-local"></div></div>
         <div id="appointmentFollow" class="hidden"><label>Follow up provisional booking on</label><input id="appointmentFollowDate" type="date"></div>
         <label>Internal notes</label><textarea id="appointmentNotes" rows="3"></textarea>
         <button type="button" class="btn-blue" onclick="saveDiaryAppointment()">Save appointment</button>
+        <button id="appointmentAddDates" type="button" class="btn-light hidden" onclick="addJobBookingDates()">Add another date for this job</button>
       </details>
       <p class="small">“Add to Google Calendar” opens an event draft for you to review and save. Automatic two-way calendar sync is not enabled.</p>
     </div>
@@ -689,3 +694,4 @@ __APP_JS__
 __PIPELINE_JS__</script>
 </body>
 </html>
+

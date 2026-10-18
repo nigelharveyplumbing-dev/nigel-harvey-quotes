@@ -2555,7 +2555,7 @@ async function loadHistory() {
           <button type="button" class="btn-blue" onclick="editSavedQuote(${q.id})">Edit</button>
           <button type="button" class="btn-secondary" onclick="sendSavedQuoteWhatsApp(${q.id})">WhatsApp</button>
           <button type="button" class="btn-blue" onclick="convertQuoteToInvoice(${q.id})">To Invoice</button>
-          ${q.status === 'won' ? `<button type="button" class="btn-light" onclick="jobFromQuote(${q.id})">Add to Pipeline</button>` : ''}
+          ${q.status === 'won' ? `<button type="button" class="btn-light" onclick="jobFromQuote(${q.id})">Book job dates</button>` : ''}
           <button type="button" class="btn-light" onclick="printSavedQuote(${q.id})">Print</button>
           <button type="button" class="btn-red" onclick="deleteSavedQuote(${q.id})">Delete</button>
         </div>
@@ -5887,3 +5887,4 @@ loadHistory();
 loadInvoices();
 loadCustomers();
 loadLeads();
+
