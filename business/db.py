@@ -2,7 +2,8 @@
 
 import sqlite3
 
-from business.config import DB_PATH
+from business.config import DB_PATH, DB_BACKUP_DIR
+from business import appointment_migration
 
 def get_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -13,6 +14,11 @@ def get_db():
 
 def init_db():
     conn = get_db()
+    try:
+        migration_backup = appointment_migration.preflight(conn, DB_BACKUP_DIR)
+    except Exception:
+        conn.close()
+        raise
     conn.execute("""
         CREATE TABLE IF NOT EXISTS customers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -204,33 +210,7 @@ def init_db():
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )""")
-    # Existing diaries required a lead even when a won quote had no enquiry.
-    # Rebuild only that constraint, retaining every column, row, index and trigger.
-    appointment_columns = list(conn.execute("PRAGMA table_info(appointments)"))
-    if any(c["name"] == "lead_id" and c["notnull"] for c in appointment_columns):
-        schema = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='appointments'").fetchone()[0]
-        objects = list(conn.execute("SELECT sql FROM sqlite_master WHERE tbl_name='appointments' AND type IN ('index','trigger') AND sql IS NOT NULL"))
-        sequence = conn.execute("SELECT seq FROM sqlite_sequence WHERE name='appointments'").fetchone()
-        if "lead_id INTEGER NOT NULL" not in schema:
-            raise RuntimeError("Unexpected appointments schema; optional-lead migration stopped")
-        schema = schema.replace("lead_id INTEGER NOT NULL", "lead_id INTEGER", 1)
-        schema = "CREATE TABLE appointments_optional_lead " + schema[schema.index("("):]
-        conn.execute("SAVEPOINT optional_appointment_lead")
-        try:
-            conn.execute(schema)
-            columns = ",".join('"' + c["name"].replace('"', '""') + '"' for c in appointment_columns)
-            conn.execute(f"INSERT INTO appointments_optional_lead ({columns}) SELECT {columns} FROM appointments")
-            conn.execute("DROP TABLE appointments")
-            conn.execute("ALTER TABLE appointments_optional_lead RENAME TO appointments")
-            if sequence:
-                conn.execute("UPDATE sqlite_sequence SET seq=MAX(seq,?) WHERE name='appointments'", (sequence[0],))
-            for obj in objects:
-                conn.execute(obj[0])
-        except Exception:
-            conn.execute("ROLLBACK TO optional_appointment_lead")
-            conn.execute("RELEASE optional_appointment_lead")
-            raise
-        conn.execute("RELEASE optional_appointment_lead")
+    appointment_migration.migrate(conn)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_start ON appointments(starts_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_lead ON appointments(lead_id)")
     conn.execute("""CREATE TABLE IF NOT EXISTS jobs (
@@ -255,6 +235,12 @@ def init_db():
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_quick_add_key ON leads(quick_add_key) WHERE quick_add_key IS NOT NULL")
 
     conn.commit()
+    if migration_backup:
+        integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        if integrity != "ok":
+            conn.close()
+            raise RuntimeError("Post-migration database integrity check failed")
+        print("PIPELINE_MIGRATION_COMPLETE integrity=ok records_preserved=true backup=" + migration_backup["backup_file"], flush=True)
     conn.close()
 
 

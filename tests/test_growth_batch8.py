@@ -110,7 +110,7 @@ class GrowthBatch8Tests(unittest.TestCase):
         self.assertEqual(before,after)
         for tree in [old,new]:self.assertEqual(sum(getattr(n,'name',None) in allowed for n in tree.body),5)
         pipeline_snapshots = {
-            'business/db.py': '1aa53f1eb938b840b4e7bca36411fac611182f586f5e71cb6af06ca69b971be9',
+            'business/db.py': 'feb841feb46026a101e5019957be55d5865341d2ed7798474c4dc8af36f212f8',
             'static/app.js': 'e1950f32ef1f4f2a530dc18511f90d5e8ec2f2944da0d83571ba7a70995f84fd',
         }
         for path in ['business/db.py','business/lead_email_store.py','business/lead_store.py','business/notifications.py','business/quote_calculation.py','business/quote_store.py','business/invoice_store.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','static/public_analytics.js','templates/request_quote.html']:
