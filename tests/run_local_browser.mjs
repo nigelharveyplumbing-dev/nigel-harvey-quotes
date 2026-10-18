@@ -480,6 +480,48 @@ try {
     .filter(job=>job.quote_id===pipelineQuote.id);
   assert.equal(pipelineJobs.length,1);
 
+  // A separate visit stays booked when a continuous booking is removed once.
+  await page.locator('#appointmentStart').fill('2026-11-06T09:00');
+  await page.locator('#appointmentEnd').fill('2026-11-06T17:00');
+  const saveExtraBooking = page.waitForResponse(r=>r.url()===origin+'/api/appointments' && r.request().method()==='POST');
+  await page.getByRole('button',{name:'Save appointment',exact:true}).click();
+  assert.equal((await saveExtraBooking).status(),200);
+  await page.waitForFunction(()=>document.querySelectorAll('#diaryList .history-item').length===3);
+  const continuousCards = diaryCards.filter({hasText:'2026-11-02 09:00–2026-11-03 17:00'});
+  await continuousCards.last().getByText('Continuous booking: remove once to clear it from every day.',{exact:true}).waitFor();
+  page.removeAllListeners('dialog');
+  page.once('dialog',dialog=>dialog.dismiss());
+  await continuousCards.last().getByRole('button',{name:'Remove booking',exact:true}).click();
+  assert.equal(await continuousCards.count(),2);
+  page.on('dialog',dialog=>dialog.accept());
+  const removeBooking = page.waitForResponse(r=>r.url().includes('/api/appointments/') && r.request().method()==='PUT');
+  await continuousCards.last().getByRole('button',{name:'Remove booking',exact:true}).click();
+  assert.equal((await removeBooking).status(),200);
+  await continuousCards.first().waitFor({state:'detached'});
+  assert.equal(await diaryCards.count(),1);
+  const retainedAppointments = (await (await context.request.get(origin+'/api/appointments')).json())
+    .filter(item=>item.job_id===pipelineJobs[0].id);
+  assert.equal(retainedAppointments.length,2);
+  assert.equal(retainedAppointments.find(item=>item.starts_at==='2026-11-02T09:00').status,'cancelled');
+  assert.equal(retainedAppointments.find(item=>item.starts_at==='2026-11-06T09:00').status,'confirmed');
+  assert.equal((await (await context.request.get(origin+'/api/jobs')).json())
+    .find(item=>item.id===pipelineJobs[0].id).status,'scheduled');
+  // Reload through the pipeline: cancellation persists and the other date opens.
+  await page.reload();
+  await page.getByRole('button',{name:'Pipeline',exact:true}).click();
+  await scheduledCard.getByRole('button',{name:'View / edit job dates',exact:true}).click();
+  await page.waitForFunction(()=>document.getElementById('appointmentStart').value==='2026-11-06T09:00');
+  assert.equal(await diaryCards.count(),1);
+  const removeLastBooking = page.waitForResponse(r=>r.url().includes('/api/appointments/') && r.request().method()==='PUT');
+  await diaryCards.getByRole('button',{name:'Remove booking',exact:true}).click();
+  assert.equal((await removeLastBooking).status(),200);
+  await diaryCards.waitFor({state:'detached'});
+  await page.waitForFunction(()=>!document.getElementById('appointmentEditor').open);
+  assert.equal(await page.locator('#appointmentEditId').inputValue(),'');
+  assert.equal((await (await context.request.get(origin+'/api/jobs')).json())
+    .find(item=>item.id===pipelineJobs[0].id).status,'awaiting_schedule');
+  assert.equal((await context.request.get(origin+'/api/quotes/'+pipelineQuote.id)).status(),200);
+
   assert.deepEqual(browserDiagnostics.pageErrors, [], 'Fatal browser JavaScript error');
   console.log(JSON.stringify({ result: 'PASS', diagnostics: browserDiagnostics }, null, 2));
 } catch (error) {
