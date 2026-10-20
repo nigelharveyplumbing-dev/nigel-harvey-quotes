@@ -84,6 +84,36 @@ class RevenueTests(unittest.TestCase):
         self.assertEqual(edited.status_code,200,edited.text)
         self.assertEqual(edited.json()['source_category'],'Referral');self.assertEqual(edited.json()['origin_id'],q['origin_id']);self.assertEqual(edited.json()['created_at'],q['created_at'])
         self.assertEqual(self.get(f"/api/revenue/origins/{l['origin_id']}")['source'],'Referral')
+    def test_manual_whatsapp_quote_and_linked_quote_keep_existing_history(self):
+        self.activate()
+        # A quote entered directly, without a lead, retains its own WhatsApp channel.
+        quote=self.quote(source_category='',contact_channel='WhatsApp')
+        initial=self.get(f"/api/revenue/origins/{quote['origin_id']}")
+        self.assertEqual(initial['source'],'Unknown')
+        self.assertEqual(initial['contact_channel'],'WhatsApp')
+        self.assertEqual(initial['kind'],'unconfirmed')
+        self.assertEqual(quote['request']['contact_channel'],'WhatsApp')
+        invoice=self.invoice(quote)
+        corrected=self.post(f"/api/revenue/origins/{quote['origin_id']}/corrections",{
+            'source':'Unknown','channel':'WhatsApp','kind':'genuine',
+            'reason':'Owner verified genuine WhatsApp customer; discovery source unknown',
+            'expected_revision':0})
+        self.assertEqual(corrected['revision'],1)
+        self.assertEqual(corrected['history'][0]['old_channel'],'WhatsApp')
+        self.assertEqual(self.get('/api/quotes/'+str(quote['id']))['origin_id'],quote['origin_id'])
+        self.assertEqual(self.get('/api/invoices/'+str(invoice['id']))['origin_id'],quote['origin_id'])
+        # A quote started from a lead must inherit the lead's first-contact channel.
+        lead=self.lead(channel='Phone')
+        linked=self.quote(lead,contact_channel='WhatsApp')
+        inherited=self.get(f"/api/revenue/origins/{linked['origin_id']}")
+        self.assertEqual(inherited['contact_channel'],'Phone')
+        self.assertEqual(linked['origin_id'],lead['origin_id'])
+        # Reject invalid channels before a standalone quote can be saved.
+        rejected=self.client.post('/api/quote',json={
+            'customer_name':'Invalid channel','labour_cost':100,
+            'contact_channel':'Made-up messaging app'},auth=self.auth)
+        self.assertEqual(rejected.status_code,422)
+
     def test_corrections_append_and_conflict(self):
         self.activate();l=self.lead();o=self.correction(l)
         self.assertEqual(o['captured_source'],'Unknown');self.assertEqual(o['revision'],1)
