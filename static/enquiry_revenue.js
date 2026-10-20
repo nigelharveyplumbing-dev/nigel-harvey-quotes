@@ -32,7 +32,21 @@ async function loadRevenue() {
   for (const id of ['revenueOriginal','revenuePaymentHistory','revenueWorkflowHistory']) document.getElementById(id).textContent='Load the selected record before changing it.';
   const [leads,quotes,jobs,invoices,customers]=await Promise.all(['/api/leads','/api/quotes','/api/jobs','/api/invoices','/api/customers'].map(async path=>(await fetch(path)).json()));
   revenueState.records={leads,quotes,jobs,invoices,customers};
-  document.getElementById('revenueOriginSelect').innerHTML=[...new Map([...leads,...quotes,...invoices,...jobs].filter(x=>x.origin_id).map(x=>[x.origin_id,x])).entries()].map(([id,x])=>`<option value="${id}">Origin #${id} · ${revenueEsc(x.source_category || x.invoice_number || x.job || 'Review source')}</option>`).join('');
+  // Identify existing records by customer and linked quote, not an opaque origin ID.
+  const originLabels=new Map();
+  for(const lead of leads.filter(x=>x.origin_id)) {
+    const quote=quotes.find(q=>Number(q.origin_id)===Number(lead.origin_id));
+    originLabels.set(String(lead.origin_id),`Lead #${lead.id} · ${lead.name || 'Unnamed customer'}${quote?' · Quote #'+quote.id:''} · ${lead.source_category || 'Unknown'}`);
+  }
+  for(const quote of quotes.filter(x=>x.origin_id)) {
+    const key=String(quote.origin_id);
+    if(!originLabels.has(key)) originLabels.set(key,`Quote #${quote.id} · ${quote.customer_name || 'Unnamed customer'} · ${quote.source_category || 'Unknown'}`);
+  }
+  for(const item of [...jobs,...invoices].filter(x=>x.origin_id)) {
+    const key=String(item.origin_id);
+    if(!originLabels.has(key)) originLabels.set(key,`Origin #${key} · ${item.customer_name || item.title || 'Existing job'}`);
+  }
+  document.getElementById('revenueOriginSelect').innerHTML=[...originLabels.entries()].map(([id,label])=>`<option value="${revenueEsc(id)}">${revenueEsc(label)}</option>`).join('');
   document.getElementById('revenueInvoiceSelect').innerHTML=invoices.map(x=>`<option value="${x.id}">${revenueEsc(x.invoice_number)} · balance ${revenueMoney(Math.round(x.balance_due*100))}</option>`).join('');
   document.getElementById('revenueEntitySelect').innerHTML=[...quotes.map(x=>`<option value="quote/${x.id}">Quote #${x.id} · ${revenueEsc(x.status || 'unclassified')}</option>`),...jobs.map(x=>`<option value="job/${x.id}">Job #${x.id} · ${revenueEsc(x.status)}</option>`)].join('');
   document.getElementById('revenueStageQuote').innerHTML=quotes.map(x=>`<option value="${x.id}">Quote #${x.id}</option>`).join('');
@@ -40,6 +54,20 @@ async function loadRevenue() {
   for (const id of ['revenueRevisionCurrent','revenueRevisionPrevious']) document.getElementById(id).innerHTML='<option value="">Choose a quote explicitly</option>'+quotes.map(x=>`<option value="${x.id}">Quote #${x.id} · origin #${x.origin_id} · ${revenueEsc(x.status)}</option>`).join('');
   for (const [id,value] of Object.entries(selected)) if (Array.from(document.getElementById(id).options).some(x=>x.value===value)) document.getElementById(id).value=value;
   await revenueReport();
+}
+// Safe shortcut from a saved quote: only opens the existing append-only correction flow.
+async function revenueOpenOrigin(originId) {
+  if(!Number.isSafeInteger(originId) || originId<1) return;
+  showTab('revenueTab');
+  await revenueRun(async()=>{
+    await loadRevenue();
+    if(!revenueState.options?.active) throw new Error('Original-source corrections require the separately approved tracking migration. No record was changed.');
+    const select=document.getElementById('revenueOriginSelect');
+    if(![...select.options].some(x=>x.value===String(originId))) throw new Error('This saved quote has no selectable enquiry origin. No record was changed.');
+    select.value=String(originId);
+    await revenueOrigin();
+    document.getElementById('revenueOriginal').closest('details').open=true;
+  });
 }
 async function revenueReport() {
   const report=await revenueFetch('report?'+new URLSearchParams({start:revenueValue('revenueStart'),end:revenueValue('revenueEnd')}));
@@ -133,7 +161,7 @@ function revenueInit() {
   document.getElementById('revenueEntitySelect').onchange=()=>{revenueState.entity=null;};
   // New manual enquiries retain Unknown unless Nigel chooses a source.
   const quick=document.getElementById('quickSource');
-  if (quick) { const wrap=document.createElement('div');wrap.id='revenueQuickFields';wrap.innerHTML=select('quickChannel','Contact channel',revenueOptions(['Unknown','Phone','WhatsApp','Email','Directory message','In person','Other']))+select('quickKind','Record classification',revenueOptions(['unconfirmed','genuine','synthetic']))+field('quickTestReference','Synthetic test reference')+field('quickCustomerId','Existing customer ID (only when explicitly confirmed)','number');quick.after(wrap); }
+  if (quick) { const wrap=document.createElement('div');wrap.id='revenueQuickFields';wrap.innerHTML='<p class="small">Contact channel is how they messaged or called you. Original source is how they found you. Leave source Unknown until confirmed.</p>'+select('quickChannel','How did they first contact you?',revenueOptions(['Unknown','Phone','WhatsApp','Email','Directory message','In person','Other']))+select('quickKind','Record classification',revenueOptions(['unconfirmed','genuine','synthetic']))+field('quickTestReference','Synthetic test reference')+field('quickCustomerId','Existing customer ID (only when explicitly confirmed)','number');quick.after(wrap); }
   // Ledger-backed balances can only be changed through the dated payment screen.
   const originalInvoices=loadInvoices;
   loadInvoices=async function(){ await originalInvoices();const options=await revenueFetch('options');if(!options.active)return;document.querySelectorAll('#invoiceList input[id^="paid_"]').forEach(input=>{input.disabled=true;const row=input.parentElement;const button=row.querySelector('button');button.textContent='Dated payment / history';button.onclick=()=>{showTab('revenueTab');revenueRun(async()=>{await loadRevenue();document.getElementById('revenueInvoiceSelect').value=input.id.slice(5);await revenueInvoice();document.getElementById('revenuePaymentHistory').closest('details').open=true;});};});document.querySelectorAll('#invoiceList button[onclick^="markInvoice"]').forEach(x=>x.hidden=true);document.getElementById('edit_invoice_amount_paid').readOnly=true; };
