@@ -108,6 +108,7 @@ class RevenueTests(unittest.TestCase):
         inherited=self.get(f"/api/revenue/origins/{linked['origin_id']}")
         self.assertEqual(inherited['contact_channel'],'Phone')
         self.assertEqual(linked['origin_id'],lead['origin_id'])
+        self.assertEqual(linked['request']['contact_channel'],'Phone')
         # Reject invalid channels before a standalone quote can be saved.
         rejected=self.client.post('/api/quote',json={
             'customer_name':'Invalid channel','labour_cost':100,
