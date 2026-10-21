@@ -55,8 +55,8 @@ async function loadRevenue() {
   for (const [id,value] of Object.entries(selected)) if (Array.from(document.getElementById(id).options).some(x=>x.value===value)) document.getElementById(id).value=value;
   await revenueReport();
 }
-// Safe shortcut from a saved quote: only opens the existing append-only correction flow.
-async function revenueOpenOrigin(originId) {
+// The detailed audit screen is still available for advanced changes.
+async function revenueOpenAdvancedOrigin(originId) {
   if(!Number.isSafeInteger(originId) || originId<1) return;
   showTab('revenueTab');
   await revenueRun(async()=>{
@@ -69,6 +69,83 @@ async function revenueOpenOrigin(originId) {
     document.getElementById('revenueOriginal').closest('details').open=true;
   });
 }
+// Everyday phone-friendly enquiry editor. Corrections remain append-only;
+// the underlying customer, quote, job and invoice relationships are unchanged.
+async function revenueOpenOrigin(originId) {
+  if (!Number.isSafeInteger(originId) || originId < 1) return;
+  let dialog=document.getElementById('quickEnquiryDialog');
+  if (!dialog) {
+    dialog=document.createElement('dialog');
+    dialog.id='quickEnquiryDialog';
+    dialog.setAttribute('aria-labelledby','quickEnquiryTitle');
+    dialog.style.cssText='width:min(440px,calc(100vw - 24px));max-width:none;max-height:88dvh;overflow:auto;border:0;border-radius:16px;padding:20px;box-shadow:0 18px 50px rgba(0,0,0,.24);color:inherit;background:#fff;';
+    document.body.appendChild(dialog);
+    dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+  }
+  dialog.innerHTML='<h2 id="quickEnquiryTitle">Enquiry details</h2><p role="status">Loading enquiry…</p>';
+  if(!dialog.open)dialog.showModal();
+  try {
+    const [settings,record]=await Promise.all([revenueFetch('options'),revenueFetch(`origins/${originId}`)]);
+    if(!settings.active)throw new Error('Tracking is not active yet. No records have been changed.');
+    if(!record?.id)throw new Error('Enquiry record was not found.');
+    const classification=record.kind==='synthetic'
+      ? '<p class="small">Synthetic test record — it remains a test and is excluded from genuine-lead totals.</p>'
+      : record.kind==='genuine'
+        ? '<p class="small">Confirmed genuine customer enquiry</p>'
+        : '<label style="display:block;margin:12px 0;"><input type="checkbox" id="qeGenuine"> I confirm this is a genuine customer enquiry</label>';
+    const field=(name,label,values,current)=>
+      `<label for="${name}" style="display:block;font-weight:650;margin:14px 0 6px;">${label}</label>`+
+      `<select id="${name}" style="width:100%;min-height:44px;">${revenueOptions(values,current)}</select>`;
+    dialog.innerHTML=`
+      <h2 id="quickEnquiryTitle" style="margin:0 0 8px;">Enquiry details</h2>
+      <p class="small">Enquiry #${Number(record.id)} · Quotes and bookings remain linked.</p>
+      ${field('qeChannel','How did they contact you?',settings.channels,record.contact_channel)}
+      ${field('qeSource','How did they find you?',settings.sources,record.source)}
+      <p class="small" style="margin:8px 0;">Not sure? Keep <strong>Unknown</strong> until the customer tells you. WhatsApp does not automatically mean Google.</p>
+      ${classification}
+      <label for="qeReason" style="display:block;font-weight:650;margin:12px 0 6px;">Why are you changing this?</label>
+      <textarea id="qeReason" rows="2" maxlength="500" placeholder="E.g. checked the original WhatsApp message" style="width:100%;box-sizing:border-box;"></textarea>
+      <p id="qeStatus" role="status" aria-live="polite" style="min-height:1.5em;"></p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
+        <button type="button" id="qeSave" class="btn-blue" style="flex:1 1 160px;">Save details</button>
+        <button type="button" id="qeCancel" class="btn-light" style="flex:1 1 110px;">Cancel</button>
+      </div>
+      <button type="button" id="qeAdvanced" class="btn-light" style="margin-top:12px;width:100%;">Advanced history</button>`;
+    dialog.querySelector('#qeCancel').onclick=()=>dialog.close();
+    dialog.querySelector('#qeAdvanced').onclick=()=>{dialog.close();revenueOpenAdvancedOrigin(originId);};
+    dialog.querySelector('#qeSave').onclick=async()=>{
+      const button=dialog.querySelector('#qeSave');
+      const status=dialog.querySelector('#qeStatus');
+      const channel=dialog.querySelector('#qeChannel').value;
+      const source=dialog.querySelector('#qeSource').value;
+      const kind=record.kind!=='genuine'&&record.kind!=='synthetic'&&
+        dialog.querySelector('#qeGenuine')?.checked?'genuine':record.kind;
+      const reason=dialog.querySelector('#qeReason').value.trim();
+      if(channel===record.contact_channel&&source===record.source&&kind===record.kind){
+        status.textContent='Nothing has changed.';return;
+      }
+      if(!reason){status.textContent='Please give a short reason for this change.';return;}
+      button.disabled=true;
+      status.textContent='Saving…';
+      try {
+        await revenueFetch(`origins/${record.id}/corrections`,{
+          source,channel,kind,reason,expected_revision:record.revision,
+          test_reference:record.test_reference||''
+        });
+        dialog.close();
+        await Promise.all([loadLeads(),loadHistory()]);
+      } catch(e) {
+        status.textContent=e.message||'Could not save. Please try again.';
+        button.disabled=false;
+      }
+    };
+    dialog.querySelector('#qeChannel').focus();
+  }catch(e){
+    dialog.innerHTML=`<h2 id="quickEnquiryTitle">Enquiry details</h2><p role="alert">${revenueEsc(e.message||'Unable to load enquiry')}</p><button type="button" class="btn-light" id="qeClose">Close</button>`;
+    dialog.querySelector('#qeClose').onclick=()=>dialog.close();
+  }
+}
+
 async function revenueReport() {
   const report=await revenueFetch('report?'+new URLSearchParams({start:revenueValue('revenueStart'),end:revenueValue('revenueEnd')}));
   document.getElementById('revenueDashboard').innerHTML=`<p>Enquiry cohort: ${revenueEsc(report.start)}–${revenueEsc(report.end)}. Current balances as at ${revenueEsc(report.as_of)}. Synthetic origins excluded: ${report.synthetic_origins_excluded}.</p><div style="overflow:auto"><table><thead><tr>${['Original source','Enquiries','Quoted','Accepted jobs','Completed','Quote-decision win rate (won / lost)','Enquiry win rate (won / lost)','Cash in dates','Cohort all recorded paid','Undated legacy','Current outstanding'].map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${Object.entries(report.by_source).map(([source,x])=>`<tr><td>${revenueEsc(source)}</td><td>${x.enquiries}</td><td>${x.quoted_enquiries} (${x.quoted_percent ?? '—'}%)</td><td>${x.accepted_enquiries} (${x.accepted_percent ?? '—'}%)</td><td>${x.completed_enquiries}</td><td>${x.won_quotes} / ${x.lost_quotes} (${x.quote_win_percent ?? '—'}%)</td><td>${x.won_enquiries} / ${x.lost_enquiries} (${x.enquiry_win_percent ?? '—'}%)</td>${['cash_pence','cohort_paid_pence','legacy_undated_pence','outstanding_pence'].map(k=>`<td>${revenueMoney(x[k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p>Dated cash: ${revenueMoney(report.totals.cash_pence)}. Refunds reduce cash on their actual date. Reversals cancel erroneous entries on their original dates. Cohort paid includes all recorded later receipts and undated balances; it is not period cash or profit. Won / lost excludes explicitly superseded quote revisions. Enquiry win rate counts each enquiry with a current won/lost quote once; any won quote wins, otherwise it is lost. Pending, expired and unclassified quotes do not create decisions; superseded quotes and synthetic tests are excluded. Standalone quotes have no enquiry denominator. Unknown remains visible.</p>`;
@@ -161,7 +238,7 @@ function revenueInit() {
   document.getElementById('revenueEntitySelect').onchange=()=>{revenueState.entity=null;};
   // New manual enquiries retain Unknown unless Nigel chooses a source.
   const quick=document.getElementById('quickSource');
-  if (quick) { const wrap=document.createElement('div');wrap.id='revenueQuickFields';wrap.innerHTML='<p class="small">Contact channel is how they messaged or called you. Original source is how they found you. Leave source Unknown until confirmed.</p>'+select('quickChannel','How did they first contact you?',revenueOptions(['Unknown','Phone','WhatsApp','Email','Directory message','In person','Other']))+select('quickKind','Record classification',revenueOptions(['unconfirmed','genuine','synthetic']))+field('quickTestReference','Synthetic test reference')+field('quickCustomerId','Existing customer ID (only when explicitly confirmed)','number');quick.after(wrap); }
+  if (quick) { const wrap=document.createElement('div');wrap.id='revenueQuickFields';wrap.innerHTML='<p class="small">Contact channel is how they messaged or called you. Original source is how they found you. Leave source Unknown until confirmed.</p>'+select('quickChannel','How did they first contact you?',revenueOptions(['Unknown','Phone','WhatsApp','Email','Directory message','In person','Other']))+'<details style="margin-top:12px;"><summary>Advanced / test settings</summary>'+select('quickKind','Record classification',revenueOptions(['unconfirmed','genuine','synthetic']))+field('quickTestReference','Synthetic test reference')+field('quickCustomerId','Existing customer ID (only when explicitly confirmed)','number')+'</details>';quick.after(wrap); }
   // Ledger-backed balances can only be changed through the dated payment screen.
   const originalInvoices=loadInvoices;
   loadInvoices=async function(){ await originalInvoices();const options=await revenueFetch('options');if(!options.active)return;document.querySelectorAll('#invoiceList input[id^="paid_"]').forEach(input=>{input.disabled=true;const row=input.parentElement;const button=row.querySelector('button');button.textContent='Dated payment / history';button.onclick=()=>{showTab('revenueTab');revenueRun(async()=>{await loadRevenue();document.getElementById('revenueInvoiceSelect').value=input.id.slice(5);await revenueInvoice();document.getElementById('revenuePaymentHistory').closest('details').open=true;});};});document.querySelectorAll('#invoiceList button[onclick^="markInvoice"]').forEach(x=>x.hidden=true);document.getElementById('edit_invoice_amount_paid').readOnly=true; };
@@ -183,7 +260,9 @@ fillFormFromRequest=function(request,quoteId=null){revenueOriginalFill(request,q
 const revenueOriginalReset=resetQuoteFormState;
 resetQuoteFormState=function(){revenueOriginalReset();document.getElementById('revenueQuoteCustomer').value='';revenueState.pending.delete('quote-save');};
 const revenueOriginalLeads=loadLeads;
-loadLeads=async function(){await revenueOriginalLeads();const options=await revenueFetch('options');if(!options.active)return;document.querySelectorAll('#leadList select[id^="lead_source_"]').forEach(x=>{x.disabled=true;const button=document.createElement('button');button.type='button';button.className='btn-light';button.textContent='Original source / corrections';button.onclick=()=>{const lead=SAVED_LEADS.find(l=>l.id===Number(x.id.slice(12)));showTab('revenueTab');revenueRun(async()=>{await loadRevenue();document.getElementById('revenueOriginSelect').value=lead.origin_id;await revenueOrigin();});};x.after(button);});};
+loadLeads=async function(){await revenueOriginalLeads();const options=await revenueFetch('options');if(!options.active)return;document.querySelectorAll('#leadList select[id^="lead_source_"]').forEach(x=>{x.disabled=true;const lead=SAVED_LEADS.find(l=>l.id===Number(x.id.slice(12)));if(!lead?.origin_id)return;const button=document.createElement('button');button.type='button';button.className='btn-light';button.textContent='Enquiry details';button.onclick=()=>revenueOpenOrigin(Number(lead.origin_id));x.after(button);});};
+const revenueOriginalHistory=loadHistory;
+loadHistory=async function(...args){await revenueOriginalHistory(...args);document.querySelectorAll('#historyList button[onclick^="revenueOpenOrigin"]').forEach(button=>{button.textContent='Enquiry details';});};
 
 const revenueOriginalPost=b7Post;
 b7Post=function(url,data,method){if(/^\/api\/jobs(?:\/|$)/.test(url))data={...data,operation_key:revenueKey('job/'+url,data)};return revenueOriginalPost(url,data,method);};
