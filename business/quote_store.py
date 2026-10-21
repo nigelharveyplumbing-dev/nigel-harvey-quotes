@@ -13,7 +13,7 @@ from business.work_types import read_additional
 
 
 def row_to_quote(row):
-    return {
+    result = {
         "id": row["id"],
         "customer_id": row["customer_id"],
         "customer_name": row["customer_name"] or "",
@@ -30,9 +30,18 @@ def row_to_quote(row):
         "source_category": row["source_category"] or "",
         "work_type": row["work_type"] or "",
         "additional_work_types": read_additional(row["additional_work_types"]),
+        "origin_id": row["origin_id"] if "origin_id" in row.keys() else None,
         "request": json.loads(row["request_json"]),
         "result": json.loads(row["result_json"]),
     }
+    if result['origin_id']:
+        from business.enquiry_attribution import origin
+        with get_db() as conn:
+            current = origin(conn,result['origin_id'])
+        result['captured_source_category'] = result['source_category']
+        result['source_category'] = current['source']
+    return result
+
 
 
 def save_quote_intelligence(quote_id: int, result_data: dict, now_uk):
@@ -79,6 +88,14 @@ def sync_lead_status_from_quotes(conn, lead_id, timestamp):
 
 
 def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
+    from business.enquiry_attribution import enabled
+    with get_db() as c:
+        if enabled(c):
+            from business.revenue_mutations import save_quote as tracked_save
+            qid,created = tracked_save(request_data,result_data,now_uk)
+            if created:
+                save_quote_intelligence(qid,result_data,now_uk)
+            return qid
     lead_id = request_data.get("lead_id")
     source = request_data.get("source_category") or None
     work_type = request_data.get("work_type") or None
@@ -144,11 +161,16 @@ def get_quote_by_id(quote_id: int):
 
 def delete_quote_by_id(quote_id: int):
     conn = get_db()
-    cur = conn.execute("DELETE FROM quotes WHERE id = ?", (quote_id,))
-    conn.commit()
-    deleted = cur.rowcount > 0
-    conn.close()
-    return deleted
+    try:
+        from business.enquiry_attribution import protect_history
+        protect_history(conn,"quotes",quote_id)
+        cur = conn.execute("DELETE FROM quotes WHERE id = ?", (quote_id,))
+        conn.commit()
+        deleted = cur.rowcount > 0
+        conn.close()
+        return deleted
+    finally:
+        conn.close()
 
 
 def next_invoice_number(now_uk):
@@ -171,6 +193,12 @@ def build_payment_link(invoice_number: str):
 
 
 def create_invoice_from_quote(quote_id: int, now_uk, format_dt, get_invoice_by_id):
+    from business.enquiry_attribution import enabled
+    with get_db() as c:
+        if enabled(c):
+            from business.revenue_mutations import create_invoice
+            iid=create_invoice(quote_id,now_uk,format_dt)
+            return get_invoice_by_id(iid) if iid else None
     quote = get_quote_by_id(quote_id)
     if not quote:
         return None
@@ -240,6 +268,16 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict, ups
     if not existing:
         return None
 
+    from business import enquiry_attribution as attribution
+    with get_db() as check:
+        tracked = attribution.enabled(check)
+    if tracked and request_data.get("lead_id") not in (None,existing["lead_id"]):
+        raise ValueError("Original enquiry link cannot be changed in a quote edit")
+    if tracked:
+        if request_data.get('customer_id') not in (None,existing['customer_id']):
+            raise ValueError('Customer relationship cannot be changed in a quote edit')
+        result_data = {**result_data,"created_at":existing["created_at"],"created_at_sort":existing["result"].get("created_at_sort",existing["created_at"])}
+        request_data = {**request_data,"source_category":existing["source_category"]}
     lead_id = request_data.get("lead_id") or existing["lead_id"]
     if lead_id:
         check = get_db()
@@ -247,7 +285,7 @@ def update_quote_by_id(quote_id: int, request_data: dict, result_data: dict, ups
         check.close()
         if not found:
             raise ValueError("Linked lead not found")
-    customer_id = upsert_customer(
+    customer_id = existing["customer_id"] if tracked else upsert_customer(
         request_data.get("customer_name", ""),
         request_data.get("customer_address", ""),
         request_data.get("customer_phone", ""),
@@ -299,10 +337,18 @@ def update_quote_outcome(quote_id, status, next_follow_up, loss_reason, loss_not
     if loss_reason and loss_reason not in LOSS_REASONS:
         raise ValueError("Invalid loss reason")
     conn = get_db()
-    row = conn.execute("SELECT lead_id FROM quotes WHERE id = ?", (quote_id,)).fetchone()
+    row = conn.execute("SELECT lead_id,status FROM quotes WHERE id = ?", (quote_id,)).fetchone()
     if not row:
         conn.close()
         return None
+    from business.enquiry_attribution import enabled
+    if enabled(conn):
+        if status == "lost" and not loss_reason:
+            conn.close(); raise ValueError("Select a reason for the lost quote")
+        if row['status'] in ('won','lost','expired') and row['status'] != status and not (loss_note or loss_reason):
+            conn.close(); raise ValueError("Provide an audit note when reopening/changing a decided quote")
+        from business.workflow_history import append
+        append(conn,"quote",quote_id,row["status"],status,reason=loss_note or loss_reason)
     timestamp = now_uk().isoformat()
     conn.execute("""UPDATE quotes SET status = ?, next_follow_up = ?, loss_reason = ?,
                    loss_note = ?, outcome_updated_at = ? WHERE id = ?""",
