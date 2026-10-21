@@ -115,7 +115,7 @@ class GrowthBatch8Tests(unittest.TestCase):
                 from manual_whatsapp_snapshot import strip_manual_whatsapp_js
                 current=strip_manual_whatsapp_js(current.decode()).encode()
             # Protect already-approved Batch 9 pages and new diary controls on main.
-            self.assertEqual(current,subprocess.check_output(['git','show','7de3c82c455fa08579c14e4e8c168f5282190463':'+path],cwd=ROOT),path)
+            self.assertEqual(current,subprocess.check_output(['git','show','7de3c82c455fa08579c14e4e8c168f5282190463'+':'+path],cwd=ROOT),path)
 
     def test_private_file_cannot_publish_or_bypass_approval(self):
         private_file=self.root/'invalid-private-advice.json'
