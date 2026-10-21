@@ -82,9 +82,24 @@ try {
 
   await page.locator('summary').filter({hasText:'Quote outcomes and job milestones'}).click();await page.locator('#revenueEntitySelect').selectOption('quote/'+quote.id);await page.getByRole('button',{name:'Load milestone history'}).click();await page.locator('#revenueOutcome').selectOption('won');await page.getByRole('button',{name:'Record milestone',exact:true}).click();await page.locator('#revenueStatus').getByText(/Saved/).waitFor();
   await page.getByRole('button',{name:'Quotes',exact:true}).click();
-  await row.getByRole('button',{name:'Add to Pipeline',exact:true}).click();
-  await page.locator('#jobInvoiceId').fill(String(invoice.id));await page.locator('#jobStatus').selectOption('accepted');
-  const jobSaved=page.waitForResponse(r=>r.url()===origin+'/api/jobs'&&r.request().method()==='POST');await page.getByRole('button',{name:'Save job',exact:true}).click();const job=await (await jobSaved).json();assert.equal(job.origin_id,lead.origin_id);
+  // Newer main books a won quote directly, retaining the original linked lead.
+  // Exercise that real booking path rather than the retired Add to Pipeline form.
+  const jobSaved=page.waitForResponse(r=>r.url()===origin+'/api/jobs'&&r.request().method()==='POST');
+  await row.getByRole('button',{name:'Book job dates',exact:true}).click();
+  const job=await (await jobSaved).json();
+  assert.equal(job.origin_id,lead.origin_id);
+  assert.equal(job.quote_id,quote.id);
+  await page.locator('#appointmentEditor').waitFor({state:'visible'});
+  const bookingDay=new Date(Date.now()+40*86400000).toISOString().slice(0,10);
+  await page.locator('#appointmentStart').fill(bookingDay+'T09:00');
+  await page.locator('#appointmentEnd').fill(bookingDay+'T17:00');
+  const bookingSaved=page.waitForResponse(r=>r.url()===origin+'/api/appointments'&&r.request().method()==='POST');
+  await page.getByRole('button',{name:'Save appointment',exact:true}).click();
+  const booking=await (await bookingSaved).json();
+  assert.equal(booking.kind,'job');
+  assert.equal(booking.job_id,job.id);
+  assert.equal(booking.lead_id,lead.id);
+  assert.equal((await (await context.request.get(origin+'/api/jobs/'+job.id)).json()).origin_id,lead.origin_id);
   await page.getByRole('button',{name:'Source & revenue',exact:true}).click();await page.locator('#revenueWorkspace').waitFor({state:'visible'});
   await page.locator('#revenueEntitySelect').selectOption('job/'+job.id);await page.getByRole('button',{name:'Load milestone history'}).click();await page.locator('#revenueOutcome').selectOption('completed');await page.getByRole('button',{name:'Record milestone',exact:true}).click();await page.locator('#revenueWorkflowHistory').getByText(/Current job status: completed/).waitFor();
   await page.locator('#revenueTab').screenshot({path:join(output,label+'-workflow-history.png'),timeout:10000});
