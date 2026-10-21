@@ -99,7 +99,8 @@ try {
   assert.equal(booking.kind,'job');
   assert.equal(booking.job_id,job.id);
   assert.equal(booking.lead_id,lead.id);
-  assert.equal((await (await context.request.get(origin+'/api/jobs/'+job.id)).json()).origin_id,lead.origin_id);
+  const persistedJobs=await (await context.request.get(origin+'/api/jobs')).json();
+  assert.equal(persistedJobs.find(item=>item.id===job.id)?.origin_id,lead.origin_id);
   await page.getByRole('button',{name:'Source & revenue',exact:true}).click();await page.locator('#revenueWorkspace').waitFor({state:'visible'});
   await page.locator('#revenueEntitySelect').selectOption('job/'+job.id);await page.getByRole('button',{name:'Load milestone history'}).click();await page.locator('#revenueOutcome').selectOption('completed');await page.getByRole('button',{name:'Record milestone',exact:true}).click();await page.locator('#revenueWorkflowHistory').getByText(/Current job status: completed/).waitFor();
   await page.locator('#revenueTab').screenshot({path:join(output,label+'-workflow-history.png'),timeout:10000});
