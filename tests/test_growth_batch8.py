@@ -110,7 +110,11 @@ class GrowthBatch8Tests(unittest.TestCase):
         self.assertEqual({k:v for k,v in before.items() if k not in allowed},{k:after[k] for k in before if k not in allowed})
         self.assertTrue(all(k.startswith(('Revenue','revenue_','api_revenue_')) for k in set(after)-set(before)))
         for path in ['business/public_pages.py','business/project_content.json','business/advice_content.json','business/real_projects.py','business/plumbing_advice.py','business/lead_email_store.py','business/notifications.py','business/quote_calculation.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','templates/homepage.html','templates/public_header.html','templates/public_footer.html']:
-            self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',baseline+':'+path],cwd=ROOT),path)
+            current=(ROOT/path).read_bytes()
+            if path=='static/app.js':
+                from manual_whatsapp_snapshot import strip_manual_whatsapp_js
+                current=strip_manual_whatsapp_js(current.decode()).encode()
+            self.assertEqual(current,subprocess.check_output(['git','show',baseline+':'+path],cwd=ROOT),path)
 
     def test_private_file_cannot_publish_or_bypass_approval(self):
         private_file=self.root/'invalid-private-advice.json'
