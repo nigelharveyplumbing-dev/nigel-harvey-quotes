@@ -28,8 +28,12 @@ try {
    assert.equal(await page.locator('main h1').count(),1);
    assert((await page.evaluate(()=>document.documentElement.scrollWidth))<=width,`${slug} overflow at ${width}`);
    const text=await page.locator('main').innerText();assert.match(text,/based in Guildford/);assert.match(text,/subject to availability/);
-   const href=await page.locator('main a[href^="/request-quote"]').first().getAttribute('href');assert.equal(new URL(href,origin).searchParams.get('landing_page'),'/plumber-'+slug);
-   await page.locator('main a[href^="/request-quote"]').first().click();await page.waitForURL('**/request-quote**');assert(await page.locator('#lead_postcode').isVisible());layouts++;
+   const href=await page.locator('main a[href^="/request-quote"]').first().getAttribute('href');assert.equal(new URL(href,origin).pathname,'/request-quote');
+   await page.locator('main a[href^="/request-quote"]').first().click();await page.waitForURL('**/request-quote**');
+   // The revenue implementation adds safe page context in the click handler.
+   // Verify the actual destination, after that handler has run.
+   assert.equal(new URL(page.url()).searchParams.get('landing_page'),'/plumber-'+slug);
+   assert(await page.locator('#lead_postcode').isVisible());layouts++;
   }
  }
  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);console.log(`South West London browser PASS: ${layouts} layouts; six homepage links; enquiry attribution; zero submissions, errors or external requests.`);

@@ -1948,6 +1948,7 @@ function collectFormPayload() {
     quote_type: document.getElementById("quote_type").value,
     lead_id: typeof CURRENT_LEAD_ID === 'undefined' ? null : CURRENT_LEAD_ID,
     source_category: document.getElementById("quote_source")?.value || "",
+    contact_channel: document.getElementById("quote_contact_channel")?.value || "Unknown",
     work_type: document.getElementById("quote_work_type")?.value || "",
     additional_work_types: typeof b7SelectedAdditional === 'function' ? b7SelectedAdditional('quoteAdditional', document.getElementById('quote_work_type').value) : [],
     customer_name: document.getElementById("customer_name").value,
@@ -2338,6 +2339,7 @@ function fillFormFromRequest(requestData, quoteId = null) {
   clearAIQuoteDraftState();
   CURRENT_LEAD_ID = requestData.lead_id || null;
   document.getElementById("quote_source").value = requestData.source_category || "";
+  document.getElementById("quote_contact_channel").value = requestData.contact_channel || "Unknown";
   document.getElementById("quote_work_type").value = requestData.work_type || "";
   b7SetAdditional('quoteAdditional', requestData.additional_work_types || [], requestData.work_type || '');
   document.getElementById("quote_type").value = requestData.quote_type || "small";
@@ -2554,6 +2556,7 @@ async function loadHistory() {
           <button type="button" class="btn-light" onclick="loadSavedQuote(${q.id})">Load</button>
           <button type="button" class="btn-blue" onclick="editSavedQuote(${q.id})">Edit</button>
           <button type="button" class="btn-secondary" onclick="sendSavedQuoteWhatsApp(${q.id})">WhatsApp</button>
+          ${q.origin_id ? `<button type="button" class="btn-light" onclick="revenueOpenOrigin(${Number(q.origin_id)})">Correct enquiry source</button>` : ''}
           <button type="button" class="btn-blue" onclick="convertQuoteToInvoice(${q.id})">To Invoice</button>
           ${q.status === 'won' ? `<button type="button" class="btn-light" onclick="jobFromQuote(${q.id})">Book job dates</button>` : ''}
           <button type="button" class="btn-light" onclick="printSavedQuote(${q.id})">Print</button>
@@ -2747,6 +2750,7 @@ function startQuoteFromLead(id) {
   startNewQuote();
   CURRENT_LEAD_ID = id;
   document.getElementById('quote_source').value = lead.source_category || '';
+  document.getElementById('quote_contact_channel').value = lead.contact_channel || 'Unknown';
   document.getElementById('quote_work_type').value = lead.work_type || '';
   b7SetAdditional('quoteAdditional', lead.additional_work_types || [], lead.work_type || '');
   document.getElementById('customer_name').value = lead.name || '';
@@ -3129,6 +3133,7 @@ function startQuoteForCustomer(id) {
 function startNewQuote() {
   resetQuoteFormState();
   document.getElementById("quote_source").value = "";
+  document.getElementById("quote_contact_channel").value = "Unknown";
   document.getElementById("quote_work_type").value = "";
   b7SetAdditional('quoteAdditional', [], '');
   document.getElementById('customer_email').value = '';
