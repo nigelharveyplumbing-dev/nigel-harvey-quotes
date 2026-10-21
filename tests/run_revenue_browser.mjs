@@ -50,6 +50,36 @@ try {
   await page.locator('#revenueOriginSelect').selectOption(String(lead.origin_id));await page.getByRole('button',{name:'Load original source',exact:true}).click();await page.locator('#revenueOriginal').getByRole('heading',{name:'Origin #'+lead.origin_id}).waitFor();
   await page.locator('#revenueKind').selectOption('synthetic');await page.locator('#revenueTestReference').fill('LOCAL-BROWSER-'+label);await page.locator('#revenueCorrectionReason').fill('Local development synthetic record; exclude from genuine metrics');await page.getByRole('button',{name:'Append source correction'}).click();await page.locator('#revenueOriginal').getByText(/revision 1/).waitFor();
   await page.locator('#revenueTab').screenshot({path:join(output,label+'-source-history.png'),timeout:10000});
+  // The everyday Enquiry Details editor must work on a saved quote and its lead.
+  // Preserve synthetic classification and quote/invoice references while updating
+  // only the original contact channel through append-only history.
+  await page.getByRole('button',{name:'Quotes',exact:true}).click();
+  await row.getByRole('button',{name:'Enquiry details',exact:true}).click();
+  await page.locator('#quickEnquiryDialog').waitFor({state:'visible'});
+  await page.locator('#qeChannel').selectOption('WhatsApp');
+  await page.locator('#qeReason').fill('Synthetic browser test of first-contact correction');
+  const mobileCorrection=page.waitForResponse(r=>r.url()===origin+'/api/revenue/origins/'+lead.origin_id+'/corrections'&&r.request().method()==='POST');
+  await page.locator('#qeSave').click();
+  assert.equal((await mobileCorrection).status(),200);
+  await page.locator('#quickEnquiryDialog').waitFor({state:'hidden'});
+  const quickResult=await (await context.request.get(origin+'/api/revenue/origins/'+lead.origin_id)).json();
+  assert.equal(quickResult.contact_channel,'WhatsApp');
+  assert.equal(quickResult.kind,'synthetic');
+  assert.equal(quickResult.source,quote.source_category);
+  assert.equal(quickResult.revision,2);
+  assert.equal((await (await context.request.get(origin+'/api/quotes/'+quote.id)).json()).origin_id,lead.origin_id);
+  assert.equal((await (await context.request.get(origin+'/api/invoices/'+invoice.id)).json()).origin_id,lead.origin_id);
+  await page.getByRole('button',{name:'Leads',exact:true}).click();
+  await card.getByRole('button',{name:'Enquiry details',exact:true}).click();
+  await page.locator('#qeChannel').selectOption('Phone');
+  await page.locator('#qeCancel').click();
+  await page.locator('#quickEnquiryDialog').waitFor({state:'hidden'});
+  const afterCancel=await (await context.request.get(origin+'/api/revenue/origins/'+lead.origin_id)).json();
+  assert.equal(afterCancel.revision,2);
+  assert.equal(afterCancel.contact_channel,'WhatsApp');
+  await page.getByRole('button',{name:'Source & revenue',exact:true}).click();
+  await page.locator('#revenueWorkspace').waitFor({state:'visible'});
+
   await page.locator('summary').filter({hasText:'Quote outcomes and job milestones'}).click();await page.locator('#revenueEntitySelect').selectOption('quote/'+quote.id);await page.getByRole('button',{name:'Load milestone history'}).click();await page.locator('#revenueOutcome').selectOption('won');await page.getByRole('button',{name:'Record milestone',exact:true}).click();await page.locator('#revenueStatus').getByText(/Saved/).waitFor();
   await page.getByRole('button',{name:'Quotes',exact:true}).click();
   await row.getByRole('button',{name:'Add to Pipeline',exact:true}).click();
