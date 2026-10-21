@@ -10,11 +10,14 @@ import unittest
 from pathlib import Path
 
 import test_revenue_tracking as helpers
-from business import appointment_migration
 
 
 class CoupledMigrationRehearsal(unittest.TestCase):
-    setUp = helpers.RevenueTests.setUp
+    def setUp(self):
+        helpers.RevenueTests.setUp(self)
+        # Import only after the temporary app has replaced the real business package.
+        from business import appointment_migration
+        self.appointment_migration = appointment_migration
     post = helpers.RevenueTests.post
     lead = helpers.RevenueTests.lead
     quote = helpers.RevenueTests.quote
@@ -62,7 +65,7 @@ class CoupledMigrationRehearsal(unittest.TestCase):
             self.assertEqual(conn.execute(
                 "SELECT id,lead_id,job_id,kind,status,starts_at,ends_at,notes FROM appointments"
             ).fetchall()[0][:], original_appointment)
-            self.assertFalse(appointment_migration.needs_migration(conn))
+            self.assertFalse(self.appointment_migration.needs_migration(conn))
             for table, record in original_values.items():
                 before_cols, expected_rows = record
                 selected = ",".join('"' + col + '"' for col in before_cols)
@@ -113,9 +116,9 @@ class CoupledMigrationRehearsal(unittest.TestCase):
                 self.assertEqual(chk.execute("PRAGMA integrity_check").fetchone()[0], "ok")
         if order == "diary_first":
             with self.migration.connect(primary) as conn:
-                checkpoint = appointment_migration.preflight(conn, self.root / "isolated_backups")
+                checkpoint = self.appointment_migration.preflight(conn, self.root / "isolated_backups")
                 self.assertEqual(checkpoint["restore_rehearsal"], "ok")
-                self.assertTrue(appointment_migration.migrate(conn))
+                self.assertTrue(self.appointment_migration.migrate(conn))
                 conn.commit()
             dry = self.migration.migrate(primary)
             self.assertTrue(dry["dry_run"])
@@ -126,9 +129,9 @@ class CoupledMigrationRehearsal(unittest.TestCase):
             self.assertTrue(dry["dry_run"])
             self.migration.migrate(primary, apply=True)
             with self.migration.connect(primary) as conn:
-                checkpoint = appointment_migration.preflight(conn, self.root / "isolated_backups")
+                checkpoint = self.appointment_migration.preflight(conn, self.root / "isolated_backups")
                 self.assertEqual(checkpoint["restore_rehearsal"], "ok")
-                self.assertTrue(appointment_migration.migrate(conn))
+                self.assertTrue(self.appointment_migration.migrate(conn))
                 conn.commit()
         self.assertTrue(self.migration.migrate(primary, apply=True)["already_applied"])
         self.verify(fixture, original_appointment, original_values)
@@ -143,7 +146,7 @@ class CoupledMigrationRehearsal(unittest.TestCase):
                 self.assertEqual(check.execute("PRAGMA integrity_check").fetchone()[0], "ok")
         with self.migration.connect(restored_primary) as conn:
             self.assertEqual(first_hashes, self.migration.hashes(conn,self.migration.inventory(conn)))
-            self.assertTrue(appointment_migration.needs_migration(conn))
+            self.assertTrue(self.appointment_migration.needs_migration(conn))
             self.assertNotIn("schema_migrations",self.migration.inventory(conn))
         self.assertEqual(hashlib.sha256(sbackup.read_bytes()).hexdigest(),
                          hashlib.sha256(restored_city.read_bytes()).hexdigest())
@@ -165,6 +168,6 @@ class CoupledMigrationRehearsal(unittest.TestCase):
         with self.migration.connect(db) as conn:
             self.assertEqual(self.migration.inventory(conn), before)
             self.assertEqual(self.migration.hashes(conn,before),hashes)
-            self.assertTrue(appointment_migration.needs_migration(conn))
+            self.assertTrue(self.appointment_migration.needs_migration(conn))
             self.assertEqual(conn.execute("PRAGMA integrity_check").fetchone()[0],"ok")
             self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(),[])
