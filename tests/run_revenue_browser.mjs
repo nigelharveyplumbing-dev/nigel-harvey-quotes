@@ -81,10 +81,24 @@ try {
   await page.locator('#revenueWorkspace').waitFor({state:'visible'});
 
   await page.locator('summary').filter({hasText:'Quote outcomes and job milestones'}).click();await page.locator('#revenueEntitySelect').selectOption('quote/'+quote.id);await page.getByRole('button',{name:'Load milestone history'}).click();await page.locator('#revenueOutcome').selectOption('won');await page.getByRole('button',{name:'Record milestone',exact:true}).click();await page.locator('#revenueStatus').getByText(/Saved/).waitFor();
-  await page.getByRole('button',{name:'Quotes',exact:true}).click();
-  await row.getByRole('button',{name:'Add to Pipeline',exact:true}).click();
-  await page.locator('#jobInvoiceId').fill(String(invoice.id));await page.locator('#jobStatus').selectOption('accepted');
-  const jobSaved=page.waitForResponse(r=>r.url()===origin+'/api/jobs'&&r.request().method()==='POST');await page.getByRole('button',{name:'Save job',exact:true}).click();const job=await (await jobSaved).json();assert.equal(job.origin_id,lead.origin_id);
+  // Current production books won quotes from Pipeline, not Saved Quotes.
+  // The booking action creates/reuses the linked job and opens its diary form.
+  await page.getByRole('button',{name:'Pipeline',exact:true}).click();
+  const pipelineCard=page.locator('#pipelineBoard .history-item').filter({hasText:'Quote #'+quote.id});
+  const createdJob=page.waitForResponse(r=>r.url()===origin+'/api/jobs'&&r.request().method()==='POST');
+  await pipelineCard.getByRole('button',{name:'Book job dates',exact:true}).click();
+  const job=await (await createdJob).json();
+  assert.equal(job.origin_id,lead.origin_id);assert.equal(job.quote_id,quote.id);
+  await page.getByRole('button',{name:'Pipeline',exact:true}).click();
+  const refreshedCard=page.locator('#pipelineBoard .history-item').filter({hasText:'Quote #'+quote.id});
+  await refreshedCard.getByRole('button',{name:'Update job #'+job.id,exact:true}).click();
+  await page.locator('#jobInvoiceId').fill(String(invoice.id));
+  await page.locator('#jobStatus').selectOption('accepted');
+  const updatedJob=page.waitForResponse(r=>r.url()===origin+'/api/jobs/'+job.id&&r.request().method()==='PUT');
+  await page.getByRole('button',{name:'Save job',exact:true}).click();
+  const savedJob=await (await updatedJob).json();
+  assert.equal(savedJob.origin_id,lead.origin_id);assert.equal(savedJob.quote_id,quote.id);
+  assert.equal(savedJob.invoice_id,invoice.id);
   await page.getByRole('button',{name:'Source & revenue',exact:true}).click();await page.locator('#revenueWorkspace').waitFor({state:'visible'});
   await page.locator('#revenueEntitySelect').selectOption('job/'+job.id);await page.getByRole('button',{name:'Load milestone history'}).click();await page.locator('#revenueOutcome').selectOption('completed');await page.getByRole('button',{name:'Record milestone',exact:true}).click();await page.locator('#revenueWorkflowHistory').getByText(/Current job status: completed/).waitFor();
   await page.locator('#revenueTab').screenshot({path:join(output,label+'-workflow-history.png'),timeout:10000});
