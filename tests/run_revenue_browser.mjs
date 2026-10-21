@@ -45,7 +45,6 @@ try {
   await page.locator('#labour').fill('100');
   const quoted=page.waitForResponse(r=>r.url()===origin+'/api/quote'&&r.request().method()==='POST');await page.getByRole('button',{name:'Generate Quote',exact:true}).click();const q=(await quoted).json();const quote=await q;assert.equal(quote.origin_id,lead.origin_id);
   const row=page.locator('#historyList .history-item').filter({hasText:'Synthetic Revenue '+label});
-  const invoiced=page.waitForResponse(r=>r.url()===`${origin}/api/quotes/${quote.id}/to-invoice`);await row.getByRole('button',{name:'To Invoice',exact:true}).click();const invoice=await (await invoiced).json();assert.equal(invoice.origin_id,lead.origin_id);
   await page.getByRole('button',{name:'Source & revenue',exact:true}).click();await page.locator('#revenueWorkspace').waitFor({state:'visible'});
   await page.locator('#revenueOriginSelect').selectOption(String(lead.origin_id));await page.getByRole('button',{name:'Load original source',exact:true}).click();await page.locator('#revenueOriginal').getByRole('heading',{name:'Origin #'+lead.origin_id}).waitFor();
   await page.locator('#revenueKind').selectOption('synthetic');await page.locator('#revenueTestReference').fill('LOCAL-BROWSER-'+label);await page.locator('#revenueCorrectionReason').fill('Local development synthetic record; exclude from genuine metrics');await page.getByRole('button',{name:'Append source correction'}).click();await page.locator('#revenueOriginal').getByText(/revision 1/).waitFor();
@@ -68,7 +67,6 @@ try {
   assert.equal(quickResult.source,quote.source_category);
   assert.equal(quickResult.revision,2);
   assert.equal((await (await context.request.get(origin+'/api/quotes/'+quote.id)).json()).origin_id,lead.origin_id);
-  assert.equal((await (await context.request.get(origin+'/api/invoices/'+invoice.id)).json()).origin_id,lead.origin_id);
   await page.getByRole('button',{name:'Leads',exact:true}).click();
   await card.getByRole('button',{name:'Enquiry details',exact:true}).click();
   await page.locator('#qeChannel').selectOption('Phone');
@@ -99,6 +97,13 @@ try {
   const job=jobsAfterBooking.find(j=>Number(j.quote_id)===quote.id);
   assert(job,'Booked quote must have an actual linked job');
   assert.equal(job.origin_id,lead.origin_id);assert.equal(job.quote_id,quote.id);
+  // Invoice after booking follows the current pipeline stage priorities.
+  await page.getByRole('button',{name:'Quotes',exact:true}).click();
+  const invoiced=page.waitForResponse(r=>r.url()===`${origin}/api/quotes/${quote.id}/to-invoice`);
+  await row.getByRole('button',{name:'To Invoice',exact:true}).click();
+  const invoice=await (await invoiced).json();
+  assert.equal(invoice.origin_id,lead.origin_id);
+  assert.equal((await (await context.request.get(origin+'/api/invoices/'+invoice.id)).json()).origin_id,lead.origin_id);
   await page.getByRole('button',{name:'Pipeline',exact:true}).click();
   const refreshedCard=page.locator('#pipelineBoard .history-item').filter({hasText:'Quote #'+quote.id});
   await refreshedCard.getByRole('button',{name:'Update job #'+job.id,exact:true}).click();
