@@ -850,7 +850,7 @@ class StagingAccessTests(unittest.TestCase):
         routes = [(method, route) for route in m.app.routes
                   if route.path not in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
                   for method in getattr(route, "methods", [])]
-        self.assertEqual(len(routes), 91)
+        self.assertEqual(len(routes), 104)
         parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "appointment_id": "1", "job_id": "1",
                       "material_id": "1", "photo_id": "1", "filename": "sample.db",
@@ -867,7 +867,7 @@ class StagingAccessTests(unittest.TestCase):
              patch.object(m.requests, "post", side_effect=AssertionError("external POST reached")):
             before = file_state()
             for method, route in routes:
-                path = route.path.format(**parameters)
+                path = route.path.format(**{**parameters,"origin_id":1,"entity_id":1,"entity_type":"quote"})
                 with self.subTest(method=method, path=route.path), patch.object(
                     route.dependant, "call", side_effect=AssertionError("handler reached")
                 ):

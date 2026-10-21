@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {randomUUID} from 'node:crypto';
 
 const analytics = fs.readFileSync('static/public_analytics.js', 'utf8');
 const quote = fs.readFileSync('templates/request_quote.html', 'utf8').split('<script>').at(-1).split('</script>')[0];
@@ -55,7 +56,7 @@ function setup(choice = null, send = false) {
   const context = { document, window, location, localStorage: {
     getItem(key) { return storage.get(key) || null; },
     setItem(key, value) { storage.set(key, value); }
-  }, URL, URLSearchParams, Date, encodeURIComponent,
+  }, sessionStorage: {getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)}, crypto:{randomUUID}, URL, URLSearchParams, Date, encodeURIComponent,
   fetch: async () => ({ ok: true, json: async () => ({ id: 1 }) }) };
   vm.createContext(context);
   vm.runInContext(analytics, context);

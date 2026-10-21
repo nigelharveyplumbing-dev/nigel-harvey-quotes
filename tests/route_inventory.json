@@ -185,6 +185,30 @@
   ],
   [
     "GET",
+    "/api/revenue/invoices/{invoice_id}/payments"
+  ],
+  [
+    "GET",
+    "/api/revenue/options"
+  ],
+  [
+    "GET",
+    "/api/revenue/origins/{origin_id}"
+  ],
+  [
+    "GET",
+    "/api/revenue/report"
+  ],
+  [
+    "GET",
+    "/api/revenue/review"
+  ],
+  [
+    "GET",
+    "/api/revenue/workflow/{entity_type}/{entity_id}"
+  ],
+  [
+    "GET",
     "/api/supplier-preference"
   ],
   [
@@ -329,6 +353,30 @@
   ],
   [
     "POST",
+    "/api/revenue/invoices/{invoice_id}/payments"
+  ],
+  [
+    "POST",
+    "/api/revenue/origins/{origin_id}/corrections"
+  ],
+  [
+    "POST",
+    "/api/revenue/origins/{origin_id}/interactions"
+  ],
+  [
+    "POST",
+    "/api/revenue/quotes/{quote_id}/revision"
+  ],
+  [
+    "POST",
+    "/api/revenue/quotes/{quote_id}/stage-invoice"
+  ],
+  [
+    "POST",
+    "/api/revenue/workflow/{entity_type}/{entity_id}"
+  ],
+  [
+    "POST",
     "/api/site-survey"
   ],
   [
@@ -362,5 +410,9 @@
   [
     "PUT",
     "/api/quotes/{quote_id}/outcome"
+  ],
+  [
+    "GET",
+    "/api/revenue/export"
   ]
 ]
