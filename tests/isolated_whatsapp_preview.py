@@ -9,7 +9,6 @@ import sqlite3
 from pathlib import Path
 
 import uvicorn
-from fastapi.testclient import TestClient
 
 from local_browser_server import disposable_app
 
@@ -40,36 +39,42 @@ def run():
         if migrated["version"] != 1:
             raise RuntimeError("Unexpected tracking migration")
 
-        # Seed fictional entries only. No real customer data or imported DB.
-        with TestClient(module.app) as client:
-            for idx in (1, 2):
-                label = f"STAGING DEMO WhatsApp {idx}"
-                reference = f"NHP-STAGING-WHATSAPP-{idx}"
-                lead_resp = client.post("/api/quick-add/confirm", auth=(user, password),
-                    json={"idempotency_key":f"isolated-preview-wa-demo-{idx}-20261021",
-                          "name":label, "phone":"07700900000",
-                          "description":"Synthetic demo plumbing enquiry only; do not contact anyone.",
-                          "source_category":"", "contact_channel":"WhatsApp",
-                          "record_kind":"synthetic", "test_reference":reference})
-                if lead_resp.status_code != 200:
-                    raise RuntimeError(f"Synthetic lead {idx} failed: {lead_resp.status_code}")
-                lead = lead_resp.json()["lead"]
-                quote_resp = client.post("/api/quote", auth=(user, password),
-                    json={"quote_type":"small", "lead_id":lead["id"],
-                          "customer_name":label, "customer_phone":"07700900000",
-                          "job_description":"Synthetic demo plumbing quote only",
-                          "labour_cost":100,
-                          "submission_key":f"isolated-preview-wa-quote-{idx}-20261021"})
-                if quote_resp.status_code != 200:
-                    raise RuntimeError(f"Synthetic quote {idx} failed: {quote_resp.status_code}")
-                quote = quote_resp.json()
-                if quote["lead_id"] != lead["id"] or quote["origin_id"] != lead["origin_id"]:
-                    raise RuntimeError("Lead-to-quote origin linkage broken")
-            with sqlite3.connect(database) as conn:
-                values = [conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-                          for table in ("leads","quotes","enquiry_origins")]
-                if values != [2, 2, 2]:
-                    raise RuntimeError(f"Unexpected disposable fixture counts: {values}")
+        # Seed fictional entries using the existing domain code. No test-only
+        # HTTP dependencies, live customer data or external messages are used.
+        from business.models import QuickAddConfirmRequest, QuoteRequest
+        from business.quick_add import confirm
+        for idx in (1, 2):
+            label = f"STAGING DEMO WhatsApp {idx}"
+            reference = f"NHP-STAGING-WHATSAPP-{idx}"
+            lead = confirm(QuickAddConfirmRequest(
+                idempotency_key=f"isolated-preview-wa-demo-{idx}-20261021",
+                name=label, phone="07700900000",
+                description="Synthetic demo plumbing enquiry only; do not contact anyone.",
+                source_category="", contact_channel="WhatsApp",
+                record_kind="synthetic", test_reference=reference),
+                module.now_uk, module.format_dt)["lead"]
+            request = QuoteRequest(
+                quote_type="small", lead_id=lead["id"],
+                customer_name=label, customer_phone="07700900000",
+                job_description="Synthetic demo plumbing quote only",
+                labour_cost=100,
+                submission_key=f"isolated-preview-wa-quote-{idx}-20261021")
+            result = module.calculate_quote(request)
+            quote_id = module.save_quote(request.model_dump(mode="json"), result)
+            quote = module.get_quote_by_id(quote_id)
+            if quote["lead_id"] != lead["id"] or quote["origin_id"] != lead["origin_id"]:
+                raise RuntimeError("Lead-to-quote origin linkage broken")
+            from business.enquiry_attribution import origin
+            from business.db import get_db
+            with get_db() as connection:
+                item = origin(connection, lead["origin_id"])
+                if item["contact_channel"] != "WhatsApp" or item["kind"] != "synthetic" or item["source"] != "Unknown":
+                    raise RuntimeError("Synthetic WhatsApp origin misclassified")
+        with sqlite3.connect(database) as conn:
+            values = [conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                      for table in ("leads","quotes","enquiry_origins")]
+            if values != [2, 2, 2]:
+                raise RuntimeError(f"Unexpected disposable fixture counts: {values}")
         print("ISOLATED PREVIEW READY: synthetic 2 leads, 2 quotes, 2 origins; no persistent disk",
               flush=True)
         uvicorn.run(module.app, host="0.0.0.0", port=port,
