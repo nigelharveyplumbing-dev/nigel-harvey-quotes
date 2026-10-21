@@ -118,4 +118,8 @@ class AdviceTests(unittest.TestCase):
         paths=['business/project_content.json','business/quote_calculation.py','business/account_pricing.py','business/city_account_prices.py','business/lead_email_store.py','business/notifications.py','business/pdf_render.py','static/app.js','static/city_account_prices.js','templates/public_footer.html','templates/public_header.html']
         for path in paths:
             baseline=subprocess.check_output(['git','show','bdcacc9ff02d041e4ab4c63269b5c7ebba4942a2:'+path],cwd=ROOT)
-            self.assertEqual((ROOT/path).read_bytes(),baseline,path)
+            current=(ROOT/path).read_bytes()
+            if path=='static/app.js':
+                from manual_whatsapp_snapshot import strip_manual_whatsapp_js
+                current=strip_manual_whatsapp_js(current.decode()).encode()
+            self.assertEqual(current,baseline,path)

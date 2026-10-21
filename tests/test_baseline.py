@@ -244,6 +244,10 @@ class BaselineTests(unittest.TestCase):
         masked = m.HTML.replace(config.group(1), "__PAYMENT_CONFIG__", 1)
         masked = masked.replace("\n"+(ROOT/'static/enquiry_revenue.js').read_text(),"",1)
         masked = re.sub(r"    contact_channel:document.*?(?=    work_type:b7Value)", "", masked, flags=re.S)
+        # Stage 3 keeps the older UI frozen except for explicitly reviewed
+        # manual WhatsApp fields and their linked-quote correction shortcut.
+        from manual_whatsapp_snapshot import strip_manual_whatsapp_markup
+        masked = strip_manual_whatsapp_markup(masked)
         # Mask only the deliberately added City-capture UI. Its behavior has
         # separate Python, Node and full Chromium coverage; the rest stays frozen.
         city_js = (Path(m.__file__).parent / "static/city_account_prices.js").read_text()

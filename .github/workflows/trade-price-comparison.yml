@@ -2,7 +2,7 @@ name: Materials comparison regression
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feature/enquiry-source-revenue]
     paths:
       - 'app.py'
       - 'business/**'

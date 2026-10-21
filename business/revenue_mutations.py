@@ -33,9 +33,15 @@ def save_quote(request,result,now):
             timestamp=now().isoformat()
             customer_id=conn.execute('INSERT INTO customers(name,address,phone,created_at,updated_at) VALUES (?,?,?,?,?)',
                 (request.get('customer_name',''),request.get('customer_address',''),request.get('customer_phone',''),timestamp,timestamp)).lastrowid
-        oid=oid or attribution.create_origin(conn,source=request.get('source_category') or 'Unknown')
-        source=attribution.origin(conn,oid)['source']
-        normalized={**request,'source_category':source,'customer_id':customer_id}
+        # Inherit the enquiry's immutable origin if a lead is linked. Only a
+        # standalone manual quote can create a first-contact channel here.
+        oid=oid or attribution.create_origin(conn,source=request.get('source_category') or 'Unknown',
+            channel=request.get('contact_channel') or 'Unknown')
+        canonical=attribution.origin(conn,oid)
+        source=canonical['source']
+        # Never store a competing contact channel in a linked quote snapshot.
+        normalized={**request,'source_category':source,
+            'contact_channel':canonical['contact_channel'],'customer_id':customer_id}
         qid=conn.execute('''INSERT INTO quotes(customer_id,customer_name,job,total_price,gross_profit,margin_percent,
             created_at,created_at_sort,request_json,result_json,status,lead_id,source_category,work_type,additional_work_types,origin_id)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',

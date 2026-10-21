@@ -91,6 +91,8 @@ class QuoteRequest(BaseModel):
     deposit_percent: float = 0
     lead_id: int | None = None
     source_category: str = ""
+    # The first-contact channel is separate from how the customer found us.
+    contact_channel: Literal["Website form", "Phone", "WhatsApp", "Email", "Directory message", "In person", "Other", "Unknown"] = "Unknown"
     work_type: str = ""
     additional_work_types: list[str] = Field(default_factory=list)
     customer_email: str = ""
