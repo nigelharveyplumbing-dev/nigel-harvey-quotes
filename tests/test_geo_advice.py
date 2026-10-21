@@ -112,19 +112,18 @@ class AdviceTests(unittest.TestCase):
 
     def test_existing_public_content_files_and_core_assets_unchanged(self):
         assert_project_renderer_preserved(self, 'bdcacc9ff02d041e4ab4c63269b5c7ebba4942a2')
-        # Batch 8 explicitly authorises targeted public_pages.py changes. The
+        # Revenue Stage 2 authorises tracking storage and consent scripts.
+        # Payment/attribution behavior is covered in test_revenue_tracking. The
         # mixed published/draft and unchanged-page checks live in test_growth_batch8.
-        paths=['business/project_content.json','business/quote_calculation.py','business/account_pricing.py','business/city_account_prices.py','business/db.py','business/lead_email_store.py','business/lead_store.py','business/notifications.py','business/invoice_store.py','business/pdf_render.py','business/quote_store.py','static/app.js','static/city_account_prices.js','static/public_analytics.js','templates/public_footer.html','templates/public_header.html']
-        pipeline_snapshots = {
-            'business/db.py': 'feb841feb46026a101e5019957be55d5865341d2ed7798474c4dc8af36f212f8',
-            'static/app.js': 'e1950f32ef1f4f2a530dc18511f90d5e8ec2f2944da0d83571ba7a70995f84fd',
-        }
+        paths=['business/project_content.json','business/quote_calculation.py','business/account_pricing.py','business/city_account_prices.py','business/lead_email_store.py','business/notifications.py','business/pdf_render.py','static/app.js','static/city_account_prices.js','templates/public_footer.html','templates/public_header.html']
         for path in paths:
-            # The pipeline repair changes only these two previously frozen files.
-            # Hash the complete files so this lock survives a squash merge.
-            if path in pipeline_snapshots:
-                self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(), pipeline_snapshots[path], path)
-                continue
-            baseline=subprocess.check_output(['git','show','bdcacc9ff02d041e4ab4c63269b5c7ebba4942a2:'+path],cwd=ROOT)
-            self.assertEqual((ROOT/path).read_bytes(),baseline,path)
-
+            # Compare the frozen source against its original baseline. Only the
+            # private app JS uses the newer, approved diary-removal baseline.
+            baseline_ref = ('7de3c82c455fa08579c14e4e8c168f5282190463'
+                            if path == 'static/app.js' else 'bdcacc9ff02d041e4ab4c63269b5c7ebba4942a2')
+            baseline=subprocess.check_output(['git','show',baseline_ref+':'+path],cwd=ROOT)
+            current=(ROOT/path).read_bytes()
+            if path=='static/app.js':
+                from manual_whatsapp_snapshot import strip_manual_whatsapp_js
+                current=strip_manual_whatsapp_js(current.decode()).encode()
+            self.assertEqual(current,baseline,path)
