@@ -85,9 +85,19 @@ try {
   // The booking action creates/reuses the linked job and opens its diary form.
   await page.getByRole('button',{name:'Pipeline',exact:true}).click();
   const pipelineCard=page.locator('#pipelineBoard .history-item').filter({hasText:'Quote #'+quote.id});
-  const createdJob=page.waitForResponse(r=>r.url()===origin+'/api/jobs'&&r.request().method()==='POST');
   await pipelineCard.getByRole('button',{name:'Book job dates',exact:true}).click();
-  const job=await (await createdJob).json();
+  // The current booking flow can create OR reuse a linked job. Check its real
+  // persisted relation instead of assuming a POST must always happen.
+  await page.locator('#diaryTab.active').waitFor({state:'visible',timeout:10000});
+  await page.waitForFunction(async quoteId=>{
+    try {
+      const response=await fetch('/api/jobs');
+      return response.ok&&(await response.json()).some(j=>Number(j.quote_id)===quoteId);
+    }catch{return false;}
+  },quote.id,{timeout:10000});
+  const jobsAfterBooking=await (await context.request.get(origin+'/api/jobs')).json();
+  const job=jobsAfterBooking.find(j=>Number(j.quote_id)===quote.id);
+  assert(job,'Booked quote must have an actual linked job');
   assert.equal(job.origin_id,lead.origin_id);assert.equal(job.quote_id,quote.id);
   await page.getByRole('button',{name:'Pipeline',exact:true}).click();
   const refreshedCard=page.locator('#pipelineBoard .history-item').filter({hasText:'Quote #'+quote.id});
