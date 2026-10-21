@@ -22,3 +22,11 @@ Reconciles approved mobile-first WhatsApp first-contact/source tracking with the
 
 ## Approval boundary
 This branch may be developed and tested with synthetic offline fixtures only. Do not merge, change staging/production settings, migrate live records, change Google settings or send outbound contacts without new explicit owner approval.
+
+## 21 October — read-only staging inspection and additional rehearsal
+
+- Existing Render staging service srv-das0vrflk1mc73dtb2cg is configured on older growth/geo-knowledge-batch-7-publication, auto-deploy OFF and its own persistent disk dsk-das0vrflk1mc73dtb2t0. Render's last marked-live staging deployment is dep-db598kqjnfac739ludn0 at 5d2e2f1327256540cbafc95490844997eedbadd2; a later attempt is marked cancelled.
+- No new staging event records or application logs appeared during the checked 20–21 October period. Absence of logs DOES NOT verify actual running SHA, database migration state, data integrity or outbound isolation. These require verified read-only runtime/database access before using persistent staging.
+- Production remains on main. The separate owner preview is a free-tier ephemeral synthetic-only service; it does not satisfy a persistent migration rehearsal.
+- Added tests/test_coupled_migration_rehearsal.py for diary-first, revenue-first and forced rollback sequences on disposable synthetic SQLite. These check preserved linked lead/quote/job/invoice/diary fields, ledger opening balance, migration checksum, SQLite restore and a separate fake City sidecar. THESE NEW TESTS REQUIRE AN EXACT-HEAD CI PASS.
+- Approval covers offline/disposable testing and read-only staging inspection. No persistent staging or production writes, deployment, migration, credential changes or main merge.
