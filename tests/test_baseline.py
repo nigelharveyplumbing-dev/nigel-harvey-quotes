@@ -390,6 +390,17 @@ class BaselineTests(unittest.TestCase):
                     with self.subTest(path=path):
                         response = client.get(path)
                         self.assertEqual(response.status_code, 200)
+                        # Undo only the removal of public /app navigation for
+                        # historic homepage goldens; all other HTML stays frozen.
+                        # The dedicated public-navigation tests assert these links
+                        # are absent on the real rendered public website.
+                        unchanged = response.text.replace(
+                            '<a class="btn" href="/request-quote">Get a Quote</a></div>',
+                            '<a class="btn" href="/request-quote">Get a Quote</a><a class="btn" href="/app">Open App</a></div>', 1,
+                        ).replace(
+                            '<a href="/request-quote">Request a quote</a><br>',
+                            '<a href="/request-quote">Request a quote</a> · <a href="/app">Open App</a><br>', 1,
+                        )
                         # Only the approved project and advice discovery links are additive.
                         unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", response.text)
                         unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
@@ -399,7 +410,7 @@ class BaselineTests(unittest.TestCase):
                                            "", unchanged, flags=re.S)
                         self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
-    def test_active_homepage_open_app_navigation(self):
+    def test_public_navigation_has_no_owner_app_shortcut(self):
         m = self.module
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage6.invalid",
@@ -415,10 +426,9 @@ class BaselineTests(unittest.TestCase):
                         self.assertIsNotNone(nav)
                         self.assertEqual([(a.get_text(strip=True), a.get("href"))
                                           for a in nav.select("a.btn")],
-                                         [("Get a Quote", "/request-quote"),
-                                          ("Open App", "/app")])
+                                         [("Get a Quote", "/request-quote")])
                         self.assertIn('class="mobile-contact"', response.text)
-                        self.assertIn('href="/app"', response.text)
+                        self.assertNotIn('href="/app"', response.text)
                 self.assertEqual(client.get("/app").status_code, 401)
                 self.assertEqual(client.get("/app", headers=self.auth_headers).status_code, 200)
 
