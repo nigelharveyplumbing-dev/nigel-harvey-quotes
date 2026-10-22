@@ -34,11 +34,12 @@ class GrowthBatchTests(unittest.TestCase):
         with patch.object(m, "_google_reviews_html", return_value=review):
             page = self.client.get("/").text
         for text in ("Local Plumber Across Surrey", "Meet Nigel",
-                     "WhatsApp Nigel", "Call Nigel", 'href="/app"',
+                     "WhatsApp Nigel", "Call Nigel",
                      "plumber-guildford", "plumber-epsom", "plumber-leatherhead",
                      "plumber-farnborough", "4.9", "7 Google reviews",
                      "google-review-card"):
             self.assertIn(text, page)
+        self.assertNotIn('href="/app"', page)
         self.assertEqual(page.count("4.9"), 2)  # fetched once, concise and full sections
         self.assertIn('rel="canonical" href="https://www.nigelharveyplumbing.co.uk/"', page)
         self.assertNotIn("images.unsplash.com", page)

@@ -84,6 +84,40 @@ def dashboard_database(quote_rows=(), invoice_rows=(), customer_count=0):
         yield get_connection
 
 
+def restore_private_nav_for_legacy_snapshot(html: str) -> str:
+    """Undo only two deliberately removed public owner-app links in old goldens.
+
+    New rendered-page checks separately prove customers never see these links.
+    Any other change still fails the historical exact-byte hash.
+    """
+    replacements = (
+        (
+            '<a class="btn" href="/request-quote">Get a Quote</a>',
+            '<a class="btn" href="/request-quote">Get a Quote</a><a class="btn" href="/app">Open App</a>',
+        ),
+        (
+            '<a href="/request-quote">Request a quote</a><br>',
+            '<a href="/request-quote">Request a quote</a> · <a href="/app">Open App</a><br>',
+        ),
+    )
+    for before, after in replacements:
+        # Homepage CTAs can repeat the same customer-facing label. In the
+        # rendered shared shell the header is first, and the footer link is last.
+        # Only that one known occurrence is restored for the historical hash.
+        if before not in html and before.endswith("<br>"):
+            # BeautifulSoup normalises void elements in SEO subpages to <br/>.
+            before = before[:-4] + "<br/>"
+            after = after[:-4] + "<br/>"
+        if before not in html:
+            raise AssertionError("Historical nav snapshot: missing " + repr(before))
+        if before.startswith('<a href="/request-quote">'):
+            position = html.rfind(before)
+            html = html[:position] + after + html[position + len(before):]
+        else:
+            html = html.replace(before, after, 1)
+    return html
+
+
 class BaselineTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -390,8 +424,9 @@ class BaselineTests(unittest.TestCase):
                     with self.subTest(path=path):
                         response = client.get(path)
                         self.assertEqual(response.status_code, 200)
+                        unchanged = restore_private_nav_for_legacy_snapshot(response.text)
                         # Only the approved project and advice discovery links are additive.
-                        unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", response.text)
+                        unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", unchanged)
                         unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
                         # The reviewed trust/area/availability copy is included
                         # in the homepage golden; Batch 8 context stays additive.
@@ -399,7 +434,7 @@ class BaselineTests(unittest.TestCase):
                                            "", unchanged, flags=re.S)
                         self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
-    def test_active_homepage_open_app_navigation(self):
+    def test_public_navigation_has_no_owner_app_shortcut(self):
         m = self.module
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage6.invalid",
@@ -415,10 +450,9 @@ class BaselineTests(unittest.TestCase):
                         self.assertIsNotNone(nav)
                         self.assertEqual([(a.get_text(strip=True), a.get("href"))
                                           for a in nav.select("a.btn")],
-                                         [("Get a Quote", "/request-quote"),
-                                          ("Open App", "/app")])
+                                         [("Get a Quote", "/request-quote")])
                         self.assertIn('class="mobile-contact"', response.text)
-                        self.assertIn('href="/app"', response.text)
+                        self.assertNotIn('href="/app"', response.text)
                 self.assertEqual(client.get("/app").status_code, 401)
                 self.assertEqual(client.get("/app", headers=self.auth_headers).status_code, 200)
 
@@ -1300,7 +1334,8 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         for name, digest in cases:
             with self.subTest(page=name):
                 # Freeze every existing byte outside the additive discovery link.
-                unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", rendered[name])
+                unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "",
+                                   restore_private_nav_for_legacy_snapshot(rendered[name]))
                 unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
                 self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
