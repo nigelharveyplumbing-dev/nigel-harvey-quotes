@@ -92,8 +92,8 @@ def restore_private_nav_for_legacy_snapshot(html: str) -> str:
     """
     replacements = (
         (
-            '<a class="btn" href="/request-quote">Get a Quote</a></div>',
-            '<a class="btn" href="/request-quote">Get a Quote</a><a class="btn" href="/app">Open App</a></div>',
+            '<a class="btn" href="/request-quote">Get a Quote</a>',
+            '<a class="btn" href="/request-quote">Get a Quote</a><a class="btn" href="/app">Open App</a>',
         ),
         (
             '<a href="/request-quote">Request a quote</a><br>',
