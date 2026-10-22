@@ -101,9 +101,16 @@ def restore_private_nav_for_legacy_snapshot(html: str) -> str:
         ),
     )
     for before, after in replacements:
-        if html.count(before) != 1:
-            raise AssertionError("Historical nav snapshot: expected one public link")
-        html = html.replace(before, after, 1)
+        # Homepage CTAs can repeat the same customer-facing label. In the
+        # rendered shared shell the header is first, and the footer link is last.
+        # Only that one known occurrence is restored for the historical hash.
+        if before not in html:
+            raise AssertionError("Historical nav snapshot: missing " + repr(before))
+        if before.startswith('<a href="/request-quote">'):
+            position = html.rfind(before)
+            html = html[:position] + after + html[position + len(before):]
+        else:
+            html = html.replace(before, after, 1)
     return html
 
 
