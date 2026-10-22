@@ -84,6 +84,29 @@ def dashboard_database(quote_rows=(), invoice_rows=(), customer_count=0):
         yield get_connection
 
 
+def restore_private_nav_for_legacy_snapshot(html: str) -> str:
+    """Undo only two deliberately removed public owner-app links in old goldens.
+
+    New rendered-page checks separately prove customers never see these links.
+    Any other change still fails the historical exact-byte hash.
+    """
+    replacements = (
+        (
+            '<a class="btn" href="/request-quote">Get a Quote</a></div>',
+            '<a class="btn" href="/request-quote">Get a Quote</a><a class="btn" href="/app">Open App</a></div>',
+        ),
+        (
+            '<a href="/request-quote">Request a quote</a><br>',
+            '<a href="/request-quote">Request a quote</a> · <a href="/app">Open App</a><br>',
+        ),
+    )
+    for before, after in replacements:
+        if html.count(before) != 1:
+            raise AssertionError("Historical nav snapshot: expected one public link")
+        html = html.replace(before, after, 1)
+    return html
+
+
 class BaselineTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -390,19 +413,9 @@ class BaselineTests(unittest.TestCase):
                     with self.subTest(path=path):
                         response = client.get(path)
                         self.assertEqual(response.status_code, 200)
-                        # Undo only the removal of public /app navigation for
-                        # historic homepage goldens; all other HTML stays frozen.
-                        # The dedicated public-navigation tests assert these links
-                        # are absent on the real rendered public website.
-                        unchanged = response.text.replace(
-                            '<a class="btn" href="/request-quote">Get a Quote</a></div>',
-                            '<a class="btn" href="/request-quote">Get a Quote</a><a class="btn" href="/app">Open App</a></div>', 1,
-                        ).replace(
-                            '<a href="/request-quote">Request a quote</a><br>',
-                            '<a href="/request-quote">Request a quote</a> · <a href="/app">Open App</a><br>', 1,
-                        )
+                        unchanged = restore_private_nav_for_legacy_snapshot(response.text)
                         # Only the approved project and advice discovery links are additive.
-                        unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", response.text)
+                        unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", unchanged)
                         unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
                         # The reviewed trust/area/availability copy is included
                         # in the homepage golden; Batch 8 context stays additive.
@@ -1310,7 +1323,8 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         for name, digest in cases:
             with self.subTest(page=name):
                 # Freeze every existing byte outside the additive discovery link.
-                unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "", rendered[name])
+                unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "",
+                                   restore_private_nav_for_legacy_snapshot(rendered[name]))
                 unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
                 self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
