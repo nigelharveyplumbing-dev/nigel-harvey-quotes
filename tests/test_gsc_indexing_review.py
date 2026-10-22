@@ -28,6 +28,7 @@ class FocusedIndexingReview(unittest.TestCase):
         checks = {
             "/leak-repair-leatherhead": ("waste is draining", "leaking supply joint", "/plumber-leatherhead"),
             "/toilet-repair-godalming": ("flush mechanisms and seals", "concealed cistern", "/plumber-godalming"),
+            "/toilet-repair-fairlands": ("repeatedly refills", "supply pipe", "/plumber-fairlands"),
         }
         contents = []
         for path, (first, second, link) in checks.items():
@@ -51,6 +52,7 @@ class FocusedIndexingReview(unittest.TestCase):
         for overview, repair in [
             ("/plumber-leatherhead", "/leak-repair-leatherhead"),
             ("/plumber-godalming", "/toilet-repair-godalming"),
+            ("/plumber-fairlands", "/toilet-repair-fairlands"),
         ]:
             with self.subTest(path=overview):
                 page = self.page(overview)
@@ -73,7 +75,7 @@ class FocusedIndexingReview(unittest.TestCase):
         # Disposable browser fixtures intentionally make 4 published advice/project
         # records into private drafts; this leaves 78 instead of the live 82.
         self.assertEqual(xml.count("<loc>"), 78)
-        for slug in ("/leak-repair-leatherhead","/toilet-repair-godalming"):
+        for slug in ("/leak-repair-leatherhead","/toilet-repair-godalming","/toilet-repair-fairlands"):
             self.assertIn("https://www.nigelharveyplumbing.co.uk"+slug+"</loc>",xml)
         self.assertNotIn("/app</loc>",xml)
         self.assertNotIn("/api/",xml)
