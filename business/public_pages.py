@@ -184,6 +184,19 @@ PRIMARY_LOCATION_NOTES = {
         "intro": "Need help with a radiator valve, leaking pipe or bathroom fitting in Leatherhead? Send a description and postcode so I can understand the work and confirm whether the location fits my route from Guildford.",
         "detail": "For radiator or pipework enquiries, say whether the issue is with one room or several and whether water is escaping. For planned bathrooms, tell me which fittings you want to change. Photos can be shared through WhatsApp after making contact.",
         "nearby": "Epsom and surrounding Surrey towns",
+        "related": ("/leak-repair-leatherhead", "Leak repairs in Leatherhead"),
+    },
+    "fairlands": {
+        "intro": "For toilet faults, leaking fittings or a planned bathroom update in Fairlands, send Nigel the job postcode and a short description of what happens. He is based in Guildford and will confirm travel and availability before agreeing a visit.",
+        "detail": "For a toilet problem, say whether it has a push button or lever, whether the cistern is concealed, and whether the water runs into the pan or leaks outside. A photograph of the accessible toilet and the water-inlet connection can help discuss the likely work; do not remove the cistern or boxing just to take a picture.",
+        "nearby": "Guildford, Worplesdon and nearby Surrey areas",
+        "related": ("/toilet-repair-fairlands", "Toilet repairs in Fairlands"),
+    },
+    "godalming": {
+        "intro": "For a running toilet, dripping fitting or planned bathroom plumbing in Godalming, describe the problem and send the job postcode. Nigel is based in Guildford and will confirm travel and availability before arranging any work.",
+        "detail": "For a toilet that will not flush or keeps refilling, say whether it has a push button or handle, and whether the cistern is concealed. A photo of the outside and a short description can help identify the type of parts and access needed; do not dismantle the toilet to take photographs.",
+        "nearby": "Guildford and nearby Surrey towns",
+        "related": ("/toilet-repair-godalming", "Toilet repairs in Godalming"),
     },
     "farnborough": {
         "intro": "For domestic plumbing work in Farnborough, from taps and toilets to showers and radiator pipework, describe the job and send your postcode. I am based in Guildford and can confirm whether I can take on the work in your part of Farnborough.",
@@ -574,9 +587,21 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
             "What to do if you have a water leak in Fairlands",
             "If you have noticed water leaking at home, try to see where it is coming from without taking anything apart. Tell me whether the water appears all the time or only when you use a tap, shower or toilet. If water is leaking badly, turn off the water at the stopcock, but only if it is safe. Take a photo or short video if you can do so safely and send it to me on WhatsApp, along with your postcode and a brief description. This can help me understand the problem and discuss what may be needed before visiting."
         ),
+        ("leak-repair", "leatherhead"): (
+            "What to check before reporting a leak in Leatherhead",
+            "A damp cupboard beneath a basin or kitchen sink may become wet only while the waste is draining, whereas a leaking supply joint can let water escape even when the tap is off. Tell me when you first see the water, which fitting was being used and whether the leak continues after the water is turned off. A photograph of the visible pipework, waste trap or wet area can help me discuss the likely inspection and parts, but a damp patch does not by itself identify the failed connection. Do not open walls or remove shower panels to investigate. For water escaping rapidly, close the stopcock if safe; keep away from electrical fittings near water. Include your Leatherhead postcode so I can confirm travel and availability."
+        ),
         ("toilet-repair", "guildford"): (
             "What to do if your toilet is not working in Guildford",
             "Let me know if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Take a photo or short video of what happens and send it to me on WhatsApp with your postcode and a brief description. This can help me work out what parts might be needed before a visit."
+        ),
+        ("toilet-repair", "fairlands"): (
+            "What to check when a toilet is running or leaking in Fairlands",
+            "A toilet that repeatedly refills after it has flushed may be losing water through the flush seal, whereas a fill valve fault may cause the cistern to refill incorrectly or continue admitting water. These are possibilities, not a diagnosis. If the leak appears around the base or supply pipe instead of into the pan, tell me when the water appears and whether it happens even when the toilet has not been used. Describe any push button or lever and whether the cistern is behind boxing or inside a fitted unit; accessible parts and suitable replacement components can differ. A short video of the running water and a photograph of safely visible connections may help before a visit. If water is escaping, isolate the toilet supply only if safe, and send the Fairlands postcode to discuss coverage and availability."
+        ),
+        ("toilet-repair", "godalming"): (
+            "A toilet that keeps running or will not flush in Godalming",
+            "If water continues to trickle into the pan after flushing, or the cistern refills repeatedly, note whether the problem stops when the cistern is full. Fill valves, flush mechanisms and seals are among the parts that may need checking; the symptom alone does not confirm which one has failed. Water around the base can have a different source, including a connection or seal. Tell me whether you have a handle, push button or concealed cistern, whether the toilet flushes at all and when any water appears. Send a photograph of safely accessible parts or a short video, plus your Godalming postcode. Do not dismantle concealed boxing or remove the cistern to take photographs. If water is escaping, isolate the supply only if you can do so safely."
         ),
         ("toilet-repair", "woking"): (
             "What to do if your toilet is not working in Woking",
@@ -622,12 +647,18 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         '<p>If the leak seems to be around a shower, you can also read '
         '<a href="/advice/shower-replacement-waterproofing-rebuild">what happens during a shower replacement and waterproofing rebuild</a>. '
         'This explains possible repair work; a site visit may still be needed to identify the cause.</p>'
-        if ((service_slug, area_slug) == ("leak-repair", "farnham")
+        if ((service_slug, area_slug) in {("leak-repair", "farnham"), ("leak-repair", "leatherhead")}
             and any(article.path == "/advice/shower-replacement-waterproofing-rebuild"
                     for article in plumbing_advice.visible_articles())) else ""
     )
+    focused_local_links = {
+        ("leak-repair", "leatherhead"): '<p>For other plumbing needs, see <a href="/plumber-leatherhead">plumbing coverage in Leatherhead</a> and discuss any visible pipework or waste connections before removing fittings.</p>',
+        ("toilet-repair", "godalming"): '<p>See <a href="/plumber-godalming">general plumbing enquiries in Godalming</a> for other fixtures and pipework. A description of the flush fault helps distinguish a possible cistern repair from a complete toilet replacement.</p>',
+        ("toilet-repair", "fairlands"): '<p>See <a href="/plumber-fairlands">plumbing enquiries in Fairlands</a> for other leaks, fittings and pipework. A running toilet can sometimes be repaired with a suitable cistern component rather than replacing the pan; inspection and parts compatibility determine the work.</p>',
+    }
+    focused_links_html = focused_local_links.get((service_slug, area_slug), "")
     priority_html = (f'<div class="wrap section"><h2>{escape(detail[0])}</h2><p>{escape(detail[1])}</p>'
-                     f'{whatsapp_html}{farnham_advice_html}<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
+                     f'{whatsapp_html}{farnham_advice_html}{focused_links_html}<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
                      'or <a href="/request-quote">send the job details</a>.</p></div>') if detail else ""
     priority_meta = {
         ("leak-repair", "aldershot"): "Leaking pipe or fitting in Aldershot? Tell Guildford-based Nigel where the water appears, whether it can be isolated and your postcode to discuss repair help.",
