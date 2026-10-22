@@ -126,5 +126,22 @@ class AdviceTests(unittest.TestCase):
                 self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(), pipeline_snapshots[path], path)
                 continue
             baseline=subprocess.check_output(['git','show','bdcacc9ff02d041e4ab4c63269b5c7ebba4942a2:'+path],cwd=ROOT)
-            self.assertEqual((ROOT/path).read_bytes(),baseline,path)
+            current=(ROOT/path).read_bytes()
+            # Only the customer-facing owner-app link is removed. Keep the
+            # rest of these protected legacy public template bytes frozen.
+            nav_replacements={
+                'templates/public_header.html': (
+                    b'<a class="btn" href="/request-quote">Get a Quote</a>',
+                    b'<a class="btn" href="/request-quote">Get a Quote</a><a class="btn" href="/app">Open App</a>'
+                ),
+                'templates/public_footer.html': (
+                    b'<a href="/request-quote">Request a quote</a>',
+                    '<a href="/request-quote">Request a quote</a> · <a href="/app">Open App</a>'.encode()
+                ),
+            }
+            if path in nav_replacements:
+                before,after=nav_replacements[path]
+                self.assertEqual(current.count(before),1,path)
+                current=current.replace(before,after,1)
+            self.assertEqual(current,baseline,path)
 
