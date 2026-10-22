@@ -70,7 +70,9 @@ class FocusedIndexingReview(unittest.TestCase):
 
     def test_sitemap_does_not_gain_or_lose_urls_or_expose_private_app(self):
         xml = self.client.get("/sitemap.xml").text
-        self.assertEqual(xml.count("<loc>"), 82)
+        # Disposable browser fixtures intentionally make 4 published advice/project
+        # records into private drafts; this leaves 78 instead of the live 82.
+        self.assertEqual(xml.count("<loc>"), 78)
         for slug in ("/leak-repair-leatherhead","/toilet-repair-godalming"):
             self.assertIn("https://www.nigelharveyplumbing.co.uk"+slug+"</loc>",xml)
         self.assertNotIn("/app</loc>",xml)
