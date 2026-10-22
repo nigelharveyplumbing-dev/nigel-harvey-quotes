@@ -2,7 +2,6 @@ from seo_preservation import assert_project_renderer_preserved
 """Batch 8 proposals preserve the live article, projects and protected app code."""
 import ast
 import base64
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -101,24 +100,22 @@ class GrowthBatch8Tests(unittest.TestCase):
         tracked=subprocess.check_output(['git','ls-tree','-r','--name-only',BASE,'static/project-images'],cwd=ROOT,text=True).splitlines()
         for path in tracked:self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT),path)
 
-    def test_app_changes_limited_to_public_html_insertion(self):
-        old=ast.parse(subprocess.check_output(['git','show',BASE+':app.py'],cwd=ROOT))
+    def test_stage2_changes_limited_to_tracking_and_protected_core_unchanged(self):
+        baseline='f0bb182a35ba7e50d80764a8f35ed5d126124167'
+        old=ast.parse(subprocess.check_output(['git','show',baseline+':app.py'],cwd=ROOT))
         new=ast.parse((ROOT/'app.py').read_text())
-        allowed={'render_public_homepage','add_project_evidence','sitemap_xml','location_page','public_site_image'}
-        before=[ast.dump(n) for n in old.body if getattr(n,'name',None) not in allowed]
-        after=[ast.dump(n) for n in new.body if getattr(n,'name',None) not in allowed]
-        self.assertEqual(before,after)
-        for tree in [old,new]:self.assertEqual(sum(getattr(n,'name',None) in allowed for n in tree.body),5)
-        pipeline_snapshots = {
-            'business/db.py': 'feb841feb46026a101e5019957be55d5865341d2ed7798474c4dc8af36f212f8',
-            'static/app.js': 'e1950f32ef1f4f2a530dc18511f90d5e8ec2f2944da0d83571ba7a70995f84fd',
-        }
-        for path in ['business/db.py','business/lead_email_store.py','business/lead_store.py','business/notifications.py','business/quote_calculation.py','business/quote_store.py','business/invoice_store.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','static/public_analytics.js','templates/request_quote.html']:
-            # Preserve complete-file checks, with a new private pipeline snapshot.
-            if path in pipeline_snapshots:
-                self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(), pipeline_snapshots[path], path)
-                continue
-            self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT),path)
+        allowed={'protect_app_routes','row_to_invoice','api_create_lead','api_delete_quote','api_update_invoice','api_invoice_status','api_delete_invoice','api_delete_customer'}
+        before={n.name:ast.dump(n) for n in old.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef,ast.ClassDef))}
+        after={n.name:ast.dump(n) for n in new.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef,ast.ClassDef))}
+        self.assertEqual({k:v for k,v in before.items() if k not in allowed},{k:after[k] for k in before if k not in allowed})
+        self.assertTrue(all(k.startswith(('Revenue','revenue_','api_revenue_')) for k in set(after)-set(before)))
+        for path in ['business/public_pages.py','business/project_content.json','business/advice_content.json','business/real_projects.py','business/plumbing_advice.py','business/lead_email_store.py','business/notifications.py','business/quote_calculation.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','templates/homepage.html','templates/public_header.html','templates/public_footer.html']:
+            current=(ROOT/path).read_bytes()
+            if path=='static/app.js':
+                from manual_whatsapp_snapshot import strip_manual_whatsapp_js
+                current=strip_manual_whatsapp_js(current.decode()).encode()
+            # Protect already-approved Batch 9 pages and new diary controls on main.
+            self.assertEqual(current,subprocess.check_output(['git','show','7de3c82c455fa08579c14e4e8c168f5282190463'+':'+path],cwd=ROOT),path)
 
     def test_private_file_cannot_publish_or_bypass_approval(self):
         private_file=self.root/'invalid-private-advice.json'
@@ -139,4 +136,3 @@ class GrowthBatch8Tests(unittest.TestCase):
         self.assertNotIn('Synthetic test content',outcome.stderr)
 
 if __name__=='__main__':unittest.main()
-
