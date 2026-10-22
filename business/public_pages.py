@@ -637,12 +637,12 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         '<p>If the leak seems to be around a shower, you can also read '
         '<a href="/advice/shower-replacement-waterproofing-rebuild">what happens during a shower replacement and waterproofing rebuild</a>. '
         'This explains possible repair work; a site visit may still be needed to identify the cause.</p>'
-        if ((service_slug, area_slug) == ("leak-repair", "farnham")
+        if ((service_slug, area_slug) in {("leak-repair", "farnham"), ("leak-repair", "leatherhead")}
             and any(article.path == "/advice/shower-replacement-waterproofing-rebuild"
                     for article in plumbing_advice.visible_articles())) else ""
     )
     focused_local_links = {
-        ("leak-repair", "leatherhead"): '<p>For other plumbing needs, see <a href="/plumber-leatherhead">plumbing coverage in Leatherhead</a>. If the leak appears around a shower, the published <a href="/advice/shower-replacement-waterproofing-rebuild">shower waterproofing guide</a> explains why the tray and wall junction may need inspection.</p>',
+        ("leak-repair", "leatherhead"): '<p>For other plumbing needs, see <a href="/plumber-leatherhead">plumbing coverage in Leatherhead</a> and discuss any visible pipework or waste connections before removing fittings.</p>',
         ("toilet-repair", "godalming"): '<p>See <a href="/plumber-godalming">general plumbing enquiries in Godalming</a> for other fixtures and pipework. A description of the flush fault helps distinguish a possible cistern repair from a complete toilet replacement.</p>',
     }
     focused_links_html = focused_local_links.get((service_slug, area_slug), "")
