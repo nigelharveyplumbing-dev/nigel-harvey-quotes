@@ -104,6 +104,10 @@ def restore_private_nav_for_legacy_snapshot(html: str) -> str:
         # Homepage CTAs can repeat the same customer-facing label. In the
         # rendered shared shell the header is first, and the footer link is last.
         # Only that one known occurrence is restored for the historical hash.
+        if before not in html and before.endswith("<br>"):
+            # BeautifulSoup normalises void elements in SEO subpages to <br/>.
+            before = before[:-4] + "<br/>"
+            after = after[:-4] + "<br/>"
         if before not in html:
             raise AssertionError("Historical nav snapshot: missing " + repr(before))
         if before.startswith('<a href="/request-quote">'):
