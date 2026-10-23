@@ -18,6 +18,9 @@ def render_public_invoice_html(item: dict, *,
     pounds_text,
     bank_payment_reference,
  ):
+    share = item.get("customer_share_path", "")
+    pdf_path = share + "/pdf" if share else f"/api/invoices/{item['id']}/pdf"
+    qr_path = share + "/payment-qr" if share else f"/api/invoices/{item['id']}/payment-qr"
     invoice = item["invoice"]
     quote_result = item["quote_result"]
     is_small_job = (quote_result.get("quote_type", "") or "").lower() == "small"
@@ -37,7 +40,7 @@ def render_public_invoice_html(item: dict, *,
             Amount due: <strong>{pounds_text(item.get("balance_due", 0))}</strong>
           </div>
           {(
-              f'<img src="/api/invoices/{item["id"]}/payment-qr" alt="Payment details QR" '
+              f'<img src="{escape(qr_path)}" alt="Payment details QR" '
               f'style="width:120px;height:120px;background:white;border:1px solid #ddd;border-radius:8px;">'
               if QRCODE_AVAILABLE else
               '<div style="width:120px;padding:10px;border:1px solid #ddd;border-radius:8px;'
@@ -55,7 +58,7 @@ def render_public_invoice_html(item: dict, *,
         for photo in photos:
             cards.append(
                 f'<div class="photo-card">'
-                f'<img src="{escape(photo.get("url", ""))}" alt="Job photo">'
+                f'<img src="{escape(share + "/photos/" + str(photo["id"]) if share else photo.get("url", ""))}" alt="Job photo">'
                 f'<div class="photo-caption"><strong>{escape(photo.get("category_label", "Job photo"))}</strong>'
                 f'<br>{escape(photo.get("caption", "") or "")}</div></div>'
             )
@@ -133,7 +136,7 @@ def render_public_invoice_html(item: dict, *,
         <div class="section-title">Payment terms</div>
         <div class="box"><ul>{''.join(f'<li>{escape(t)}</li>' for t in terms)}</ul>{payment_html}</div>
         <div class="actions">
-          <a href="/api/invoices/{item['id']}/pdf" target="_blank" class="btn">Download PDF</a>
+          <a href="{escape(pdf_path)}" target="_blank" class="btn">Download PDF</a>
           <a href="javascript:window.print()" class="btn light">Print</a>
         </div>
       </div>

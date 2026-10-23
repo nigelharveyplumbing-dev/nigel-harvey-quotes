@@ -20,3 +20,6 @@ Nigel has previously sent numbered invoice links to customers on WhatsApp. Turni
 
 ## Current task
 Owner authorised **step 1: start securing customer document links**. The current action prepares this review and isolation boundary only. Do not silently deploy, migrate, message customers or break old links.
+
+## Development continuation
+Secure-link implementation, fictional-record tests and an inventory helper are now being prepared on this branch. See `customer-document-links-cutover-runbook.md` for the three rollout modes and outstanding approval gates. Default legacy mode preserves access and performs no link migration. Preparation mode does not close the numbered-link exposure. No live or staging action is implied.

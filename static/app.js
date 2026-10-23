@@ -1988,7 +1988,9 @@ function buildQuoteMaterialsWhatsappText(data) {
 
 function buildQuoteWhatsappMessage(data) {
   const quotePdfUrl = CURRENT_QUOTE_ID
-    ? `${window.location.origin}/api/quotes/${CURRENT_QUOTE_ID}/pdf`
+    ? (Object.prototype.hasOwnProperty.call(data, "share_pdf_path")
+      ? (data.share_pdf_path ? window.location.origin + data.share_pdf_path : "")
+      : `${window.location.origin}/api/quotes/${CURRENT_QUOTE_ID}/pdf`)
     : "";
 
   const pdfLine = quotePdfUrl
@@ -2070,6 +2072,11 @@ function renderQuoteResult(data) {
   }
 
   const message = buildQuoteWhatsappMessage(data);
+  const quoteLinkRevoked = Object.prototype.hasOwnProperty.call(data, "share_pdf_path") && !data.share_pdf_path;
+  document.getElementById("whatsappBtn").onclick = quoteLinkRevoked ? () => {
+    alert("Quote link unavailable. Issue a replacement before sharing.");
+    return false;
+  } : null;
 
   const cleanPhone = normalisePhone(data.customer_phone || "");
   document.getElementById("whatsappBtn").href = cleanPhone
@@ -2269,7 +2276,9 @@ function renderInvoiceCard(item, scrollToTop = true) {
   if (watermark) watermark.classList.toggle("hidden", String(item.status || "").toLowerCase() !== "paid");
   window.CURRENT_INVOICE_PAYMENT_DETAILS = bankDetails;
 
-  const invoiceUrl = window.location.origin + "/invoice/" + item.id;
+  const invoiceUrl = Object.prototype.hasOwnProperty.call(item, "share_path")
+    ? (item.share_path ? window.location.origin + item.share_path : "#")
+    : window.location.origin + "/invoice/" + item.id;
 
   const msg =
 `Nigel Harvey Ltd Invoice
@@ -2287,6 +2296,12 @@ ${invoiceUrl}`;
     : "https://wa.me/?text=" + encodeURIComponent(msg);
 
   document.getElementById("invoiceOpenBtn").href = invoiceUrl;
+  for (const id of ["invoiceWhatsappBtn", "invoiceOpenBtn"]) {
+    document.getElementById(id).onclick = invoiceUrl === "#" ? () => {
+      alert("Invoice link unavailable. Issue a replacement before sharing.");
+      return false;
+    } : null;
+  }
 
   if (scrollToTop) window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -3098,7 +3113,7 @@ async function viewCustomerHistory(id) {
             <div class="history-actions" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
               <button type="button" class="btn-light" onclick="openInvoice(${i.id})">Preview Invoice</button>
               <button type="button" class="btn-light" onclick="editInvoice(${i.id})">Edit</button>
-              <button type="button" class="btn-primary" onclick="window.open('/invoice/${i.id}', '_blank')">Public Link</button>
+              <button type="button" class="btn-primary" onclick="openInvoicePage(${i.id})">Public Link</button>
             </div>
           </div>
         `).join("")
@@ -5727,8 +5742,20 @@ async function sendInvoiceWhatsApp(id) {
   }
 }
 
-function openInvoicePage(id) {
-  window.open("/invoice/" + id, "_blank");
+async function openInvoicePage(id) {
+  const popup = window.open("", "_blank");
+  try {
+    const response = await fetch("/api/invoices/" + id);
+    if (!response.ok) throw new Error();
+    const item = await response.json();
+    const path = Object.prototype.hasOwnProperty.call(item, "share_path")
+      ? item.share_path : "/invoice/" + id;
+    if (!path) throw new Error();
+    if (popup) popup.location.href = path;
+  } catch (_) {
+    if (popup) popup.close();
+    alert("Invoice link unavailable. Issue a replacement before sharing.");
+  }
 }
 
 async function emailInvoice(id) {
@@ -5887,4 +5914,5 @@ loadHistory();
 loadInvoices();
 loadCustomers();
 loadLeads();
+
 

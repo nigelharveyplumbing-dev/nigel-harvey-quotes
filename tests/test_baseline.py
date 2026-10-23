@@ -169,10 +169,10 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
-        self.assertEqual(len(routes), 91)
+        self.assertEqual(len(routes), 98)
         self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 15)
         self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
-        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 71)
+        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 78)
         self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
         self.assertEqual(self.module.PUBLIC_ROUTE_KEYS,
                          PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES)
@@ -294,7 +294,7 @@ class BaselineTests(unittest.TestCase):
             masked = masked.replace(addition, '')
         # Includes the deliberate diary removal controls, covered by mobile browser tests.
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
-                         "978a19cd6ac02909652d78adb7ba563a06e960fe865090ce4e1047645008ffa6")
+                         "42d02f7f2b8faaae8b32be8fc921a87fd1f4f4012ec934e7ea61468feb8da311")
         self.assertEqual(m.HTML.count("<style>"), 1)
         self.assertEqual(m.HTML.count("<script>"), 1)
         self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {
@@ -338,8 +338,8 @@ class BaselineTests(unittest.TestCase):
         m = self.module
         private = {tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         private -= PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES
-        self.assertEqual(len(private), 71)
-        parameters = {"invoice_id": "1", "quote_id": "1", "customer_id": "1",
+        self.assertEqual(len(private), 78)
+        parameters = {"kind": "invoice", "document_id": "1", "token": "t" * 43, "invoice_id": "1", "quote_id": "1", "customer_id": "1",
                       "lead_id": "1", "appointment_id": "1", "job_id": "1",
                       "material_id": "1", "photo_id": "1", "filename": "sample.db"}
         def file_state():
@@ -615,7 +615,7 @@ class BaselineTests(unittest.TestCase):
         html = self.module.HTML
         normalise = html[html.index("function normalisePhone(phone) {"):html.index("function setEditingStatus(")]
         quote = html[html.index("function buildQuoteWhatsappMessage(data) {"):html.index("function renderQuoteResult(data) {")]
-        invoice = html[html.index("  const invoiceUrl = window.location.origin + \"/invoice/\" + item.id;"):
+        invoice = html[html.index("  const invoiceUrl = Object.prototype.hasOwnProperty.call(item, \"share_path\")"):
                        html.index("  document.getElementById(\"invoiceOpenBtn\").href = invoiceUrl;")]
         script = f"""
 const assert = require('node:assert/strict');
@@ -1681,4 +1681,5 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
 
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -43,6 +43,12 @@ except ImportError:
     qrcode = None
     QRCODE_AVAILABLE = False
 
+from business import document_links
+
+# Validate the rollout setting at startup; typos must not reopen numbered links.
+document_links.mode()
+document_links.install_log_redaction()
+
 app = FastAPI(title="Nigel Harvey Ltd Business App")
 
 @app.on_event("startup")
@@ -83,6 +89,15 @@ PUBLIC_ROUTE_KEYS = frozenset({
 })
 
 
+LEGACY_DOCUMENT_ROUTE_KEYS = frozenset(key for key in PUBLIC_ROUTE_KEYS
+    if key[1].startswith(("/invoice/", "/api/invoices/", "/api/quotes/")))
+SHARED_DOCUMENT_ROUTE_KEYS = frozenset(("GET", path) for path in (
+    "/share/invoice/{token}", "/share/invoice/{token}/pdf",
+    "/share/invoice/{token}/payment-qr", "/share/invoice/{token}/photos/{photo_id}",
+    "/share/quote/{token}/pdf",
+))
+
+
 def check_basic_auth(request: Request):
     if not APP_USERNAME or not APP_PASSWORD:
         return False
@@ -108,7 +123,12 @@ def is_public_route(request: Request):
     for route in app.router.routes:
         match, _ = route.matches(request.scope)
         if match == Match.FULL:
-            return (request.method, route.path) in PUBLIC_ROUTE_KEYS
+            key = (request.method, route.path)
+            if key in SHARED_DOCUMENT_ROUTE_KEYS:
+                return document_links.enabled()
+            if document_links.mode() == "secure" and key in LEGACY_DOCUMENT_ROUTE_KEYS:
+                return False
+            return key in PUBLIC_ROUTE_KEYS
     return False
 
 
@@ -130,6 +150,10 @@ def is_cross_site_write(request: Request):
 @app.middleware("http")
 async def protect_app_routes(request: Request, call_next):
     def indexing_headers(response):
+        if request.url.path.startswith("/share/") or (document_links.enabled() and (
+                request.url.path.startswith(("/invoice/", "/api/invoices/", "/api/quotes/", "/api/document-links/")))):
+            response.headers.update(document_links.HEADERS)
+            return response
         if (is_staging_environment() or request.url.path == "/app"
                 or request.url.path.startswith("/app/")
                 or (request.url.path.startswith("/api/") and not is_public_route(request))):
@@ -137,7 +161,7 @@ async def protect_app_routes(request: Request, call_next):
         return response
 
     if not is_staging_environment() and is_public_route(request):
-        return await call_next(request)
+        return indexing_headers(await call_next(request))
     if not check_basic_auth(request):
         headers = {"WWW-Authenticate": "Basic"}
         if request.url.path.startswith("/api/"):
@@ -920,6 +944,7 @@ def _overdue_reminder_worker():
 def row_to_invoice(row):
     return {
         "id": row["id"],
+        **document_links.fields(row, "invoice"),
         "quote_id": row["quote_id"],
         "customer_id": row["customer_id"],
         "invoice_number": row["invoice_number"],
@@ -1059,6 +1084,11 @@ def absolute_url(path: str, request: Request | None = None) -> str:
 
 
 def build_invoice_public_url(invoice_id: int, request: Request | None = None):
+    if document_links.enabled():
+        item = get_invoice_by_id(invoice_id)
+        if not item or not item.get("share_path"):
+            raise RuntimeError("Invoice link unavailable; issue a replacement first")
+        return absolute_url(item["share_path"], request)
     return absolute_url(f"/invoice/{invoice_id}", request)
 
 
@@ -5693,7 +5723,10 @@ def api_quote_to_invoice(quote_id: int):
 
 @app.get("/invoice/{invoice_id}", response_class=HTMLResponse)
 def public_invoice(invoice_id: int):
-    item = get_invoice_by_id(invoice_id)
+    return render_customer_invoice(get_invoice_by_id(invoice_id))
+
+
+def render_customer_invoice(item):
     if not item:
         raise HTTPException(status_code=404, detail="Invoice not found")
     html = public_invoice_render.render_public_invoice_html(
@@ -5726,6 +5759,73 @@ def api_quote_pdf(quote_id: int, request: Request):
     disposition = "inline" if request.query_params.get("view") == "1" else "attachment"
     headers = {"Content-Disposition": f'{disposition}; filename="quote-{quote_id}.pdf"'}
     return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+
+def shared_document_id(kind: str, token: str):
+    conn = get_db()
+    try:
+        row = document_links.resolve(conn, "invoices" if kind == "invoice" else "quotes", token)
+    finally:
+        conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return row["id"]
+
+
+@app.get("/share/invoice/{token}", response_class=HTMLResponse)
+def shared_invoice(token: str):
+    item = get_invoice_by_id(shared_document_id("invoice", token))
+    if not item:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return render_customer_invoice({**item, "customer_share_path": "/share/invoice/" + token})
+
+
+@app.get("/share/quote/{token}/pdf")
+def shared_quote_pdf(token: str, request: Request):
+    return api_quote_pdf(shared_document_id("quote", token), request)
+
+
+@app.get("/share/invoice/{token}/pdf")
+def shared_invoice_pdf(token: str, request: Request):
+    return api_invoice_pdf(shared_document_id("invoice", token), request)
+
+
+@app.get("/share/invoice/{token}/payment-qr")
+def shared_invoice_qr(token: str):
+    return api_invoice_payment_qr(shared_document_id("invoice", token))
+
+
+@app.get("/share/invoice/{token}/photos/{photo_id}")
+def shared_invoice_photo(token: str, photo_id: int):
+    return api_invoice_photo(shared_document_id("invoice", token), photo_id)
+
+
+@app.post("/api/document-links/{kind}/{document_id}")
+def replace_document_link(kind: str, document_id: int):
+    return change_document_link(kind, document_id, revoke=False)
+
+
+@app.delete("/api/document-links/{kind}/{document_id}")
+def revoke_document_link(kind: str, document_id: int):
+    return change_document_link(kind, document_id, revoke=True)
+
+
+def change_document_link(kind: str, document_id: int, *, revoke: bool):
+    if kind not in {"quote", "invoice"} or not document_links.enabled():
+        raise HTTPException(status_code=404, detail="Document not found")
+    table = "quotes" if kind == "quote" else "invoices"
+    conn = get_db()
+    try:
+        with conn:
+            if not conn.execute(f"SELECT id FROM {table} WHERE id=?", (document_id,)).fetchone():
+                raise HTTPException(status_code=404, detail="Document not found")
+            if revoke:
+                conn.execute(f"UPDATE {table} SET share_token='' WHERE id=?", (document_id,))
+                return {"ok": True}
+            token = document_links.issue(conn, table, document_id)
+            return {"path": f"/share/{kind}/{token}" + ("/pdf" if kind == "quote" else "")}
+    finally:
+        conn.close()
 
 
 

@@ -10,11 +10,13 @@ from business.config import PAYMENT_LINK_BASE
 from business.db import get_db
 from business.growth_tracking import LOSS_REASONS, QUOTE_STATUSES, SOURCES, WORK_TYPES
 from business.work_types import read_additional
+from business import document_links
 
 
 def row_to_quote(row):
     return {
         "id": row["id"],
+        **document_links.fields(row, "quote"),
         "customer_id": row["customer_id"],
         "customer_name": row["customer_name"] or "",
         "job": row["job"] or "",
@@ -31,7 +33,7 @@ def row_to_quote(row):
         "work_type": row["work_type"] or "",
         "additional_work_types": read_additional(row["additional_work_types"]),
         "request": json.loads(row["request_json"]),
-        "result": json.loads(row["result_json"]),
+        "result": {**json.loads(row["result_json"]), **document_links.fields(row, "quote")},
     }
 
 
@@ -116,6 +118,8 @@ def save_quote(request_data: dict, result_data: dict, upsert_customer, now_uk):
         "pending", lead_id, source, work_type, json.dumps(additional),
     ))
     quote_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    if document_links.enabled():
+        document_links.issue(conn, "quotes", quote_id)
     if lead_id:
         sync_lead_status_from_quotes(conn, lead_id, now_uk().isoformat())
     conn.commit()
@@ -230,6 +234,8 @@ def create_invoice_from_quote(quote_id: int, now_uk, format_dt, get_invoice_by_i
         json.dumps(invoice_payload),
     ))
     invoice_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    if document_links.enabled():
+        document_links.issue(conn, "invoices", invoice_id)
     conn.commit()
     conn.close()
     return get_invoice_by_id(invoice_id)

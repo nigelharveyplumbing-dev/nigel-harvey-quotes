@@ -362,5 +362,33 @@
   [
     "PUT",
     "/api/quotes/{quote_id}/outcome"
+  ],
+  [
+    "GET",
+    "/share/invoice/{token}"
+  ],
+  [
+    "GET",
+    "/share/quote/{token}/pdf"
+  ],
+  [
+    "GET",
+    "/share/invoice/{token}/pdf"
+  ],
+  [
+    "GET",
+    "/share/invoice/{token}/payment-qr"
+  ],
+  [
+    "GET",
+    "/share/invoice/{token}/photos/{photo_id}"
+  ],
+  [
+    "POST",
+    "/api/document-links/{kind}/{document_id}"
+  ],
+  [
+    "DELETE",
+    "/api/document-links/{kind}/{document_id}"
   ]
 ]
