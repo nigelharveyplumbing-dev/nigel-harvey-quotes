@@ -732,21 +732,6 @@ let CURRENT_QUOTE_DATA = null;
 let CURRENT_INVOICE_ID = null;
 let CURRENT_EDITING_INVOICE_ID = null;
 
-function showNotice(message, type = "success") {
-  const box = document.getElementById("appNotice");
-  if (!box) return;
-  box.className = "notice " + (type === "error" ? "error" : "success");
-  box.innerText = message || "";
-  box.style.display = message ? "block" : "none";
-  if (message) {
-    window.clearTimeout(showNotice._timer);
-    showNotice._timer = window.setTimeout(() => {
-      box.style.display = "none";
-      box.innerText = "";
-    }, 2600);
-  }
-}
-
 function clearNotice() {
   const box = document.getElementById("appNotice");
   if (!box) return;
@@ -765,13 +750,20 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;");
 }
 
-function showNotice(message) {
-  const box = document.getElementById("notice");
+function showNotice(message, type = "success") {
+  const box = document.getElementById("appNotice");
   if (!box) return;
-  box.innerText = message;
-  box.style.display = "block";
-  if (typeof updateQuantityLearningNotes === 'function') if (typeof updateQuantityLearningNotes === 'function') updateQuantityLearningNotes();
-  setTimeout(() => { box.style.display = "none"; }, 4000);
+  box.className = "notice no-print " + (type === "error" ? "error" : "success");
+  box.innerText = message || "";
+  box.style.display = message ? "block" : "none";
+  if (message) {
+    if (typeof updateQuantityLearningNotes === "function") updateQuantityLearningNotes();
+    window.clearTimeout(showNotice._timer);
+    showNotice._timer = window.setTimeout(() => {
+      box.style.display = "none";
+      box.innerText = "";
+    }, 2600);
+  }
 }
 
 function showTab(id) {

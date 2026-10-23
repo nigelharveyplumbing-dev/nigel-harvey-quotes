@@ -20,8 +20,8 @@ import uvicorn
 from local_browser_server import disposable_app
 
 
-BASE_CANDIDATE = "0aa8d35a1eff29d1c8fb5974e55764dbd897b418"
-CANDIDATE_FILES = {'business/pdf_render.py': '663f346c3a80f66e50f21d78af62f045d3095e6488a7ae0eb4dfab4a41f083ef', 'app.py': 'e015905e0b6b07fc0f212aacfce6cddb4fb8742dbe0432057746da13c5bcd181', 'business/db.py': 'a84e82df3ef6970c450c60e8dca26f1a33ec56b7635bb325fdfc67052db906e0', 'business/document_links.py': 'b680531f6a503e10d4d2dccfafd9d45d56d1821f6ebfb5d4f47d0b43bab741cf', 'business/public_invoice_render.py': '97abde943a35c8d798aa0b28a021407e22e845953ec696de86b7fe26d8e68b7f', 'business/quote_store.py': '7344d52d3b5092f6865901998387cad614e6338d9345c6af7e0502295fcac4aa', 'static/app.js': '1b9e4ddb6ef61670bc5fd8a26226e4ba6a8965a3a901997707b50d847739fa87'}
+BASE_CANDIDATE = "d8123d26e60bbfabb898e3827a0c9e3aacd2a676"
+CANDIDATE_FILES = {'app.py': 'e015905e0b6b07fc0f212aacfce6cddb4fb8742dbe0432057746da13c5bcd181', 'business/db.py': 'a84e82df3ef6970c450c60e8dca26f1a33ec56b7635bb325fdfc67052db906e0', 'business/document_links.py': 'b680531f6a503e10d4d2dccfafd9d45d56d1821f6ebfb5d4f47d0b43bab741cf', 'business/public_invoice_render.py': '97abde943a35c8d798aa0b28a021407e22e845953ec696de86b7fe26d8e68b7f', 'business/quote_store.py': '7344d52d3b5092f6865901998387cad614e6338d9345c6af7e0502295fcac4aa', 'business/pdf_render.py': '663f346c3a80f66e50f21d78af62f045d3095e6488a7ae0eb4dfab4a41f083ef', 'static/app.js': 'eeed4879b81a6cdbeb0d807b9cee7b798559040f3a06a439d036a68a0f4745c1', 'static/app.css': 'ae37d1e0c3b336a18204bb8cd2de48d2c343feac2470cea6ac1d196f79c41a2f', 'templates/app.html': '469770e8599cc8209186139b3e5ec149769f772743a8f5a50162f34caab12067'}
 
 
 def verify_candidate():

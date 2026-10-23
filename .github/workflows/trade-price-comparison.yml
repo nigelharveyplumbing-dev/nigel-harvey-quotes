@@ -40,6 +40,17 @@ jobs:
           python -m pip install -r requirements-test.txt
           npm install --prefix "$RUNNER_TEMP/comparison-browser" playwright@1.56.1
           "$RUNNER_TEMP/comparison-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Secure document-link browser matrix
+        env:
+          EMAIL_ENABLED: '0'
+          GOOGLE_PLACES_API_KEY: ''
+          OPENAI_API_KEY: ''
+          DOCUMENT_LINK_EVIDENCE_DIR: '${{ runner.temp }}/document-link-preview'
+        run: |
+          export CODEX_PRIMARY_RUNTIME_NODE_MODULES="$RUNNER_TEMP/comparison-browser/node_modules"
+          export STAGE6_TEST_PYTHON="$(command -v python)"
+          node --check tests/run_document_links_browser.mjs
+          node tests/run_document_links_browser.mjs
       - name: Full offline Python, Node and browser regression
         env:
           EMAIL_ENABLED: '0'

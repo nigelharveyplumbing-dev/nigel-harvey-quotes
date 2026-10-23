@@ -292,9 +292,10 @@ class BaselineTests(unittest.TestCase):
             'source === "selected_public" ? \'<span class="badge">selected public price</span>\' : ',
         ):
             masked = masked.replace(addition, '')
-        # Includes the deliberate diary removal controls, covered by mobile browser tests.
+        # Includes reviewed diary, document-link, notification and invoice-watermark changes;
+        # the secure browser matrix checks notice visibility and paid/unpaid rendering.
         self.assertEqual(hashlib.sha256(masked.encode()).hexdigest(),
-                         "42d02f7f2b8faaae8b32be8fc921a87fd1f4f4012ec934e7ea61468feb8da311")
+                         "d70084d9dff39007182e465daf75b4a0673fddcf6dfd708bab50f3aa6ef6d7d0")
         self.assertEqual(m.HTML.count("<style>"), 1)
         self.assertEqual(m.HTML.count("<script>"), 1)
         self.assertEqual(set(re.findall(r"__[A-Z][A-Z_]+__", m.HTML)), {
