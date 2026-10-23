@@ -1,0 +1,111 @@
+{
+  "synthetic_only": true,
+  "browser": "Chromium",
+  "mode": "secure",
+  "cases": [
+    {
+      "policy": "customer",
+      "device": "desktop",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "result": "PASS",
+      "quote_ui": true,
+      "invoice_ui": true,
+      "whatsapp_links": true,
+      "email_ui_intercepted": true,
+      "pdf_downloads": true,
+      "images": true,
+      "no_horizontal_overflow": true,
+      "legacy_staff_only": true,
+      "rotation_and_revocation": true,
+      "anonymous_customer": true,
+      "payment_watermark_states": true,
+      "email_notice_visible": true,
+      "staging_auth": false,
+      "page_errors": 0,
+      "external_requests": 0
+    },
+    {
+      "policy": "customer",
+      "device": "mobile",
+      "viewport": [
+        390,
+        844
+      ],
+      "result": "PASS",
+      "quote_ui": true,
+      "invoice_ui": true,
+      "whatsapp_links": true,
+      "email_ui_intercepted": true,
+      "pdf_downloads": true,
+      "images": true,
+      "no_horizontal_overflow": true,
+      "legacy_staff_only": true,
+      "rotation_and_revocation": true,
+      "anonymous_customer": true,
+      "payment_watermark_states": true,
+      "email_notice_visible": true,
+      "staging_auth": false,
+      "page_errors": 0,
+      "external_requests": 0
+    },
+    {
+      "policy": "staging",
+      "device": "desktop",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "result": "PASS",
+      "quote_ui": true,
+      "invoice_ui": true,
+      "whatsapp_links": true,
+      "email_ui_intercepted": true,
+      "pdf_downloads": true,
+      "images": true,
+      "no_horizontal_overflow": true,
+      "legacy_staff_only": true,
+      "rotation_and_revocation": true,
+      "anonymous_customer": false,
+      "payment_watermark_states": true,
+      "email_notice_visible": true,
+      "staging_auth": true,
+      "page_errors": 0,
+      "external_requests": 0
+    },
+    {
+      "policy": "staging",
+      "device": "mobile",
+      "viewport": [
+        390,
+        844
+      ],
+      "result": "PASS",
+      "quote_ui": true,
+      "invoice_ui": true,
+      "whatsapp_links": true,
+      "email_ui_intercepted": true,
+      "pdf_downloads": true,
+      "images": true,
+      "no_horizontal_overflow": true,
+      "legacy_staff_only": true,
+      "rotation_and_revocation": true,
+      "anonymous_customer": false,
+      "payment_watermark_states": true,
+      "email_notice_visible": true,
+      "staging_auth": true,
+      "page_errors": 0,
+      "external_requests": 0
+    }
+  ],
+  "external_requests": 0,
+  "active_case": "staging-mobile",
+  "result": "PASS",
+  "candidate": "d8123d26e60bbfabb898e3827a0c9e3aacd2a676",
+  "ci_run_id": 39946443645,
+  "python_tests": 310,
+  "existing_browser_workflows": 8,
+  "artifact_id": 12498153421
+}
