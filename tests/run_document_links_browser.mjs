@@ -20,7 +20,7 @@ const directory = dirname(fileURLToPath(import.meta.url));
 const evidence = process.env.DOCUMENT_LINK_EVIDENCE_DIR ? resolve(process.env.DOCUMENT_LINK_EVIDENCE_DIR) : null;
 if (evidence) mkdirSync(evidence, {recursive:true});
 const report = {synthetic_only:true, browser:'Chromium', mode:'secure', cases:[], external_requests:0};
-let browser, server, failure;
+let browser, server, failure, activePage;
 const cleanup = async () => {
   if (browser) {await browser.close(); browser = null;}
   if (server) {await stopServer(server); server = null;}
@@ -56,6 +56,7 @@ try {
     });
     for (const [device,width,height] of [['desktop',1440,1000], ['mobile',390,844]]) {
       await phase(`${policy}-${device}`, async () => {
+        report.active_case = `${policy}-${device}`;
         const name = `Fictional ${policy} ${device} Customer`;
         const errors = [], external = [];
         const context = await browser.newContext({httpCredentials:credentials, acceptDownloads:true,
@@ -68,6 +69,7 @@ try {
         };
         await context.route('**/*', guard); await anonymous.route('**/*', guard);
         const page = await context.newPage();
+        activePage = page;
         page.on('pageerror', error => errors.push(error.name));
         assert.equal((await anonymous.request.get(origin+'/app')).status(),401);
         assert.equal((await page.goto(origin+'/app')).status(),200);
@@ -92,12 +94,12 @@ try {
         assert.match(invoice.share_path, /^\/share\/invoice\/[\w-]{43}$/);
         const row = page.locator('#invoiceList .history-item').filter({hasText:invoice.invoice_number});
         await row.getByRole('button',{name:'Preview Invoice',exact:true}).click();
-        assert.equal(await page.locator('#invoicePaidWatermark').isVisible(),false,'Unpaid invoice shows a PAID watermark');
         await page.locator('#invoicePhotoFiles').setInputFiles({name:'fictional.png',mimeType:'image/png',buffer:picture});
         const photoResponse = page.waitForResponse(r => r.url() === `${origin}/api/invoices/${invoice.id}/photos` && r.request().method() === 'POST');
         await page.getByRole('button',{name:'Add Photos to Invoice',exact:true}).click();
         const photo = (await (await photoResponse).json()).photos[0];
         await page.locator('#invoicePhotoGallery img').first().waitFor();
+        assert.equal(await page.locator('#invoicePaidWatermark').isVisible(),false,'Unpaid invoice shows a PAID watermark');
         const invoiceMessage = new URL(await page.locator('#invoiceWhatsappBtn').getAttribute('href')).searchParams.get('text');
         assert(invoiceMessage.includes(origin + invoice.share_path));
         assert(!invoiceMessage.includes(`${origin}/invoice/`));
@@ -163,7 +165,7 @@ try {
         await row.getByRole('button',{name:'Mark Paid',exact:true}).click();
         await row.getByText('Paid',{exact:true}).waitFor();
         await row.getByRole('button',{name:'Preview Invoice',exact:true}).click();
-        assert.equal(await page.locator('#invoicePaidWatermark').isVisible(),true,'Paid invoice watermark is absent');
+        await page.locator('#invoicePaidWatermark').waitFor({state:'visible'});
         await customer.reload();
         assert.equal(await customer.locator('.paid-watermark').isVisible(),true);
         const endpoint = `${origin}/api/document-links/invoice/${invoice.id}`;
@@ -187,6 +189,7 @@ try {
   }
 } catch (error) {
   failure = error; report.failure = error.name;
+  if (evidence && activePage) await activePage.screenshot({path:join(evidence,'failed-case.png'),fullPage:true}).catch(() => {});
 } finally {
   clearTimeout(deadline); await cleanup();
   report.result = failure ? 'FAIL' : 'PASS';
