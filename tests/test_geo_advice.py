@@ -115,12 +115,11 @@ class AdviceTests(unittest.TestCase):
         # Batch 8 explicitly authorises targeted public_pages.py changes. The
         # mixed published/draft and unchanged-page checks live in test_growth_batch8.
         paths=['business/project_content.json','business/quote_calculation.py','business/account_pricing.py','business/city_account_prices.py','business/db.py','business/lead_email_store.py','business/lead_store.py','business/notifications.py','business/invoice_store.py','business/pdf_render.py','business/quote_store.py','static/app.js','static/city_account_prices.js','static/public_analytics.js','templates/public_footer.html','templates/public_header.html']
-        pipeline_snapshots = {
-            'business/db.py': 'feb841feb46026a101e5019957be55d5865341d2ed7798474c4dc8af36f212f8',
-            'static/app.js': 'e1950f32ef1f4f2a530dc18511f90d5e8ec2f2944da0d83571ba7a70995f84fd',
-        }
+        # Approved pipeline and PR #34 document-link changes. All other
+        # public content and business files retain their historical locks.
+        pipeline_snapshots = {'business/db.py': 'a84e82df3ef6970c450c60e8dca26f1a33ec56b7635bb325fdfc67052db906e0', 'static/app.js': '1b9e4ddb6ef61670bc5fd8a26226e4ba6a8965a3a901997707b50d847739fa87', 'business/quote_store.py': '7344d52d3b5092f6865901998387cad614e6338d9345c6af7e0502295fcac4aa'}
         for path in paths:
-            # The pipeline repair changes only these two previously frozen files.
+            # These files include the reviewed pipeline and document-link changes.
             # Hash the complete files so this lock survives a squash merge.
             if path in pipeline_snapshots:
                 self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(), pipeline_snapshots[path], path)

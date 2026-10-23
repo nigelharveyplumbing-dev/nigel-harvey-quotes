@@ -18,8 +18,7 @@ Nigel has previously sent numbered invoice links to customers on WhatsApp. Turni
 4. Take fresh protected database and City-sidecar backups under a coordinated write freeze, record checksums and restore steps. A code-only rollback after new token links are sent is not a safe customer experience.
 5. Staging, release and any real data migration require separate approval.
 
-## Current task
-Owner authorised **step 1: start securing customer document links**. The current action prepares this review and isolation boundary only. Do not silently deploy, migrate, message customers or break old links.
+## Development candidate
+Owner authorised continuation of document-link development, fictional-record testing and preparation of a safe replacement process. The branch now implements those changes against the current app, without merging the old privacy-notice PR. See `customer-document-links-cutover-runbook.md` for the three rollout modes and remaining release gates.
 
-## Development continuation
-Secure-link implementation, fictional-record tests and an inventory helper are now being prepared on this branch. See `customer-document-links-cutover-runbook.md` for the three rollout modes and outstanding approval gates. Default legacy mode preserves access and performs no link migration. Preparation mode does not close the numbered-link exposure. No live or staging action is implied.
+Default legacy mode preserves existing access and performs no link migration. Preparation mode enables replacement links while preserving old numbered links; it does not close the existing numbered-link exposure. Secure mode is reserved for the separately approved final cutover. No deployment, real-data migration or customer message has been performed.
