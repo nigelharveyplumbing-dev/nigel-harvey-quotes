@@ -16,11 +16,42 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from PIL import Image
 from pypdf import PdfReader
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from local_browser_server import disposable_app
 
 
 class DocumentLinkTests(unittest.TestCase):
+    def test_invoice_photo_headers_do_not_overlap_company_details(self):
+        """Check actual PDF text geometry with branding on both photo pages."""
+        with self.fixture() as (m, root), TestClient(m.app) as c:
+            _, invoice = self.documents(m, c)
+            image = io.BytesIO()
+            Image.new("RGB", (80, 60), "navy").save(image, "PNG")
+            response = c.post(f"/api/invoices/{invoice['id']}/photos", headers=self.auth(),
+                files=[("photos", (f"fictional-{n}.png", image.getvalue(), "image/png"))
+                       for n in range(7)])
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertIsNotNone(m._pdf_logo_reader())
+            pdf = c.get(invoice["share_path"] + "/pdf")
+            self.assertEqual(pdf.status_code, 200)
+            pages = PdfReader(io.BytesIO(pdf.content)).pages
+            self.assertEqual(len(pages), 3)
+            for page in pages[1:]:
+                header = []
+                def collect(text, cm, tm, font, size):
+                    text = text.strip()
+                    if text and tm[5] > float(page.mediabox.height) - 110:
+                        name = str(font["/BaseFont"]).lstrip("/")
+                        header.append((text, tm[4], tm[5], stringWidth(text, name, size)))
+                page.extract_text(visitor_text=collect)
+                self.assertIn(m.COMPANY_NAME, [item[0] for item in header])
+                for index, left in enumerate(header):
+                    for right in header[index + 1:]:
+                        if abs(left[2] - right[2]) < 2:
+                            gap = max(left[1], right[1]) - min(left[1] + left[3], right[1] + right[3])
+                            self.assertGreaterEqual(gap, 8, f"Header collision: {left[0]} / {right[0]}")
+
     def fixture(self, mode="secure", environment=""):
         return disposable_app("synthetic-owner", "test-only-password", environment=environment,
                               public_base_url="https://synthetic.example", document_link_mode=mode)
