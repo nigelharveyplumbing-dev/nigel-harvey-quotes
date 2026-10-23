@@ -46,6 +46,7 @@ jobs:
           GOOGLE_PLACES_API_KEY: ''
           OPENAI_API_KEY: ''
           ADVICE_EVIDENCE_DIR: '${{ runner.temp }}/advice-preview'
+          DOCUMENT_LINK_EVIDENCE_DIR: '${{ runner.temp }}/document-link-preview'
         run: |
           export CODEX_PRIMARY_RUNTIME_NODE_MODULES="$RUNNER_TEMP/comparison-browser/node_modules"
           export STAGE6_TEST_PYTHON="$(command -v python)"
@@ -60,4 +61,11 @@ jobs:
         with:
           name: approved-advice-previews
           path: ${{ runner.temp }}/advice-preview
+          if-no-files-found: error
+      - name: Save secure document-link desktop and mobile previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secure-document-link-previews
+          path: ${{ runner.temp }}/document-link-preview
           if-no-files-found: error

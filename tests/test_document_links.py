@@ -11,6 +11,7 @@ import sqlite3
 import subprocess
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -22,6 +23,32 @@ from local_browser_server import disposable_app
 
 
 class DocumentLinkTests(unittest.TestCase):
+    def test_secure_email_composition_and_revocation_without_sending(self):
+        with self.fixture() as (m, root), TestClient(m.app) as c:
+            _, invoice = self.documents(m, c)
+            ctx = SimpleNamespace(
+                build_invoice_public_url=m.build_invoice_public_url,
+                company_name=m.COMPANY_NAME, company_phone=m.COMPANY_PHONE,
+                company_email=m.COMPANY_EMAIL, pounds_text=m.pounds_text,
+                get_company_logo_value=m.get_company_logo_value,
+                generate_invoice_pdf_bytes=m.generate_invoice_pdf_bytes,
+                from_header="Fictional Test <fictional@example.test>",
+            )
+            msg = m.document_sharing.prepare_invoice_email(invoice, "fictional@example.test", "TEST ONLY", ctx)
+            parts = list(msg.walk())
+            for kind in ("text/plain", "text/html"):
+                body = next(p for p in parts if p.get_content_type() == kind).get_payload(decode=True).decode()
+                self.assertIn("https://synthetic.example" + invoice["share_path"], body)
+                self.assertNotIn("https://synthetic.example/invoice/", body)
+                self.assertIn("TEST ONLY", body)
+            attachment = next(p for p in parts if p.get_content_type() == "application/pdf")
+            self.assertEqual(attachment.get_filename(), invoice["invoice_number"] + ".pdf")
+            pdf_text = "".join(page.extract_text() for page in PdfReader(io.BytesIO(attachment.get_payload(decode=True))).pages)
+            self.assertIn("Fictional Customer", pdf_text)
+            c.delete(f"/api/document-links/invoice/{invoice['id']}", headers=self.auth()).raise_for_status()
+            with self.assertRaisesRegex(RuntimeError, "link unavailable"):
+                m.document_sharing.prepare_invoice_email(invoice, "fictional@example.test", "", ctx)
+
     def test_invoice_photo_headers_do_not_overlap_company_details(self):
         """Check actual PDF text geometry with branding on both photo pages."""
         with self.fixture() as (m, root), TestClient(m.app) as c:

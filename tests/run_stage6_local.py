@@ -29,7 +29,7 @@ def main():
     print("Running offline Playwright browser workflows", flush=True)
     environment = dict(os.environ)
     environment.setdefault("STAGE6_TEST_PYTHON", sys.executable)
-    for script in ("run_local_browser.mjs", "run_project_browser.mjs", "run_advice_browser.mjs", "run_london_browser.mjs"):
+    for script in ("run_local_browser.mjs", "run_document_links_browser.mjs", "run_project_browser.mjs", "run_advice_browser.mjs", "run_london_browser.mjs"):
         result = subprocess.run(["node", str(ROOT / "tests" / script)],
                                 cwd=ROOT, env=environment, check=False)
         if result.returncode:
