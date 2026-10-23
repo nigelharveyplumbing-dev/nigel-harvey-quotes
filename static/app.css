@@ -104,3 +104,6 @@ button, .btn-link { width:100%; padding:14px; border:none; border-radius:12px; b
   .actions { position:sticky; bottom:8px; z-index:5; }
   .doc-total-box .quote-total { font-size:34px; }
 }
+
+#appNotice { position:fixed; top:16px; left:50%; transform:translateX(-50%); width:calc(100% - 32px); max-width:1020px; box-sizing:border-box; margin:0; z-index:10000; }
+#invoicePaidWatermark:not(.hidden) { display:flex; }

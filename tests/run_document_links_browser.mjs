@@ -92,6 +92,7 @@ try {
         assert.match(invoice.share_path, /^\/share\/invoice\/[\w-]{43}$/);
         const row = page.locator('#invoiceList .history-item').filter({hasText:invoice.invoice_number});
         await row.getByRole('button',{name:'Preview Invoice',exact:true}).click();
+        assert.equal(await page.locator('#invoicePaidWatermark').isVisible(),false,'Unpaid invoice shows a PAID watermark');
         await page.locator('#invoicePhotoFiles').setInputFiles({name:'fictional.png',mimeType:'image/png',buffer:picture});
         const photoResponse = page.waitForResponse(r => r.url() === `${origin}/api/invoices/${invoice.id}/photos` && r.request().method() === 'POST');
         await page.getByRole('button',{name:'Add Photos to Invoice',exact:true}).click();
@@ -116,6 +117,9 @@ try {
         page.on('dialog',promptHandler);
         await page.getByRole('button',{name:'Email Invoice PDF',exact:true}).click();
         await page.getByText('Invoice email sent successfully.',{exact:true}).waitFor();
+        assert.equal(await page.locator('#appNotice').count(),1);
+        const noticeBox = await page.locator('#appNotice').boundingBox();
+        assert(noticeBox.y >= 0 && noticeBox.y + noticeBox.height <= height,'Email notice is outside viewport');
         page.off('dialog',promptHandler);
         assert.deepEqual(emailPayload,{to_email:'fictional@example.test',message:'FICTIONAL TEST ONLY'});
         await page.unroute(emailEndpoint);
@@ -130,6 +134,7 @@ try {
         }
         const response = await customer.goto(origin+invoice.share_path);
         assert.equal(response.status(),200);
+        assert.equal(await customer.locator('.paid-watermark').count(),0);
         for (const [header, value] of [['cache-control','no-store'],['referrer-policy','no-referrer']])
           assert.equal(response.headers()[header],value);
         await customer.getByText(name,{exact:false}).waitFor();
@@ -154,6 +159,13 @@ try {
           assert.equal((await anonymous.request.get(origin+path)).status(),401);
         assert.equal((await anonymous.request.get(`${origin}/api/invoices/${invoice.id}`)).status(),401);
         assert.equal((await customerContext.request.get(origin+invoice.share_path+'/photos/999999')).status(),404);
+        await page.getByRole('button',{name:'Invoices',exact:true}).click();
+        await row.getByRole('button',{name:'Mark Paid',exact:true}).click();
+        await row.getByText('Paid',{exact:true}).waitFor();
+        await row.getByRole('button',{name:'Preview Invoice',exact:true}).click();
+        assert.equal(await page.locator('#invoicePaidWatermark').isVisible(),true,'Paid invoice watermark is absent');
+        await customer.reload();
+        assert.equal(await customer.locator('.paid-watermark').isVisible(),true);
         const endpoint = `${origin}/api/document-links/invoice/${invoice.id}`;
         const replacement = (await (await context.request.post(endpoint)).json()).path;
         assert.equal((await customerContext.request.get(origin+invoice.share_path)).status(),404);
@@ -165,6 +177,7 @@ try {
           quote_ui:true,invoice_ui:true,whatsapp_links:true,email_ui_intercepted:true,
           pdf_downloads:true,images:true,no_horizontal_overflow:true,legacy_staff_only:true,
           rotation_and_revocation:true,anonymous_customer:policy === 'customer',
+          payment_watermark_states:true,email_notice_visible:true,
           staging_auth:policy === 'staging',page_errors:0,external_requests:0});
         await context.close(); await anonymous.close();
         console.log(`Document links ${policy} ${device}: PASS`);
