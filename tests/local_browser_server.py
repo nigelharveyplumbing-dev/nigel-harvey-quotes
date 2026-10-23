@@ -73,7 +73,7 @@ def block_external_connections():
 @contextmanager
 def disposable_app(username: str, password: str,
                    public_base_url: str = "", environment: str = "",
-                   bank_settings: dict | None = None, projects_as_drafts: bool = True, advice_as_drafts: bool = True):
+                   bank_settings: dict | None = None, projects_as_drafts: bool = True, advice_as_drafts: bool = True, document_link_mode: str = "legacy"):
     if not username or not password:
         raise ValueError("Test-only Basic Auth credentials are required")
     with tempfile.TemporaryDirectory(prefix="stage6-local-") as temporary:
@@ -115,6 +115,7 @@ def disposable_app(username: str, password: str,
 
         # Explicitly neutralize any inherited production integration settings.
         overrides = {
+            "CUSTOMER_DOCUMENT_LINK_MODE": document_link_mode,
             "APP_USERNAME": username,
             "APP_PASSWORD": password,
             "EMAIL_ENABLED": "0",
@@ -161,7 +162,7 @@ def disposable_app(username: str, password: str,
                       if route.path not in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
                       for method in getattr(route, "methods", [])]
             expected = [tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())]
-            if len(routes) != len(set(routes)) or set(routes) != set(expected) or len(routes) != 91:
+            if len(routes) != len(set(routes)) or set(routes) != set(expected) or len(routes) != 98:
                 raise RuntimeError("Route inventory changed")
             yield module, root
         finally:

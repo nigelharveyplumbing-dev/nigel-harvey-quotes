@@ -3,7 +3,7 @@
 import sqlite3
 
 from business.config import DB_PATH, DB_BACKUP_DIR
-from business import appointment_migration
+from business import appointment_migration, document_links
 
 def get_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -234,6 +234,7 @@ def init_db():
         conn.execute("ALTER TABLE leads ADD COLUMN customer_id INTEGER")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_quick_add_key ON leads(quick_add_key) WHERE quick_add_key IS NOT NULL")
 
+    document_links.migrate(conn)
     conn.commit()
     if migration_backup:
         integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
@@ -255,4 +256,5 @@ def database_counts():
             counts[table] = None
     conn.close()
     return counts
+
 

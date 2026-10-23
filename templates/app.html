@@ -10,12 +10,11 @@
 <body>
 <div class="wrap">
 
-  <div id="appNotice" class="notice" style="display:none;"></div>
+  <div id="appNotice" class="notice no-print" role="status" aria-live="polite" style="display:none;"></div>
 
   <div class="card">
     <h1>Nigel Harvey Ltd</h1>
     <div class="sub">Enquiries, diary, jobs, quotes and invoices</div>
-    <div id="appNotice" class="notice success"></div>
 
     <div class="tabs no-print">
       <button class="btn-light" onclick="showTab('dashboardTab')">Dashboard</button>
@@ -540,7 +539,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
   </div>
 
   <div id="invoiceCard" class="card result invoice-sheet" style="position:relative;">
-    <div id="invoicePaidWatermark" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:96px;font-weight:900;color:rgba(22,163,74,.13);transform:rotate(-24deg);pointer-events:none;z-index:2;">PAID</div>
+    <div id="invoicePaidWatermark" class="hidden" style="position:absolute;inset:0;align-items:center;justify-content:center;font-size:96px;font-weight:900;color:rgba(22,163,74,.13);transform:rotate(-24deg);pointer-events:none;z-index:2;">PAID</div>
     <div class="quote-header print-head">
       <div><div class="quote-company">Nigel Harvey Ltd</div>
       <div class="quote-meta">

@@ -138,7 +138,7 @@ def _pdf_draw_materials_section(c, y, result, ctx):
 
 def _pdf_photo_page_header(c, continued=False, ctx=None):
     c.showPage()
-    y = _pdf_header(c, "INVOICE JOB PHOTOS", "", ctx)
+    y = _pdf_header(c, "INVOICE", "JOB PHOTOS", ctx)
     c.setFont("Helvetica-Bold", 14)
     c.drawString(40, y, "Job Photos" + (" (continued)" if continued else ""))
     return y - 24
