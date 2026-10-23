@@ -73,6 +73,8 @@ PUBLIC_ROUTE_KEYS = frozenset({
     ("GET", "/{service_slug}-{area_slug}"),
     ("GET", "/{service_slug}"),
     ("POST", "/api/leads"),
+    # Legacy numbered customer links remain public ONLY until the owner-approved
+    # token-link reissue cutover. No auth change is activated in this draft.
     ("GET", "/invoice/{invoice_id}"),
     ("GET", "/api/invoices/{invoice_id}/pdf"),
     ("GET", "/api/invoices/{invoice_id}/payment-qr"),
