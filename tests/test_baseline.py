@@ -1338,6 +1338,15 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
                 unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "",
                                    restore_private_nav_for_legacy_snapshot(rendered[name]))
                 unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
+                if name == "service":
+                    # Remove the exact additive section, leaving the old
+                    # page markup byte-for-byte intact for the golden check.
+                    faq_start = '<div class="wrap section"><h2>Common questions</h2>'
+                    next_section = '<div class="wrap section"><h2>Areas covered'
+                    self.assertEqual(unchanged.count(faq_start), 1)
+                    start = unchanged.index(faq_start)
+                    end = unchanged.index(next_section, start)
+                    unchanged = unchanged[:start] + unchanged[end:]
                 self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
     def test_stage7_merchant_parsing_and_matching_offline(self):
