@@ -243,7 +243,7 @@ def add_batch8_context(html: str, path: str) -> str:
             '<p>For planned <a href="/bathroom-plumbing-guildford">bathroom plumbing in Guildford</a>, '
             'explain which fittings are changing, whether the layout stays the same and what access '
             'is available. Hidden pipework or damaged supporting construction may need inspection '
-            'before the scope and quotation can be confirmed.</p>' + proof_html +
+            'before the scope and quotation can be confirmed.</p>' +
             '<p>Send the postcode, a short description and photographs of safely visible areas '
             'through <a href="/request-quote">the enquiry form</a> or WhatsApp. '
             'Call for an active leak rather than waiting for an online reply; attendance depends '
@@ -283,6 +283,17 @@ def add_batch8_context(html: str, path: str) -> str:
         marker = '<div class="wrap section"><h2>Other Plumbing Services in Farnham</h2>'
     section = ('<section class="section-pale"><div class="wrap section"><h2>' +
                heading + '</h2>' + paragraphs + '</div></section>')
+    if path == "/plumber-guildford" and proof_html:
+        # Surface approved, published Merrow evidence before the service list.
+        # The project/advice links disappear automatically if no longer public.
+        real_work = ('<section class="section-pale" id="guildford-real-work">'
+                     '<div class="wrap section"><h2>Completed plumbing work near Guildford</h2>'
+                     + proof_html +
+                     '<p>For smaller repairs, see <a href="/leak-repair-guildford">Guildford leak repairs</a> '
+                     'and <a href="/toilet-repair-guildford">Guildford toilet repairs</a>. '
+                     '<a href="/request-quote">Send your postcode and job details</a> to discuss the next step.</p>'
+                     '</div></section>')
+        html = html.replace('<section id="services">', real_work + '<section id="services">', 1)
     return html.replace(marker, section + marker, 1)
 
 
@@ -389,7 +400,7 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
 <script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{local_schema}</script><script type="application/ld+json">{faq_schema}</script></head><body>
 <div class="topbar"><div class="wrap"><span>Local plumber serving Guildford &amp; Surrey</span><span>Call Nigel: {escape(COMPANY_PHONE)} &nbsp; · &nbsp; {escape(COMPANY_EMAIL)}</span></div></div>
 <header class="site-header"><div class="wrap site-nav"><div class="brand">Nigel Harvey <small>PLUMBING</small></div><div class="navlinks"><a href="#services">Services</a><a href="#about">About</a><a href="#reviews">Reviews</a><a href="#areas">Areas</a><a class="btn" href="/request-quote">Get a Quote</a></div></div></header>
-<section class="guildford-hero"><div class="wrap"><div class="hero-copy"><div class="eyebrow">Nigel Harvey Plumbing · Guildford</div><h1>Plumber in Guildford</h1><p>Local domestic plumbing for leaks, taps, toilets, bathrooms, showers, radiators and pipework. From first enquiry to finished job, you deal directly with me, Nigel.</p><div class="actions"><a class="btn" href="/request-quote">Get a Quote</a><a class="btn white" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a></div></div></div></section>
+<section class="guildford-hero"><div class="wrap"><div class="hero-copy"><div class="eyebrow">Nigel Harvey Plumbing · Guildford</div><h1>Plumber in Guildford</h1><p>Guildford plumbing repairs for leaking taps, running toilets, wastes, radiator valves and pipework, alongside planned shower and bathroom plumbing. I’m based in Guildford; you deal directly with me, Nigel, and I’ll discuss the work and availability before any visit.</p><div class="actions"><a class="btn" href="/request-quote">Get a Quote</a><a class="btn white" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a></div></div></div></section>
 <div class="trust"><div class="wrap trustgrid"><div><strong>Local &amp; independent</strong><span>Based in Guildford</span></div><div><strong>Clear communication</strong><span>Deal directly with Nigel</span></div><div><strong>Clear quotes</strong><span>Work &amp; charges explained</span></div><div><strong>Surrey coverage</strong><span>Guildford &amp; nearby areas</span></div></div></div>
 <section id="services"><div class="wrap"><div class="intro"><h2>Plumbing services in Guildford</h2><p>Whether you have a leaking fitting, a toilet that is not working properly, a radiator or valve problem, or planned bathroom plumbing, send the details directly to Nigel. Photos and a short description can help establish what may be required before the visit.</p></div><div class="service-links">{local_service_links}</div></div></section>
 <section class="section-pale"><div class="wrap"><div class="intro"><h2>Domestic plumbing work I can help with</h2><p>Practical plumbing repairs and planned work for homes and landlords across Guildford.</p></div><div class="cards"><div class="card"><h3>Leaks, taps &amp; toilets</h3><p>Repairs to leaking pipework and fittings, taps, toilet mechanisms, wastes, traps and other everyday plumbing problems.</p></div><div class="card"><h3>Bathrooms &amp; showers</h3><p>Bathroom plumbing, sanitaryware connections, shower pipework, first and second fix work and practical plumbing alterations.</p></div><div class="card"><h3>Radiators &amp; pipework</h3><p>Radiators, TRVs and valves, towel radiators, pipework alterations and plumbing-related heating work.</p></div></div></div></section>
