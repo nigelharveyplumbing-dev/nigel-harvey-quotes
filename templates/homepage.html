@@ -15,7 +15,7 @@
 <body>
 __PUBLIC_HEADER__
 <main id="main">
-<section class="hero"><div class="wrap"><div class="hero-copy"><div class="kicker">Nigel Harvey Plumbing · Guildford based · Local Plumber Across Surrey</div><h1>Plumber in Guildford &amp; Across Surrey</h1><p><strong>Over 20 years of plumbing experience.</strong> Guildford, Surrey and selected jobs in South West London.</p><p>Plumbing repairs, bathrooms, showers, radiators and installations in Guildford and across Surrey. I also consider jobs in South West London, depending on the location and work involved. Tell me what needs doing and deal directly with me, Nigel. Emergency and out-of-hours callouts, including overnight, are subject to availability. Please call or leave a message; I’ll respond when I can.</p><div class="actions"><a class="btn" href="/request-quote">Get a Quote</a><a class="btn outline" href="__WHATSAPP_URL__" target="_blank" rel="noopener noreferrer">WhatsApp Nigel</a><a class="btn light" href="tel:__COMPANY_PHONE_TEL__">Call Nigel</a></div></div></div></section>
+<section class="hero"><div class="wrap"><div class="hero-copy"><div class="kicker">Nigel Harvey Plumbing · Guildford based · Local Plumber Across Surrey</div><h1>Plumber in Guildford &amp; Across Surrey</h1><p><strong>Over 20 years of plumbing experience.</strong> Guildford, Surrey and selected jobs in South West London.</p><p>Plumbing repairs, bathrooms, showers, radiators and installations in Guildford and across Surrey. I also consider jobs in South West London, depending on the location and work involved. Tell me what needs doing and deal directly with me, Nigel. Emergency and out-of-hours callouts, including overnight, are subject to availability. Please call or leave a message; I’ll respond when I can. For nearby smaller jobs, see <a href="/plumber-guildford">plumbing repairs in Guildford</a>.</p><div class="actions"><a class="btn" href="/request-quote">Get a Quote</a><a class="btn outline" href="__WHATSAPP_URL__" target="_blank" rel="noopener noreferrer">WhatsApp Nigel</a><a class="btn light" href="tel:__COMPANY_PHONE_TEL__">Call Nigel</a></div></div></div></section>
 <div class="review-strip"><div class="wrap"><strong>Customer feedback from Google</strong><div>__GOOGLE_REVIEW_SUMMARY__</div></div></div>
 <section id="services"><div class="wrap"><div class="intro"><h2>Plumbing help for the jobs that matter at home</h2><p class="muted">From an urgent leak to planned bathroom plumbing, send a short description and I’ll help establish the next step. For urgent issues, calling is usually the clearest way to get in touch.</p></div><div class="grid">
 <article class="card service-card"><div class="icon" aria-hidden="true">🔧</div><h3>Plumbing repairs</h3><p>Leaks, damaged fittings, pipework, sinks and wastes, with practical repairs for everyday problems.</p><a class="textlink" href="/general-plumbing-surrey">Explore general plumbing →</a></article>
@@ -35,17 +35,71 @@ __PUBLIC_HEADER__
 __PUBLIC_FOOTER__
 __PUBLIC_ANALYTICS__
 <script>
-// Carry only explicit campaign parameters to the enquiry form; no cookies or identifiers.
-const campaign = new URLSearchParams(location.search);
-const allowed = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'];
-let referring = '';
-try { const url = new URL(document.referrer); referring = url.origin + (url.origin === location.origin ? url.pathname : ''); } catch (_) {}
-for (const link of document.querySelectorAll('a[href="/request-quote"]')) {
-  const next = new URL(link.href);
-  next.searchParams.set('landing_page', location.pathname);
-  if (referring) next.searchParams.set('referrer', referring);
-  for (const name of allowed) if (campaign.has(name)) next.searchParams.set(name, campaign.get(name));
-  link.href = next.pathname + next.search;
-}
+(function () {
+  'use strict';
+  // Session-only source context after analytics consent; never a confirmed lead.
+  const campaign = new URLSearchParams(location.search);
+  const allowed = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'];
+  let referring = '';
+  try { const url = new URL(document.referrer); referring = url.origin + (url.origin === location.origin ? url.pathname : ''); } catch (_) {}
+  const key = 'nhp_quote_origin_v1';
+  const ttlMs = 30 * 60 * 1000;
+
+  function consented() {
+    let accepted = false;
+    try { accepted = localStorage.getItem('nhp_analytics_choice_v1') === 'accepted'; } catch (_) {}
+    // Revoking or declining consent must discard previously saved session context.
+    if (!accepted) { try { sessionStorage.removeItem(key); } catch (_) {} }
+    return accepted;
+  }
+  function campaignFields() {
+    const fields = {};
+    for (const name of allowed) if (campaign.has(name)) fields[name] = (campaign.get(name) || '').slice(0, 100);
+    return fields;
+  }
+  function origin() {
+    if (!consented()) return null;
+    const fields = campaignFields();
+    const externalReferrer = referring && !referring.startsWith(location.origin + '/');
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(key) || 'null');
+      if (!externalReferrer && !Object.keys(fields).length && saved &&
+          typeof saved.landing_page === 'string' && saved.landing_page.startsWith('/') &&
+          !saved.landing_page.startsWith('//') && Number.isFinite(saved.saved_at) &&
+          Date.now() >= saved.saved_at && Date.now() - saved.saved_at <= ttlMs) return saved;
+      const first = { landing_page: location.pathname, referrer: referring,
+                      ...fields, saved_at: Date.now() };
+      sessionStorage.setItem(key, JSON.stringify(first));
+      return first;
+    } catch (_) { return null; }
+  }
+  function apply(link) {
+    const next = new URL(link.href, location.href);
+    // Without consent, preserve only this page's existing explicit context.
+    next.searchParams.set('landing_page', location.pathname);
+    if (referring) next.searchParams.set('referrer', referring);
+    for (const name of allowed) if (campaign.has(name)) next.searchParams.set(name, campaign.get(name));
+    const first = origin();
+    if (first) {
+      next.searchParams.set('landing_page', first.landing_page);
+      if (first.referrer) next.searchParams.set('referrer', first.referrer);
+      else next.searchParams.delete('referrer');
+      for (const name of allowed) {
+        if (first[name]) next.searchParams.set(name, first[name]);
+        else next.searchParams.delete(name);
+      }
+    }
+    link.href = next.pathname + next.search;
+  }
+  for (const link of document.querySelectorAll('a[href="/request-quote"]')) apply(link);
+  document.addEventListener('click', function (event) {
+    const link = event.target.closest && event.target.closest('a[href]');
+    if (!link) return;
+    const next = new URL(link.href, location.href);
+    if (next.origin !== location.origin) return;
+    if (next.pathname === '/request-quote') apply(link);
+    else origin(); // Captures the first page if consent was accepted after load.
+  });
+}());
 </script>
 </body></html>

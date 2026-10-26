@@ -73,6 +73,23 @@ class GrowthBatch8Tests(unittest.TestCase):
         self.assertEqual(self.client.get('/app').status_code,401)
         self.assertEqual(self.client.get('/api/customers').status_code,401)
 
+    def test_guildford_repair_focus_and_published_proof_before_services(self):
+        response = self.client.get('/plumber-guildford')
+        self.assertEqual(response.status_code, 200)
+        page = BeautifulSoup(response.text, 'html.parser')
+        hero = page.select_one('.guildford-hero')
+        self.assertIn('Guildford plumbing repairs for leaking taps', hero.get_text())
+        proof = page.select_one('#guildford-real-work')
+        self.assertIsNotNone(proof)
+        self.assertIn('the completed Merrow ensuite project', proof.get_text())
+        self.assertLess(response.text.index('id="guildford-real-work"'),
+                        response.text.index('id="services"'))
+        self.assertIn('/projects/ensuite-renovation-merrow-guildford',
+                      [link['href'] for link in proof.select('a')])
+        self.assertIn('/toilet-repair-guildford',
+                      [link['href'] for link in proof.select('a')])
+        self.assertEqual(self.client.get('/projects/ensuite-renovation-merrow-guildford').status_code, 200)
+
     def test_farnham_uses_shared_branding_without_legacy_hero_logo(self):
         for path in ['/', '/plumber-guildford', '/plumber-woking', '/leak-repair-farnham']:
             with self.subTest(path=path):
