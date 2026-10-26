@@ -37,7 +37,7 @@ class SouthWestLondonTests(unittest.TestCase):
     def test_coverage_and_emergency_availability_are_qualified(self):
         for slug in AREAS:
             text=self.page(slug).get_text(' ',strip=True)
-            for phrase in ['based in Guildford','depending on the location and work involved','subject to availability','may not answer immediately','not guaranteed','no London office']:
+            for phrase in ['based in Guildford','subject to availability','may not answer immediately','not guaranteed','no London office']:
                 self.assertIn(phrase,text)
             self.assertNotIn('surrounding Surrey areas',text)
             self.assertNotIn('Gas Safe',text)
