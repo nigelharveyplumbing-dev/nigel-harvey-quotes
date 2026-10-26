@@ -49,6 +49,13 @@ class FullSiteIntegrityTests(unittest.TestCase):
                 self.assertIn("text/html", response.headers.get("content-type", ""))
                 self.assertNotIn("noindex", response.headers.get("x-robots-tag", "").lower())
                 page = BeautifulSoup(response.text, "html.parser")
+                brand = page.select_one('header a.brand[href="/"]')
+                self.assertIsNotNone(brand, path)
+                self.assertEqual(brand.get('aria-label'), 'Nigel Harvey Plumbing home', path)
+                logos = brand.select('img.brand-logo')
+                self.assertEqual(len(logos), 1, path)
+                self.assertEqual(logos[0].get('src'), '/site-images/nigel-harvey-logo.png', path)
+                self.assertEqual(logos[0].get('alt'), 'Nigel Harvey Ltd', path)
                 footer = page.select_one("footer")
                 self.assertIsNotNone(footer, path)
                 self.assertEqual(footer.select_one("strong").get_text(strip=True),

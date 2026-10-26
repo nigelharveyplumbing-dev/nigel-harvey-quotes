@@ -79,8 +79,10 @@ class GrowthBatch8Tests(unittest.TestCase):
                 response=self.client.get(path)
                 self.assertEqual(response.status_code,200)
                 page=BeautifulSoup(response.text,'html.parser')
-                self.assertIn('Nigel Harvey',page.select_one('header .brand').get_text())
+                self.assertIn('Nigel Harvey',page.select_one('header .brand')['aria-label'])
                 self.assertIn('PLUMBING',page.select_one('header .brand').get_text())
+                self.assertEqual(page.select_one('header .brand img')['src'],
+                                 '/site-images/nigel-harvey-logo.png')
                 self.assertEqual(len(page.select('main img.logo')),0)
         # The approved correction must not remove logos from other service pages.
         for path in ['/leak-repair-camberley', '/bathroom-plumbing-farnham']:

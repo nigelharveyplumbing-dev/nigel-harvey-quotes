@@ -126,6 +126,9 @@ class AdviceTests(unittest.TestCase):
                 continue
             baseline=subprocess.check_output(['git','show','bdcacc9ff02d041e4ab4c63269b5c7ebba4942a2:'+path],cwd=ROOT)
             current=(ROOT/path).read_bytes()
+            if path == 'templates/public_header.html':
+                from branding_snapshot import restore_brand
+                current = restore_brand(current.decode()).encode()
             # Reverse only the verified company disclosure for the historical
             # byte lock. Full-site checks require it on every public page.
             if path == 'templates/public_footer.html':

@@ -10,3 +10,7 @@ footer .analytics-settings{border:0;background:transparent;color:#fff;text-decor
 .analytics-choices button:last-child{background:var(--blue);color:#fff}
 @media(max-width:800px){.analytics-consent{display:block;bottom:0;padding:16px 4%}.analytics-choices{margin-top:12px;flex-wrap:wrap}}
 @media(max-width:640px){.analytics-consent{bottom:63px}}
+
+/* Restore the existing graphic logo in the shared public header. */
+.brand{flex-shrink:0;max-width:100%}.brand-logo{display:block;width:260px;max-width:100%;height:auto}.brand span{text-align:center}
+@media(min-width:901px) and (max-width:1060px){.nav{flex-wrap:wrap;padding:16px 0}.navlinks{width:100%;justify-content:space-between;flex-wrap:wrap;gap:10px}}

@@ -30,6 +30,7 @@ from bs4 import BeautifulSoup
 from PIL import Image
 from pypdf import PdfReader
 from encoding_audit import hits as encoding_hits, scan_database, text_leaves
+from branding_snapshot import restore_brand
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,6 +91,7 @@ def restore_private_nav_for_legacy_snapshot(html: str) -> str:
     New rendered-page checks separately prove customers never see these links.
     Any other change still fails the historical exact-byte hash.
     """
+    html = restore_brand(html, includes_css=True)
     disclosure = ('<p class="company-disclosure">Registered in England and Wales · '
                   'Company no. 09507904<br>Registered office: 125 Bushy Hill Drive, '
                   'Guildford, Surrey, England, GU1 2UG</p>')

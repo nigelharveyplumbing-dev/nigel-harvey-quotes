@@ -115,8 +115,8 @@ try{
    assert.equal(await page.locator('link[rel=canonical]').getAttribute('href'),'https://www.nigelharveyplumbing.co.uk'+path);
    const layout=await page.evaluate(()=>({width:innerWidth,document:document.documentElement.scrollWidth}));
    assert(layout.document<=width,`${name} ${device} overflow`);diagnostics.layouts.push({name,device,...layout});
-   const brand=await page.locator('header .brand').evaluate(b=>({text:b.textContent,width:b.getBoundingClientRect().width}));
-   assert(brand.text.includes('Nigel Harvey') && brand.width<=width,'Existing public wordmark must remain readable');
+   const brand=await page.locator('header .brand').evaluate(b=>({text:b.getAttribute('aria-label'),width:b.getBoundingClientRect().width,logoLoaded:b.querySelector('img.brand-logo')?.naturalWidth>0}));
+   assert(brand.text.includes('Nigel Harvey') && brand.width<=width && brand.logoLoaded,'Public logo must load and fit the header');
    if(name==='farnham-leak')assert.equal(await page.locator('main img.logo').count(),0,'Farnham must use shared header branding without the legacy hero logo');
    diagnostics.layouts.at(-1).branding=brand.text.replace(/\s+/g,' ').trim();
    });
