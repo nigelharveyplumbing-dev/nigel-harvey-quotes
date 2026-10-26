@@ -138,7 +138,8 @@ function setup(choice = null, send = false) {
       localStorage: {getItem(key) { return choices.get(key) || null; }},
       sessionStorage: {
         getItem(key) { return session.get(key) || null; },
-        setItem(key, value) { session.set(key, value); }
+        setItem(key, value) { session.set(key, value); },
+        removeItem(key) { session.delete(key); }
       }
     });
     return {
@@ -177,6 +178,13 @@ function setup(choice = null, send = false) {
   assert.equal(new URL(denied.quoteLink.href, site).searchParams.get('landing_page'),
                '/plumber-guildford');
 
+  const revoked = visit({
+    path: '/plumber-woking', choice: 'rejected', session: consentedSession
+  });
+  assert.equal(consentedSession.size, 0, 'revoking consent discards stored attribution');
+  assert.equal(new URL(revoked.quoteLink.href, site).searchParams.get('landing_page'),
+               '/plumber-woking');
+
   const lateSession = new Map();
   const late = visit({
     path: '/plumber-guildford', referrer: 'https://www.google.com/search',
@@ -195,9 +203,13 @@ function setup(choice = null, send = false) {
   assert.equal(new URL(refreshed.quoteLink.href, site).searchParams.get('landing_page'),
                '/plumber-woking');
 
+  const externalSession = new Map([['nhp_quote_origin_v1', JSON.stringify({
+    landing_page: '/plumber-guildford', referrer: 'https://www.google.co.uk',
+    saved_at: Date.now()
+  })]]);
   const external = visit({
     path: '/plumber-guildford', referrer: 'https://www.bing.com/search',
-    choice: 'accepted', session: consentedSession
+    choice: 'accepted', session: externalSession
   });
   assert.equal(new URL(external.quoteLink.href, site).searchParams.get('referrer'),
                'https://www.bing.com');
