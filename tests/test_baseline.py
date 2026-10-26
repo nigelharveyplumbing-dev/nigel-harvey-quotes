@@ -415,18 +415,19 @@ class BaselineTests(unittest.TestCase):
             "SEO_CSS": "aea9aaf6e6704acabe4891b0ac98142966025a808ec6908954c410ff96f725da",
             "LEAD_FORM_HTML": "ebad8b2a87d805fb4e2e0fe6a9ca848ae6982d1f70782502b2900f36ae9fef06",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "d6a5a3d28a17242970c61dd453c8c5bf4e73190893ccf4b7b3b78ac823d0ec90",
+                "e4ada17b2fede04b70b44f11a03698f18fb9fd0f40de1f2a4e5edb2b625f6f76",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
-        # PR #37 intentionally changes only consented quote attribution and
-        # the reviewed Guildford/homepage wording. Refresh exact-byte goldens
-        # from the isolated CI snapshot; other page families remain protected.
+        # PR #37 changed consented attribution and Guildford copy; PR #38
+        # changes the owner-approved homepage hero and London coverage copy.
+        # These exact-byte goldens come from the isolated CI render. Keep the
+        # quote form and all unrelated page-family snapshots unchanged.
         page_hashes = {
-            "/": "bb9202cbd4cd39d3bfea6c0925116697cad89ee59b3a3bf70bd01ca6c997bf21",
-            "/new-home": "bb9202cbd4cd39d3bfea6c0925116697cad89ee59b3a3bf70bd01ca6c997bf21",
+            "/": "eac7a8e52fc0c37a416bbbbb9e7e7f9d19381208758b618594ba04ad7729ed00",
+            "/new-home": "eac7a8e52fc0c37a416bbbbb9e7e7f9d19381208758b618594ba04ad7729ed00",
             "/request-quote": "e895a765504abaf0dc188b4d31fe2175580757cc6ed6632dce3f5da75d755ee0",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
@@ -673,7 +674,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
                 self.assertEqual(response.status_code, 200, path)
                 self.assertIn("text/html", response.headers["content-type"])
             home = client.get("/").text
-            self.assertIn("Local Plumber Across Surrey", home)
+            self.assertIn("Surrey &amp; South West London", home)
             self.assertIn('rel="canonical"', home)
             # Established Surrey service URLs resolve despite route precedence.
             self.assertEqual(client.get("/emergency-plumber-surrey").status_code, 200)
