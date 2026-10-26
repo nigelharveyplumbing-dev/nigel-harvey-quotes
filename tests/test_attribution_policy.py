@@ -1,6 +1,11 @@
 """Attribution policy: only explicit evidence establishes Google organic search."""
 import unittest
+import sys
+from pathlib import Path
 
+# The offline test runner discovers modules from tests/, not the repo root.
+# Import the pure classification helper without initialising app.py or a database.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from business.growth_tracking import inferred_source
 
 
