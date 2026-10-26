@@ -283,7 +283,7 @@ def add_batch8_context(html: str, path: str) -> str:
         marker = '<div class="wrap section"><h2>Other Plumbing Services in Farnham</h2>'
     section = ('<section class="section-pale"><div class="wrap section"><h2>' +
                heading + '</h2>' + paragraphs + '</div></section>')
-    if path == "/plumber-guildford" and proof_html:
+    if path == "/plumber-guildford" and project_path in published:
         # Surface approved, published Merrow evidence before the service list.
         # The project/advice links disappear automatically if no longer public.
         real_work = ('<section class="section-pale" id="guildford-real-work">'
