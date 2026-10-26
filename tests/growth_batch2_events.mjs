@@ -111,4 +111,96 @@ function setup(choice = null, send = false) {
   h.handlers['[data-choice="rejected"]']();
   assert.equal(h.handlers.reloaded, true);
 }
+
+{
+  // Both page families must use the same privacy-aware, first-party attribution script.
+  const shared = fs.readFileSync('business/website_contact.py', 'utf8');
+  const sharedMatch = shared.match(/QUOTE_ATTRIBUTION_SCRIPT = """(<script>[\s\S]*?<\/script>)"""/);
+  const homepage = fs.readFileSync('templates/homepage.html', 'utf8');
+  const homepageMatch = homepage.match(/__PUBLIC_ANALYTICS__\s*(<script>[\s\S]*?<\/script>)/);
+  assert.ok(sharedMatch && homepageMatch, 'attribution scripts exist');
+  assert.equal(sharedMatch[1], homepageMatch[1], 'homepage and other public pages share identical logic');
+  const source = sharedMatch[1].replace(/^<script>/, '').replace(/<\/script>$/, '');
+  const site = 'https://www.nigelharveyplumbing.co.uk';
+  function visit({path, referrer = '', choice = null, query = '', session = new Map()}) {
+    const choices = new Map(choice ? [['nhp_analytics_choice_v1', choice]] : []);
+    const quoteLink = {href: '/request-quote'};
+    const otherLink = {href: '/plumber-woking'};
+    const handlers = {};
+    const location = {origin: site, pathname: path, search: query, href: site + path + query};
+    const document = {
+      referrer,
+      querySelectorAll() { return [quoteLink]; },
+      addEventListener(type, callback) { handlers[type] = callback; }
+    };
+    vm.runInNewContext(source, {
+      document, location, URL, URLSearchParams, Date, Number, Object, JSON,
+      localStorage: {getItem(key) { return choices.get(key) || null; }},
+      sessionStorage: {
+        getItem(key) { return session.get(key) || null; },
+        setItem(key, value) { session.set(key, value); }
+      }
+    });
+    return {
+      quoteLink, otherLink,
+      setChoice(value) { choices.set('nhp_analytics_choice_v1', value); },
+      click(link) { handlers.click({target: {closest() { return link; }}}); }
+    };
+  }
+  const consentedSession = new Map();
+  const first = visit({
+    path: '/plumber-guildford', referrer: 'https://www.google.co.uk/search?q=plumber',
+    choice: 'accepted', query: '?utm_source=google&utm_medium=organic',
+    session: consentedSession
+  });
+  const firstUrl = new URL(first.quoteLink.href, site);
+  assert.equal(firstUrl.searchParams.get('landing_page'), '/plumber-guildford');
+  assert.equal(firstUrl.searchParams.get('referrer'), 'https://www.google.co.uk');
+  assert.equal(firstUrl.searchParams.get('utm_medium'), 'organic');
+  assert.equal(consentedSession.size, 1);
+
+  const second = visit({
+    path: '/leak-repair-guildford', referrer: site + '/plumber-guildford',
+    choice: 'accepted', session: consentedSession
+  });
+  const secondUrl = new URL(second.quoteLink.href, site);
+  assert.equal(secondUrl.searchParams.get('landing_page'), '/plumber-guildford');
+  assert.equal(secondUrl.searchParams.get('referrer'), 'https://www.google.co.uk');
+  assert.equal(secondUrl.searchParams.get('utm_source'), 'google');
+
+  const deniedSession = new Map();
+  const denied = visit({
+    path: '/plumber-guildford', referrer: 'https://www.google.com/search',
+    choice: 'rejected', session: deniedSession
+  });
+  assert.equal(deniedSession.size, 0, 'declined analytics cannot create session attribution');
+  assert.equal(new URL(denied.quoteLink.href, site).searchParams.get('landing_page'),
+               '/plumber-guildford');
+
+  const lateSession = new Map();
+  const late = visit({
+    path: '/plumber-guildford', referrer: 'https://www.google.com/search',
+    session: lateSession
+  });
+  assert.equal(lateSession.size, 0);
+  late.setChoice('accepted');
+  late.click(late.otherLink);
+  assert.equal(JSON.parse(lateSession.get('nhp_quote_origin_v1')).landing_page,
+               '/plumber-guildford');
+
+  const stale = new Map([['nhp_quote_origin_v1', JSON.stringify({
+    landing_page: '/old', referrer: 'https://example.com', saved_at: Date.now() - 31 * 60 * 1000
+  })]]);
+  const refreshed = visit({path: '/plumber-woking', choice: 'accepted', session: stale});
+  assert.equal(new URL(refreshed.quoteLink.href, site).searchParams.get('landing_page'),
+               '/plumber-woking');
+
+  const external = visit({
+    path: '/plumber-guildford', referrer: 'https://www.bing.com/search',
+    choice: 'accepted', session: consentedSession
+  });
+  assert.equal(new URL(external.quoteLink.href, site).searchParams.get('referrer'),
+               'https://www.bing.com');
+}
+
 console.log('Growth Batch 2 analytics and quote success workflows passed offline');
