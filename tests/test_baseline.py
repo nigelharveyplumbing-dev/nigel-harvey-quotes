@@ -85,11 +85,21 @@ def dashboard_database(quote_rows=(), invoice_rows=(), customer_count=0):
 
 
 def restore_private_nav_for_legacy_snapshot(html: str) -> str:
-    """Undo only two deliberately removed public owner-app links in old goldens.
+    """Undo the reviewed footer disclosure and two removed links in old goldens.
 
     New rendered-page checks separately prove customers never see these links.
     Any other change still fails the historical exact-byte hash.
     """
+    disclosure = ('<p class="company-disclosure">Registered in England and Wales · '
+                  'Company no. 09507904<br>Registered office: 125 Bushy Hill Drive, '
+                  'Guildford, Surrey, England, GU1 2UG</p>')
+    line_break = '<br>'
+    if disclosure not in html:
+        disclosure = disclosure.replace('<br>', '<br/>')
+        line_break = '<br/>'
+    if html.count(disclosure) != 1:
+        raise AssertionError("Historical footer snapshot: expected one exact disclosure")
+    html = html.replace(disclosure, line_break, 1)
     replacements = (
         (
             '<a class="btn" href="/request-quote">Get a Quote</a>',

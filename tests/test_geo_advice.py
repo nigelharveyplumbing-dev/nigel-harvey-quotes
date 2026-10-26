@@ -126,8 +126,16 @@ class AdviceTests(unittest.TestCase):
                 continue
             baseline=subprocess.check_output(['git','show','bdcacc9ff02d041e4ab4c63269b5c7ebba4942a2:'+path],cwd=ROOT)
             current=(ROOT/path).read_bytes()
-            # Only the customer-facing owner-app link is removed. Keep the
-            # rest of these protected legacy public template bytes frozen.
+            # Reverse only the verified company disclosure for the historical
+            # byte lock. Full-site checks require it on every public page.
+            if path == 'templates/public_footer.html':
+                disclosure = ('<p class="company-disclosure">Registered in England and Wales · '
+                              'Company no. 09507904<br>Registered office: 125 Bushy Hill Drive, '
+                              'Guildford, Surrey, England, GU1 2UG</p>').encode()
+                self.assertEqual(current.count(disclosure), 1, path)
+                current = current.replace(disclosure, b'<br>', 1)
+            # Reverse only the customer-facing owner-app link removal. Keep
+            # the remaining protected legacy public template bytes frozen.
             nav_replacements={
                 'templates/public_header.html': (
                     b'<a class="btn" href="/request-quote">Get a Quote</a>',
