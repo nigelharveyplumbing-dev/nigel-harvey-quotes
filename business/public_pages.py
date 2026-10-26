@@ -760,7 +760,7 @@ def render_south_west_london_page(location: dict, request: Request | None = None
     canonical = absolute_url(f"/plumber-{location['slug']}", request)
     title = f"Plumber in {name} | Nigel Harvey Plumbing"
     descriptions = {
-        "wimbledon": "Wimbledon plumbing repairs: leaking taps, shower faults, toilets and radiator valves. Guildford-based Nigel regularly travels to Wimbledon; enquire about a visit.",
+        "wimbledon": "Wimbledon plumbing repairs: leaking taps, showers, toilets and radiator valves. Guildford-based Nigel regularly travels to Wimbledon; ask about a visit.",
         "morden": "Morden plumbing repairs: taps, running toilets, leaking wastes, shower fittings and radiator valves. Guildford-based Nigel covers South West London.",
         "merton": "Merton plumbing repairs: leaking taps, toilet faults, showers, wastes and radiator valves. Guildford-based Nigel covers South West London.",
     }
