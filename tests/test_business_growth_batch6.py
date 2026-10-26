@@ -13,6 +13,19 @@ from local_browser_server import disposable_app
 
 
 class BusinessGrowthTests(unittest.TestCase):
+    def test_conservative_google_attribution_with_isolated_app(self):
+        # Import through disposable_app only: business.db reads configuration
+        # at import time and must never be imported against the live DB path.
+        with disposable_app('attribution-test', 'isolated-password') as (module, _):
+            classify = module.growth_tracking.inferred_source
+            self.assertEqual(classify('website', {'referrer': 'https://www.google.co.uk'}), 'Other')
+            self.assertEqual(classify('website', {'referrer': 'https://www.google.com'}), 'Other')
+            self.assertEqual(classify('website', {
+                'utm_source': 'google', 'utm_medium': 'organic'
+            }), 'Google organic search')
+            # A WhatsApp button click does not establish a confirmed enquiry.
+            self.assertEqual(classify('website', {}), 'Website/direct')
+
     def test_multiple_quotes_share_lead_without_downgrading_won_outcome(self):
         username, password = secrets.token_urlsafe(12), secrets.token_urlsafe(16)
         auth = {'Authorization': 'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()}
