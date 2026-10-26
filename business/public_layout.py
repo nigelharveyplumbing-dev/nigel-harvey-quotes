@@ -75,8 +75,9 @@ def analytics_markup() -> str:
     return ("<div id=\"analytics-consent\" class=\"analytics-consent\" role=\"region\" "
             "aria-label=\"Analytics choice\" hidden><div><strong>Optional analytics</strong> "
             "helps Nigel understand which pages and contact routes are useful. "
-            "If you accept, Google Analytics may store cookies and receive browsing and contact-click information; "
-            "your job details are not sent. You can change this later in the footer.</div>"
+            "If you accept, Google Analytics may store cookies and receive browsing and contact-click information. "
+            "This tab also remembers the first page and referring website for quote attribution. "
+            "Your job details are not sent to Google Analytics. You can change this later in the footer.</div>"
             "<div class=\"analytics-choices\"><button type=\"button\" data-choice=\"rejected\">Decline</button>"
             "<button type=\"button\" data-choice=\"accepted\">Accept analytics</button></div></div>"
             f'<script id="public-analytics" data-measurement-id="{GA4_MEASUREMENT_ID}" '
