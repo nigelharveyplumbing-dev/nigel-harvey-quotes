@@ -118,8 +118,8 @@ class SouthWestLondonTests(unittest.TestCase):
                 self.assertEqual(focus.h2.get_text(), heading)
                 self.assertIn('toilet', focus.get_text().lower())
                 self.assertIn('Guildford', page.select_one('.hero .lead').get_text())
-                self.assertIn('smaller plumbing repairs', page.select_one('.hero .lead').get_text().lower()
-                              if slug != 'wimbledon' else 'smaller plumbing repairs')
+                self.assertIn('small plumbing repairs' if slug == 'wimbledon' else 'smaller plumbing repairs',
+                              page.select_one('.hero .lead').get_text().lower())
                 self.assertNotIn('boiler installation', page.get_text().lower())
                 self.assertNotIn('Gas Safe registered', page.get_text())
         self.assertIn('regularly travel to Wimbledon',
