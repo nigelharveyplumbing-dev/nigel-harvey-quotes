@@ -19,8 +19,11 @@ QUOTE_ATTRIBUTION_SCRIPT = """<script>
   const ttlMs = 30 * 60 * 1000;
 
   function consented() {
-    try { return localStorage.getItem('nhp_analytics_choice_v1') === 'accepted'; }
-    catch (_) { return false; }
+    let accepted = false;
+    try { accepted = localStorage.getItem('nhp_analytics_choice_v1') === 'accepted'; } catch (_) {}
+    // Revoking or declining consent must discard previously saved session context.
+    if (!accepted) { try { sessionStorage.removeItem(key); } catch (_) {} }
+    return accepted;
   }
   function campaignFields() {
     const fields = {};
