@@ -33,7 +33,7 @@ class GrowthBatchTests(unittest.TestCase):
                   '<article class="google-review-card">Synthetic</article></div>')
         with patch.object(m, "_google_reviews_html", return_value=review):
             page = self.client.get("/").text
-        for text in ("Local Plumber Across Surrey", "Meet Nigel",
+        for text in ("Surrey &amp; South West London", "Meet Nigel",
                      "WhatsApp Nigel", "Call Nigel",
                      "plumber-guildford", "plumber-epsom", "plumber-leatherhead",
                      "plumber-farnborough", "4.9", "7 Google reviews",
