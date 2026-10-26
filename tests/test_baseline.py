@@ -415,16 +415,19 @@ class BaselineTests(unittest.TestCase):
             "SEO_CSS": "aea9aaf6e6704acabe4891b0ac98142966025a808ec6908954c410ff96f725da",
             "LEAD_FORM_HTML": "ebad8b2a87d805fb4e2e0fe6a9ca848ae6982d1f70782502b2900f36ae9fef06",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "18addd56b81583c7fb0b1b2a40780b1a1a821c1069ddea7463a8eb453c8aff17",
+                "d6a5a3d28a17242970c61dd453c8c5bf4e73190893ccf4b7b3b78ac823d0ec90",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
+        # PR #37 intentionally changes only consented quote attribution and
+        # the reviewed Guildford/homepage wording. Refresh exact-byte goldens
+        # from the isolated CI snapshot; other page families remain protected.
         page_hashes = {
-            "/": "e12dc6bb4b6522d3c73f99875a14c2d5eecf073bd8cc7ab142105561f623750a",
-            "/new-home": "e12dc6bb4b6522d3c73f99875a14c2d5eecf073bd8cc7ab142105561f623750a",
-            "/request-quote": "0b9d71a15bdcf403aa43f77d0f284a1e1467bb7f75f1ea26e45d17dbedaa0dd4",
+            "/": "bb9202cbd4cd39d3bfea6c0925116697cad89ee59b3a3bf70bd01ca6c997bf21",
+            "/new-home": "bb9202cbd4cd39d3bfea6c0925116697cad89ee59b3a3bf70bd01ca6c997bf21",
+            "/request-quote": "e895a765504abaf0dc188b4d31fe2175580757cc6ed6632dce3f5da75d755ee0",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage6.invalid",
@@ -1330,9 +1333,9 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         """Freeze the SEO page families after applying the shared public shell."""
         m = self.module
         cases = (
-            ("location", "3989e02593f7b5ed7a1bd1a99d105f4ac3f001bb7e5db26b60ae3cd93d9daf68"),
-            ("service", "39088ad1730a819a85e63011d26246ce419be9f535f01e5960eb88508e5787f6"),
-            ("local", "9748b98c4c87612cadd413ecf043cc47c209c785675a51833b7a97c446acdb30"),
+            ("location", "da2baf228f0e08577f59a6eb687bb7df7a85c39546925d435b9b2139cbb302ab"),
+            ("service", "3eb19c9a6518f183a3201c58f8cdd02cf31d26246ce419be9f535f01e5960eb88508e5787f6"),
+            ("local", "b48b46b48314367a81c10e84fbd11f9ed821d7647d28a4d1305d58c7fa5bc6de"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage7.invalid",
