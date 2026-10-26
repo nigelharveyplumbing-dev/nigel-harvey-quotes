@@ -49,6 +49,18 @@ class FullSiteIntegrityTests(unittest.TestCase):
                 self.assertIn("text/html", response.headers.get("content-type", ""))
                 self.assertNotIn("noindex", response.headers.get("x-robots-tag", "").lower())
                 page = BeautifulSoup(response.text, "html.parser")
+                footer = page.select_one("footer")
+                self.assertIsNotNone(footer, path)
+                self.assertEqual(footer.select_one("strong").get_text(strip=True),
+                                 "Nigel Harvey Plumbing", path)
+                self.assertIn("Nigel Harvey Ltd · Guildford, Surrey",
+                              footer.get_text(" ", strip=True), path)
+                disclosure = footer.select(".company-disclosure")
+                self.assertEqual(len(disclosure), 1, path)
+                self.assertEqual(disclosure[0].get_text(" ", strip=True),
+                                 "Registered in England and Wales · Company no. 09507904 "
+                                 "Registered office: 125 Bushy Hill Drive, Guildford, "
+                                 "Surrey, England, GU1 2UG", path)
                 title = page.title.get_text(" ", strip=True) if page.title else ""
                 description = page.select_one('meta[name="description"]')
                 canonical = page.select('link[rel="canonical"]')
