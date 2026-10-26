@@ -1334,7 +1334,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         m = self.module
         cases = (
             ("location", "da2baf228f0e08577f59a6eb687bb7df7a85c39546925d435b9b2139cbb302ab"),
-            ("service", "3eb19c9a6518f183a3201c58f8cdd02cf31d26246ce419be9f535f01e5960eb88508e5787f6"),
+            ("service", "3eb19c9a6518f183a3201c58f8c6980ee2a39d8c8dd02cf31c2fbb0daab0bc67"),
             ("local", "b48b46b48314367a81c10e84fbd11f9ed821d7647d28a4d1305d58c7fa5bc6de"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
