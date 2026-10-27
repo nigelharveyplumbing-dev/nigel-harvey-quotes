@@ -104,11 +104,11 @@ class SouthWestLondonTests(unittest.TestCase):
         self.assertEqual(home.select_one('link[rel="canonical"]')['href'],
                          'https://www.nigelharveyplumbing.co.uk/')
 
-    def test_three_priority_london_pages_focus_on_smaller_repairs(self):
+    def test_three_priority_london_pages_welcome_repairs_and_installations(self):
         headings = {
-            'wimbledon': 'Small plumbing repairs in Wimbledon',
-            'morden': 'Small plumbing repairs in Morden',
-            'merton': 'Small plumbing repairs across Merton',
+            'wimbledon': 'Plumbing repairs & installations in Wimbledon',
+            'morden': 'Plumbing repairs & installations in Morden',
+            'merton': 'Plumbing repairs & installations across Merton',
         }
         for slug, heading in headings.items():
             with self.subTest(slug=slug):
@@ -118,8 +118,11 @@ class SouthWestLondonTests(unittest.TestCase):
                 self.assertEqual(focus.h2.get_text(), heading)
                 self.assertIn('toilet', focus.get_text().lower())
                 self.assertIn('Guildford', page.select_one('.hero .lead').get_text())
-                self.assertIn('small plumbing repairs' if slug == 'wimbledon' else 'smaller plumbing repairs',
-                              page.select_one('.hero .lead').get_text().lower())
+                lead = page.select_one('.hero .lead').get_text()
+                self.assertIn('Small repairs are welcome too', lead)
+                self.assertIn('bathroom installations', lead)
+                self.assertIn('repairs & installations', focus.h2.get_text())
+                self.assertIn('shower', lead.lower())
                 self.assertNotIn('boiler installation', page.get_text().lower())
                 self.assertNotIn('Gas Safe registered', page.get_text())
         self.assertIn('regularly travel to Wimbledon',
