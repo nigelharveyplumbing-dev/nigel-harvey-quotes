@@ -662,10 +662,33 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
             and any(article.path == "/advice/shower-replacement-waterproofing-rebuild"
                     for article in plumbing_advice.visible_articles())) else ""
     )
+    # Helpful, genuinely service-specific follow-up guidance. These are not
+    # claims about completed jobs in the named towns; do not fabricate local proof.
     focused_local_links = {
-        ("leak-repair", "leatherhead"): '<p>For other plumbing needs, see <a href="/plumber-leatherhead">plumbing coverage in Leatherhead</a> and discuss any visible pipework or waste connections before removing fittings.</p>',
-        ("toilet-repair", "godalming"): '<p>See <a href="/plumber-godalming">general plumbing enquiries in Godalming</a> for other fixtures and pipework. A description of the flush fault helps distinguish a possible cistern repair from a complete toilet replacement.</p>',
-        ("toilet-repair", "fairlands"): '<p>See <a href="/plumber-fairlands">plumbing enquiries in Fairlands</a> for other leaks, fittings and pipework. A running toilet can sometimes be repaired with a suitable cistern component rather than replacing the pan; inspection and parts compatibility determine the work.</p>',
+        ("leak-repair", "leatherhead"): (
+            '<h3>Is the leak on the supply or waste side?</h3>'
+            '<p>If the cupboard is dry until you empty a basin or sink, note whether water appears '
+            'around the trap or waste outlet. If water escapes even when nothing is draining, '
+            'tell me whether the supply isolation valves are accessible. These observations help '
+            'plan an inspection; they do not establish the cause without checking the fittings. '
+            'For other plumbing needs, see <a href="/plumber-leatherhead">plumbing coverage in Leatherhead</a>.</p>'
+        ),
+        ("toilet-repair", "godalming"): (
+            '<h3>Repairing a cistern or replacing a toilet?</h3>'
+            '<p>A running cistern or weak flush does not automatically mean a new toilet is needed. '
+            'Tell me whether the flush is push-button, lever-operated or behind a wall plate, '
+            'and whether there is a removable access panel. I can discuss whether a mechanism '
+            'repair or a replacement fitting is more appropriate once access and parts are checked. '
+            'For other fixtures, see <a href="/plumber-godalming">general plumbing enquiries in Godalming</a>.</p>'
+        ),
+        ("toilet-repair", "fairlands"): (
+            '<h3>What if the toilet is leaking outside the pan?</h3>'
+            '<p>Water trickling into the pan is different from water collecting around the base '
+            'or the inlet connection. Note whether the floor gets wet only after flushing or '
+            'while the toilet is unused. If the cistern is concealed, describe the visible flush '
+            'plate and any access panel; do not remove boxing to investigate. '
+            'See <a href="/plumber-fairlands">plumbing enquiries in Fairlands</a> for other repairs.</p>'
+        ),
     }
     focused_links_html = focused_local_links.get((service_slug, area_slug), "")
     priority_html = (f'<div class="wrap section"><h2>{escape(detail[0])}</h2><p>{escape(detail[1])}</p>'
