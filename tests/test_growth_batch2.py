@@ -67,7 +67,7 @@ class GrowthBatch2Tests(unittest.TestCase):
 
     def test_priority_intent_and_internal_routes(self):
         for path, phrases in {
-            "/": ("Local Plumber Across Surrey", "Guildford based", "/plumber-guildford"),
+            "/": ("Surrey &amp; South West London", "Guildford based", "/plumber-guildford"),
             "/plumber-guildford": ("Plumber in Guildford", "Common Guildford plumbing enquiries",
                                    "/leak-repair-guildford", "/general-plumbing-surrey"),
             "/plumber-aldershot": ("Guildford-based Nigel", "/leak-repair-aldershot"),

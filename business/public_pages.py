@@ -759,7 +759,48 @@ def render_south_west_london_page(location: dict, request: Request | None = None
     name = location["name"]
     canonical = absolute_url(f"/plumber-{location['slug']}", request)
     title = f"Plumber in {name} | Nigel Harvey Plumbing"
-    description = f"Plumbing in {name}: taps, toilets, leaks, bathrooms and radiators. Guildford-based Nigel confirms coverage and availability before a visit."
+    descriptions = {
+        "wimbledon": "Wimbledon plumbing repairs: leaking taps, showers, toilets and radiator valves. Guildford-based Nigel regularly travels to Wimbledon; ask about a visit.",
+        "morden": "Morden plumbing repairs: taps, running toilets, leaking wastes, shower fittings and radiator valves. Guildford-based Nigel covers South West London.",
+        "merton": "Merton plumbing repairs: leaking taps, toilet faults, showers, wastes and radiator valves. Guildford-based Nigel covers South West London.",
+    }
+    description = descriptions.get(location["slug"], f"Plumbing in {name}: taps, toilets, leaks, bathrooms and radiators. Guildford-based Nigel confirms coverage and availability before a visit.")
+    lead = (
+        "Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey, and I regularly travel to Wimbledon during the working week. "
+        "I welcome small plumbing repairs in Wimbledon, including taps, toilets, shower fittings, wastes and radiator valves. "
+        "Send the postcode and fault details so I can discuss timing and relevant charges before a visit."
+        if location["slug"] == "wimbledon" else
+        (f"Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey. "
+         f"I cover smaller plumbing repairs in {name}, including taps, toilets, shower fittings, leaks, wastes and radiator valves. "
+         "Send your postcode and job details so I can discuss availability and relevant charges before a visit."
+         if location["slug"] in {"morden", "merton"} else
+         f"Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey. I consider plumbing jobs in {name}, depending on the location and work involved. Send your postcode and job details so I can confirm coverage, availability and the next step.")
+    )
+    repair_focus = {
+        "wimbledon": (
+            "Small plumbing repairs in Wimbledon",
+            "I regularly travel to Wimbledon for work, although my schedule varies. "
+            "For a dripping tap, faulty shower, running toilet or leaking waste, describe what happens and send a photograph of the fitting if useful. "
+            "I can discuss a convenient appointment without promising a fixed weekly slot."
+        ),
+        "morden": (
+            "Small plumbing repairs in Morden",
+            "For a toilet that keeps refilling, a dripping tap or a waste leaking under the sink, "
+            "tell me what happens and whether the water can be safely isolated. "
+            "I can also discuss shower fittings, radiator valves and small pipework repairs."
+        ),
+        "merton": (
+            "Small plumbing repairs across Merton",
+            "Merton includes Wimbledon and Morden. For a leaking tap, toilet fault, shower fitting, waste or radiator valve, "
+            "send the postcode, a short description and a photograph if useful. "
+            "I'll confirm a practical appointment time before a visit is agreed."
+        ),
+    }.get(location["slug"])
+    repair_focus_html = (
+        '<div class="wrap section" id="small-plumbing-repairs"><h2>' + escape(repair_focus[0]) +
+        '</h2><p>' + escape(repair_focus[1]) + '</p></div>'
+        if repair_focus else ""
+    )
     faqs = [
         (f"Is Nigel based in {name}?", "Nigel is based in Guildford, Surrey. He considers jobs in South West London depending on the location, work involved and availability. There is no London office."),
         (f"Can I book an emergency callout in {name}?", "Emergency and out-of-hours callouts, including overnight, are subject to availability. Nigel may not answer immediately. Call or leave a message with the postcode and problem; attendance is not confirmed until agreed."),
@@ -781,9 +822,10 @@ def render_south_west_london_page(location: dict, request: Request | None = None
     return render_shared_public_page(f"""<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(title)}</title><meta name="description" content="{escape(description, quote=True)}"><link rel="canonical" href="{escape(canonical, quote=True)}"><meta property="og:type" content="website"><meta property="og:title" content="{escape(title, quote=True)}"><meta property="og:description" content="{escape(description, quote=True)}"><meta property="og:url" content="{escape(canonical, quote=True)}">{schema_html}<style>{SEO_CSS}</style></head><body>
 <div class="wrap hero"><div class="hero-card"><div class="eyebrow">Guildford based · South West London enquiries</div><h1>Plumber in {escape(name)}</h1>
-<p class="lead">Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey. I consider plumbing jobs in {escape(name)}, depending on the location and work involved. Send your postcode and job details so I can confirm coverage, availability and the next step.</p>
+<p class="lead">{escape(lead)}</p>
 <div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
 <div class="wrap section"><h2>Planning plumbing work in {escape(name)}</h2><p>{escape(location['planning'])}</p><p>A quote enquiry does not confirm a booking. Travel, timing, the proposed work and relevant charges are discussed before you agree to proceed.</p></div>
+{repair_focus_html}
 <div class="wrap section"><h2>Domestic plumbing enquiries</h2><div class="grid3"><div class="card item"><h3>Taps, toilets and leaks</h3><p>Dripping taps, toilet mechanisms, wastes, traps and visible pipework leaks. Describe the fault and whether water is still escaping.</p></div><div class="card item"><h3>Bathrooms and showers</h3><p>Sanitaryware connections, shower plumbing, replacement fittings and pipework alterations. Tell me what is changing and what will stay.</p></div><div class="card item"><h3>Radiators and pipework</h3><p>Radiators, valves, towel rails and associated plumbing. Send dimensions and photographs where useful.</p></div></div></div>
 <div class="wrap section"><h2>Urgent and out-of-hours enquiries</h2><p>Emergency and out-of-hours callouts, including overnight, are subject to availability. I may not answer immediately; call or leave a message with your postcode and the problem. Response times and attendance are not guaranteed. If water is escaping, isolate it only if safe to do so.</p></div>
 <div class="wrap section"><h2>Other South West London areas</h2><p>Coverage is confirmed for each job. Merton includes Wimbledon and Morden; the pages help you send the right enquiry details.</p><div class="pill-links">{related}</div><p><a href="/plumber-guildford">Guildford base and Surrey plumbing</a></p></div>

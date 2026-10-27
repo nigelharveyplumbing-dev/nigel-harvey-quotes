@@ -37,7 +37,7 @@ class SouthWestLondonTests(unittest.TestCase):
     def test_coverage_and_emergency_availability_are_qualified(self):
         for slug in AREAS:
             text=self.page(slug).get_text(' ',strip=True)
-            for phrase in ['based in Guildford','depending on the location and work involved','subject to availability','may not answer immediately','not guaranteed','no London office']:
+            for phrase in ['based in Guildford','subject to availability','may not answer immediately','not guaranteed','no London office']:
                 self.assertIn(phrase,text)
             self.assertNotIn('surrounding Surrey areas',text)
             self.assertNotIn('Gas Safe',text)
@@ -84,6 +84,51 @@ class SouthWestLondonTests(unittest.TestCase):
             self.assertTrue(links)
             self.assertTrue(all(link['href']=='/request-quote' for link in links))
             self.assertIn('next.searchParams.set',str(self.page(slug)))
+
+    def test_mobile_homepage_short_copy_keeps_surrey_and_london(self):
+        home = BeautifulSoup(self.client.get('/').text, 'html.parser')
+        hero = home.select_one('section.hero .hero-copy')
+        self.assertIsNotNone(hero)
+        self.assertEqual(hero.h1.get_text(), 'Plumber in Guildford & Across Surrey')
+        self.assertIn('Also serving South West London, including Wimbledon', hero.get_text())
+        self.assertIn('regularly travel to Wimbledon', hero.get_text())
+        self.assertLess(len(hero.select('p')[1].get_text()), 310)
+        self.assertEqual([a.get_text(strip=True) for a in hero.select('.actions a')],
+                         ['Get a Quote', 'WhatsApp Nigel', 'Call Nigel'])
+        self.assertIn('subject to availability', hero.select_one('.hero-availability').get_text())
+        self.assertLess(str(hero).index('class="actions"'),
+                        str(hero).index('class="hero-availability"'))
+        self.assertIn('/plumber-wimbledon', [a['href'] for a in hero.select('a[href^="/plumber-"]')])
+        self.assertEqual(home.select_one('title').get_text(),
+                         'Plumber in Guildford & Surrey | Nigel Harvey Plumbing')
+        self.assertEqual(home.select_one('link[rel="canonical"]')['href'],
+                         'https://www.nigelharveyplumbing.co.uk/')
+
+    def test_three_priority_london_pages_focus_on_smaller_repairs(self):
+        headings = {
+            'wimbledon': 'Small plumbing repairs in Wimbledon',
+            'morden': 'Small plumbing repairs in Morden',
+            'merton': 'Small plumbing repairs across Merton',
+        }
+        for slug, heading in headings.items():
+            with self.subTest(slug=slug):
+                page = self.page(slug)
+                focus = page.select_one('#small-plumbing-repairs')
+                self.assertIsNotNone(focus)
+                self.assertEqual(focus.h2.get_text(), heading)
+                self.assertIn('toilet', focus.get_text().lower())
+                self.assertIn('Guildford', page.select_one('.hero .lead').get_text())
+                self.assertIn('small plumbing repairs' if slug == 'wimbledon' else 'smaller plumbing repairs',
+                              page.select_one('.hero .lead').get_text().lower())
+                self.assertNotIn('boiler installation', page.get_text().lower())
+                self.assertNotIn('Gas Safe registered', page.get_text())
+        self.assertIn('regularly travel to Wimbledon',
+                      self.page('wimbledon').select_one('.hero .lead').get_text())
+        for slug in ('richmond', 'kingston', 'putney'):
+            page = self.page(slug)
+            self.assertIsNone(page.select_one('#small-plumbing-repairs'))
+            self.assertIn('depending on the location and work involved',
+                          page.select_one('.hero .lead').get_text())
 
     def test_london_list_does_not_change_surrey_matrix(self):
         self.assertEqual(len(self.module.LOCATION_PAGES),14)

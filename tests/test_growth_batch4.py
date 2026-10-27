@@ -63,7 +63,8 @@ class GrowthBatch4Tests(unittest.TestCase):
         hero = page.select_one("section.hero").get_text(" ", strip=True)
         self.assertIn("Over 20 years of plumbing experience", hero)
         self.assertIn("South West London", hero)
-        self.assertIn("depending on the location and work involved", hero)
+        self.assertIn("regularly travel to Wimbledon", hero)
+        self.assertIn("subject to availability", hero)
         for path in ("/plumber-guildford", "/plumber-aldershot", "/plumber-camberley",
                      "/emergency-plumber-surrey", "/leak-repair-guildford"):
             self.assertTrue(page.select_one(f'a[href="{path}"]'), path)
