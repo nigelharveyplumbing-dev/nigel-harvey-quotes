@@ -48,6 +48,32 @@ class FocusedIndexingReview(unittest.TestCase):
                 contents.append(body)
         self.assertNotEqual(contents[0], contents[1])
 
+    def test_priority_two_pages_explain_different_customer_decisions(self):
+        checks = {
+            "/toilet-repair-godalming": (
+                "Repairing a cistern or replacing a toilet?",
+                "removable access panel", "/plumber-godalming"),
+            "/toilet-repair-fairlands": (
+                "What if the toilet is leaking outside the pan?",
+                "only after flushing", "/plumber-fairlands"),
+            "/leak-repair-leatherhead": (
+                "Is the leak on the supply or waste side?",
+                "around the trap or waste outlet", "/plumber-leatherhead"),
+        }
+        for path, (heading, phrase, parent) in checks.items():
+            with self.subTest(path=path):
+                page = self.page(path)
+                h3 = next((h for h in page.select("h3") if h.get_text(strip=True) == heading), None)
+                self.assertIsNotNone(h3)
+                para = h3.find_next_sibling("p")
+                self.assertIsNotNone(para)
+                self.assertIn(phrase, para.get_text())
+                self.assertIsNotNone(para.select_one(f'a[href="{parent}"]'))
+                self.assertNotIn("completed job in", para.get_text().lower())
+                self.assertEqual(page.select_one('meta[name="robots"]')['content']
+                                 if page.select_one('meta[name="robots"]') else "index,follow",
+                                 "index,follow")
+
     def test_local_overviews_offer_direct_links_into_relevant_repairs(self):
         for overview, repair in [
             ("/plumber-leatherhead", "/leak-repair-leatherhead"),
