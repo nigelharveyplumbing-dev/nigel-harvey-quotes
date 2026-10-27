@@ -603,8 +603,16 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
             "A damp cupboard beneath a basin or kitchen sink may become wet only while the waste is draining, whereas a leaking supply joint can let water escape even when the tap is off. Tell me when you first see the water, which fitting was being used and whether the leak continues after the water is turned off. A photograph of the visible pipework, waste trap or wet area can help me discuss the likely inspection and parts, but a damp patch does not by itself identify the failed connection. Do not open walls or remove shower panels to investigate. For water escaping rapidly, close the stopcock if safe; keep away from electrical fittings near water. Include your Leatherhead postcode so I can confirm travel and availability."
         ),
         ("toilet-repair", "guildford"): (
-            "What to do if your toilet is not working in Guildford",
-            "Let me know if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Take a photo or short video of what happens and send it to me on WhatsApp with your postcode and a brief description. This can help me work out what parts might be needed before a visit."
+            "What to check before a toilet repair in Guildford",
+            "A toilet that keeps running into the pan after flushing may have a different fault from one that fills slowly or leaks onto the floor. Tell me which symptom you see, whether the flush is a button or lever, and if the cistern is exposed or concealed behind a panel. The fill valve, flush mechanism, seals and external connections need different checks; I cannot identify the faulty part from the symptom alone. If water is escaping, isolate the toilet supply only if it is safe. Send your Guildford postcode and a photograph of the accessible fitting, without dismantling it, so I can discuss repair or replacement options before a visit."
+        ),
+        ("bathroom-plumbing", "guildford"): (
+            "Planning a bathroom or shower plumbing job in Guildford",
+            "For a replacement shower, basin, toilet or bath, tell me which fittings will stay in the same position and which will move. Existing hot and cold supplies, waste fall, access beneath the tray or bath and the condition of surrounding surfaces can affect the scope. A straightforward fitting replacement is different from moving pipework or rebuilding a leaking shower area. Send photographs of safely visible connections and your Guildford postcode; I can discuss the likely work and whether an inspection is needed before quoting."
+        ),
+        ("bathroom-plumbing", "farnham"): (
+            "Replacing bathroom fittings or changing pipework in Farnham",
+            "If you are replacing a shower, basin or toilet, say whether the new fitting is the same size and whether the waste and supply positions will change. For a shower tray or enclosure, access to the trap, the waste route and the waterproofing at the tray junction can affect the job. A small replacement may be possible without a full bathroom refurbishment, but hidden damage cannot be ruled out from photos alone. Send the Farnham postcode and pictures of the existing fittings to discuss the next step."
         ),
         ("toilet-repair", "fairlands"): (
             "What to check when a toilet is running or leaking in Fairlands",
@@ -615,8 +623,8 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
             "If water continues to trickle into the pan after flushing, or the cistern refills repeatedly, note whether the problem stops when the cistern is full. Fill valves, flush mechanisms and seals are among the parts that may need checking; the symptom alone does not confirm which one has failed. Water around the base can have a different source, including a connection or seal. Tell me whether you have a handle, push button or concealed cistern, whether the toilet flushes at all and when any water appears. Send a photograph of safely accessible parts or a short video, plus your Godalming postcode. Do not dismantle concealed boxing or remove the cistern to take photographs. If water is escaping, isolate the supply only if you can do so safely."
         ),
         ("toilet-repair", "woking"): (
-            "What to do if your toilet is not working in Woking",
-            "Let me know if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Take a photo or short video of what happens and send it to me on WhatsApp with your postcode and a brief description. This can help me work out what parts might be needed before a visit."
+            "What details help with a toilet repair in Woking?",
+            "If the toilet will not flush, tell me whether the button or handle moves normally, whether the cistern refills, and whether water is running into the pan. For a concealed cistern, a photograph of the flush plate and any existing access panel is more useful than removing boxing. If the leak is outside the toilet, note whether it appears only after flushing or while the toilet is unused. These details can help plan an inspection and suitable parts, not confirm a diagnosis. Send your Woking postcode and photographs of safely accessible areas to discuss availability."
         ),
         ("toilet-repair", "burpham"): (
             "What to do if your toilet is not working in Burpham",
@@ -691,6 +699,28 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         ),
     }
     focused_links_html = focused_local_links.get((service_slug, area_slug), "")
+    # Point to published evidence where relevant, without implying a project
+    # took place in a town where it did not.
+    if (service_slug, area_slug) in {("bathroom-plumbing", "guildford"), ("bathroom-plumbing", "farnham")}:
+        from business import real_projects
+        project_path = "/projects/ensuite-renovation-merrow-guildford"
+        advice_path = "/advice/shower-replacement-waterproofing-rebuild"
+        if any(p.path == project_path for p in real_projects.visible_projects()):
+            focused_links_html += (
+                '<p>For an example of a completed shower and bathroom rebuild in '
+                '<strong>Merrow, Guildford</strong> (not a project in Farnham), see '
+                '<a href="' + project_path + '">the Merrow ensuite project</a>. '
+                'The extent of work on your property will depend on its condition and fittings.</p>'
+            ) if area_slug == "farnham" else (
+                '<p>See <a href="' + project_path + '">the completed Merrow ensuite project</a> '
+                'for a real example of shower and bathroom preparation near Guildford. '
+                'Your property may require different work.</p>'
+            )
+        if any(a.path == advice_path for a in plumbing_advice.visible_articles()):
+            focused_links_html += (
+                '<p>Read <a href="' + advice_path + '">the shower replacement and waterproofing guide</a> '
+                'for further background on shower plumbing and preparation.</p>'
+            )
     priority_html = (f'<div class="wrap section"><h2>{escape(detail[0])}</h2><p>{escape(detail[1])}</p>'
                      f'{whatsapp_html}{farnham_advice_html}{focused_links_html}<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
                      'or <a href="/request-quote">send the job details</a>.</p></div>') if detail else ""
