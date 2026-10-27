@@ -125,7 +125,10 @@ class SouthWestLondonTests(unittest.TestCase):
         self.assertIn('regularly travel to Wimbledon',
                       self.page('wimbledon').select_one('.hero .lead').get_text())
         for slug in ('richmond', 'kingston', 'putney'):
-            self.assertIsNone(self.page(slug).select_one('#small-plumbing-repairs'))
+            page = self.page(slug)
+            self.assertIsNone(page.select_one('#small-plumbing-repairs'))
+            self.assertIn('depending on the location and work involved',
+                          page.select_one('.hero .lead').get_text())
 
     def test_london_list_does_not_change_surrey_matrix(self):
         self.assertEqual(len(self.module.LOCATION_PAGES),14)
