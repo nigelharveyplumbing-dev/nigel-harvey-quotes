@@ -47,7 +47,7 @@
       <button type="button" class="btn-light no-print" style="margin-bottom:12px;" onclick="startNewQuote()">Start Fresh Quote</button>
       <div id="quoteWorkflow" class="quote-box small no-print" style="margin-bottom:12px;">New quotes start Pending. Save a quote to track follow-up and outcome.</div>
 
-      <label for="quote_source">Lead source (optional)</label>
+      <label for="quote_source">How did the customer find you? (if known)</label>
       <select id="quote_source">
         <option value="">Unknown / linked lead source</option>
         <option>Google Business Profile</option><option>Google organic search</option>
@@ -55,6 +55,9 @@
         <option>MyBuilder</option><option>Locally</option><option>Bing</option><option>Yell</option>
         <option>Checkatrade</option><option>TrustATrader</option><option>Other</option>
       </select>
+      <label for="quote_contact_channel">How did they first contact you?</label>
+      <select id="quote_contact_channel"><option>Unknown</option><option>WhatsApp</option><option>Phone</option><option>Email</option><option>Website form</option><option>Directory message</option><option>In person</option><option>Other</option></select>
+      <p class="small">For a quote linked to an existing enquiry, its original contact channel is inherited. To correct an existing saved enquiry or quote, use Source &amp; revenue and give a reason.</p>
       <label for="quote_work_type">Primary work type (headline reporting)</label>
       <select id="quote_work_type" onchange="b7ChangePrimary('quoteAdditional','quote_work_type')">
         <option value="">Not classified</option>
@@ -342,7 +345,7 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
           <label>Email</label><input id="quickEmail" type="email" autocomplete="off">
           <label>Address / postcode</label><input id="quickAddress" autocomplete="off">
           <label>Job details</label><textarea id="quickDescription" rows="4"></textarea>
-          <div class="grid2"><div><label>Lead source</label><select id="quickSource"><option value="">Unknown / confirm later</option><option>Google Business Profile</option><option>Google organic search</option><option>Website/direct</option><option>Referral</option><option>Repeat customer</option><option>MyBuilder</option><option>Locally</option><option>Bing</option><option>Yell</option><option>Checkatrade</option><option>TrustATrader</option><option>Other</option></select></div>
+          <div class="grid2"><div><label>How did they find you?</label><select id="quickSource"><option value="">Unknown / confirm later</option><option>Google Business Profile</option><option>Google organic search</option><option>Website/direct</option><option>Referral</option><option>Repeat customer</option><option>MyBuilder</option><option>Locally</option><option>Bing</option><option>Yell</option><option>Checkatrade</option><option>TrustATrader</option><option>Other</option></select></div>
           <div><label>Primary work type</label><select id="quickWork" onchange="b7ChangePrimary('quickAdditional','quickWork')"><option value="">Not classified</option><option>Leak / repair</option><option>Tap</option><option>Toilet / cistern</option><option>Shower</option><option>Bathroom plumbing</option><option>Radiator / TRV</option><option>Outside tap</option><option>Pipework</option><option>Power/heating-system flush</option><option>Cylinder / tank</option><option>Other</option></select></div></div>
           <div id="quickAdditional"></div>
           <p class="small"><strong>Site visit / quote survey (optional).</strong> Book a short visit to inspect the work before preparing a quote. This does not schedule the actual plumbing job. Leave both times blank to save only the enquiry.</p>
@@ -690,7 +693,8 @@ toggleBathroomFields(); updateLabourSuggestion(); scheduleQuoteLearning(); sched
 __MATERIAL_SELECTION_JS__
 __CITY_ACCOUNT_PRICES_JS__
 __APP_JS__
-__PIPELINE_JS__</script>
+__PIPELINE_JS__
+__REVENUE_JS__</script>
 </body>
 </html>
 
