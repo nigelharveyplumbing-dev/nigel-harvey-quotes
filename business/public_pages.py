@@ -770,9 +770,11 @@ def render_south_west_london_page(location: dict, request: Request | None = None
         "I welcome small plumbing repairs in Wimbledon, including taps, toilets, shower fittings, wastes and radiator valves. "
         "Send the postcode and fault details so I can discuss timing and relevant charges before a visit."
         if location["slug"] == "wimbledon" else
-        f"Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey. "
-        f"I cover smaller plumbing repairs in {name}, including taps, toilets, shower fittings, leaks, wastes and radiator valves. "
-        "Send your postcode and job details so I can discuss availability and relevant charges before a visit."
+        (f"Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey. "
+         f"I cover smaller plumbing repairs in {name}, including taps, toilets, shower fittings, leaks, wastes and radiator valves. "
+         "Send your postcode and job details so I can discuss availability and relevant charges before a visit."
+         if location["slug"] in {"morden", "merton"} else
+         f"Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey. I consider plumbing jobs in {name}, depending on the location and work involved. Send your postcode and job details so I can confirm coverage, availability and the next step.")
     )
     repair_focus = {
         "wimbledon": (
