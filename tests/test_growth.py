@@ -96,8 +96,8 @@ class GrowthBatchTests(unittest.TestCase):
         self.assertNotIn('href="/leak-repair-farnborough"',
                          self.client.get("/leak-repair-guildford").text)
         form = self.client.get("/request-quote").text
-        self.assertIn("params.get('landing_page')", form)
-        self.assertIn("params.get('referrer')", form)
+        self.assertIn("window.nhpAttribution.context()", form)
+        self.assertIn("analytics_consent:window.nhpAttribution?.accepted()", form)
 
     def test_every_sitemap_page_uses_shared_layout_and_keeps_seo(self):
         m, c = self.module, self.client
@@ -174,7 +174,7 @@ class GrowthBatchTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         lead = response.json()
         notify.assert_called_once_with(lead)
-        self.assertEqual({key: lead[key] for key in payload}, payload)
+        self.assertEqual({key: lead[key] for key in payload}, {**payload,"referrer":"https://search.invalid"})
         self.assertEqual(lead["status"], "new")
         self.assertIn(lead, self.client.get("/api/leads", headers=self.auth).json())
         conn = m.get_db()

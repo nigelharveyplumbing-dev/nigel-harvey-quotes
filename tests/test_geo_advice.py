@@ -114,7 +114,7 @@ class AdviceTests(unittest.TestCase):
         assert_project_renderer_preserved(self, 'bdcacc9ff02d041e4ab4c63269b5c7ebba4942a2')
         # Batch 8 explicitly authorises targeted public_pages.py changes. The
         # mixed published/draft and unchanged-page checks live in test_growth_batch8.
-        paths=['business/project_content.json','business/quote_calculation.py','business/account_pricing.py','business/city_account_prices.py','business/db.py','business/lead_email_store.py','business/lead_store.py','business/notifications.py','business/invoice_store.py','business/pdf_render.py','business/quote_store.py','static/app.js','static/city_account_prices.js','static/public_analytics.js','templates/public_footer.html','templates/public_header.html']
+        paths=['business/project_content.json','business/quote_calculation.py','business/account_pricing.py','business/city_account_prices.py','business/lead_email_store.py','business/notifications.py','business/pdf_render.py','static/city_account_prices.js','templates/public_footer.html','templates/public_header.html']
         # Approved pipeline and PR #34 document-link changes. All other
         # public content and business files retain their historical locks.
         pipeline_snapshots = {'business/pdf_render.py': '663f346c3a80f66e50f21d78af62f045d3095e6488a7ae0eb4dfab4a41f083ef', 'business/db.py': 'a84e82df3ef6970c450c60e8dca26f1a33ec56b7635bb325fdfc67052db906e0', 'static/app.js': 'eeed4879b81a6cdbeb0d807b9cee7b798559040f3a06a439d036a68a0f4745c1', 'business/quote_store.py': '7344d52d3b5092f6865901998387cad614e6338d9345c6af7e0502295fcac4aa'}

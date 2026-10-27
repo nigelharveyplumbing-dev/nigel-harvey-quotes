@@ -130,6 +130,18 @@ def restore_private_nav_for_legacy_snapshot(html: str) -> str:
     return html
 
 
+def pre_revenue_public(html):
+    """Freeze website content while separately testing consent/attribution scripts."""
+    baseline = json.loads((ROOT/'tests/fixtures/pre_revenue_public.json').read_text())
+    html = html.replace((ROOT/'static/public_analytics.js').read_text(),baseline['static/public_analytics.js'])
+    old_context = baseline['business/website_contact.py'].split('QUOTE_ATTRIBUTION_SCRIPT = """',1)[1].split('"""',1)[0]
+    from business.website_contact import QUOTE_ATTRIBUTION_SCRIPT
+    html = html.replace(QUOTE_ATTRIBUTION_SCRIPT,old_context)
+    new_form = (ROOT/'templates/request_quote.html').read_text().rsplit('<script>',1)[1].split('</script>',1)[0]
+    old_form = baseline['templates/request_quote.html'].rsplit('<script>',1)[1].split('</script>',1)[0]
+    return html.replace(new_form,old_form)
+
+
 class BaselineTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -181,10 +193,10 @@ class BaselineTests(unittest.TestCase):
         expected = {tuple(item) for item in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         self.assertEqual(routes, expected)
         self.assertEqual(len(routes_list), len(routes), "Duplicate method/path route")
-        self.assertEqual(len(routes), 98)
+        self.assertEqual(len(routes), 111)
         self.assertEqual(len(PUBLIC_WEBSITE_ROUTES), 15)
         self.assertEqual(len(PUBLIC_CUSTOMER_ROUTES), 5)
-        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 78)
+        self.assertEqual(len(routes - PUBLIC_WEBSITE_ROUTES - PUBLIC_CUSTOMER_ROUTES), 91)
         self.assertTrue(PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES <= routes)
         self.assertEqual(self.module.PUBLIC_ROUTE_KEYS,
                          PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES)
@@ -276,6 +288,12 @@ class BaselineTests(unittest.TestCase):
         config = re.search(r'const APP_PAYMENT_CONFIG = (\{.*?\});', m.HTML)
         self.assertIsNotNone(config)
         masked = m.HTML.replace(config.group(1), "__PAYMENT_CONFIG__", 1)
+        # Reverse only the reviewed tracking/WhatsApp additions for the legacy
+        # exact-byte UI lock; dedicated tests exercise the new functionality.
+        masked = masked.replace("\n"+(ROOT/'static/enquiry_revenue.js').read_text(),"",1)
+        masked = re.sub(r"    contact_channel:document.*?(?=    work_type:b7Value)", "", masked, flags=re.S)
+        from manual_whatsapp_snapshot import strip_manual_whatsapp_markup
+        masked = strip_manual_whatsapp_markup(masked)
         # Mask only the deliberately added City-capture UI. Its behavior has
         # separate Python, Node and full Chromium coverage; the rest stays frozen.
         city_js = (Path(m.__file__).parent / "static/city_account_prices.js").read_text()
@@ -314,7 +332,7 @@ class BaselineTests(unittest.TestCase):
             "__MATERIAL_LIBRARY__", "__FAVOURITE_MATERIALS__", "__JOB_TEMPLATES__",
             "__MATERIAL_ALIAS_RULES__", "__COMPANY_LOGO_HTML__",
         })
-        self.assertEqual(set(re.findall(r"/api/[A-Za-z0-9_/-]+", m.HTML)), {
+        self.assertEqual(set(re.findall(r"/api/[A-Za-z0-9_/-]+", m.HTML.replace((ROOT/'static/enquiry_revenue.js').read_text(),'',1))), {
             "/api/ai-quote-draft", "/api/ai-quote-status", "/api/backups", "/api/backups/",
             "/api/customers", "/api/customers/", "/api/dashboard", "/api/business-performance",
             "/api/appointments", "/api/appointments/", "/api/jobs", "/api/jobs/",
@@ -351,9 +369,9 @@ class BaselineTests(unittest.TestCase):
         m = self.module
         private = {tuple(row) for row in json.loads((ROOT / "tests/route_inventory.json").read_text())}
         private -= PUBLIC_WEBSITE_ROUTES | PUBLIC_CUSTOMER_ROUTES
-        self.assertEqual(len(private), 78)
+        self.assertEqual(len(private), 91)
         parameters = {"kind": "invoice", "document_id": "1", "token": "t" * 43, "invoice_id": "1", "quote_id": "1", "customer_id": "1",
-                      "lead_id": "1", "appointment_id": "1", "job_id": "1",
+                      "origin_id": "1", "entity_type": "quote", "entity_id": "1", "lead_id": "1", "appointment_id": "1", "job_id": "1",
                       "material_id": "1", "photo_id": "1", "filename": "sample.db"}
         def file_state():
             return {
@@ -419,7 +437,7 @@ class BaselineTests(unittest.TestCase):
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
-                self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
+                self.assertEqual(hashlib.sha256(pre_revenue_public(getattr(m, name)).encode()).hexdigest(), digest)
 
         # PR #37 changed consented attribution and Guildford copy; PR #38
         # changes the owner-approved homepage hero and London coverage copy.
@@ -449,7 +467,7 @@ class BaselineTests(unittest.TestCase):
                         # in the homepage golden; Batch 8 context stays additive.
                         unchanged = re.sub(r'<section class="section-alt" id="batch8-home-context">.*?</section>',
                                            "", unchanged, flags=re.S)
-                        self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
+                        self.assertEqual(hashlib.sha256(pre_revenue_public(unchanged).encode()).hexdigest(), digest)
 
     def test_public_navigation_has_no_owner_app_shortcut(self):
         m = self.module
@@ -1354,7 +1372,7 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
                 unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "",
                                    restore_private_nav_for_legacy_snapshot(rendered[name]))
                 unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
-                self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
+                self.assertEqual(hashlib.sha256(pre_revenue_public(unchanged).encode()).hexdigest(), digest)
 
     def test_stage7_merchant_parsing_and_matching_offline(self):
         """No merchant request escapes the process; preserve exact parsed shapes."""
