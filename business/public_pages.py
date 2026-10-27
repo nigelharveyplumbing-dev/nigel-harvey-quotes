@@ -707,9 +707,8 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         advice_path = "/advice/shower-replacement-waterproofing-rebuild"
         if any(p.path == project_path for p in real_projects.visible_projects()):
             focused_links_html += (
-                '<p>For an example of a completed shower and bathroom rebuild in '
-                '<strong>Merrow, Guildford</strong> (not a project in Farnham), see '
-                '<a href="' + project_path + '">the Merrow ensuite project</a>. '
+                '<p>For a real example of a completed shower and bathroom rebuild, see '
+                '<a href="' + project_path + '">the Merrow, Guildford ensuite project</a>. '
                 'The extent of work on your property will depend on its condition and fittings.</p>'
             ) if area_slug == "farnham" else (
                 '<p>See <a href="' + project_path + '">the completed Merrow ensuite project</a> '
