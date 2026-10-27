@@ -760,40 +760,40 @@ def render_south_west_london_page(location: dict, request: Request | None = None
     canonical = absolute_url(f"/plumber-{location['slug']}", request)
     title = f"Plumber in {name} | Nigel Harvey Plumbing"
     descriptions = {
-        "wimbledon": "Wimbledon plumbing repairs: leaking taps, showers, toilets and radiator valves. Guildford-based Nigel regularly travels to Wimbledon; ask about a visit.",
-        "morden": "Morden plumbing repairs: taps, running toilets, leaking wastes, shower fittings and radiator valves. Guildford-based Nigel covers South West London.",
-        "merton": "Merton plumbing repairs: leaking taps, toilet faults, showers, wastes and radiator valves. Guildford-based Nigel covers South West London.",
+        "wimbledon": "Wimbledon plumbing repairs and installations: taps, toilets, showers, radiators and pipework. Small jobs welcome. Guildford-based Nigel regularly visits.",
+        "morden": "Morden plumbing repairs and installations: taps, toilets, showers, radiators and pipework. Small jobs welcome. Guildford-based Nigel covers the area.",
+        "merton": "Merton plumbing repairs and installations: taps, toilets, showers, radiators and pipework. Small jobs welcome. Guildford-based Nigel covers the area.",
     }
     description = descriptions.get(location["slug"], f"Plumbing in {name}: taps, toilets, leaks, bathrooms and radiators. Guildford-based Nigel confirms coverage and availability before a visit.")
     lead = (
-        "Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey, and I regularly travel to Wimbledon during the working week. "
-        "I welcome small plumbing repairs in Wimbledon, including taps, toilets, shower fittings, wastes and radiator valves. "
-        "Send the postcode and fault details so I can discuss timing and relevant charges before a visit."
+        "Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey, and I regularly travel to Wimbledon for work. "
+        "I provide domestic plumbing in Wimbledon, from leaking taps and toilet repairs to showers, radiators, pipework and bathroom installations. "
+        "Small repairs are welcome too. Send your postcode and job details to discuss availability and relevant charges."
         if location["slug"] == "wimbledon" else
         (f"Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey. "
-         f"I cover smaller plumbing repairs in {name}, including taps, toilets, shower fittings, leaks, wastes and radiator valves. "
-         "Send your postcode and job details so I can discuss availability and relevant charges before a visit."
+         f"I provide domestic plumbing in {name}, including tap and toilet repairs, showers, radiators, pipework and bathroom installations. "
+         "Small repairs are welcome too. Send your postcode and job details to discuss availability and relevant charges."
          if location["slug"] in {"morden", "merton"} else
          f"Over 20 years of plumbing experience. I’m Nigel, based in Guildford, Surrey. I consider plumbing jobs in {name}, depending on the location and work involved. Send your postcode and job details so I can confirm coverage, availability and the next step.")
     )
     repair_focus = {
         "wimbledon": (
-            "Small plumbing repairs in Wimbledon",
+            "Plumbing repairs & installations in Wimbledon",
             "I regularly travel to Wimbledon for work, although my schedule varies. "
             "For a dripping tap, faulty shower, running toilet or leaking waste, describe what happens and send a photograph of the fitting if useful. "
-            "I can discuss a convenient appointment without promising a fixed weekly slot."
+            "I also discuss replacement fittings and planned installations, with timing agreed before a visit."
         ),
         "morden": (
-            "Small plumbing repairs in Morden",
+            "Plumbing repairs & installations in Morden",
             "For a toilet that keeps refilling, a dripping tap or a waste leaking under the sink, "
             "tell me what happens and whether the water can be safely isolated. "
-            "I can also discuss shower fittings, radiator valves and small pipework repairs."
+            "I can also discuss shower replacements, radiator valves and planned pipework alterations."
         ),
         "merton": (
-            "Small plumbing repairs across Merton",
+            "Plumbing repairs & installations across Merton",
             "Merton includes Wimbledon and Morden. For a leaking tap, toilet fault, shower fitting, waste or radiator valve, "
             "send the postcode, a short description and a photograph if useful. "
-            "I'll confirm a practical appointment time before a visit is agreed."
+            "I also take enquiries about planned replacements and installations; we can agree a practical appointment time."
         ),
     }.get(location["slug"])
     repair_focus_html = (
