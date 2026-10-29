@@ -12,6 +12,7 @@ from business.website_contact import telephone_uri_number, whatsapp_url
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE_CSS = (ROOT / "static/public_site.css").read_text(encoding="utf-8")
+SITE_CSS += "\n" + (ROOT / "static/public_reviews.css").read_text(encoding="utf-8")
 SUBPAGE_CSS = (ROOT / "static/public_seo.css").read_text(encoding="utf-8")
 HEADER = (ROOT / "templates/public_header.html").read_text(encoding="utf-8")
 FOOTER = (ROOT / "templates/public_footer.html").read_text(encoding="utf-8")
@@ -102,6 +103,9 @@ def render_shared_public_page(html: str) -> str:
         for node in soup.select(selector):
             node.decompose()
     body["class"] = ["public-subpage"]
+    # The graphic logo is already in the shared navigation.
+    for logo in soup.select(".hero img.logo"):
+        logo.decompose()
 
     main = body.find("main", recursive=False)
     if main is None:
