@@ -10,7 +10,7 @@ on:
       - 'templates/**'
       - 'tests/**'
       - 'requirements*.txt'
-      - '.github/workflows/trade-price-comparison.yml'
+      - '.github/workflows/full-regression-tests.yml'
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
