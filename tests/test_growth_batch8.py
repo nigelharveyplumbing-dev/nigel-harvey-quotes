@@ -101,10 +101,11 @@ class GrowthBatch8Tests(unittest.TestCase):
                 self.assertEqual(page.select_one('header .brand img')['src'],
                                  '/site-images/nigel-harvey-logo.png')
                 self.assertEqual(len(page.select('main img.logo')),0)
-        # The approved correction must not remove logos from other service pages.
+        # The website-wide consistency update uses the shared header logo everywhere.
         for path in ['/leak-repair-camberley', '/bathroom-plumbing-farnham']:
             page=BeautifulSoup(self.client.get(path).text,'html.parser')
-            self.assertEqual(len(page.select('.hero-card img.logo')),1)
+            self.assertEqual(len(page.select('.hero-card img.logo')),0)
+            self.assertEqual(len(page.select('header .brand img')),1)
 
     def test_original_published_article_record_and_project_assets_preserved(self):
         assert_project_renderer_preserved(self, BASE)
@@ -125,7 +126,9 @@ class GrowthBatch8Tests(unittest.TestCase):
         new=ast.parse((ROOT/'app.py').read_text())
         allowed={'render_public_homepage','add_project_evidence','sitemap_xml','location_page','public_site_image'}
         # Approved service-hero rating badge additions are isolated to these wrappers.
-        approved_review_wrappers={'render_service_page','render_local_service_location_page'}
+        approved_review_wrappers={'render_service_page','render_local_service_location_page',
+            'render_location_page','with_public_review_badge','advice_index','advice_page',
+            'project_index','real_project_page'}
         # PR #34 deliberately changes only the documented auth/document boundaries.
         security_functions = {
             'is_public_route', 'protect_app_routes', 'row_to_invoice',

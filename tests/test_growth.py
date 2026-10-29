@@ -138,13 +138,19 @@ class GrowthBatchTests(unittest.TestCase):
                 patch.object(m.google_reviews.requests, "get", return_value=Response()) as fetch:
             for path in ("/", "/plumber-guildford", "/plumber-epsom", "/plumber-farnborough"):
                 page = BeautifulSoup(self.client.get(path).text, "html.parser")
-                self.assertIn("Synthetic review", page.text)
-                self.assertTrue(page.select(".google-review-card"), path)
+                if path == "/":
+                    self.assertIn("Synthetic review", page.text)
+                    self.assertTrue(page.select(".google-review-card"), path)
+                else:
+                    self.assertFalse(page.select(".google-review-card"), path)
+                    self.assertIn("4.9", page.select_one(".hero-review-badge").text)
+                    self.assertEqual(page.select_one(".hero-review-badge a")["href"], "/#reviews")
             self.assertEqual(fetch.call_count, 4)
         with patch.object(m, "GOOGLE_PLACES_API_KEY", ""), \
                 patch.object(m.google_reviews.requests, "get") as fetch:
             for path in ("/", "/plumber-leatherhead"):
-                self.assertIn("Read Google Reviews", self.client.get(path).text)
+                expected = "Read Google Reviews" if path == "/" else "Read customer reviews on Google"
+                self.assertIn(expected, self.client.get(path).text)
             fetch.assert_not_called()
 
     def test_local_stock_image_allowlist_and_staging_guard(self):

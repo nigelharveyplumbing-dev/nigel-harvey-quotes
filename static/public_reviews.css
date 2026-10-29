@@ -1,0 +1,11 @@
+/* Shared Google summary: homepage strip and compact public-page badge. */
+.review-summary{text-decoration:none;font-weight:750;color:#075587}
+.review-summary .google-rating{display:inline-flex;align-items:center;gap:12px;flex-wrap:wrap}
+.review-summary .google-rating strong{font-size:1.5rem;line-height:1.25}
+.review-summary .stars{color:#a96105;letter-spacing:.08em}
+.hero-review-badge{margin:22px 0 0;max-width:100%}
+.hero-review-badge .review-summary{display:inline-flex;align-items:center;min-height:48px;max-width:100%;padding:13px 18px;border:1px solid var(--line);border-radius:9px;background:#fff;color:#075587;box-shadow:0 3px 12px #081e2c14;line-height:1.5}
+.hero-review-badge .review-summary:hover{background:#e8f2f4;border-color:#a5c2d0}
+.hero-review-badge .google-rating{margin:0;text-align:left}
+.hero-review-badge + .actions,.hero-review-badge + .nav-actions{margin-top:22px}
+@media(max-width:420px){.hero-review-badge .review-summary{padding:12px 14px}.hero-review-badge .google-rating{column-gap:10px;row-gap:4px}.hero-review-badge .google-rating strong{font-size:1.35rem}}
