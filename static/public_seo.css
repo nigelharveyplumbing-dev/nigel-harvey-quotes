@@ -78,3 +78,10 @@
  .public-subpage .cta-blue .actions,.public-subpage .cta .nav-actions{margin-top:20px}
 }
 @media(max-width:420px){.public-subpage .service-links,.public-subpage .area-links,.public-subpage .pill-links{grid-template-columns:1fr}}
+
+/* Compact Google trust badge above service-page contact actions. */
+.public-subpage .hero-review-badge{margin:14px 0 18px;max-width:100%}
+.public-subpage .hero-review-badge>a{display:inline-flex;align-items:center;max-width:100%;padding:9px 13px;border:1px solid rgba(255,255,255,.35);border-radius:9px;background:rgba(255,255,255,.12);color:inherit;text-decoration:none}
+.public-subpage .hero-review-badge .google-rating{display:flex;align-items:center;justify-content:flex-start;gap:8px;flex-wrap:wrap;font-size:.94rem;line-height:1.4}
+.public-subpage .hero-review-badge .google-rating strong{font-size:1.05rem}
+@media(max-width:600px){.public-subpage .hero-review-badge{margin:12px 0 16px}.public-subpage .hero-review-badge>a{padding:8px 10px}.public-subpage .hero-review-badge .google-rating{font-size:.85rem;gap:6px}}
