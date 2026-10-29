@@ -1243,7 +1243,7 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
 
 def render_service_page(service: dict, logo_html: str, request: Request | None = None) -> str:
     return public_pages.render_service_page(
-        service, logo_html, request, absolute_url=absolute_url)
+        service, logo_html, request, absolute_url=absolute_url, review_badge_html=website_contact.review_summary_html(_google_reviews_html(), GOOGLE_REVIEWS_URL).replace('href="#reviews"', 'href="/#reviews"'))
 
 
 
@@ -1261,7 +1261,7 @@ LOCAL_SERVICE_PAGES = public_pages.LOCAL_SERVICE_PAGES
 
 def render_local_service_location_page(service: dict, location: dict, logo_html: str, request: Request | None = None) -> str:
     return public_pages.render_local_service_location_page(
-        service, location, logo_html, request, absolute_url=absolute_url)
+        service, location, logo_html, request, absolute_url=absolute_url, review_badge_html=website_contact.review_summary_html(_google_reviews_html(), GOOGLE_REVIEWS_URL).replace('href="#reviews"', 'href="/#reviews"'))
 
 
 

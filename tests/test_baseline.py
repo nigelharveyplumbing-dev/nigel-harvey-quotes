@@ -1354,6 +1354,12 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
                 unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "",
                                    restore_private_nav_for_legacy_snapshot(rendered[name]))
                 unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
+                if name in ("service", "local"):
+                    # The only approved new markup is the compact live review badge.
+                    badge = re.search(r'<div class="hero-review-badge">.*?</div>', unchanged, re.S)
+                    self.assertIsNotNone(badge, "Expected review badge in service hero")
+                    self.assertIn("Read customer reviews on Google", badge.group(0))
+                    unchanged = unchanged.replace(badge.group(0), "", 1)
                 self.assertEqual(hashlib.sha256(unchanged.encode()).hexdigest(), digest)
 
     def test_stage7_merchant_parsing_and_matching_offline(self):

@@ -124,6 +124,8 @@ class GrowthBatch8Tests(unittest.TestCase):
         old=ast.parse(subprocess.check_output(['git','show','1397d5d16ef9737f7b07f8ad4f92b8f98548f516:app.py'],cwd=ROOT))
         new=ast.parse((ROOT/'app.py').read_text())
         allowed={'render_public_homepage','add_project_evidence','sitemap_xml','location_page','public_site_image'}
+        # Approved service-hero rating badge additions are isolated to these wrappers.
+        approved_review_wrappers={'render_service_page','render_local_service_location_page'}
         # PR #34 deliberately changes only the documented auth/document boundaries.
         security_functions = {
             'is_public_route', 'protect_app_routes', 'row_to_invoice',
@@ -133,7 +135,7 @@ class GrowthBatch8Tests(unittest.TestCase):
             'replace_document_link', 'revoke_document_link', 'change_document_link',
         }
         def outside_approved_scope(node):
-            if getattr(node, 'name', None) in allowed | security_functions:
+            if getattr(node, 'name', None) in allowed | security_functions | approved_review_wrappers:
                 return False
             if isinstance(node, ast.ImportFrom) and node.module == 'business' and any(a.name == 'document_links' for a in node.names):
                 return False
