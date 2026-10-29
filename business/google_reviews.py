@@ -45,7 +45,7 @@ def google_reviews_html(*, GOOGLE_PLACES_API_KEY, GOOGLE_REVIEWS_URL, _google_pl
         rating_text = f"{float(rating):.1f}" if rating is not None else ""
         count_text = f"{int(count):,} Google review" + ("" if int(count) == 1 else "s") if count is not None else "Google reviews"
         cards = []
-        for review in reviews[:3]:
+        for review in reviews:
             author = review.get("authorAttribution") or {}
             author_name = escape(author.get("displayName") or "Google customer")
             author_uri = escape(author.get("uri") or review.get("googleMapsUri") or reviews_url, quote=True)
