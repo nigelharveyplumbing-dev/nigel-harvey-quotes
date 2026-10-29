@@ -1615,9 +1615,14 @@ def local_service_location_page(service_slug: str, area_slug: str, request: Requ
         logo_html = get_company_logo_html(get_company_logo_value())
         return HTMLResponse(content=website_contact.add_quote_attribution(add_project_evidence(render_service_page(established_service, logo_html, request), request)),
                             media_type="text/html; charset=utf-8")
-    service = next((item for item in LOCAL_SERVICE_PAGES if item["slug"] == service_slug.lower()), None)
+    # Starlette splits /leak-repair-woking at the first hyphen ("leak" /
+    # "repair-woking"). Match the complete path against configured service
+    # prefixes instead, so multi-word service slugs resolve correctly.
+    service = next((item for item in LOCAL_SERVICE_PAGES
+                    if full_slug.startswith(item["slug"] + "-")), None)
+    resolved_area_slug = full_slug[len(service["slug"]) + 1:] if service else area_slug.lower()
     # No automatic service × Farnborough doorway pages in this growth batch.
-    location = next((item for item in LOCATION_PAGES if item["slug"] == area_slug.lower()
+    location = next((item for item in LOCATION_PAGES if item["slug"] == resolved_area_slug
                      and item["slug"] != "farnborough"), None)
     if service_slug.lower() == "blocked-drains" and location:
         return RedirectResponse(url=f"/plumber-{location['slug']}", status_code=301)
