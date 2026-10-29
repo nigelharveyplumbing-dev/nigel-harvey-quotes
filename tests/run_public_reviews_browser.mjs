@@ -52,10 +52,12 @@ try{
     assert.equal(layout.badges,1,path);assert.equal(layout.cards,0,path);assert.equal(layout.href,'/#reviews');assert.match(layout.text,/4\.6/);assert.match(layout.text,/23 Google reviews/);
     assert.equal(layout.background,'rgb(255, 255, 255)');assert.equal(layout.color,'rgb(7, 85, 135)');assert.equal(layout.starColor,'rgb(169, 97, 5)');assert.equal(layout.underline,'none');assert(layout.badgeWidth<=width);
     if(layout.beforeActions!==null)assert.equal(layout.beforeActions,true,path);
+   }
+   await page.screenshot({path:join(evidence,`${name}-${device}.png`),fullPage:false});
+   if(name!=='home' && name!=='enquiry'){
     const link=page.locator('.hero-review-badge a');await link.focus();
     assert(await link.evaluate(el=>el===document.activeElement));
    }
-   await page.screenshot({path:join(evidence,`${name}-${device}.png`),fullPage:false});
   }
   await context.close();
  }
