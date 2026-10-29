@@ -37,6 +37,7 @@ try{
   for(const [name,path] of pages){
    const response=await page.goto(origin+path,{waitUntil:'networkidle'});assert.equal(response.status(),200,path);
    const decline=page.getByRole('button',{name:'Decline',exact:true});if(await decline.isVisible())await decline.click();
+   await page.mouse.move(0,0); // Measure the normal badge, independently of the previous page's pointer.
    const layout=await page.evaluate(()=>{
     const badge=document.querySelector('.hero-review-badge');const link=badge?.querySelector('a');
     const actions=badge?.parentElement.querySelector('.actions,.nav-actions');
