@@ -1239,14 +1239,16 @@ def get_company_logo_html(logo_value: str) -> str:
 
 
 def render_location_page(location_name: str, logo_html: str, request: Request | None = None) -> str:
-    return public_pages.render_location_page(
+    reviews = _google_reviews_html()
+    html = public_pages.render_location_page(
         location_name, logo_html, request, absolute_url=absolute_url,
-        _google_reviews_html=_google_reviews_html)
+        _google_reviews_html=lambda: reviews)
+    return website_contact.add_public_review_badge(html, reviews, GOOGLE_REVIEWS_URL)
 
 
 def render_service_page(service: dict, logo_html: str, request: Request | None = None) -> str:
     return public_pages.render_service_page(
-        service, logo_html, request, absolute_url=absolute_url)
+        service, logo_html, request, absolute_url=absolute_url, review_badge_html=website_contact.review_summary_html(_google_reviews_html(), GOOGLE_REVIEWS_URL).replace('href="#reviews"', 'href="/#reviews"'))
 
 
 
@@ -1264,7 +1266,7 @@ LOCAL_SERVICE_PAGES = public_pages.LOCAL_SERVICE_PAGES
 
 def render_local_service_location_page(service: dict, location: dict, logo_html: str, request: Request | None = None) -> str:
     return public_pages.render_local_service_location_page(
-        service, location, logo_html, request, absolute_url=absolute_url)
+        service, location, logo_html, request, absolute_url=absolute_url, review_badge_html=website_contact.review_summary_html(_google_reviews_html(), GOOGLE_REVIEWS_URL).replace('href="#reviews"', 'href="/#reviews"'))
 
 
 
@@ -1524,6 +1526,10 @@ def sitemap_xml(request: Request):
     return Response(content=xml, media_type="application/xml; charset=utf-8")
 
 
+def with_public_review_badge(html: str) -> str:
+    return website_contact.add_public_review_badge(html, _google_reviews_html(), GOOGLE_REVIEWS_URL)
+
+
 @app.get("/advice", response_class=HTMLResponse)
 def advice_index(request: Request):
     owner = check_basic_auth(request)
@@ -1531,8 +1537,8 @@ def advice_index(request: Request):
         raise HTTPException(status_code=404, detail="Advice not found",
                             headers={"X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, no-store"})
     private = owner or is_staging_environment()
-    return HTMLResponse(plumbing_advice.render_index(absolute_url=absolute_url, request=request,
-                        include_drafts=owner, staging=is_staging_environment()),
+    return HTMLResponse(with_public_review_badge(plumbing_advice.render_index(absolute_url=absolute_url, request=request,
+                        include_drafts=owner, staging=is_staging_environment())),
                         headers={"Cache-Control": "private, no-store" if private else "no-cache",
                                  **({"X-Robots-Tag": "noindex, nofollow"} if private else {})})
 
@@ -1544,8 +1550,8 @@ def advice_page(article_slug: str, request: Request):
         raise HTTPException(status_code=404, detail="Advice not found",
                             headers={"X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, no-store"})
     private = article.status != "published" or is_staging_environment()
-    return HTMLResponse(website_contact.add_quote_attribution(plumbing_advice.render_article(
-        article, absolute_url=absolute_url, request=request, staging=is_staging_environment())),
+    return HTMLResponse(website_contact.add_quote_attribution(with_public_review_badge(plumbing_advice.render_article(
+        article, absolute_url=absolute_url, request=request, staging=is_staging_environment()))),
         headers={"Cache-Control": "private, no-store" if private else "no-cache",
                  **({"X-Robots-Tag": "noindex, nofollow"} if private else {})})
 
@@ -1554,9 +1560,9 @@ def advice_page(article_slug: str, request: Request):
 def project_index(request: Request):
     include_drafts = check_basic_auth(request)
     noindex = include_drafts or not real_projects.visible_projects() or is_staging_environment()
-    return HTMLResponse(website_contact.add_quote_attribution(real_projects.render_index(
+    return HTMLResponse(website_contact.add_quote_attribution(with_public_review_badge(real_projects.render_index(
         absolute_url=absolute_url, request=request, include_drafts=include_drafts,
-        staging=is_staging_environment())), headers={
+        staging=is_staging_environment()))), headers={
             "Cache-Control": "private, no-store" if noindex else "no-cache",
             **({"X-Robots-Tag": "noindex, nofollow"} if noindex else {}),
         })
@@ -1569,8 +1575,8 @@ def real_project_page(project_slug: str, request: Request):
         raise HTTPException(status_code=404, detail="Project not found",
                             headers={"X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, no-store"})
     noindex = project.status != "published" or is_staging_environment()
-    return HTMLResponse(website_contact.add_quote_attribution(plumbing_advice.add_related_advice_links(real_projects.render_project(
-        project, absolute_url=absolute_url, request=request, staging=is_staging_environment()), request.url.path)),
+    return HTMLResponse(website_contact.add_quote_attribution(with_public_review_badge(plumbing_advice.add_related_advice_links(real_projects.render_project(
+        project, absolute_url=absolute_url, request=request, staging=is_staging_environment()), request.url.path))),
         headers={"Cache-Control": "private, no-store" if noindex else "no-cache",
                  **({"X-Robots-Tag": "noindex, nofollow"} if noindex else {})})
 

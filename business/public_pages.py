@@ -461,7 +461,7 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
 <footer><div class="wrap foot"><div><strong>Nigel Harvey Plumbing</strong><br>Nigel Harvey Ltd · Guildford, Surrey</div><div>{escape(COMPANY_PHONE)}<br>{escape(COMPANY_EMAIL)}</div></div></footer><a class="mobile-call" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel · {escape(COMPANY_PHONE)}</a></body></html>""")
 
 
-def render_service_page(service: dict, logo_html: str, request: Request | None = None, *, absolute_url) -> str:
+def render_service_page(service: dict, logo_html: str, request: Request | None = None, *, absolute_url, review_badge_html: str = '') -> str:
     service_links = ''.join(f'<a href="/{escape(item["slug"])}">{escape(item["title"])}</a>' for item in SERVICE_PAGES if item['slug'] != service['slug'])
     location_links = ''.join(f'<a href="/plumber-{escape(item["slug"])}">Plumber in {escape(item["name"])}</a>' for item in LOCATION_PAGES)
     page_title = {
@@ -509,7 +509,7 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
 <html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(page_title)}</title><meta name="description" content="{escape(service['meta'])}"><meta name="keywords" content="{escape(service['keywords'])}"><link rel="canonical" href="{escape(canonical)}"><meta property="og:type" content="website"><meta property="og:title" content="{escape(page_title)}"><meta property="og:description" content="{escape(service['meta'])}"><meta property="og:url" content="{escape(canonical)}"><script type="application/ld+json">{breadcrumb_schema}</script><script type="application/ld+json">{service_schema}</script></head>
 <body><div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(service['title'])}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Nigel</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
 <main>
-<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Surrey plumbing service</div><h1>{escape(service['heading'])}</h1><p class="lead">{escape(service['intro'])}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
+<div class="wrap hero"><div class="hero-card"><div>{logo_html}</div><div class="eyebrow">Surrey plumbing service</div><h1>{escape(service['heading'])}</h1><p class="lead">{escape(service['intro'])}</p><div class="hero-review-badge">{review_badge_html}</div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
 <div class="wrap section"><h2>What to tell Nigel</h2><p>{escape(service['body'])}</p><div class="grid3"><div class="card item"><h3>Where is the job?</h3><p>Send the postcode so Nigel can confirm whether the location is in his service area.</p></div><div class="card item"><h3>What is happening?</h3><p>Describe the fixture or pipework and whether this is a repair or planned installation.</p></div><div class="card item"><h3>How to get in touch</h3><p>Call for a pressing problem or use the quote form for planned work. You deal directly with Nigel.</p></div></div></div>
 {general_detail}
 {urgent_detail}
@@ -560,7 +560,7 @@ LOCAL_SERVICE_PAGES = [
 ]
 
 
-def render_local_service_location_page(service: dict, location: dict, logo_html: str, request: Request | None = None, *, absolute_url) -> str:
+def render_local_service_location_page(service: dict, location: dict, logo_html: str, request: Request | None = None, *, absolute_url, review_badge_html: str = '') -> str:
     area = location["name"]
     area_slug = location["slug"]
     service_slug = service["slug"]
@@ -603,8 +603,16 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
             "A damp cupboard beneath a basin or kitchen sink may become wet only while the waste is draining, whereas a leaking supply joint can let water escape even when the tap is off. Tell me when you first see the water, which fitting was being used and whether the leak continues after the water is turned off. A photograph of the visible pipework, waste trap or wet area can help me discuss the likely inspection and parts, but a damp patch does not by itself identify the failed connection. Do not open walls or remove shower panels to investigate. For water escaping rapidly, close the stopcock if safe; keep away from electrical fittings near water. Include your Leatherhead postcode so I can confirm travel and availability."
         ),
         ("toilet-repair", "guildford"): (
-            "What to do if your toilet is not working in Guildford",
-            "Let me know if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Take a photo or short video of what happens and send it to me on WhatsApp with your postcode and a brief description. This can help me work out what parts might be needed before a visit."
+            "What to check before a toilet repair in Guildford",
+            "A toilet that keeps running into the pan after flushing may have a different fault from one that fills slowly or leaks onto the floor. Tell me which symptom you see, whether the flush is a button or lever, and if the cistern is exposed or concealed behind a panel. The fill valve, flush mechanism, seals and external connections need different checks; I cannot identify the faulty part from the symptom alone. If water is escaping, isolate the toilet supply only if it is safe. Send your Guildford postcode and a photograph of the accessible fitting, without dismantling it, so I can discuss repair or replacement options before a visit."
+        ),
+        ("bathroom-plumbing", "guildford"): (
+            "Planning a bathroom or shower plumbing job in Guildford",
+            "For a replacement shower, basin, toilet or bath, tell me which fittings will stay in the same position and which will move. Existing hot and cold supplies, waste fall, access beneath the tray or bath and the condition of surrounding surfaces can affect the scope. A straightforward fitting replacement is different from moving pipework or rebuilding a leaking shower area. Send photographs of safely visible connections and your Guildford postcode; I can discuss the likely work and whether an inspection is needed before quoting."
+        ),
+        ("bathroom-plumbing", "farnham"): (
+            "Replacing bathroom fittings or changing pipework in Farnham",
+            "If you are replacing a shower, basin or toilet, say whether the new fitting is the same size and whether the waste and supply positions will change. For a shower tray or enclosure, access to the trap, the waste route and the waterproofing at the tray junction can affect the job. A small replacement may be possible without a full bathroom refurbishment, but hidden damage cannot be ruled out from photos alone. Send the Farnham postcode and pictures of the existing fittings to discuss the next step."
         ),
         ("toilet-repair", "fairlands"): (
             "What to check when a toilet is running or leaking in Fairlands",
@@ -615,8 +623,8 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
             "If water continues to trickle into the pan after flushing, or the cistern refills repeatedly, note whether the problem stops when the cistern is full. Fill valves, flush mechanisms and seals are among the parts that may need checking; the symptom alone does not confirm which one has failed. Water around the base can have a different source, including a connection or seal. Tell me whether you have a handle, push button or concealed cistern, whether the toilet flushes at all and when any water appears. Send a photograph of safely accessible parts or a short video, plus your Godalming postcode. Do not dismantle concealed boxing or remove the cistern to take photographs. If water is escaping, isolate the supply only if you can do so safely."
         ),
         ("toilet-repair", "woking"): (
-            "What to do if your toilet is not working in Woking",
-            "Let me know if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Take a photo or short video of what happens and send it to me on WhatsApp with your postcode and a brief description. This can help me work out what parts might be needed before a visit."
+            "What details help with a toilet repair in Woking?",
+            "If the toilet will not flush, tell me whether the button or handle moves normally, whether the cistern refills, and whether water is running into the pan. For a concealed cistern, a photograph of the flush plate and any existing access panel is more useful than removing boxing. If the leak is outside the toilet, note whether it appears only after flushing or while the toilet is unused. These details can help plan an inspection and suitable parts, not confirm a diagnosis. Send your Woking postcode and photographs of safely accessible areas to discuss availability."
         ),
         ("toilet-repair", "burpham"): (
             "What to do if your toilet is not working in Burpham",
@@ -691,6 +699,27 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         ),
     }
     focused_links_html = focused_local_links.get((service_slug, area_slug), "")
+    # Point to published evidence where relevant, without implying a project
+    # took place in a town where it did not.
+    if (service_slug, area_slug) in {("bathroom-plumbing", "guildford"), ("bathroom-plumbing", "farnham")}:
+        from business import real_projects
+        project_path = "/projects/ensuite-renovation-merrow-guildford"
+        advice_path = "/advice/shower-replacement-waterproofing-rebuild"
+        if any(p.path == project_path for p in real_projects.visible_projects()):
+            focused_links_html += (
+                '<p>For a real example of a completed shower and bathroom rebuild, see '
+                '<a href="' + project_path + '">the Merrow, Guildford ensuite project</a>. '
+                'The extent of work on your property will depend on its condition and fittings.</p>'
+            ) if area_slug == "farnham" else (
+                '<p>See <a href="' + project_path + '">the completed Merrow ensuite project</a> '
+                'for a real example of shower and bathroom preparation near Guildford. '
+                'Your property may require different work.</p>'
+            )
+        if any(a.path == advice_path for a in plumbing_advice.visible_articles()):
+            focused_links_html += (
+                '<p>Read <a href="' + advice_path + '">the shower replacement and waterproofing guide</a> '
+                'for further background on shower plumbing and preparation.</p>'
+            )
     priority_html = (f'<div class="wrap section"><h2>{escape(detail[0])}</h2><p>{escape(detail[1])}</p>'
                      f'{whatsapp_html}{farnham_advice_html}{focused_links_html}<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
                      'or <a href="/request-quote">send the job details</a>.</p></div>') if detail else ""
@@ -756,7 +785,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
 <body>
 <div class="top"><div class="wrap nav"><div class="brand">Nigel Harvey Ltd<small>{escape(title)} in {escape(area)}</small></div><div class="nav-actions"><a class="btn btn-light" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a><a class="btn btn-light" href="/">Home</a></div></div></div>
 <main>
-<div class="wrap hero"><div class="hero-card">{hero_logo_html}<div class="eyebrow">Local plumbing help in {escape(area)}</div><h1>{escape(heading)}</h1><p class="lead">{escape(intro)}</p><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
+<div class="wrap hero"><div class="hero-card">{hero_logo_html}<div class="eyebrow">Local plumbing help in {escape(area)}</div><h1>{escape(heading)}</h1><p class="lead">{escape(intro)}</p><div class="hero-review-badge">{review_badge_html}</div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div></div>
 
 <div class="wrap section"><h2>{escape(title)} Services in {escape(area)}</h2><p>If you are looking for {escape(service["service"])} in {escape(area)}, Nigel provides practical help for local homes, landlords and small businesses.</p><ul class="list">{problem_items}</ul></div>
 {priority_html}

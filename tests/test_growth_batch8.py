@@ -101,10 +101,11 @@ class GrowthBatch8Tests(unittest.TestCase):
                 self.assertEqual(page.select_one('header .brand img')['src'],
                                  '/site-images/nigel-harvey-logo.png')
                 self.assertEqual(len(page.select('main img.logo')),0)
-        # The approved correction must not remove logos from other service pages.
+        # The website-wide consistency update uses the shared header logo everywhere.
         for path in ['/leak-repair-camberley', '/bathroom-plumbing-farnham']:
             page=BeautifulSoup(self.client.get(path).text,'html.parser')
-            self.assertEqual(len(page.select('.hero-card img.logo')),1)
+            self.assertEqual(len(page.select('.hero-card img.logo')),0)
+            self.assertEqual(len(page.select('header .brand img')),1)
 
     def test_original_published_article_record_and_project_assets_preserved(self):
         assert_project_renderer_preserved(self, BASE)
@@ -121,7 +122,7 @@ class GrowthBatch8Tests(unittest.TestCase):
         for path in tracked:self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT),path)
 
     def test_stage2_changes_limited_to_tracking_and_protected_core_unchanged(self):
-        baseline='f62412fb019afac9ec8605303b062ae726506e97'
+        baseline='8cd736461190941224b911a02884c3ea1ac5fbdb'
         old=ast.parse(subprocess.check_output(['git','show',baseline+':app.py'],cwd=ROOT))
         new=ast.parse((ROOT/'app.py').read_text())
         allowed={'protect_app_routes','row_to_invoice','api_create_lead','api_delete_quote','api_update_invoice','api_invoice_status','api_delete_invoice','api_delete_customer'}
@@ -129,13 +130,13 @@ class GrowthBatch8Tests(unittest.TestCase):
         after={n.name:ast.dump(n) for n in new.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef,ast.ClassDef))}
         self.assertEqual({k:v for k,v in before.items() if k not in allowed},{k:after[k] for k in before if k not in allowed})
         self.assertTrue(all(k.startswith(('Revenue','revenue_','api_revenue_')) for k in set(after)-set(before)))
-        for path in ['business/public_pages.py','business/project_content.json','business/advice_content.json','business/real_projects.py','business/plumbing_advice.py','business/lead_email_store.py','business/notifications.py','business/quote_calculation.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','templates/homepage.html','templates/public_header.html','templates/public_footer.html']:
+        for path in ['business/public_pages.py','business/public_layout.py','business/google_reviews.py','business/document_links.py','static/public_reviews.css','business/project_content.json','business/advice_content.json','business/real_projects.py','business/plumbing_advice.py','business/lead_email_store.py','business/notifications.py','business/quote_calculation.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','templates/homepage.html','templates/public_header.html','templates/public_footer.html']:
             current=(ROOT/path).read_bytes()
             if path=='static/app.js':
                 from manual_whatsapp_snapshot import strip_manual_whatsapp_js
                 current=strip_manual_whatsapp_js(current.decode()).encode()
-            # Protect already-approved Batch 9 pages and new diary controls on main.
-            self.assertEqual(current,subprocess.check_output(['git','show','f62412fb019afac9ec8605303b062ae726506e97'+':'+path],cwd=ROOT),path)
+            # Protect the latest production website, review design, security and diary controls.
+            self.assertEqual(current,subprocess.check_output(['git','show',baseline+':'+path],cwd=ROOT),path)
 
     def test_private_file_cannot_publish_or_bypass_approval(self):
         private_file=self.root/'invalid-private-advice.json'

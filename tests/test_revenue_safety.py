@@ -82,11 +82,17 @@ class RevenueSafetyTests(unittest.TestCase):
             self.assertEqual(source['source'],expected)
 
     def test_previous_release_reads_and_paid_write_guard(self):
+        self.assert_previous_release_compatibility('c4f57d379e3463fc414814b43ca0e81f8e5a68c7')
+
+    def test_current_production_reads_and_paid_write_guard(self):
+        self.assert_previous_release_compatibility('8cd736461190941224b911a02884c3ea1ac5fbdb')
+
+    def assert_previous_release_compatibility(self, baseline):
         q=self.quote();i=self.invoice(q);self.m.update_invoice_status(i['id'],'part paid',30);self.activate()
         repo=Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory(prefix='revenue-previous-release-') as folder:
             root=Path(folder);archive=root/'baseline.tar';old=root/'app';old.mkdir()
-            subprocess.run(['git','archive','c4f57d379e3463fc414814b43ca0e81f8e5a68c7','-o',str(archive)],cwd=repo,check=True,timeout=15)
+            subprocess.run(['git','archive',baseline,'-o',str(archive)],cwd=repo,check=True,timeout=15)
             with tarfile.open(archive) as tar:tar.extractall(old,filter='data')
             shutil.copy2(self.root/'quotes.db',old/'quotes.db')
             p=old/'business/config.py';s=p.read_text()

@@ -91,6 +91,11 @@ def restore_private_nav_for_legacy_snapshot(html: str) -> str:
     New rendered-page checks separately prove customers never see these links.
     Any other change still fails the historical exact-byte hash.
     """
+    review_css = "\n" + (ROOT / "static/public_reviews.css").read_text()
+    if review_css in html:
+        assert html.count(review_css) == 1
+        html = html.replace(review_css, "", 1)
+    html = html.replace(' class="review-summary"', "")
     html = restore_brand(html, includes_css=True)
     disclosure = ('<p class="company-disclosure">Registered in England and Wales · '
                   'Company no. 09507904<br>Registered office: 125 Bushy Hill Drive, '
@@ -1368,10 +1373,28 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             }
         for name, digest in cases:
             with self.subTest(page=name):
-                # Freeze every existing byte outside the additive discovery link.
+                if name == "location":
+                    page = BeautifulSoup(rendered[name], "html.parser")
+                    badge = page.select_one(".hero-review-badge")
+                    self.assertIsNotNone(badge)
+                    self.assertIn("Read customer reviews on Google", badge.text)
+                    rendered[name] = rendered[name].replace(str(badge), "", 1)
+                    box = page.select_one(".reviewbox")
+                    self.assertEqual(len(box.select("a.review-summary")), 1)
+                    original_box = str(box)
+                    box.clear()
+                    box.append(BeautifulSoup("<div>Synthetic reviews</div>", "html.parser"))
+                    rendered[name] = rendered[name].replace(original_box, str(box), 1)
+                # Freeze every existing byte outside the approved presentation changes.
                 unchanged = re.sub(r'<br/?><a href="/projects">Real projects</a>', "",
                                    restore_private_nav_for_legacy_snapshot(rendered[name]))
                 unchanged = unchanged.replace('<a href="/advice">Plumbing Advice</a>', "", 1)
+                if name in ("service", "local"):
+                    # The only approved new markup is the compact live review badge.
+                    badge = re.search(r'<div class="hero-review-badge">.*?</div>', unchanged, re.S)
+                    self.assertIsNotNone(badge, "Expected review badge in service hero")
+                    self.assertIn("Read customer reviews on Google", badge.group(0))
+                    unchanged = unchanged.replace(badge.group(0), "", 1)
                 self.assertEqual(hashlib.sha256(pre_revenue_public(unchanged).encode()).hexdigest(), digest)
 
     def test_stage7_merchant_parsing_and_matching_offline(self):

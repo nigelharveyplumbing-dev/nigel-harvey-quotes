@@ -99,5 +99,45 @@ def review_summary_html(review_html: str, reviews_url: str) -> str:
     rating = BeautifulSoup(review_html, "html.parser").select_one(".google-rating")
     link = escape(reviews_url, quote=True)
     if rating:
-        return f'<a href="#reviews" aria-label="See customer reviews">{rating}</a>'
-    return f'<a href="{link}" target="_blank" rel="noopener noreferrer">Read customer reviews on Google</a>'
+        return f'<a href="#reviews" class="review-summary" aria-label="See customer reviews">{rating}</a>'
+    return f'<a href="{link}" class="review-summary" target="_blank" rel="noopener noreferrer">Read customer reviews on Google</a>'
+
+
+def add_public_review_badge(html: str, review_html: str, reviews_url: str) -> str:
+    """Add one compact summary to a public intro; preserve the SEO head and content.
+
+    Only explicitly selected public renderers call this. Private application and
+    document responses never pass through this presentation helper.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    intro = soup.select_one(".hero-copy, .hero-card, .project-intro > div, .advice-story, .project-index")
+    if intro is None:
+        return html
+    original_intro = str(intro)
+    summary = review_summary_html(review_html, reviews_url).replace('href="#reviews"', 'href="/#reviews"')
+    badge = soup.select_one(".hero-review-badge")
+    if badge is None:
+        badge = soup.new_tag("div", attrs={"class": "hero-review-badge"})
+        lead = intro.select_one(".lead, .project-lead, .advice-answer")
+        if lead is None:
+            lead = intro.find("p", recursive=False)
+            if lead is not None and "kicker" in lead.get("class", []):
+                lead = lead.find_next_sibling("p")
+        if lead is None:
+            return html
+        lead.insert_after(badge)
+    badge.clear()
+    badge.append(BeautifulSoup(summary, "html.parser"))
+    # The homepage owns the full Google cards. Keep existing local review anchors
+    # useful, without duplicating Google's five cards across location pages.
+    for box in soup.select(".reviewbox"):
+        original_box = str(box)
+        box.clear()
+        box.append(BeautifulSoup(summary, "html.parser"))
+        html = html.replace(original_box, str(box), 1)
+    # The shared header already displays the graphic logo on every public page.
+    for logo in intro.select('img[alt="Nigel Harvey Ltd logo"]'):
+        logo.decompose()
+    if original_intro in html:
+        return html.replace(original_intro, str(intro), 1)
+    return str(soup)

@@ -10,7 +10,7 @@ on:
       - 'templates/**'
       - 'tests/**'
       - 'requirements*.txt'
-      - '.github/workflows/trade-price-comparison.yml'
+      - '.github/workflows/full-regression-tests.yml'
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -73,6 +73,23 @@ jobs:
           node --test tests/test_batch8_browser_support.mjs
           node tests/test_lead_email.cjs
           python -B tests/run_stage6_local.py
+      - name: Public Google review desktop, tablet and mobile matrix
+        env:
+          EMAIL_ENABLED: '0'
+          GOOGLE_PLACES_API_KEY: ''
+          OPENAI_API_KEY: ''
+          PUBLIC_REVIEWS_EVIDENCE_DIR: '${{ runner.temp }}/public-review-preview'
+        run: |
+          export CODEX_PRIMARY_RUNTIME_NODE_MODULES="$RUNNER_TEMP/comparison-browser/node_modules"
+          export STAGE6_TEST_PYTHON="$(command -v python)"
+          node tests/run_public_reviews_browser.mjs
+      - name: Save public review responsive screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-review-responsive-previews
+          path: ${{ runner.temp }}/public-review-preview
+          if-no-files-found: error
       - name: Save approved article desktop and mobile previews
         if: always()
         uses: actions/upload-artifact@v4
