@@ -162,7 +162,7 @@ PRIMARY_LOCATION_NOTES = {
         "intro": "For plumbing work in Farnham, send the postcode and say whether you need a repair or a planned fitting change. Nigel travels from Guildford and will confirm the location, work and availability before agreeing a visit.",
         "detail": "For a sink or basin problem, distinguish slow drainage from water leaking out of a connection. Stop using a fitting that spills water and photograph the visible trap or pipe without dismantling it. For a planned replacement, send the proposed product details as well as the existing fitting.",
         "nearby": "Godalming, Aldershot and nearby areas",
-        "related": ("/leak-repair-farnham", "Leak repair enquiries in Farnham"),
+        "related": ("/leak-repair-farnham", "Leak repair in Farnham"),
     },
     "worplesdon": {
         "intro": "Nigel is based in Guildford and considers domestic plumbing enquiries in Worplesdon. Send the full job postcode and describe the fitting, so coverage and the next step can be confirmed before a visit.",
@@ -174,7 +174,7 @@ PRIMARY_LOCATION_NOTES = {
         "intro": "For plumbing repairs or a bathroom project in Merrow, contact Guildford-based Nigel with the postcode and job details. The published Merrow ensuite renovation provides a real example of his bathroom preparation and fitting work.",
         "detail": "That ensuite included wall reconstruction, waterproof boarding, shower and sanitaryware plumbing, tiling and a towel rail. Your job may be smaller: say which fittings are staying, which are changing and whether you have seen a leak. An inspection establishes the preparation your room needs.",
         "nearby": "Burpham, Guildford and nearby areas",
-        "related": ("/projects/ensuite-renovation-merrow-guildford", "See the completed Merrow ensuite and photographs"),
+        "related": ("/projects/ensuite-renovation-merrow-guildford", "see the completed Merrow ensuite and photographs"),
     },
     "burpham": {
         "intro": "For a tap, toilet, basin or radiator job in Burpham, describe the fault or planned replacement and send the postcode. You deal with Nigel directly; his base is Guildford, and a visit is arranged after coverage and availability are discussed.",
@@ -360,8 +360,12 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
     ) if primary_note else ""
     if primary_note and primary_note.get("related"):
         href, label = primary_note["related"]
-        primary_details_html += (f'<section><div class="wrap"><p>Looking for a specific repair? '
-                                 f'<a href="{escape(href, quote=True)}">{escape(label)}</a> explains what details to send.</p></div></section>')
+        if href.startswith("/projects/"):
+            primary_details_html += (f'<section><div class="wrap"><p>For a documented local example, '
+                                     f'<a href="{escape(href, quote=True)}">{escape(label)}</a>.</p></div></section>')
+        else:
+            primary_details_html += (f'<section><div class="wrap"><p>Looking for a specific repair? '
+                                     f'<a href="{escape(href, quote=True)}">{escape(label)}</a> explains what details to send.</p></div></section>')
     location_intro = primary_note["intro"] if primary_note else (
         f"Reliable domestic plumbing for leaks, taps, toilets, bathrooms, showers, radiators and pipework in {location_name} and surrounding Surrey areas. From first enquiry to finished job, you deal directly with me, Nigel."
     )
