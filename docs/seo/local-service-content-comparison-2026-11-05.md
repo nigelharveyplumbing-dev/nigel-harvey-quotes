@@ -2,6 +2,8 @@
 
 Scope: all 52 published local service/location combinations in the 82-URL sitemap. Branch: seo/full-site-content-review-2026-11-05.
 
+This records the starting comparison. The continued PR now improves 29 of the 36 fallback pages, deliberately retains seven with existing visibility, and preserves the earlier three targeted edits. Final guidance counts are 45 custom / seven shared: emergency 12/1, toilet 10/3, leak 13/0, bathroom 10/3. See [all 82 page decisions](page-by-page-review-2026-11-05.md), [all 3,321 pairwise comparisons](full-site-pairwise-2026-11-05.json), and [validation status](validation-2026-11-05.md).
+
 ## Template-level comparison
 
 | Service | Pages | Custom priority guidance | Shared fallback guidance |

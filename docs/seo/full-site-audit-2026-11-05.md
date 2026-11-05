@@ -1,6 +1,6 @@
 # Website-wide SEO content review — 5 November 2026
 
-Status: audit only; no production changes approved.
+Initial audit record. Superseded by [the complete page-by-page review](page-by-page-review-2026-11-05.md) and [validation record](validation-2026-11-05.md). No production changes approved.
 
 ## Scope
 The production sitemap contains 82 URLs: 20 location overview pages, 52 local service/location pages, 4 Surrey-wide service pages, and 6 other pages (home, quote, project and advice index/detail).
