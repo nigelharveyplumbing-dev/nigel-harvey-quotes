@@ -72,6 +72,13 @@ try{
    });
    const headers=await response.allHeaders();
    const layout=await page.evaluate(()=>({
+    ctaContrast:[...document.querySelectorAll('.cta p')].map(x=>{
+     const rgb=c=>c.match(/[\d.]+/g).slice(0,3).map(Number);
+     const luminance=c=>rgb(c).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4}).reduce((a,v,i)=>a+v*[.2126,.7152,.0722][i],0);
+     let background=x;while(background.parentElement&&getComputedStyle(background).backgroundColor==='rgba(0, 0, 0, 0)')background=background.parentElement;
+     const fg=luminance(getComputedStyle(x).color),bg=luminance(getComputedStyle(background).backgroundColor);
+     return {text:x.textContent,ratio:(Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05)};
+    }),
     overflow:document.documentElement.scrollWidth>innerWidth,
     canonical:[...document.querySelectorAll('link[rel="canonical"]')].map(x=>x.href),
     h1:document.querySelectorAll('h1').length,title:document.title,
@@ -91,6 +98,7 @@ try{
    if(row.status!==200)problems.push('HTTP');
    if(!/noindex/.test(row.noindex||''))problems.push('staging noindex');
    if(row.overflow||row.clippedHeadings.length)problems.push('layout overflow');
+   if(row.ctaContrast.some(x=>x.ratio<4.5))problems.push('contact banner contrast');
    if(row.canonical.length!==1||row.canonical[0]!==origin+path)problems.push('canonical');
    if(row.h1!==1||!row.title||!row.description)problems.push('metadata/heading');
    if(row.logos!==1||row.brokenImages.length)problems.push('logo/images');
