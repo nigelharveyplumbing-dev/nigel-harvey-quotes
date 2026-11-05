@@ -576,7 +576,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         ),
         ("leak-repair", "camberley"): (
             "What to do if you have a water leak in Camberley",
-            "If you have noticed water leaking at home, try to see where it is coming from without taking anything apart. Tell me whether the water appears all the time or only when you use a tap, shower or toilet. If water is leaking badly, turn off the water at the stopcock, but only if it is safe. Take a photo or short video if you can do so safely and send it to me on WhatsApp, along with your postcode and a brief description. This can help me understand the problem and discuss what may be needed before visiting."
+            "For a Camberley leak enquiry, tell me whether water is escaping continuously or only when a particular fitting is used. For example, a damp kitchen cupboard when the sink empties may point to a waste connection rather than a pressurised supply. Do not undo pipework to test this. If water is escaping rapidly, turn off the stopcock if safe and keep clear of nearby electrics. Send the postcode, a photo of visible connections and when the water appears so we can discuss the next step."
         ),
         ("leak-repair", "farnham"): (
             "What to do if you have a water leak in Farnham",
@@ -596,7 +596,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         ),
         ("leak-repair", "fairlands"): (
             "What to do if you have a water leak in Fairlands",
-            "If you have noticed water leaking at home, try to see where it is coming from without taking anything apart. Tell me whether the water appears all the time or only when you use a tap, shower or toilet. If water is leaking badly, turn off the water at the stopcock, but only if it is safe. Take a photo or short video if you can do so safely and send it to me on WhatsApp, along with your postcode and a brief description. This can help me understand the problem and discuss what may be needed before visiting."
+            "For a leak in Fairlands, let me know whether the dampness is under a basin, behind a toilet or near a shower, and whether it changes when the fitting is used. A stain on a ceiling does not necessarily show exactly where the leak started, so avoid opening surfaces yourself. If there is active water escape, isolate the supply only when safe. A photograph of the affected area and the Fairlands postcode will help me discuss possible checks and availability."
         ),
         ("leak-repair", "leatherhead"): (
             "What to check before reporting a leak in Leatherhead",
@@ -632,7 +632,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         ),
         ("toilet-repair", "leatherhead"): (
             "What to do if your toilet is not working in Leatherhead",
-            "Let me know if your toilet will not flush, keeps running, fills slowly or leaks onto the floor. You do not need to take anything apart. If water is escaping, turn off the toilet's water supply only if it is safe. Take a photo or short video of what happens and send it to me on WhatsApp with your postcode and a brief description. This can help me work out what parts might be needed before a visit."
+            "For a toilet repair enquiry in Leatherhead, say whether the cistern fills slowly, runs into the pan after flushing or leaks onto the floor. These symptoms can involve different components, so please do not remove the cistern or concealed boxing to investigate. A photograph of the flush button or lever and any safely accessible isolation valve helps establish what can be checked. If water is escaping, isolate the toilet supply only if safe, and include your Leatherhead postcode when you contact me."
         ),
     }
     # Service-specific guidance for remaining town pages. Keep existing reviewed
