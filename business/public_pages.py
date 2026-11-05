@@ -345,6 +345,10 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
     canonical = absolute_url(f"/plumber-{slug}", request)
     is_guildford = slug == "guildford"
     primary_note = PRIMARY_LOCATION_NOTES.get(slug)
+    if primary_note and slug == "merrow":
+        from business import real_projects
+        if not any(p.path == primary_note["related"][0] for p in real_projects.visible_projects()):
+            primary_note = None
     primary_details_html = (
         f'<section class="section-pale"><div class="wrap"><div class="intro left"><h2>Planning plumbing work in {escape(location_name)}</h2>'
         f'<p>{escape(primary_note["intro"])}</p></div><div class="cards"><div class="card"><h3>Useful details to share</h3>'
@@ -504,13 +508,18 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
             f'<a href="/{local_service_slug}-{escape(item["slug"])}">{escape(item["name"])}</a>'
             for item in LOCATION_PAGES if item["slug"] != "farnborough") + '</div></div>'
     ) if local_service_slug else ""
+    from business import real_projects, plumbing_advice
+    published_planning_links = []
+    if any(a.path == "/advice/shower-replacement-waterproofing-rebuild" for a in plumbing_advice.visible_articles()):
+        published_planning_links.append('<a href="/advice/shower-replacement-waterproofing-rebuild">shower replacement and waterproofing guide</a>')
+    if any(p.path == "/projects/ensuite-renovation-merrow-guildford" for p in real_projects.visible_projects()):
+        published_planning_links.append('<a href="/projects/ensuite-renovation-merrow-guildford">completed Merrow, Guildford ensuite</a>')
     planning_detail = (
         '<div class="wrap section"><h2>Preparation behind the bathroom fittings</h2>'
         '<p>The pipe connections are one part of a bathroom job. Access to wastes, the condition of the supporting surfaces '
         'and waterproofing around a shower affect the scope and order of work. '
-        'Read the <a href="/advice/shower-replacement-waterproofing-rebuild">shower replacement and waterproofing guide</a> '
-        'and see the <a href="/projects/ensuite-renovation-merrow-guildford">completed Merrow, Guildford ensuite</a> '
-        'for a documented example. The work needed in your bathroom must be assessed separately.</p></div>'
+        + ('See the ' + ' and '.join(published_planning_links) + ' for further background. ' if published_planning_links else '') +
+        'The work needed in your bathroom must be assessed separately.</p></div>'
     ) if service["slug"] == "bathroom-plumbing-surrey" else ""
     page_title = {
         "emergency-plumber-surrey": "Emergency Plumbing in Surrey",

@@ -77,11 +77,27 @@ jobs:
           export STAGE6_TEST_PYTHON="$(command -v python)"
           node tests/run_public_reviews_browser.mjs
       - name: Save public review responsive screenshots
+        # All 82 published URLs, with the application's staging auth/noindex.
+        # No production data, credentials or external integrations are used.
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: public-review-responsive-previews
           path: ${{ runner.temp }}/public-review-preview
+          if-no-files-found: error
+      - name: All 82 public pages on staging at four viewport sizes
+        env:
+          FULL_SITE_EVIDENCE_DIR: '${{ runner.temp }}/full-site-preview'
+        run: |
+          export CODEX_PRIMARY_RUNTIME_NODE_MODULES="$RUNNER_TEMP/comparison-browser/node_modules"
+          export STAGE6_TEST_PYTHON="$(command -v python)"
+          node tests/run_full_site_browser.mjs
+      - name: Save all 82-page staging screenshots and checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-site-staging-previews
+          path: ${{ runner.temp }}/full-site-preview
           if-no-files-found: error
       - name: Save approved article desktop and mobile previews
         if: always()
