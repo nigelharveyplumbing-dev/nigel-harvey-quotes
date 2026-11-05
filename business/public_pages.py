@@ -720,8 +720,31 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
                 '<p>Read <a href="' + advice_path + '">the shower replacement and waterproofing guide</a> '
                 'for further background on shower plumbing and preparation.</p>'
             )
+    # Keep all local service pages discoverable through contextual links to the
+    # corresponding area overview and two distinct related services.
+    related_service_slugs = {
+        "emergency-plumber": ("leak-repair", "toilet-repair"),
+        "toilet-repair": ("leak-repair", "bathroom-plumbing"),
+        "leak-repair": ("emergency-plumber", "bathroom-plumbing"),
+        "bathroom-plumbing": ("toilet-repair", "leak-repair"),
+    }
+    related_service_labels = {
+        "emergency-plumber": "urgent plumbing",
+        "toilet-repair": "toilet repairs",
+        "leak-repair": "leak repairs",
+        "bathroom-plumbing": "bathroom plumbing",
+    }
+    related_links = [
+        f'<a href="/{escape(slug)}-{escape(area_slug)}">{escape(related_service_labels[slug])} in {escape(area)}</a>'
+        for slug in related_service_slugs[service_slug]
+    ]
+    local_navigation_html = (
+        f'<p>Other help in {escape(area)}: '
+        f'<a href="/plumber-{escape(area_slug)}">general plumbing</a>, '
+        f'{related_links[0]} and {related_links[1]}.</p>'
+    )
     priority_html = (f'<div class="wrap section"><h2>{escape(detail[0])}</h2><p>{escape(detail[1])}</p>'
-                     f'{whatsapp_html}{farnham_advice_html}{focused_links_html}<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
+                     f'{whatsapp_html}{farnham_advice_html}{focused_links_html}{local_navigation_html}<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
                      'or <a href="/request-quote">send the job details</a>.</p></div>') if detail else ""
     priority_meta = {
         ("leak-repair", "aldershot"): "Leaking pipe or fitting in Aldershot? Tell Guildford-based Nigel where the water appears, whether it can be isolated and your postcode to discuss repair help.",
