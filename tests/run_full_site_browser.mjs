@@ -59,7 +59,17 @@ try{
   for(const path of paths){
    const response=await page.goto(origin+path,{waitUntil:'load'});
    await page.evaluate(()=>document.fonts.ready);
-   await page.evaluate(async()=>{await Promise.all([...document.images].map(img=>img.decode().catch(()=>{})))});
+   await page.evaluate(async()=>{
+    // Below-the-fold project photographs are lazy-loaded in the real page.
+    // Request them explicitly before a full-page capture and bound decoding,
+    // so an offscreen image cannot stall the entire 328-case matrix.
+    const images=[...document.images];for(const img of images)img.loading='eager';
+    let timeout;
+    try{await Promise.race([
+     Promise.all(images.map(img=>img.decode().catch(()=>{}))),
+     new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error('Image decode deadline')),15000)}),
+    ])}finally{clearTimeout(timeout)}
+   });
    const headers=await response.allHeaders();
    const layout=await page.evaluate(()=>({
     overflow:document.documentElement.scrollWidth>innerWidth,
