@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import Request
 from business.config import (COMPANY_NAME, COMPANY_EMAIL, COMPANY_PHONE, COMPANY_PHONE_TEL, GOOGLE_BUSINESS_PROFILE_URL, GOOGLE_RATING_VALUE, GOOGLE_REVIEW_COUNT, GOOGLE_REVIEWS_URL, GOOGLE_REVIEW_1_TEXT, GOOGLE_REVIEW_1_AUTHOR, GOOGLE_REVIEW_2_TEXT, GOOGLE_REVIEW_2_AUTHOR, GOOGLE_REVIEW_3_TEXT, GOOGLE_REVIEW_3_AUTHOR)
 from business.public_layout import render_shared_public_page
+from business.local_service_guidance import LOCAL_GUIDANCE
 
 def build_homepage_faq_schema() -> str:
     faq_items = [
@@ -157,6 +158,36 @@ SERVICE_PAGES = [
 ]
 
 PRIMARY_LOCATION_NOTES = {
+    "farnham": {
+        "intro": "For plumbing work in Farnham, send the postcode and say whether you need a repair or a planned fitting change. Nigel travels from Guildford and will confirm the location, work and availability before agreeing a visit.",
+        "detail": "For a sink or basin problem, distinguish slow drainage from water leaking out of a connection. Stop using a fitting that spills water and photograph the visible trap or pipe without dismantling it. For a planned replacement, send the proposed product details as well as the existing fitting.",
+        "nearby": "Godalming, Aldershot and nearby areas",
+        "related": ("/leak-repair-farnham", "Leak repair enquiries in Farnham"),
+    },
+    "worplesdon": {
+        "intro": "Nigel is based in Guildford and considers domestic plumbing enquiries in Worplesdon. Send the full job postcode and describe the fitting, so coverage and the next step can be confirmed before a visit.",
+        "detail": "For work in a flat or on shared pipework, mention the floor, who can authorise isolation and any access arrangements. For planned bathroom work, a sketch of fitting positions and the order of work with other trades helps establish the plumbing scope.",
+        "nearby": "Fairlands, Guildford and surrounding areas",
+        "related": ("/bathroom-plumbing-worplesdon", "Planning bathroom plumbing in Worplesdon"),
+    },
+    "merrow": {
+        "intro": "For plumbing repairs or a bathroom project in Merrow, contact Guildford-based Nigel with the postcode and job details. The published Merrow ensuite renovation provides a real example of his bathroom preparation and fitting work.",
+        "detail": "That ensuite included wall reconstruction, waterproof boarding, shower and sanitaryware plumbing, tiling and a towel rail. Your job may be smaller: say which fittings are staying, which are changing and whether you have seen a leak. An inspection establishes the preparation your room needs.",
+        "nearby": "Burpham, Guildford and nearby areas",
+        "related": ("/projects/ensuite-renovation-merrow-guildford", "See the completed Merrow ensuite and photographs"),
+    },
+    "burpham": {
+        "intro": "For a tap, toilet, basin or radiator job in Burpham, describe the fault or planned replacement and send the postcode. You deal with Nigel directly; his base is Guildford, and a visit is arranged after coverage and availability are discussed.",
+        "detail": "If several small repairs need attention, list each fitting and photograph them separately. Say which problem is urgent and which items you want replaced. This helps distinguish a single repair from a visit involving several parts, without assuming that a whole bathroom must be changed.",
+        "nearby": "Merrow, Guildford and nearby areas",
+        "related": ("/toilet-repair-burpham", "Toilet repair information for Burpham"),
+    },
+    "shalford": {
+        "intro": "For Shalford plumbing enquiries, send Nigel the postcode and explain what you need: an active leak, a fitting repair or planned pipework. He is based in Guildford and will discuss the job and travel before any booking is agreed.",
+        "detail": "If the problem appeared after a fitting was changed, mention what was installed and whether water escapes during filling or draining. For planned work, send the product details before ordering so connections, access and any pipework changes can be considered.",
+        "nearby": "Guildford, Godalming and surrounding areas",
+        "related": ("/leak-repair-shalford", "Discussing a leak repair in Shalford"),
+    },
     "woking": {
         "intro": "For a leaking fitting, toilet problem or planned bathroom plumbing in Woking, describe the job and send the postcode. You deal directly with Nigel, who is based in Guildford and can confirm coverage and the next step before a visit is arranged.",
         "detail": "Say which fitting is affected, when the problem occurs and whether water is still escaping. For planned work, explain which fittings are changing and whether the layout stays the same. Share photographs of safely visible areas if useful; do not remove fittings to take them.",
@@ -464,6 +495,23 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
 def render_service_page(service: dict, logo_html: str, request: Request | None = None, *, absolute_url, review_badge_html: str = '') -> str:
     service_links = ''.join(f'<a href="/{escape(item["slug"])}">{escape(item["title"])}</a>' for item in SERVICE_PAGES if item['slug'] != service['slug'])
     location_links = ''.join(f'<a href="/plumber-{escape(item["slug"])}">Plumber in {escape(item["name"])}</a>' for item in LOCATION_PAGES)
+    # The county service hub links to its actual town/service pages, as well as
+    # the overview pages. Farnborough has no published local-service matrix.
+    local_service_slug = {"emergency-plumber-surrey": "emergency-plumber",
+                          "bathroom-plumbing-surrey": "bathroom-plumbing"}.get(service["slug"])
+    town_service_links = (
+        '<div class="wrap section"><h2>Local service information</h2><div class="pill-links">' + ''.join(
+            f'<a href="/{local_service_slug}-{escape(item["slug"])}">{escape(item["name"])}</a>'
+            for item in LOCATION_PAGES if item["slug"] != "farnborough") + '</div></div>'
+    ) if local_service_slug else ""
+    planning_detail = (
+        '<div class="wrap section"><h2>Preparation behind the bathroom fittings</h2>'
+        '<p>The pipe connections are one part of a bathroom job. Access to wastes, the condition of the supporting surfaces '
+        'and waterproofing around a shower affect the scope and order of work. '
+        'Read the <a href="/advice/shower-replacement-waterproofing-rebuild">shower replacement and waterproofing guide</a> '
+        'and see the <a href="/projects/ensuite-renovation-merrow-guildford">completed Merrow, Guildford ensuite</a> '
+        'for a documented example. The work needed in your bathroom must be assessed separately.</p></div>'
+    ) if service["slug"] == "bathroom-plumbing-surrey" else ""
     page_title = {
         "emergency-plumber-surrey": "Emergency Plumbing in Surrey",
         "general-plumbing-surrey": "General Plumbing & Repairs in Surrey",
@@ -513,6 +561,8 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
 <div class="wrap section"><h2>What to tell Nigel</h2><p>{escape(service['body'])}</p><div class="grid3"><div class="card item"><h3>Where is the job?</h3><p>Send the postcode so Nigel can confirm whether the location is in his service area.</p></div><div class="card item"><h3>What is happening?</h3><p>Describe the fixture or pipework and whether this is a repair or planned installation.</p></div><div class="card item"><h3>How to get in touch</h3><p>Call for a pressing problem or use the quote form for planned work. You deal directly with Nigel.</p></div></div></div>
 {general_detail}
 {urgent_detail}
+{planning_detail}
+{town_service_links}
 <div class="wrap section"><h2>Areas covered for {escape(service['heading']).lower()}</h2><p>We also cover nearby towns for customers searching for this service in Surrey.</p><div class="pill-links">{location_links}</div></div>
 <div class="wrap section"><h2>Related plumbing services</h2><div class="pill-links">{service_links}</div></div>
 <div class="wrap section"><h2>Frequently asked questions</h2><div class="faq-grid"><div class="card faq"><h3>How do I check whether you cover my address?</h3><p>Send your postcode and a short description. Nigel can confirm the location before arranging any work.</p></div><div class="card faq"><h3>Can I request a quote online?</h3><p>Yes. Send your details through the online quote form. Submission does not confirm a booking.</p></div><div class="card faq"><h3>What if the problem is urgent?</h3><p>Call Nigel to discuss the issue and availability. Isolate an active leak if it is safe to do so.</p></div></div></div>
@@ -655,7 +705,8 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
             "Tell me whether you are replacing a bath, shower, basin or toilet, or changing where the pipes run. A few photos or a short video of the existing bathroom can help me understand the space. Send them on WhatsApp with your postcode and a brief description of what you would like done. Please do not remove any fittings just to take pictures."
         ),
     }
-    detail = priority_details.get((service_slug, area_slug), service_guidance.get(service_slug))
+    detail = LOCAL_GUIDANCE.get((service_slug, area_slug),
+                               priority_details.get((service_slug, area_slug), service_guidance.get(service_slug)))
     from business.website_contact import whatsapp_url
     whatsapp_message = f"Hello Nigel, I need help with {service['service']} in {area}. My postcode is: . I can send a photo or short video of the problem."
     whatsapp_link = whatsapp_url(COMPANY_PHONE, whatsapp_message)
@@ -701,7 +752,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
     focused_links_html = focused_local_links.get((service_slug, area_slug), "")
     # Point to published evidence where relevant, without implying a project
     # took place in a town where it did not.
-    if (service_slug, area_slug) in {("bathroom-plumbing", "guildford"), ("bathroom-plumbing", "farnham")}:
+    if (service_slug, area_slug) in {("bathroom-plumbing", "guildford"), ("bathroom-plumbing", "farnham"), ("bathroom-plumbing", "merrow"), ("emergency-plumber", "merrow")}:
         from business import real_projects
         project_path = "/projects/ensuite-renovation-merrow-guildford"
         advice_path = "/advice/shower-replacement-waterproofing-rebuild"
