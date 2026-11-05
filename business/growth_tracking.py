@@ -8,7 +8,7 @@ from business.db import get_db
 
 SOURCES = ("Google Business Profile", "Google organic search", "Website/direct",
            "Referral", "Repeat customer", "MyBuilder", "Locally", "Bing", "Yell",
-           "Checkatrade", "TrustATrader", "Other")
+           "Checkatrade", "TrustATrader", "Other", "Unknown")
 WORK_TYPES = ("Leak / repair", "Tap", "Toilet / cistern", "Shower", "Bathroom plumbing",
               "Radiator / TRV", "Outside tap", "Pipework", "Power/heating-system flush",
               "Cylinder / tank", "Other")
@@ -23,6 +23,8 @@ def inferred_source(source, context):
     medium = (context.get("utm_medium") or "").strip().lower()
     ref = (context.get("referrer") or "").strip().lower()
     direct = (source or "").strip().lower()
+    if direct in {"manual", "unknown", ""} and not src and not medium and not ref:
+        return "Unknown"
     if src in {"google_business_profile", "google-business-profile", "gbp", "gmb"}:
         return "Google Business Profile"
     if src == "google" and medium in {"organic", "seo"}:
@@ -37,7 +39,7 @@ def inferred_source(source, context):
         return "Google organic search" if medium == "organic" else "Other"
     if host == "bing.com" or host.endswith(".bing.com"):
         return "Bing"
-    if src or medium or (host and "nigelharveyplumbing.co.uk" not in host):
+    if src or medium or (host and host not in {"nigelharveyplumbing.co.uk", "www.nigelharveyplumbing.co.uk"}):
         return "Other"
     return "Website/direct"
 

@@ -13,6 +13,59 @@
   let started = false;
   try { choice = localStorage.getItem(storageKey); } catch (_) {}
 
+  // Share the current main branch's consented 30-minute quote-origin context.
+  const entryKey = 'nhp_quote_origin_v1';
+  const campaignKeys = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'];
+  const ttlMs = 30 * 60 * 1000;
+  const params = new URLSearchParams(location.search);
+  function landingPage(value) {
+    return typeof value === 'string' && /^\/(?!\/)[A-Za-z0-9/_-]*$/.test(value) ? value : location.pathname;
+  }
+  function currentContext() {
+    const context = { landing_page: landingPage(params.get('landing_page') || location.pathname) };
+    try {
+      const ref = new URL(params.get('referrer') || document.referrer);
+      if (['https:', 'http:'].includes(ref.protocol) && ref.origin !== location.origin) context.referrer = ref.origin;
+    } catch (_) {}
+    for (const key of campaignKeys) {
+      const value = params.get(key) || '';
+      if (/^[A-Za-z][A-Za-z0-9 _.-]{0,79}$/.test(value) && !/\d{7,}|@/.test(value)) context[key] = value;
+    }
+    return context;
+  }
+  function clearEntry() { try { sessionStorage.removeItem(entryKey); } catch (_) {} }
+  let entryForPage = null;
+  let entryCapturedAt = 0;
+  function firstEntry() {
+    if (choice !== 'accepted') {
+      clearEntry(); entryForPage = null;
+      return {landing_page:landingPage(params.get('landing_page') || location.pathname)};
+    }
+    if (entryForPage && Date.now() >= entryCapturedAt && Date.now() - entryCapturedAt <= ttlMs) return entryForPage;
+    const current = currentContext();
+    let saved;
+    try { saved = JSON.parse(sessionStorage.getItem(entryKey)); } catch (_) {}
+    const valid = saved && saved.landing_page === landingPage(saved.landing_page) &&
+      Number.isFinite(saved.saved_at) && Date.now() >= saved.saved_at && Date.now() - saved.saved_at <= ttlMs;
+    // A fresh campaign or external arrival starts a new context, as on main.
+    if (valid && !current.referrer && !campaignKeys.some(key => current[key])) {
+      const cleaned = {landing_page:saved.landing_page};
+      try { const ref = new URL(saved.referrer); if (ref.origin !== location.origin) cleaned.referrer = ref.origin; } catch (_) {}
+      for (const key of campaignKeys) {
+        if (/^[A-Za-z][A-Za-z0-9 _.-]{0,79}$/.test(saved[key] || '') && !/\d{7,}|@/.test(saved[key])) cleaned[key] = saved[key];
+      }
+      entryForPage = cleaned;
+      entryCapturedAt = saved.saved_at;
+    } else {
+      entryForPage = current;
+      entryCapturedAt = Date.now();
+      try { sessionStorage.setItem(entryKey, JSON.stringify({...current,saved_at:Date.now()})); } catch (_) {}
+    }
+    return entryForPage;
+  }
+  window.nhpAttribution = { context:firstEntry, accepted:()=>choice === 'accepted' };
+  firstEntry();
+
   function start() {
     if (started || choice !== 'accepted') return;
     started = true;
@@ -24,7 +77,10 @@
       ad_user_data: 'denied', ad_personalization: 'denied'
     });
     window.gtag('js', new Date());
-    window.gtag('config', id, { allow_google_signals: false, allow_ad_personalization_signals: false });
+    const context = firstEntry();
+    const campaign = {};
+    for (const [utm,field] of Object.entries({utm_source:'campaign_source',utm_medium:'campaign_medium',utm_campaign:'campaign_name',utm_content:'campaign_content',utm_term:'campaign_term'})) if (context[utm]) campaign[field] = context[utm];
+    window.gtag('config', id, { allow_google_signals: false, allow_ad_personalization_signals: false, page_location: location.origin + location.pathname, page_referrer:context.referrer || '', ...campaign });
     const loader = document.createElement('script');
     loader.async = true;
     loader.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(id);
@@ -51,8 +107,9 @@
     choice = value;
     try { localStorage.setItem(storageKey, value); } catch (_) {}
     banner.hidden = true;
-    if (value === 'accepted') start();
-    else if (started) {
+    if (value === 'accepted') { firstEntry(); start(); }
+    else { clearEntry(); }
+    if (value !== 'accepted' && started) {
       if (sendToGoogle) window.gtag('consent', 'update', { analytics_storage: 'denied' });
       forgetCookies();
       location.reload();

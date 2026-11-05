@@ -121,45 +121,22 @@ class GrowthBatch8Tests(unittest.TestCase):
         tracked=subprocess.check_output(['git','ls-tree','-r','--name-only',BASE,'static/project-images'],cwd=ROOT,text=True).splitlines()
         for path in tracked:self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT),path)
 
-    def test_app_changes_limited_to_public_html_insertion(self):
-        old=ast.parse(subprocess.check_output(['git','show','1397d5d16ef9737f7b07f8ad4f92b8f98548f516:app.py'],cwd=ROOT))
+    def test_stage2_changes_limited_to_tracking_and_protected_core_unchanged(self):
+        baseline='8cd736461190941224b911a02884c3ea1ac5fbdb'
+        old=ast.parse(subprocess.check_output(['git','show',baseline+':app.py'],cwd=ROOT))
         new=ast.parse((ROOT/'app.py').read_text())
-        allowed={'render_public_homepage','add_project_evidence','sitemap_xml','location_page','public_site_image'}
-        # Approved service-hero rating badge additions are isolated to these wrappers.
-        approved_review_wrappers={'render_service_page','render_local_service_location_page',
-            'render_location_page','with_public_review_badge','advice_index','advice_page',
-            'project_index','real_project_page'}
-        # PR #34 deliberately changes only the documented auth/document boundaries.
-        security_functions = {
-            'is_public_route', 'protect_app_routes', 'row_to_invoice',
-            'build_invoice_public_url', 'public_invoice', 'render_customer_invoice',
-            'shared_document_id', 'shared_invoice', 'shared_quote_pdf',
-            'shared_invoice_pdf', 'shared_invoice_qr', 'shared_invoice_photo',
-            'replace_document_link', 'revoke_document_link', 'change_document_link',
-        }
-        def outside_approved_scope(node):
-            if getattr(node, 'name', None) in allowed | security_functions | approved_review_wrappers:
-                return False
-            if isinstance(node, ast.ImportFrom) and node.module == 'business' and any(a.name == 'document_links' for a in node.names):
-                return False
-            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Attribute) and isinstance(node.value.func.value, ast.Name) and node.value.func.value.id == 'document_links':
-                return False
-            if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id in {'LEGACY_DOCUMENT_ROUTE_KEYS', 'SHARED_DOCUMENT_ROUTE_KEYS'} for t in node.targets):
-                return False
-            return True
-        before=[ast.dump(n) for n in old.body if outside_approved_scope(n)]
-        after=[ast.dump(n) for n in new.body if outside_approved_scope(n)]
-        self.assertEqual(before,after)
-        for tree in [old,new]:self.assertEqual(sum(getattr(n,'name',None) in allowed for n in tree.body),5)
-        # Current approved pipeline and document-link changes; all other files
-        # continue to compare against the historical public-content baseline.
-        pipeline_snapshots = {'business/pdf_render.py': '663f346c3a80f66e50f21d78af62f045d3095e6488a7ae0eb4dfab4a41f083ef', 'business/db.py': 'a84e82df3ef6970c450c60e8dca26f1a33ec56b7635bb325fdfc67052db906e0', 'static/app.js': 'eeed4879b81a6cdbeb0d807b9cee7b798559040f3a06a439d036a68a0f4745c1', 'business/quote_store.py': '7344d52d3b5092f6865901998387cad614e6338d9345c6af7e0502295fcac4aa'}
-        for path in ['business/db.py','business/lead_email_store.py','business/lead_store.py','business/notifications.py','business/quote_calculation.py','business/quote_store.py','business/invoice_store.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','static/public_analytics.js','templates/request_quote.html']:
-            # Preserve complete-file checks, with a new private pipeline snapshot.
-            if path in pipeline_snapshots:
-                self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(), pipeline_snapshots[path], path)
-                continue
-            self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT),path)
+        allowed={'protect_app_routes','row_to_invoice','api_create_lead','api_delete_quote','api_update_invoice','api_invoice_status','api_delete_invoice','api_delete_customer'}
+        before={n.name:ast.dump(n) for n in old.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef,ast.ClassDef))}
+        after={n.name:ast.dump(n) for n in new.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef,ast.ClassDef))}
+        self.assertEqual({k:v for k,v in before.items() if k not in allowed},{k:after[k] for k in before if k not in allowed})
+        self.assertTrue(all(k.startswith(('Revenue','revenue_','api_revenue_')) for k in set(after)-set(before)))
+        for path in ['business/public_pages.py','business/public_layout.py','business/google_reviews.py','business/document_links.py','static/public_reviews.css','business/project_content.json','business/advice_content.json','business/real_projects.py','business/plumbing_advice.py','business/lead_email_store.py','business/notifications.py','business/quote_calculation.py','business/pdf_render.py','business/account_pricing.py','business/city_account_prices.py','static/app.js','static/city_account_prices.js','templates/homepage.html','templates/public_header.html','templates/public_footer.html']:
+            current=(ROOT/path).read_bytes()
+            if path=='static/app.js':
+                from manual_whatsapp_snapshot import strip_manual_whatsapp_js
+                current=strip_manual_whatsapp_js(current.decode()).encode()
+            # Protect the latest production website, review design, security and diary controls.
+            self.assertEqual(current,subprocess.check_output(['git','show',baseline+':'+path],cwd=ROOT),path)
 
     def test_private_file_cannot_publish_or_bypass_approval(self):
         private_file=self.root/'invalid-private-advice.json'

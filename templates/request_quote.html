@@ -18,31 +18,28 @@ __PUBLIC_ANALYTICS__
 <script>
 const form = document.getElementById('leadForm');
 let submitted = false;
+let submission = null;
 form.addEventListener('submit', async function(event) {
   event.preventDefault();
   const button = document.getElementById('submitButton');
   if (submitted || button.disabled) return;
   const err = document.getElementById('lead_err'), ok = document.getElementById('lead_ok');
   err.style.display = ok.style.display = 'none';
-  const params = new URLSearchParams(window.location.search);
-  let referring = '';
-  try { const url = new URL(document.referrer); referring = url.origin + (url.origin === window.location.origin ? url.pathname : ''); } catch (_) {}
-  const landing = params.get('landing_page') || (referring.startsWith(window.location.origin + '/') ? new URL(referring).pathname : window.location.pathname);
-  referring = params.get('referrer') || referring;
+  const context = window.nhpAttribution ? window.nhpAttribution.context() : {landing_page:location.pathname};
   const value = id => document.getElementById(id).value.trim();
   const payload = {
     name:value('lead_name'), phone:value('lead_phone'), email:value('lead_email'),
     address:value('lead_address'), postcode:value('lead_postcode'),
     job_type:value('lead_job_type'), urgency:value('lead_urgency'),
     preferred_contact:value('lead_preferred_contact'), description:value('lead_description'),
-    source:'website', landing_page:landing, referrer:referring,
-    utm_source:params.get('utm_source') || '', utm_medium:params.get('utm_medium') || '',
-    utm_campaign:params.get('utm_campaign') || '', utm_content:params.get('utm_content') || '',
-    utm_term:params.get('utm_term') || ''
+    source:'website', ...context, analytics_consent:window.nhpAttribution?.accepted() || false
   };
   if (!payload.name || !payload.phone || !payload.description) {
     err.textContent = 'Please add your name, phone number and a short job description.'; err.style.display='block'; return;
   }
+  const signature = JSON.stringify(payload);
+  if (!submission || submission.signature !== signature) submission = {signature,key:crypto.randomUUID()};
+  payload.submission_key = submission.key;
   button.disabled = true;
   try {
     const res = await fetch('/api/leads', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});

@@ -15,6 +15,9 @@ def lead_source_with_context(data: LeadRequest) -> str:
     source = (data.source or "website").strip() or "website"
     context = {key: (getattr(data, key) or "").strip()[:300] for key in CONTEXT_FIELDS
                if (getattr(data, key) or "").strip()}
+    from business.enquiry_attribution import sanitize_context
+    attribution = sanitize_context(context)
+    context = {**{k:v for k,v in context.items() if k not in ("landing_page","referrer","utm_source","utm_medium","utm_campaign","utm_content","utm_term")},**attribution}
     if not context:
         return source
     return SOURCE_PREFIX + json.dumps({"source": source[:120], **context}, ensure_ascii=False,
@@ -34,7 +37,7 @@ def parse_lead_source(value: str) -> tuple[str, dict]:
 
 
 def row_to_lead(row):
-    source, context = parse_lead_source(row["source"] or "website")
+    source, context = parse_lead_source(row["source"] or "")
     result = {
         "id": row["id"],
         "customer_id": row["customer_id"],
@@ -52,40 +55,73 @@ def row_to_lead(row):
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+    if "origin_id" in row.keys():
+        result["origin_id"] = row["origin_id"]
+        if row["origin_id"]:
+            from business.enquiry_attribution import origin
+            with get_db() as c:
+                current = origin(c,row["origin_id"])
+            result["source_category"] = current["source"]
+            result["record_kind"] = current["kind"]
+            result["contact_channel"] = current["contact_channel"]
     return {**result, **context}
 
 
 def save_lead(data: LeadRequest, now_uk, format_dt):
     validate_work_types(data.work_type, data.additional_work_types)
+    with get_db() as check:
+        from business.enquiry_attribution import enabled
+        if enabled(check) and not data.analytics_consent:
+            data = data.model_copy(update={key:'' for key in ('referrer','utm_source','utm_medium','utm_campaign','utm_content','utm_term')})
     now = now_uk()
     conn = get_db()
-    conn.execute(
-        """
-        INSERT INTO leads (name, phone, email, address, job_type, description, status, source, created_at, created_at_sort, updated_at, source_category, work_type, additional_work_types)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            (data.name or "").strip(),
-            (data.phone or "").strip(),
-            (data.email or "").strip(),
-            (data.address or "").strip(),
-            (data.job_type or "small").strip() or "small",
-            (data.description or "").strip(),
-            "new",
-            lead_source_with_context(data),
-            format_dt(now),
-            now.isoformat(),
-            now.isoformat(),
-            data.source_category if data.source_category in SOURCES else None,
-            data.work_type if data.work_type in WORK_TYPES else None,
-            json.dumps(data.additional_work_types),
-        ),
-    )
-    lead_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    conn.execute("INSERT INTO lead_email_notifications (lead_id) VALUES (?)", (lead_id,))
-    conn.commit()
-    conn.close()
-    return get_lead_by_id(lead_id)
+    try:
+        from business import enquiry_attribution as attribution
+        tracked = attribution.enabled(conn)
+        if tracked:
+            conn.execute("BEGIN IMMEDIATE")
+            if data.submission_key and not 16 <= len(data.submission_key) <= 128:
+                conn.close(); raise ValueError("Invalid enquiry submission key")
+            old = conn.execute("SELECT id,submission_hash FROM leads WHERE submission_key=?", (data.submission_key,)).fetchone() if data.submission_key else None
+            from business.payment_store import request_hash
+            digest = request_hash(data.model_dump())
+            if old:
+                if old[1] != digest:
+                    conn.close(); raise ValueError("Submission key reused for different details")
+                conn.close(); return get_lead_by_id(old[0])
+        conn.execute(
+            """
+            INSERT INTO leads (name, phone, email, address, job_type, description, status, source, created_at, created_at_sort, updated_at, source_category, work_type, additional_work_types)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (data.name or "").strip(),
+                (data.phone or "").strip(),
+                (data.email or "").strip(),
+                (data.address or "").strip(),
+                (data.job_type or "small").strip() or "small",
+                (data.description or "").strip(),
+                "new",
+                lead_source_with_context(data),
+                format_dt(now),
+                now.isoformat(),
+                now.isoformat(),
+                data.source_category if data.source_category in SOURCES else None,
+                data.work_type if data.work_type in WORK_TYPES else None,
+                json.dumps(data.additional_work_types),
+            ),
+        )
+        lead_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        if tracked:
+            context = {key: getattr(data,key) for key in CONTEXT_FIELDS}
+            oid = attribution.create_origin(conn,lead_id=lead_id,channel="Website form",context=context,method="website_observed")
+            conn.execute("UPDATE leads SET origin_id=?,submission_key=?,submission_hash=? WHERE id=?", (oid,data.submission_key or None,digest,lead_id))
+        conn.execute("INSERT INTO lead_email_notifications (lead_id) VALUES (?)", (lead_id,))
+        conn.commit()
+        conn.close()
+        return get_lead_by_id(lead_id)
+    finally:
+        conn.close()
 
 
 def get_lead_by_id(lead_id: int):
@@ -130,6 +166,13 @@ def classify_lead(lead_id, source_category, work_type, now_uk, additional_work_t
     if work_type and work_type not in WORK_TYPES:
         raise ValueError("Invalid work type")
     conn = get_db()
+    from business import enquiry_attribution as attribution
+    if attribution.enabled(conn):
+        current = conn.execute("SELECT origin_id FROM leads WHERE id=?",(lead_id,)).fetchone()
+        if current and current[0]:
+            effective = attribution.origin(conn,current[0])["source"]
+            if source_category and source_category != effective:
+                conn.close(); raise ValueError("Use Original source details to correct source with an audit reason")
     existing = conn.execute("SELECT additional_work_types FROM leads WHERE id=?", (lead_id,)).fetchone()
     if additional_work_types is None:
         additional_work_types = read_additional(existing["additional_work_types"]) if existing else []
@@ -191,6 +234,8 @@ def delete_lead_by_id(lead_id: int, confirmed_site_visits: int | None = None):
         # Recheck inside the write transaction. A quote/job added after the
         # confirmation preview must never be removed or left dangling.
         conn.execute("BEGIN IMMEDIATE")
+        from business.enquiry_attribution import protect_history
+        protect_history(conn,"leads",lead_id)
         info = _lead_deletion_info(conn, lead_id)
         if not info:
             conn.rollback()

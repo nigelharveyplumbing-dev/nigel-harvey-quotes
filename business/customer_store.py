@@ -11,7 +11,9 @@ def upsert_customer(name: str, address: str, phone: str, now_uk):
     conn = get_db()
     now = now_uk().isoformat()
 
-    if phone:
+    from business.enquiry_attribution import enabled
+    tracked = enabled(conn)
+    if phone and not tracked:
         row = conn.execute("SELECT * FROM customers WHERE phone = ? LIMIT 1", (phone,)).fetchone()
         if row:
             conn.execute(
@@ -22,7 +24,7 @@ def upsert_customer(name: str, address: str, phone: str, now_uk):
             conn.close()
             return row["id"]
 
-    if name and address:
+    if name and address and not tracked:
         row = conn.execute(
             "SELECT * FROM customers WHERE name = ? AND address = ? LIMIT 1",
             (name, address)
@@ -113,6 +115,9 @@ def delete_customer_by_id(customer_id: int):
         conn.close()
         return None
 
+    from business.enquiry_attribution import enabled
+    if enabled(conn) and any(conn.execute("SELECT 1 FROM "+table+" WHERE customer_id=? LIMIT 1",(customer_id,)).fetchone() for table in ("quotes","invoices","jobs","leads")):
+        conn.close(); raise ValueError("Customer has tracked history; retain it rather than delete")
     deleted_invoices = conn.execute(
         "DELETE FROM invoices WHERE customer_id = ?", (customer_id,)
     ).rowcount
