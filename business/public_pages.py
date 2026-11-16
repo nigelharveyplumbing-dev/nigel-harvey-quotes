@@ -138,6 +138,28 @@ LOCATION_PAGES = [
 ]
 
 
+# Keep links on individual service/town pages focused on related areas instead
+# of repeating every town on all 52 pages. County hubs still link to the full
+# service-area matrix, and every existing published URL remains available.
+# These are navigation choices, not claims of a local office or guaranteed visit.
+LOCAL_SERVICE_NEARBY_AREAS = {
+    "guildford": ("merrow", "burpham", "shalford", "worplesdon"),
+    "woking": ("worplesdon", "fairlands", "guildford", "camberley"),
+    "farnham": ("aldershot", "godalming", "camberley", "guildford"),
+    "godalming": ("shalford", "guildford", "farnham", "merrow"),
+    "camberley": ("aldershot", "woking", "farnham", "guildford"),
+    "aldershot": ("farnham", "camberley", "guildford", "godalming"),
+    "leatherhead": ("epsom", "guildford", "woking"),
+    "epsom": ("leatherhead", "guildford", "woking"),
+    "fairlands": ("worplesdon", "burpham", "guildford", "woking"),
+    "worplesdon": ("fairlands", "burpham", "guildford", "woking"),
+    "merrow": ("guildford", "burpham", "shalford", "godalming"),
+    "burpham": ("guildford", "merrow", "worplesdon", "fairlands"),
+    "shalford": ("guildford", "godalming", "merrow", "burpham"),
+}
+LOCAL_SERVICE_AREA_NAMES = {item["slug"]: item["name"] for item in LOCATION_PAGES}
+
+
 # Owner-confirmed area overviews only. Keep these separate from the Surrey
 # service/location matrix so six area pages do not generate dozens of promises.
 SOUTH_WEST_LONDON_PAGES = [
@@ -830,8 +852,8 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
     }.get((service_slug, area_slug), f"{title} in {area} | Nigel Harvey Plumbing")
     problem_items = "".join(f"<li>{escape(item)}</li>" for item in service["problems"])
     related_locations = "".join(
-        f'<a href="/{escape(service_slug)}-{escape(item["slug"])}">{escape(title)} in {escape(item["name"])}</a>'
-        for item in LOCATION_PAGES if item["slug"] not in {area_slug, "farnborough"}
+        f'<a href="/{escape(service_slug)}-{escape(neighbour)}">{escape(title)} in {escape(LOCAL_SERVICE_AREA_NAMES[neighbour])}</a>'
+        for neighbour in LOCAL_SERVICE_NEARBY_AREAS[area_slug]
     )
     related_services = "".join(
         f'<a href="/{escape(item["slug"])}-{escape(area_slug)}">{escape(item["title"])} in {escape(area)}</a>'
@@ -884,7 +906,7 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
 </div></div>
 
 <div class="wrap section"><h2>Other Plumbing Services in {escape(area)}</h2><div class="pill-links">{related_services}</div></div>
-<div class="wrap section"><h2>Nearby Areas We Cover</h2><div class="pill-links">{related_locations}</div></div>
+<div class="wrap section"><h2>Other Local Service Areas</h2><div class="pill-links">{related_locations}</div></div>
 
 <div class="wrap cta card"><div><h2>Need {escape(title.lower())} in {escape(area)}?</h2><p style="color:#dce9ee">Call now or send the job details online.</p></div><div class="nav-actions"><a class="btn btn-green" href="tel:{escape(COMPANY_PHONE_TEL)}">Call Now: {escape(COMPANY_PHONE)}</a><a class="btn btn-primary" href="/request-quote">Request a Quote</a></div></div>
 </main>
