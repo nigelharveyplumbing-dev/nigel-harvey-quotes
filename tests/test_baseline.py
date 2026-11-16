@@ -1343,7 +1343,9 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
             ("service", "3eb19c9a6518f183a3201c58f8c6980ee2a39d8c8dd02cf31c2fbb0daab0bc67"),
             # PR48 intentionally changes Guildford emergency guidance and adds
             # contextual local navigation; the shared shell is unchanged.
-            ("local", "f48e91d1c6d7e0cbefd8b4b5f5dcc5ff2ac5dbdc207d9050e87efb79775e45fe"),
+            # PR49 narrows the town-to-town links, retaining the public shell
+            # and all canonicals, metadata, contact actions and service copy.
+            ("local", "418bf10a98a55274312ed83382ee84b63cb09f169847191bee6c58d92220c357"),
         )
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
                                      "PUBLIC_BASE_URL": "https://stage7.invalid",
