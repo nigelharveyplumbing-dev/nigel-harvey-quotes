@@ -1,6 +1,12 @@
 """Public local-page links should stay focused without losing discoverability."""
 
+import sys
+from pathlib import Path
+
 from bs4 import BeautifulSoup
+
+# unittest discovery runs from tests/ rather than the repository root.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from business.public_pages import (
     LOCAL_SERVICE_AREA_NAMES,
