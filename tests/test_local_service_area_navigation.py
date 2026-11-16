@@ -1,69 +1,89 @@
-"""Public service-area links stay useful without breaking discoverability.
+"""Public-only navigation audit using isolated synthetic test storage.
 
-This module uses unittest so the standard CI test discovery actually runs it.
-No app/database import, external requests or customer data access.
+Use the same disposable public-site harness as the existing 82-page audit.
+Avoid importing business.config at unittest discovery time: doing so bypasses
+the existing baseline suite's storage isolation.
 """
-import sys
 import unittest
-from pathlib import Path
 
 from bs4 import BeautifulSoup
+from fastapi.testclient import TestClient
 
-# unittest discovery executes from tests/, not always from the repository root.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from local_browser_server import disposable_app
 
-from business.public_pages import (
-    LOCAL_SERVICE_AREA_NAMES,
-    LOCAL_SERVICE_NEARBY_AREAS,
-    LOCAL_SERVICE_PAGES,
-    LOCATION_PAGES,
-    render_local_service_location_page,
+
+SERVICE_SLUGS = ("emergency-plumber", "toilet-repair", "leak-repair", "bathroom-plumbing")
+TOWN_SLUGS = (
+    "guildford", "woking", "farnham", "godalming", "camberley",
+    "aldershot", "leatherhead", "epsom", "fairlands",
+    "worplesdon", "merrow", "burpham", "shalford",
 )
 
 
-def _url(path, request=None):
-    return "https://www.nigelharveyplumbing.co.uk" + path
-
-
 class LocalServiceAreaNavigationTests(unittest.TestCase):
-    def test_nearby_map_matches_published_towns(self):
-        service_towns = {p["slug"] for p in LOCATION_PAGES if p["slug"] != "farnborough"}
-        self.assertEqual(set(LOCAL_SERVICE_NEARBY_AREAS), service_towns)
-        self.assertTrue(service_towns.issubset(LOCAL_SERVICE_AREA_NAMES))
-        for town, neighbours in LOCAL_SERVICE_NEARBY_AREAS.items():
-            with self.subTest(town=town):
-                self.assertGreaterEqual(len(neighbours), 3)
-                self.assertLessEqual(len(neighbours), 4)
-                self.assertEqual(len(neighbours), len(set(neighbours)))
-                self.assertNotIn(town, neighbours)
-                self.assertTrue(set(neighbours) <= service_towns)
+    @classmethod
+    def setUpClass(cls):
+        cls.context = disposable_app(
+            "local-navigation-synthetic", "synthetic-only-no-production-data",
+            projects_as_drafts=False, advice_as_drafts=False,
+        )
+        cls.app_module, _ = cls.context.__enter__()
+        cls.addClassCleanup(cls.context.__exit__, None, None, None)
+        cls.client = TestClient(cls.app_module.app)
+        cls.client.__enter__()
+        cls.addClassCleanup(cls.client.__exit__, None, None, None)
 
-    def test_all_52_local_service_pages_link_only_relevant_areas(self):
-        audited = 0
-        for service in LOCAL_SERVICE_PAGES:
-            for location in LOCATION_PAGES:
-                if location["slug"] == "farnborough":
-                    continue
-                with self.subTest(service=service["slug"], town=location["slug"]):
-                    html = render_local_service_location_page(
-                        service, location, "", absolute_url=_url
-                    )
-                    soup = BeautifulSoup(html, "html.parser")
+    def test_all_52_public_local_pages_have_focused_service_area_links(self):
+        checked = 0
+        known_paths = {
+            f"/{service}-{town}" for service in SERVICE_SLUGS for town in TOWN_SLUGS
+        }
+        self.assertEqual(len(known_paths), 52)
+        for service in SERVICE_SLUGS:
+            for town in TOWN_SLUGS:
+                path = f"/{service}-{town}"
+                with self.subTest(path=path):
+                    response = self.client.get(path)
+                    self.assertEqual(response.status_code, 200)
+                    soup = BeautifulSoup(response.text, "html.parser")
                     heading = soup.find("h2", string="Other Local Service Areas")
                     self.assertIsNotNone(heading)
-                    container = heading.find_next("div", class_="pill-links")
-                    self.assertIsNotNone(container)
-                    links = [a["href"] for a in container.find_all("a")]
-                    expected = [
-                        f'/{service["slug"]}-{neighbour}'
-                        for neighbour in LOCAL_SERVICE_NEARBY_AREAS[location["slug"]]
-                    ]
-                    self.assertEqual(links, expected)
-                    self.assertTrue(all(x.startswith("/") and not x.startswith("//") for x in links))
+                    links_region = heading.find_next("div", class_="pill-links")
+                    self.assertIsNotNone(links_region)
+                    links = [a.get("href") for a in links_region.find_all("a")]
+                    self.assertGreaterEqual(len(links), 3)
+                    self.assertLessEqual(len(links), 4)
+                    self.assertEqual(len(links), len(set(links)))
+                    self.assertTrue(set(links) <= known_paths)
+                    self.assertNotIn(path, links)
+                    self.assertTrue(all(x.startswith("/" + service + "-") for x in links))
                     self.assertIsNotNone(soup.select_one('link[rel="canonical"]'))
                     self.assertIsNotNone(soup.select_one('a[href="/request-quote"]'))
-                    audited += 1
-        self.assertEqual(audited, 52)
+                    checked += 1
+        self.assertEqual(checked, 52)
+
+    def test_fairlands_and_guildford_emergency_navigation_is_local(self):
+        expected = {
+            "/emergency-plumber-fairlands": (
+                "/emergency-plumber-worplesdon", "/emergency-plumber-burpham",
+                "/emergency-plumber-guildford", "/emergency-plumber-woking",
+            ),
+            "/emergency-plumber-guildford": (
+                "/emergency-plumber-merrow", "/emergency-plumber-burpham",
+                "/emergency-plumber-shalford", "/emergency-plumber-worplesdon",
+            ),
+        }
+        for path, target_links in expected.items():
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                soup = BeautifulSoup(response.text, "html.parser")
+                heading = soup.find("h2", string="Other Local Service Areas")
+                links = [
+                    a.get("href")
+                    for a in heading.find_next("div", class_="pill-links").find_all("a")
+                ]
+                self.assertEqual(tuple(links), target_links)
 
 
 if __name__ == "__main__":
