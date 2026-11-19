@@ -342,9 +342,10 @@ def add_batch8_context(html: str, path: str) -> str:
         real_work = ('<section class="section-pale" id="guildford-real-work">'
                      '<div class="wrap section"><h2>Completed plumbing work near Guildford</h2>'
                      + proof_html +
-                     '<p>For smaller repairs, see <a href="/leak-repair-guildford">Guildford leak repairs</a> '
-                     'and <a href="/toilet-repair-guildford">Guildford toilet repairs</a>. '
+                     '<p>If water is escaping from a pipe, tap or waste connection, see <a href="/leak-repair-guildford">leak and pipe repairs in Guildford</a>. '
+                     'For running cisterns, flushing faults and leaking toilet connections, see <a href="/toilet-repair-guildford">toilet repairs in Guildford</a>. '
                      '<a href="/request-quote">Send your postcode and job details</a> to discuss the next step.</p>'
+                     '<p>For shower pipework, sanitaryware changes and planned fitting work, read about <a href="/bathroom-plumbing-guildford">bathroom plumbing in Guildford</a>. For an active urgent plumbing problem, <a href="/emergency-plumber-guildford">read the urgent plumbing guidance</a> and call to discuss availability.</p>'
                      '</div></section>')
         html = html.replace('<section id="services">', real_work + '<section id="services">', 1)
     return html.replace(marker, section + marker, 1)
