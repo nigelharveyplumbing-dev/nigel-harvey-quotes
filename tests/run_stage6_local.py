@@ -22,7 +22,7 @@ def main():
     if not outcome.wasSuccessful():
         return 1
     if sys.argv[1:] == ["--python-only"]:
-        print("Browser checks deferred to isolated staging", flush=True)
+        print("Browser checks omitted by --python-only", flush=True)
         return 0
     if sys.argv[1:]:
         raise SystemExit("Usage: run_stage6_local.py [--python-only]")
@@ -55,7 +55,7 @@ def main():
     process = subprocess.Popen(["node", str(ROOT / "tests/run_batch8_browser.mjs")],
                                cwd=ROOT, env=environment)
     try:
-        return process.wait(timeout=210)
+        result = process.wait(timeout=210)
     except subprocess.TimeoutExpired:
         print("Batch 8 harness exceeded 210 seconds; requesting owned-process cleanup", flush=True)
         process.terminate()
@@ -64,6 +64,19 @@ def main():
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=5)
+        return 1
+    if result:
+        return result
+    print("Running isolated migrated revenue desktop/mobile journeys", flush=True)
+    process = subprocess.Popen(["node", str(ROOT / "tests/run_revenue_browser.mjs")],cwd=ROOT,env=environment)
+    try:
+        return process.wait(timeout=210)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        try:
+            process.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            process.kill(); process.wait(timeout=5)
         return 1
 
 

@@ -28,14 +28,19 @@ def load_invoices(row_to_invoice):
 
 def delete_invoice_by_id(invoice_id: int):
     conn = get_db()
-    conn.execute("DELETE FROM invoice_photos WHERE invoice_id = ?", (invoice_id,))
-    cur = conn.execute("DELETE FROM invoices WHERE id = ?", (invoice_id,))
-    conn.commit()
-    deleted = cur.rowcount > 0
-    conn.close()
-    if deleted:
-        shutil.rmtree(INVOICE_PHOTO_DIR / str(invoice_id), ignore_errors=True)
-    return deleted
+    try:
+        from business.enquiry_attribution import protect_history
+        protect_history(conn,"invoices",invoice_id)
+        conn.execute("DELETE FROM invoice_photos WHERE invoice_id = ?", (invoice_id,))
+        cur = conn.execute("DELETE FROM invoices WHERE id = ?", (invoice_id,))
+        conn.commit()
+        deleted = cur.rowcount > 0
+        conn.close()
+        if deleted:
+            shutil.rmtree(INVOICE_PHOTO_DIR / str(invoice_id), ignore_errors=True)
+        return deleted
+    finally:
+        conn.close()
 
 
 def update_invoice_status(invoice_id: int, status: str, amount_paid: float, row_to_invoice, safe_float):
@@ -43,6 +48,12 @@ def update_invoice_status(invoice_id: int, status: str, amount_paid: float, row_
     if not invoice:
         return None
 
+    from business.enquiry_attribution import enabled
+    with get_db() as check:
+        if enabled(check):
+            if abs(safe_float(amount_paid)-invoice["amount_paid"])>0.000001:
+                raise ValueError("Use Record payment with a genuine receipt date; cumulative paid amounts are protected")
+            return invoice
     total = safe_float(invoice["total_price"])
     amount_paid = max(0.0, min(total, safe_float(amount_paid)))
     balance_due = max(0.0, total - amount_paid)
@@ -100,7 +111,12 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest, row_to_invoi
     travel_charge = max(0.0, safe_float(data.travel_charge, 0.0))
     materials = max(0.0, safe_float(data.materials, 0.0))
     total_price = round(labour + callout_charge + travel_charge + materials, 2)
-    amount_paid = max(0.0, min(total_price, safe_float(data.amount_paid, 0.0)))
+    from business.enquiry_attribution import enabled
+    with get_db() as check:
+        tracked = enabled(check)
+    if tracked and abs(safe_float(data.amount_paid)-invoice["amount_paid"])>0.000001:
+        raise ValueError("Paid balance changes require an audited payment entry")
+    amount_paid = invoice["amount_paid"] if tracked else max(0.0, min(total_price, safe_float(data.amount_paid, 0.0)))
     balance_due = max(0.0, round(total_price - amount_paid, 2))
 
     if amount_paid <= 0:
@@ -110,7 +126,7 @@ def update_invoice_by_id(invoice_id: int, data: InvoiceEditRequest, row_to_invoi
     else:
         status = "part paid"
 
-    customer_id = upsert_customer(customer_name, customer_address, customer_phone)
+    customer_id = invoice["customer_id"] if tracked else upsert_customer(customer_name, customer_address, customer_phone)
 
     quote_result = invoice["quote_result"]
     quote_result["customer_name"] = customer_name

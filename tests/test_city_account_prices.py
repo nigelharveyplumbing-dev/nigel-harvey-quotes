@@ -210,7 +210,7 @@ class CityAccountHTTPTests(unittest.TestCase):
             self.assertEqual(before_account,path.read_bytes())
             self.assertEqual(before_quote,app.DB_PATH.read_bytes())
             listed=client.get('/api/city-account-prices?q=313813',headers=auth)
-            self.assertEqual(listed.headers['cache-control'],'no-store')
+            self.assertEqual(listed.headers['cache-control'],'private, no-store')
             snapshot=listed.json()['results'][0]['selection']
             quote_payload={'customer_name':'Synthetic City capture customer','materials':[dict(name=price_row['product_name'],
                 quantity=2,supplier='City Plumbing',url='',manual_price=7.2,selected_account_price=snapshot)]}

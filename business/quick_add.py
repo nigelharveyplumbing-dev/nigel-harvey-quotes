@@ -96,16 +96,27 @@ def confirm(data, now, format_dt):
         raise ValueError("A provisional follow-up requires a visit")
     conn = get_db()
     try:
-        existing = conn.execute("SELECT id FROM leads WHERE quick_add_key=?", (data.idempotency_key,)).fetchone()
+        conn.execute("BEGIN IMMEDIATE")
+        from business.enquiry_attribution import enabled
+        from business.payment_store import request_hash
+        tracked = enabled(conn)
+        digest = request_hash(data.model_dump())
+        existing = conn.execute("SELECT * FROM leads WHERE quick_add_key=?", (data.idempotency_key,)).fetchone()
         if existing:
+            if tracked and existing['submission_hash'] and existing['submission_hash'] != digest:
+                raise ValueError("Submission key reused for different manual enquiry details")
             return {"lead": get_lead_by_id(existing["id"]), "already_created": True}
         timestamp = now()
         name, phone, address = (data.name.strip()[:180], data.phone.strip()[:80],
                                 data.address.strip()[:300])
-        customer_id = None
+        from business import enquiry_attribution as attribution
+        tracked = attribution.enabled(conn)
+        customer_id = data.customer_id if tracked else None
+        if customer_id and not conn.execute("SELECT 1 FROM customers WHERE id=?",(customer_id,)).fetchone():
+            raise ValueError("Selected customer does not exist")
         # A confirmed, identifiable customer can exist before any quote. Use
         # this same transaction so a failed lead/visit never leaves an orphan.
-        if name and (phone or address):
+        if not tracked and name and (phone or address):
             customer = (conn.execute("SELECT id FROM customers WHERE phone=? LIMIT 1", (phone,)).fetchone()
                         if phone else None)
             if not customer and address:
@@ -127,6 +138,10 @@ def confirm(data, now, format_dt):
              json.dumps(data.additional_work_types),
              data.idempotency_key, customer_id))
         lead_id = cur.lastrowid
+        if tracked:
+            oid = attribution.create_origin(conn,lead_id=lead_id,source=data.source_category or "Unknown",
+                channel=data.contact_channel,kind=data.record_kind,test_reference=data.test_reference)
+            conn.execute("UPDATE leads SET origin_id=?,submission_hash=? WHERE id=?",(oid,digest,lead_id))
         appointment_id = None
         if visit:
             cur = conn.execute("""INSERT INTO appointments

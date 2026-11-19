@@ -91,9 +91,13 @@ class QuoteRequest(BaseModel):
     deposit_percent: float = 0
     lead_id: int | None = None
     source_category: str = ""
+    # The first-contact channel is separate from how the customer found us.
+    contact_channel: Literal["Website form", "Phone", "WhatsApp", "Email", "Directory message", "In person", "Other", "Unknown"] = "Unknown"
     work_type: str = ""
     additional_work_types: list[str] = Field(default_factory=list)
     customer_email: str = ""
+    customer_id: int | None = None
+    submission_key: str = ""
 
 
 
@@ -143,6 +147,8 @@ class LeadRequest(BaseModel):
     source_category: str = ""
     work_type: str = ""
     additional_work_types: list[str] = Field(default_factory=list)
+    submission_key: str = ""
+    analytics_consent: bool = False
 
 
 class LeadStatusRequest(BaseModel):
@@ -174,6 +180,7 @@ class AppointmentRequest(BaseModel):
 
 
 class JobRequest(BaseModel):
+    operation_key: str = ""
     lead_id: int | None = None
     quote_id: int | None = None
     invoice_id: int | None = None
@@ -196,6 +203,10 @@ class QuickAddConfirmRequest(BaseModel):
     source_category: str = ""
     work_type: str = ""
     additional_work_types: list[str] = Field(default_factory=list)
+    contact_channel: str = "Unknown"
+    record_kind: str = "unconfirmed"
+    test_reference: str = ""
+    customer_id: int | None = None
     visit_starts_at: str = ""
     visit_ends_at: str = ""
     visit_status: str = "confirmed"
