@@ -29,6 +29,22 @@ class FullSiteIntegrityTests(unittest.TestCase):
         cls.client.__enter__()
         cls.addClassCleanup(cls.client.__exit__, None, None, None)
 
+    def test_homepage_meet_nigel_portrait_asset(self):
+        """Approved owner portrait is rendered only in the Meet Nigel section."""
+        page = BeautifulSoup(self.client.get("/").text, "html.parser")
+        photo = page.select_one("section#about .photo-panel img")
+        self.assertIsNotNone(photo)
+        self.assertEqual(photo.get("src"), "/site-images/nigel-harvey-portrait.webp")
+        self.assertEqual(photo.get("alt"), "Portrait of Nigel Harvey")
+        self.assertEqual(photo.get("width"), "900")
+        self.assertEqual(photo.get("height"), "985")
+        self.assertEqual(photo.get("loading"), "lazy")
+        image = self.client.get(photo["src"])
+        self.assertEqual(image.status_code, 200)
+        self.assertIn("image/webp", image.headers.get("content-type", ""))
+        self.assertGreater(len(image.content), 20000)
+        self.assertLess(len(image.content), 100000)
+
     def test_five_page_broad_plumbing_enquiry_routes(self):
         """Check balanced service links, quote paths and existing canonical URLs."""
         checks = {
