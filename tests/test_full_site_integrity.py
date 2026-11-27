@@ -44,6 +44,7 @@ class FullSiteIntegrityTests(unittest.TestCase):
         self.assertIn("image/webp", image.headers.get("content-type", ""))
         self.assertGreater(len(image.content), 20000)
         self.assertLess(len(image.content), 100000)
+        self.assertEqual(self.client.get("/site-images/not-approved.webp").status_code, 404)
 
     def test_five_page_broad_plumbing_enquiry_routes(self):
         """Check balanced service links, quote paths and existing canonical URLs."""
