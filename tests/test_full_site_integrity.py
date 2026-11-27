@@ -61,6 +61,39 @@ class FullSiteIntegrityTests(unittest.TestCase):
         self.assertIn("Repairs and planned plumbing work in Merrow",
                       self.client.get("/plumber-merrow").text)
 
+    def test_keyword_led_plumbing_and_bathroom_pages(self):
+        """Keyword focus stays within existing public URLs and truthful service scope."""
+        home = BeautifulSoup(self.client.get("/").text, "html.parser")
+        self.assertIn("general plumbing", home.get_text(" ", strip=True).lower())
+        self.assertIn("bathroom fitting", home.get_text(" ", strip=True).lower())
+        self.assertIn("/bathroom-plumbing-surrey",
+                      {a.get("href") for a in home.select("a[href]")})
+        for path, title_part, related_area in (
+            ("/bathroom-plumbing-woking", "Bathroom Fitting", "/plumber-woking"),
+            ("/bathroom-plumbing-leatherhead", "Bathroom Installation", "/plumber-leatherhead"),
+            ("/bathroom-plumbing-godalming", "Bathroom Fitter", "/plumber-godalming"),
+        ):
+            with self.subTest(page=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                page = BeautifulSoup(response.text, "html.parser")
+                self.assertIn(title_part, page.title.get_text(" ", strip=True))
+                self.assertIn("Bathroom Fitting & Installation",
+                              page.select_one("h1").get_text(" ", strip=True))
+                self.assertEqual(page.select_one('link[rel="canonical"]')["href"],
+                                 ORIGIN + path)
+                links = {link.get("href") for link in page.select("a[href]")}
+                self.assertTrue({related_area, "/bathroom-plumbing-surrey",
+                                 "/request-quote"} <= links)
+                self.assertNotIn("Gas Safe registered", response.text)
+        for path in ("/plumber-guildford", "/plumber-woking", "/general-plumbing-surrey",
+                     "/bathroom-plumbing-surrey"):
+            with self.subTest(page=path):
+                page = BeautifulSoup(self.client.get(path).text, "html.parser")
+                self.assertIn("plumb", page.get_text(" ", strip=True).lower())
+                self.assertIn("/request-quote",
+                              {a.get("href") for a in page.select("a[href]")})
+
     def sitemap(self):
         r = self.client.get("/sitemap.xml")
         self.assertEqual(r.status_code, 200)
