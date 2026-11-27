@@ -174,8 +174,8 @@ SOUTH_WEST_LONDON_PAGES = [
 
 SERVICE_PAGES = [
     {"slug":"emergency-plumber-surrey","title":"Emergency Plumbing Callouts in Surrey","meta":"Emergency plumbing in Surrey, including overnight, subject to availability. Call or leave a message with your postcode and problem.","heading":"Emergency Plumbing Callouts in Surrey","intro":"Water escaping from a pipe or fitting, a failed toilet or another pressing plumbing issue? Emergency and out-of-hours callouts may be available, including overnight. Call or leave a message with your postcode and the problem. Nigel may not answer immediately, and attendance is subject to availability. For a significant leak, isolate the water if it is safe to do so.","body":"Explain where the problem is, whether water is still escaping and what you have safely been able to isolate. Your postcode helps Nigel confirm whether he can attend. Overnight attendance is not guaranteed; response and timing depend on availability, the issue and location. An online form can provide details, but a call is better for a time-sensitive problem.","keywords":"urgent plumber Surrey, plumbing leak Surrey, burst pipe Guildford"},
-    {"slug":"general-plumbing-surrey","title":"General Plumbing & Small Repairs in Surrey","meta":"Leaking taps, running toilets, wastes, outside taps or minor pipework repairs? Tell Guildford-based Nigel what needs fixing and send your postcode.","heading":"General Plumbing in Surrey","intro":"Nigel handles everyday domestic plumbing jobs, from tap and toilet repairs to sink fittings, wastes, outside taps, leaks and pipework alterations around Guildford and nearby towns.","body":"A useful enquiry includes the fixture involved, what is going wrong and whether there is an active leak. You can send the details and your postcode, then discuss the work and any relevant charges with Nigel before proceeding.","keywords":"general plumbing Surrey, minor plumbing repairs, tap and toilet repairs"},
-    {"slug":"bathroom-plumbing-surrey","title":"Bathroom Plumbing in Surrey","meta":"Bathroom and shower plumbing around Guildford and nearby areas, including sanitaryware connections, pipework changes and first or second fix work.","heading":"Bathroom Plumbing in Surrey","intro":"For bathroom plumbing, Nigel can discuss sanitaryware connections, shower pipework and first or second fix plumbing as part of a planned refurbishment or smaller update.","body":"Tell Nigel which fittings you want to replace, what is staying in place and whether the layout changes. These details help distinguish a straightforward replacement from new pipework or other preparation before a quote is agreed.","keywords":"bathroom plumbing Surrey, shower plumbing Guildford, sanitaryware plumbing"},
+    {"slug":"general-plumbing-surrey","title":"General Plumbing & Installations in Surrey","meta":"Guildford-based plumber for general plumbing, replacement taps and sinks, outside taps, radiators, pipework installations and repairs across Surrey.","heading":"General Plumbing & Installations in Surrey","intro":"Nigel handles domestic plumbing repairs and planned fitting work: replacement taps, kitchen sinks and basins, outside taps, radiator valves, leaks, waste connections and pipework alterations around Guildford and Surrey.","body":"Say whether you need a new installation, replacement fitting or repair, and describe the existing plumbing. Send the postcode and any relevant fitting details or photographs; Nigel can then discuss the scope, access, materials and charges before arranging work.","keywords":"general plumbing Surrey, plumber Surrey, plumbing installations Surrey"},
+    {"slug":"bathroom-plumbing-surrey","title":"Bathroom Fitting & Renovations in Surrey","meta":"Bathroom fitting, refurbishment and shower installation around Guildford and Surrey. Discuss complete bathroom refits, sanitaryware, tiling and plumbing changes with Nigel.","heading":"Bathroom Fitting & Renovations in Surrey","intro":"Planning a new bathroom, renovation or shower installation? Nigel can discuss full bathroom refits, replacement sanitaryware, shower fittings, tiling and the first- and second-fix plumbing involved, as well as smaller bathroom updates.","body":"Tell Nigel whether you are planning a complete bathroom refurbishment or replacing a shower, basin, toilet or bath. Share the postcode, room dimensions, proposed layout and any fitting details to discuss access, pipework changes, waterproofing and the scope of a quotation.","keywords":"bathroom fitter Surrey, bathroom fitting Surrey, bathroom renovation Surrey"},
     {"slug":"heating-repairs-surrey","title":"Radiators & Heating Plumbing in Surrey","meta":"Radiator, valve, towel radiator and heating pipework plumbing around Guildford and nearby Surrey areas. Discuss the work with Nigel.","heading":"Radiators & Heating Plumbing in Surrey","intro":"Nigel can help with plumbing-related heating work such as radiators, towel radiators, valves and associated pipework. Describe which rooms and fittings are affected.","body":"For a radiator enquiry, say whether the issue is a valve, a leak or a planned replacement, and whether the pipework position will change. Nigel can discuss the practical plumbing work required.","keywords":"radiator plumber Surrey, radiator valves Guildford, heating pipework"},
 ]
 
@@ -211,7 +211,7 @@ PRIMARY_LOCATION_NOTES = {
         "related": ("/leak-repair-shalford", "Discussing a leak repair in Shalford"),
     },
     "woking": {
-        "intro": "For a leaking fitting, toilet problem or planned bathroom plumbing in Woking, describe the job and send the postcode. You deal directly with Nigel, who is based in Guildford and can confirm coverage and the next step before a visit is arranged.",
+        "intro": "For general plumbing, replacement taps or radiators, pipework and bathroom fitting in Woking, describe the job and send your postcode. You deal directly with Nigel, based in Guildford, who can confirm coverage and the next step before a visit is arranged.",
         "detail": "Say which fitting is affected, when the problem occurs and whether water is still escaping. For planned work, explain which fittings are changing and whether the layout stays the same. Share photographs of safely visible areas if useful; do not remove fittings to take them.",
         "nearby": "Guildford, Godalming and nearby Surrey areas",
         "related": ("/leak-repair-woking", "Leak repair in Woking"),
@@ -412,12 +412,12 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
     )
 
     title = (
-        "Plumber in Guildford | Local Repairs | Nigel Harvey Plumbing"
+        "Plumber in Guildford | Nigel Harvey Plumbing"
         if is_guildford else
         f"Plumber in {location_name} | Nigel Harvey Plumbing"
     )
     meta_description = (
-        "Guildford plumber for leaks, toilets, taps and bathrooms, with emergency callouts subject to availability. Send your postcode and job details."
+        "Guildford plumber for general plumbing, new taps, sinks, radiators, bathroom fitting, pipework and repairs. Contact Nigel directly for a quote."
         if is_guildford else
         f"Plumbing in {location_name} for leaks, taps, toilets, bathrooms and pipework. Send your postcode and job details to Nigel to discuss availability and a quote."
     )
@@ -433,9 +433,9 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
         meta_description = ("Need plumbing help in Camberley? Describe a leak, tap, toilet or bathroom job "
                             "and send your postcode to Guildford-based Nigel for the next step.")
     elif slug == "woking":
-        title = "Plumber in Woking | Repairs | Nigel Harvey Plumbing"
-        meta_description = ("Plumbing repairs and bathroom work in Woking. Send your postcode and job details "
-                            "to Guildford-based Nigel to discuss coverage, availability and a quote.")
+        title = "Plumber in Woking | Nigel Harvey Plumbing"
+        meta_description = ("Plumber in Woking for general plumbing, kitchen taps, radiators, bathroom fitting and repairs. "
+                            "Contact Guildford-based Nigel with your postcode and job details.")
 
     breadcrumb_schema = json.dumps({
         "@context": "https://schema.org",
@@ -560,15 +560,21 @@ def render_service_page(service: dict, logo_html: str, request: Request | None =
     if any(p.path == "/projects/ensuite-renovation-merrow-guildford" for p in real_projects.visible_projects()):
         published_planning_links.append('<a href="/projects/ensuite-renovation-merrow-guildford">completed Merrow, Guildford ensuite</a>')
     planning_detail = (
-        '<div class="wrap section"><h2>Preparation behind the bathroom fittings</h2>'
-        '<p>The pipe connections are one part of a bathroom job. Access to wastes, the condition of the supporting surfaces '
-        'and waterproofing around a shower affect the scope and order of work. '
+        '<div class="wrap section"><h2>Bathroom fitting, shower installation and refurbishment</h2>'
+        '<p>Whether you want a complete bathroom refit or a replacement shower, basin, toilet or bath, '
+        'the existing supplies, wastes, waterproofing and condition behind finishes affect the scope. '
+        'Nigel can discuss first- and second-fix plumbing, sanitaryware, tiling and preparation; '
+        'electrical work requires the appropriate qualified trade. '
         + ('See the ' + ' and '.join(published_planning_links) + ' for further background. ' if published_planning_links else '') +
-        'The work needed in your bathroom must be assessed separately.</p></div>'
+        'The work needed at your property must be assessed separately.</p>'
+        '<p>For specific local enquiries see <a href="/bathroom-plumbing-woking">bathroom fitting in Woking</a>, '
+        '<a href="/bathroom-plumbing-leatherhead">bathroom installations in Leatherhead</a> and '
+        '<a href="/bathroom-plumbing-godalming">bathroom work in Godalming</a>, '
+        'or <a href="/request-quote">send your plans to Nigel</a>.</p></div>'
     ) if service["slug"] == "bathroom-plumbing-surrey" else ""
     page_title = {
         "emergency-plumber-surrey": "Emergency Plumbing in Surrey",
-        "general-plumbing-surrey": "General Plumbing & Repairs in Surrey",
+        "general-plumbing-surrey": "General Plumbing & Installations in Surrey",
         "heating-repairs-surrey": "Radiator & Heating Repairs in Surrey",
     }.get(service["slug"], service["title"]) + " | Nigel Harvey Plumbing"
     canonical = absolute_url(f"/{service['slug']}", request)
@@ -809,6 +815,26 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
         ),
     }
     focused_links_html = focused_local_links.get((service_slug, area_slug), "")
+    if service_slug == "bathroom-plumbing" and area_slug in {"woking", "leatherhead", "godalming"}:
+        # Distinct enquiry advice for high-relevance existing pages; no invented local projects.
+        fitting_details = {
+            "woking": ("If you are comparing a full bathroom renovation with changing individual fittings, "
+                       "list what you want removed, what will remain and whether a shower, bath or toilet is moving. "
+                       "Nigel can review the plumbing, tiling and preparation before a quote."),
+            "leatherhead": ("For a bath-to-shower conversion or replacement shower, include the tray and enclosure sizes, "
+                            "existing waste position and any access beneath the floor. These details help establish "
+                            "whether a fitting change also requires pipework or waterproofing work."),
+            "godalming": ("For a bathroom refit that changes the layout, share a sketch showing the current and proposed "
+                           "positions of the basin, toilet, bath and shower. Waste routes and access affect what "
+                           "can be moved before work begins."),
+        }[area_slug]
+        focused_links_html += (
+            f"<h3>Bathroom fitting and renovation enquiries in {escape(area)}</h3>"
+            f"<p>{escape(fitting_details)}</p>"
+            '<p>See <a href="/bathroom-plumbing-surrey">bathroom fitting across Surrey</a> for the broader service, '
+            f'<a href="/plumber-{escape(area_slug)}">general plumbing in {escape(area)}</a> for smaller jobs, '
+            'or <a href="/request-quote">request a bathroom fitting quote</a>.</p>'
+        )
     # Point to published evidence where relevant, without implying a project
     # took place in a town where it did not.
     if (service_slug, area_slug) in {("bathroom-plumbing", "guildford"), ("bathroom-plumbing", "farnham"), ("bathroom-plumbing", "merrow"), ("emergency-plumber", "merrow")}:
@@ -856,7 +882,16 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
     priority_html = (f'<div class="wrap section"><h2>{escape(detail[0])}</h2><p>{escape(detail[1])}</p>'
                      f'{whatsapp_html}{farnham_advice_html}{focused_links_html}{local_navigation_html}<p>For other domestic plumbing jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a> '
                      'or <a href="/request-quote">send the job details</a>.</p></div>') if detail else ""
+    if service_slug == "bathroom-plumbing" and area_slug in {"woking", "leatherhead", "godalming"}:
+        # Improve existing, relevant bathroom pages rather than creating overlapping town URLs.
+        heading = f"Bathroom Fitting & Installation in {area}"
+        intro = (f"Planning a bathroom renovation, new shower or replacement fittings in {area}? "
+                 "Nigel can discuss bathroom fitting, sanitaryware, pipework alterations and tiling "
+                 "from his Guildford base. Send your postcode and project details to confirm coverage.")
     priority_meta = {
+        ("bathroom-plumbing", "woking"): "Bathroom fitting and installation in Woking, including shower replacement, sanitaryware, tiling and plumbing for renovations. Ask Nigel about a quote.",
+        ("bathroom-plumbing", "leatherhead"): "Bathroom installation and refurbishment in Leatherhead, from showers and sanitaryware to pipework and tiling. Discuss your plans with Nigel.",
+        ("bathroom-plumbing", "godalming"): "Bathroom fitting and renovation in Godalming, including showers, sanitaryware and pipework changes. Contact Guildford-based Nigel for a quote.",
         ("leak-repair", "aldershot"): "Leaking pipe or fitting in Aldershot? Tell Guildford-based Nigel where the water appears, whether it can be isolated and your postcode to discuss repair help.",
         ("leak-repair", "camberley"): "Leak repair in Camberley for pipes, taps, toilets and wastes. Tell Guildford-based Nigel where water appears, whether it can be isolated and your postcode.",
         ("leak-repair", "farnham"): "A leaking pipe, tap or bathroom fitting in Farnham? Describe where the water appears and send your postcode to Guildford-based Nigel to discuss the repair.",
@@ -870,6 +905,9 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
     }
     meta_description = priority_meta.get((service_slug, area_slug), concise_meta[service_slug].format(area=area))
     page_title = {
+        ("bathroom-plumbing", "woking"): "Bathroom Fitting & Installation Woking | Nigel Harvey",
+        ("bathroom-plumbing", "leatherhead"): "Bathroom Installation Leatherhead | Nigel Harvey Plumbing",
+        ("bathroom-plumbing", "godalming"): "Bathroom Fitter Godalming | Nigel Harvey Plumbing",
         ("leak-repair", "camberley"): "Leak Repair Camberley | Pipes | Nigel Harvey Plumbing",
         ("leak-repair", "aldershot"): "Leak Repair Aldershot | Pipes | Nigel Harvey Plumbing",
         ("toilet-repair", "leatherhead"): "Toilet Repair Leatherhead | Nigel Harvey Plumbing",
