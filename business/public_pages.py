@@ -310,9 +310,11 @@ def add_batch8_context(html: str, path: str) -> str:
             'Tray and enclosure dimensions, the existing supply and waste arrangement, and access '
             'to connections can affect the work. Do not order replacement fittings on appearance alone.</p>'
             + proof_html +
-            '<p>For a repair, describe what happens when the fitting is used and whether the fault '
-            'affects one fixture or several. <a href="/general-plumbing-surrey">General plumbing information</a> '
-            'explains the kinds of everyday jobs Nigel can discuss. '
+            '<p>For a repair, say whether the issue is a running toilet, a dripping tap, a leaking waste '
+            'or an active pipe leak. <a href="/toilet-repair-woking">Toilet repairs in Woking</a> '
+            'covers cistern and flushing faults; <a href="/leak-repair-woking">leak repairs in Woking</a> '
+            'covers visible supply and waste leaks. For other smaller jobs, see '
+            '<a href="/general-plumbing-surrey">general plumbing in Surrey</a>. '
             '<a href="/request-quote">Send the Woking postcode and job details</a> to confirm coverage '
             'and the next step. No visit or immediate attendance is confirmed by submitting the form.</p>')
         marker = '<section id="about">'
@@ -389,6 +391,20 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
         else:
             primary_details_html += (f'<section><div class="wrap"><p>Looking for a specific repair? '
                                      f'<a href="{escape(href, quote=True)}">{escape(label)}</a> explains what details to send.</p></div></section>')
+    if slug == "merrow" and primary_note:
+        # The published Merrow ensuite supports the local project link above.
+        # Repair links do not imply the project included these particular repairs.
+        primary_details_html += (
+            '<section class="section-pale" id="merrow-repair-options"><div class="wrap section">'
+            '<h2>Small plumbing repairs in Merrow</h2>'
+            '<p>For a toilet that runs after flushing or does not fill properly, see '
+            '<a href="/toilet-repair-merrow">toilet repairs in Merrow</a>. '
+            'For water under a basin, around a waste fitting or from a visible pipe, see '
+            '<a href="/leak-repair-merrow">leak repairs in Merrow</a>. '
+            'Describe when the fault occurs and send your postcode to '
+            '<a href="/request-quote">discuss the repair with Nigel</a>. '
+            'An enquiry does not confirm a visit.</p></div></section>'
+        )
     location_intro = primary_note["intro"] if primary_note else (
         f"Reliable domestic plumbing for leaks, taps, toilets, bathrooms, showers, radiators and pipework in {location_name} and surrounding Surrey areas. From first enquiry to finished job, you deal directly with me, Nigel."
     )
@@ -466,7 +482,7 @@ def render_location_page(location_name: str, logo_html: str, request: Request | 
 <div class="trust"><div class="wrap trustgrid"><div><strong>Local &amp; independent</strong><span>Based in Guildford</span></div><div><strong>Clear communication</strong><span>Deal directly with Nigel</span></div><div><strong>Clear quotes</strong><span>Work &amp; charges explained</span></div><div><strong>Surrey coverage</strong><span>Guildford &amp; nearby areas</span></div></div></div>
 <section id="services"><div class="wrap"><div class="intro"><h2>Plumbing services in Guildford</h2><p>Whether you have a leaking fitting, a toilet that is not working properly, a radiator or valve problem, or planned bathroom plumbing, send the details directly to Nigel. Photos and a short description can help establish what may be required before the visit.</p></div><div class="service-links">{local_service_links}</div></div></section>
 <section class="section-pale"><div class="wrap"><div class="intro"><h2>Domestic plumbing work I can help with</h2><p>Practical plumbing repairs and planned work for homes and landlords across Guildford.</p></div><div class="cards"><div class="card"><h3>Leaks, taps &amp; toilets</h3><p>Repairs to leaking pipework and fittings, taps, toilet mechanisms, wastes, traps and other everyday plumbing problems.</p></div><div class="card"><h3>Bathrooms &amp; showers</h3><p>Bathroom plumbing, sanitaryware connections, shower pipework, first and second fix work and practical plumbing alterations.</p></div><div class="card"><h3>Radiators &amp; pipework</h3><p>Radiators, TRVs and valves, towel radiators, pipework alterations and plumbing-related heating work.</p></div></div></div></section>
-<section><div class="wrap"><div class="intro"><h2>Common Guildford plumbing enquiries</h2><p>Small repairs matter too. If a tap keeps dripping, a toilet runs after flushing, a waste leaks under the sink or a radiator valve needs attention, tell me what you can see and whether the water can be safely isolated.</p><p>For a specific problem, read about <a href="/leak-repair-guildford">leak repairs</a> or <a href="/toilet-repair-guildford">toilet repairs in Guildford</a>. For a wider mix of minor jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a>. For an urgent issue, see the <a href="/emergency-plumber-surrey">emergency plumbing information</a> and call or leave a message. Response times and attendance are subject to availability.</p><p>I am based in Guildford; if you are in <a href="/plumber-merrow">Merrow</a>, <a href="/plumber-burpham">Burpham</a>, <a href="/plumber-worplesdon">Worplesdon</a> or West Horsley, send the postcode with your enquiry.</p></div></div></section>
+<section><div class="wrap"><div class="intro"><h2>Common Guildford plumbing enquiries</h2><p>Small repairs matter too. If a tap keeps dripping, a toilet runs after flushing, a waste leaks under the sink or a radiator valve needs attention, tell me what you can see and whether the water can be safely isolated.</p><p>For a quote, include your Guildford postcode, the affected fitting, when the fault happens and whether the supply or waste is leaking. For concealed cisterns, note whether there is an accessible flush plate or panel; do not remove boxing just for photos.</p><p>For a specific problem, read about <a href="/leak-repair-guildford">leak repairs</a> or <a href="/toilet-repair-guildford">toilet repairs in Guildford</a>. For a wider mix of minor jobs, see <a href="/general-plumbing-surrey">general plumbing in Surrey</a>. For an urgent issue, see the <a href="/emergency-plumber-surrey">emergency plumbing information</a> and call or leave a message. Response times and attendance are subject to availability.</p><p>I am based in Guildford; if you are in <a href="/plumber-merrow">Merrow</a>, <a href="/plumber-burpham">Burpham</a>, <a href="/plumber-worplesdon">Worplesdon</a> or West Horsley, send the postcode with your enquiry.</p></div></div></section>
 <section class="section-dark" id="about"><div class="wrap"><div class="intro"><h2>A local Guildford plumber you deal with directly</h2><p>Nigel Harvey Plumbing is based in Guildford. When you enquire, you deal directly with Nigel rather than a call centre or salesperson. The aim is straightforward communication, a clear quotation and a practical plan for getting the work completed.</p></div><div class="cards"><div class="card"><h3>Direct contact</h3><p>Speak directly with the person who will be carrying out the plumbing work.</p></div><div class="card"><h3>Clear quotations</h3><p>Work and relevant charges can be set out before you decide whether to proceed.</p></div><div class="card"><h3>Local coverage</h3><p>Based in Guildford and covering surrounding towns and villages across Surrey.</p></div></div></div></section>
 <section class="review-section" id="reviews"><div class="wrap"><div class="intro"><h2>Customer reviews</h2><p>Recent independent Google feedback from plumbing customers.</p></div><div class="reviewbox">{reviews_html}</div></div></section>
 <section id="areas"><div class="wrap"><div class="intro"><h2>Areas near Guildford</h2><p>As well as Guildford itself, plumbing work is available across nearby Surrey areas. Use the local pages below for more information.</p></div><div class="area-links">{related}</div></div></section>
@@ -760,6 +776,16 @@ def render_local_service_location_page(service: dict, location: dict, logo_html:
     # Helpful, genuinely service-specific follow-up guidance. These are not
     # claims about completed jobs in the named towns; do not fabricate local proof.
     focused_local_links = {
+        ("toilet-repair", "guildford"): (
+            '<h3>What to tell Nigel about a running or leaking toilet</h3>'
+            '<p>Water running into the pan after flushing, a cistern that will not refill and '
+            'water appearing on the floor are different symptoms. Say whether the flush uses '
+            'a lever or button, whether the cistern is concealed and whether the water can be '
+            'safely isolated. A photo of accessible parts can help plan the next step; '
+            'do not dismantle a cistern or boxing. '
+            '<a href="/request-quote">Send your Guildford postcode and toilet-repair details</a> '
+            'to discuss a repair, without assuming that a new toilet is required.</p>'
+        ),
         ("leak-repair", "leatherhead"): (
             '<h3>Is the leak on the supply or waste side?</h3>'
             '<p>If the cupboard is dry until you empty a basin or sink, note whether water appears '
