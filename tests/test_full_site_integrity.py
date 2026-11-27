@@ -29,15 +29,21 @@ class FullSiteIntegrityTests(unittest.TestCase):
         cls.client.__enter__()
         cls.addClassCleanup(cls.client.__exit__, None, None, None)
 
-    def test_five_page_seo_intent_and_enquiry_routes(self):
-        """The five focus pages expose useful internal links and retain canonicals."""
+    def test_five_page_broad_plumbing_enquiry_routes(self):
+        """Check balanced service links, quote paths and existing canonical URLs."""
         checks = {
-            "/": ["/toilet-repair-guildford", "/general-plumbing-surrey", "/request-quote"],
-            "/plumber-guildford": ["/toilet-repair-guildford", "/leak-repair-guildford", "/request-quote"],
-            "/toilet-repair-guildford": ["/request-quote", "/plumber-guildford"],
-            "/plumber-merrow": ["/toilet-repair-merrow", "/leak-repair-merrow",
+            "/": ["/general-plumbing-surrey", "/bathroom-plumbing-surrey",
+                  "/heating-repairs-surrey", "/leak-repair-guildford", "/request-quote"],
+            "/plumber-guildford": ["/general-plumbing-surrey", "/toilet-repair-guildford",
+                                    "/bathroom-plumbing-guildford", "/request-quote"],
+            "/plumber-merrow": ["/general-plumbing-surrey", "/leak-repair-merrow",
+                                "/bathroom-plumbing-merrow", "/heating-repairs-surrey",
                                 "/projects/ensuite-renovation-merrow-guildford", "/request-quote"],
-            "/plumber-woking": ["/toilet-repair-woking", "/leak-repair-woking", "/request-quote"],
+            "/plumber-woking": ["/general-plumbing-surrey", "/leak-repair-woking",
+                                "/bathroom-plumbing-woking", "/request-quote"],
+            "/general-plumbing-surrey": ["/plumber-guildford", "/plumber-woking",
+                                          "/bathroom-plumbing-surrey", "/heating-repairs-surrey",
+                                          "/request-quote"],
         }
         for path, destinations in checks.items():
             with self.subTest(path=path):
@@ -50,9 +56,9 @@ class FullSiteIntegrityTests(unittest.TestCase):
                 canonical = page.select_one('link[rel="canonical"]')
                 self.assertIsNotNone(canonical)
                 self.assertEqual(canonical.get("href"), ORIGIN + path)
-        self.assertIn("What to tell Nigel about a running or leaking toilet",
-                      self.client.get("/toilet-repair-guildford").text)
-        self.assertIn("Small plumbing repairs in Merrow",
+        self.assertIn("General plumbing repairs and fitting work",
+                      self.client.get("/general-plumbing-surrey").text)
+        self.assertIn("Repairs and planned plumbing work in Merrow",
                       self.client.get("/plumber-merrow").text)
 
     def sitemap(self):
