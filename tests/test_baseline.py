@@ -420,19 +420,22 @@ class BaselineTests(unittest.TestCase):
             "SEO_CSS": "aea9aaf6e6704acabe4891b0ac98142966025a808ec6908954c410ff96f725da",
             "LEAD_FORM_HTML": "ebad8b2a87d805fb4e2e0fe6a9ca848ae6982d1f70782502b2900f36ae9fef06",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "e4ada17b2fede04b70b44f11a03698f18fb9fd0f40de1f2a4e5edb2b625f6f76",
+                "baf70aed627be6b55157d8f04cde1e202c703a4d6d44ee253f31684ddcf574a0",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
+        # PR #51 intentionally updates public homepage service wording and metadata.
+        # Snapshot hashes below are from isolated CI after those approved changes;
+        # preserve the full literal/HTML integrity checks for all other pages.
         # PR #37 changed consented attribution and Guildford copy; PR #38
         # changes the owner-approved homepage hero and London coverage copy.
         # These exact-byte goldens come from the isolated CI render. Keep the
         # quote form and all unrelated page-family snapshots unchanged.
         page_hashes = {
-            "/": "eac7a8e52fc0c37a416bbbbb9e7e7f9d19381208758b618594ba04ad7729ed00",
-            "/new-home": "eac7a8e52fc0c37a416bbbbb9e7e7f9d19381208758b618594ba04ad7729ed00",
+            "/": "1712979863c9292e2259af77aba4fa17b816f2722b11a84df85b823e1eada275",
+            "/new-home": "1712979863c9292e2259af77aba4fa17b816f2722b11a84df85b823e1eada275",
             "/request-quote": "e895a765504abaf0dc188b4d31fe2175580757cc6ed6632dce3f5da75d755ee0",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
@@ -1339,8 +1342,8 @@ assert.equal(document.getElementById('invoiceWhatsappBtn').href,
         """Freeze the SEO page families after applying the shared public shell."""
         m = self.module
         cases = (
-            ("location", "da2baf228f0e08577f59a6eb687bb7df7a85c39546925d435b9b2139cbb302ab"),
-            ("service", "3eb19c9a6518f183a3201c58f8c6980ee2a39d8c8dd02cf31c2fbb0daab0bc67"),
+            ("location", "1a8a819fb51514c5f665725b9f6356f8e6034b815d4a704d340835d393c7b957"),
+            ("service", "20dca2c3402e0c724257a200d9bc694a3745e1988101404739ff4a61f19fdb7f"),
             # PR48 intentionally changes Guildford emergency guidance and adds
             # contextual local navigation; the shared shell is unchanged.
             # PR49 narrows the town-to-town links, retaining the public shell

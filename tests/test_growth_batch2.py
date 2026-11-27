@@ -72,7 +72,7 @@ class GrowthBatch2Tests(unittest.TestCase):
                                    "/leak-repair-guildford", "/general-plumbing-surrey"),
             "/plumber-aldershot": ("Guildford-based Nigel", "/leak-repair-aldershot"),
             "/plumber-camberley": ("Guildford-based Nigel", "/leak-repair-camberley"),
-            "/general-plumbing-surrey": ("Everyday repairs and small plumbing jobs", "outside tap"),
+            "/general-plumbing-surrey": ("General plumbing repairs and fitting work", "outside taps"),
             "/leak-repair-camberley": ("What to do if you have a water leak in Camberley", "WhatsApp"),
             "/leak-repair-farnham": ("What to do if you have a water leak in Farnham", "postcode"),
             "/toilet-repair-leatherhead": ("What to do if your toilet is not working in Leatherhead", "WhatsApp"),
