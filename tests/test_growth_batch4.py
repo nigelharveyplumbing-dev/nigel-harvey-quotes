@@ -90,14 +90,14 @@ class GrowthBatch4Tests(unittest.TestCase):
     def test_priority_snippets_and_urgent_wording(self):
         expectations = {
             "/plumber-guildford": (
-                "Plumber in Guildford | Local Repairs | Nigel Harvey Plumbing",
-                "emergency", "/emergency-plumber-surrey"),
+                "Plumber in Guildford | Nigel Harvey Plumbing",
+                "bathroom fitting", "/emergency-plumber-surrey"),
             "/emergency-plumber-surrey": (
                 "Emergency Plumbing in Surrey | Nigel Harvey Plumbing",
                 "including overnight", "/emergency-plumber-guildford"),
             "/general-plumbing-surrey": (
-                "General Plumbing & Repairs in Surrey | Nigel Harvey Plumbing",
-                "minor pipework repairs", "/plumber-guildford"),
+                "General Plumbing in Surrey | Nigel Harvey Plumbing",
+                "replacement taps", "/plumber-guildford"),
             "/leak-repair-camberley": (
                 "Leak Repair Camberley | Pipes | Nigel Harvey Plumbing",
                 "whether it can be isolated", "/general-plumbing-surrey"),
