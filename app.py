@@ -1454,8 +1454,8 @@ NEW_HOMEPAGE_PREVIEW_HTML = (Path(__file__).resolve().parent / "templates/homepa
 
 @app.get("/site-images/{filename}")
 def public_site_image(filename: str):
-    # Only reviewed, bundled illustrations and the existing public logo are served.
-    if filename not in {"bathroom-illustrative.webp", "shower-illustrative.webp", "radiator-illustrative.webp", "nigel-harvey-logo.png"}:
+    # Serve reviewed illustrations, the owner-approved portrait and public logo only.
+    if filename not in {"bathroom-illustrative.webp", "shower-illustrative.webp", "radiator-illustrative.webp", "nigel-harvey-portrait.webp", "nigel-harvey-logo.png"}:
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(Path(__file__).resolve().parent / "static" / "site-images" / filename,
                         media_type="image/png" if filename == "nigel-harvey-logo.png" else "image/webp",
