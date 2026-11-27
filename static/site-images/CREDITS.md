@@ -7,3 +7,7 @@ These are stock photographs of domestic fixtures, not completed work by Nigel Ha
 - `radiator-illustrative.webp`: Jonathan Cosens Photography, [Unsplash photo](https://unsplash.com/photos/a-close-up-of-a-radiator-in-front-of-a-window-oMVVjzTOPFQ). Free to use under the Unsplash License (checked 2026-09-27).
 
 Original files were downloaded from Unsplash and resized/compressed for this site. Replace them with authentic, consented job photography when available. Unsplash License: https://unsplash.com/license
+
+## Meet Nigel portrait
+
+- `nigel-harvey-portrait.webp`: Owner-approved, AI-assisted portrait created from owner-provided reference photographs. The bathroom backdrop is illustrative and is not presented as a completed job. The original generated portrait was optimised as a local WebP asset for the homepage.
