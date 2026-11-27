@@ -29,6 +29,32 @@ class FullSiteIntegrityTests(unittest.TestCase):
         cls.client.__enter__()
         cls.addClassCleanup(cls.client.__exit__, None, None, None)
 
+    def test_five_page_seo_intent_and_enquiry_routes(self):
+        """The five focus pages expose useful internal links and retain canonicals."""
+        checks = {
+            "/": ["/toilet-repair-guildford", "/general-plumbing-surrey", "/request-quote"],
+            "/plumber-guildford": ["/toilet-repair-guildford", "/leak-repair-guildford", "/request-quote"],
+            "/toilet-repair-guildford": ["/request-quote", "/plumber-guildford"],
+            "/plumber-merrow": ["/toilet-repair-merrow", "/leak-repair-merrow",
+                                "/projects/ensuite-renovation-merrow-guildford", "/request-quote"],
+            "/plumber-woking": ["/toilet-repair-woking", "/leak-repair-woking", "/request-quote"],
+        }
+        for path, destinations in checks.items():
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                page = BeautifulSoup(response.text, "html.parser")
+                hrefs = {link.get("href") for link in page.select("a[href]")}
+                for destination in destinations:
+                    self.assertIn(destination, hrefs, (path, destination))
+                canonical = page.select_one('link[rel="canonical"]')
+                self.assertIsNotNone(canonical)
+                self.assertEqual(canonical.get("href"), ORIGIN + path)
+        self.assertIn("What to tell Nigel about a running or leaking toilet",
+                      self.client.get("/toilet-repair-guildford").text)
+        self.assertIn("Small plumbing repairs in Merrow",
+                      self.client.get("/plumber-merrow").text)
+
     def sitemap(self):
         r = self.client.get("/sitemap.xml")
         self.assertEqual(r.status_code, 200)
