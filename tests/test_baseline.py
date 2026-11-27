@@ -420,13 +420,14 @@ class BaselineTests(unittest.TestCase):
             "SEO_CSS": "aea9aaf6e6704acabe4891b0ac98142966025a808ec6908954c410ff96f725da",
             "LEAD_FORM_HTML": "ebad8b2a87d805fb4e2e0fe6a9ca848ae6982d1f70782502b2900f36ae9fef06",
             "NEW_HOMEPAGE_PREVIEW_HTML":
-                "baf70aed627be6b55157d8f04cde1e202c703a4d6d44ee253f31684ddcf574a0",
+                "b77ce7f751f334f34554844b59fd9823aa771b3b4d46b3ece21253e6ee470f8a",
         }
         for name, digest in literals.items():
             with self.subTest(literal=name):
                 self.assertEqual(hashlib.sha256(getattr(m, name).encode()).hexdigest(), digest)
 
         # PR #51 intentionally updates public homepage service wording and metadata.
+        # PR #52 changes only the Meet Nigel homepage image and its static asset;
         # Snapshot hashes below are from isolated CI after those approved changes;
         # preserve the full literal/HTML integrity checks for all other pages.
         # PR #37 changed consented attribution and Guildford copy; PR #38
@@ -434,8 +435,8 @@ class BaselineTests(unittest.TestCase):
         # These exact-byte goldens come from the isolated CI render. Keep the
         # quote form and all unrelated page-family snapshots unchanged.
         page_hashes = {
-            "/": "1712979863c9292e2259af77aba4fa17b816f2722b11a84df85b823e1eada275",
-            "/new-home": "1712979863c9292e2259af77aba4fa17b816f2722b11a84df85b823e1eada275",
+            "/": "6efeb7cda96844f0ffe814a7972f1fe2444f2434603b590c4c57e3259ec778f0",
+            "/new-home": "6efeb7cda96844f0ffe814a7972f1fe2444f2434603b590c4c57e3259ec778f0",
             "/request-quote": "e895a765504abaf0dc188b4d31fe2175580757cc6ed6632dce3f5da75d755ee0",
         }
         with patch.dict(os.environ, {"APP_ENVIRONMENT": "production",
